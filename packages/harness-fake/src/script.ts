@@ -147,8 +147,11 @@ const parseLine = (line: string): Directive | undefined => {
 /** `[Result of "<title>"]` — the first line of a finished task's result (D5.7). */
 const RESULT_OF = /^\[Result of "([^"\n]*)"\]\s*$/
 
-/** The brain's one-line origin tag (`[Group chat "…" · members: …]`, `[DM with the owner]`, `[Routine run "…"]`). */
-const ORIGIN_TAG = /^\[(?:Group chat |DM with |Routine run ).*\]\s*$/
+/**
+ * The brain's one-line origin tag (`[Group chat "…" · members: …]`, `[DM with the owner]`,
+ * `[Routine run "…"]`) or the reply hint leading teammates' messages in a DM (`[From teammates · …]`).
+ */
+const ORIGIN_TAG = /^\[(?:Group chat |DM with |Routine run |From teammates ).*\]\s*$/
 const SENDER = /^\[(?:Direct message from )?@[^\]\n]+\]:[ \t]?/
 
 /** A background task's first turn: its brief follows this line (D5.7). */

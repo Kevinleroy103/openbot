@@ -213,6 +213,7 @@ describe("Claude session (fake query)", () => {
           disableClaudeAiConnectors: true,
           syncClaudeAiSkills: false,
           syncClaudeAiPlugins: false,
+          attribution: { commit: "", pr: "", sessionUrl: false },
         },
         additionalDirectories: [join(h.root, "attachments")],
       })

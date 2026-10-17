@@ -109,6 +109,9 @@ const GROUP_FIRST_TURN_ENTRIES = 100
 /** Origin tag of a turn in the owner's DM after a turn elsewhere (D5.0). */
 export const DM_ORIGIN_TAG = "[DM with the owner]"
 
+/** Leads a turn of teammates' messages in the owner's DM (like the group header's reply hint). */
+export const BOT_DM_HINT = "[From teammates · your reply is posted to the owner, not sent to them (answer a teammate with message_bot) · nothing new the owner needs to know or decide → NO_REPLY]"
+
 /** Delivery outcome registry (owned by the Orchestrator). */
 export interface DeliveryOutcomes {
   readonly register: (deliveryId: string) => Effect.Effect<void>
@@ -651,7 +654,8 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
      * - group: the group header, then the group messages this session has not seen yet;
      * - the owner's DM / a routine-run conversation: the deliveries, opened with an origin tag line
      *   (`[DM with the owner]`, `[Routine run "…"]`) when the session's previous turn was elsewhere;
-     * - bot messages in a DM read `[Direct message from @Name]: …`.
+     * - bot messages in a DM read `[Direct message from @Name]: …`, led by `BOT_DM_HINT` when the turn
+     *   carries only teammates' messages.
      */
     const renderTurnText = (bot: Bot, conversation: Conversation, deliveries: ReadonlyArray<Delivery>) =>
       Effect.gen(function*() {
@@ -665,8 +669,11 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
             : conversation.kind === "direct"
             ? DM_ORIGIN_TAG
             : `[Routine run ${quoted(conversation.title)} · your reply is posted there]`
+          // Teammates writing in the owner's DM: the reply lands with the owner, so it should be rare.
+          const lead = conversation.kind === "direct" && fromBotsOnly ? [tag, BOT_DM_HINT] : [tag]
+          const prefix = lead.filter((line) => line !== undefined).join("\n")
           return {
-            text: tag === undefined ? body : `${tag}\n${body}`,
+            text: prefix === "" ? body : `${prefix}\n${body}`,
             lastSeen: undefined as EntryId | undefined,
             attachmentIds: [] as ReadonlyArray<AttachmentId>,
           }

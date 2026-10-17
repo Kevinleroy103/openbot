@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { ConversationId } from "@openbot/contracts"
 import { Deferred, Effect, Exit, Layer, Ref } from "effect"
 import { ConversationService, Messaging, type ToolContext } from "../../src/ports/index.ts"
+import { BOT_DM_HINT } from "../../src/services/conversation/BotRunner.ts"
 import { HOP_LIMIT_MESSAGE, MESSAGING_DISABLED, MessagingLive } from "../../src/services/conversation/index.ts"
 import {
   botId,
@@ -81,7 +82,7 @@ describe("message_bot (D5.2)", () => {
     })
     expect(out.bobTurns.map((t) => [t.trigger, t.status])).toEqual([["bot", "completed"]])
     const bobTurn = out.handles.find((h) => h.bot.id === out.bob.id)!
-    expect(bobTurn.input.text).toBe("[Direct message from @Ada]: Can you check the build?")
+    expect(bobTurn.input.text).toBe(`${BOT_DM_HINT}\n[Direct message from @Ada]: Can you check the build?`)
     // Bob's reply stays in Bob's DM.
     expect(messagesOf(out.bobEntries).at(-1)?.text).toBe("Reply from Bob")
     expect(messagesOf(out.adaEntries).some((m) => m.text === "Reply from Bob")).toBe(false)
@@ -106,7 +107,7 @@ describe("message_bot (D5.2)", () => {
     )
     expect(out.after).toHaveLength(1)
     expect(out.handles).toHaveLength(1)
-    expect(out.handles[0]!.input.text).toBe("[Direct message from @Ada]: FYI: the report is in the shared folder.")
+    expect(out.handles[0]!.input.text).toBe(`${BOT_DM_HINT}\n[Direct message from @Ada]: FYI: the report is in the shared folder.`)
   })
 
   test("background: a busy recipient is not interrupted; the message runs as soon as its turn ends", async () => {
@@ -135,7 +136,7 @@ describe("message_bot (D5.2)", () => {
     )
     expect(out.whileBusy).toBe(1)
     expect(out.handles).toHaveLength(2)
-    expect(out.handles[1]!.input.text).toBe("[Direct message from @Ada]: Done with mine.")
+    expect(out.handles[1]!.input.text).toBe(`${BOT_DM_HINT}\n[Direct message from @Ada]: Done with mine.`)
   })
 
   test("bot ping-pong through message_bot stops after 8 hops with a model-readable refusal", async () => {
@@ -454,7 +455,7 @@ describe("post_to_group and handoff_task", () => {
       appLayer(),
     )
     expect(out.handles[0]!.input.text).toBe(
-      "[Direct message from @Ada]: Task handed off to you:\nWrite the release notes\n\nContext:\nVersion 1.2, see CHANGELOG.md",
+      `${BOT_DM_HINT}\n` + "[Direct message from @Ada]: Task handed off to you:\nWrite the release notes\n\nContext:\nVersion 1.2, see CHANGELOG.md",
     )
     expect(eventsOf(out.adaEntries)).toContainEqual({
       type: "handoff",

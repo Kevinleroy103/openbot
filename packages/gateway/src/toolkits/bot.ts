@@ -483,7 +483,7 @@ const moveBotToSection = defineTool({
 // ============================================================================ questions & approvals (D3.3)
 
 const PENDING_HINT =
-  "Do not wait for it: finish or end your turn now. The answer will arrive as a new message in this conversation."
+  "Do not wait for it: end your turn now. The owner already sees the card, so do not announce or repeat it; with nothing else to add, reply exactly NO_REPLY. The answer will arrive as a new message in this conversation."
 
 const askUser = defineTool({
   name: "ask_user",

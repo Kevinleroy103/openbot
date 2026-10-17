@@ -3,7 +3,9 @@
  * plus placement (D1.5) and approvals.
  *
  * - `settingSources: []`, `strictMcpConfig: true` and a `settings` overlay that turns off user
- *   hooks, claude.ai connectors and synced skills/plugins. `HOME` is never changed. The default
+ *   hooks, claude.ai connectors and synced skills/plugins, and Claude's commit/PR attribution (a
+ *   teammate's commits carry no "Co-Authored-By: Claude" / "Generated with Claude Code"; the owner's
+ *   own `attribution` setting never reaches a bot). `HOME` is never changed. The default
  *   account keeps the brain's `CLAUDE_CONFIG_DIR` (the user's login keeps working); an account the
  *   owner added points `CLAUDE_CONFIG_DIR` at that account's own config dir (profile.ts).
  * - Memory: native auto-memory off (default; OpenBot renders the index into the instructions), or
@@ -102,6 +104,8 @@ export const buildQueryOptions = (input: QueryOptionsInput): SdkOptions => {
     disableClaudeAiConnectors: true,
     syncClaudeAiSkills: false,
     syncClaudeAiPlugins: false,
+    // object form: older CLIs (a configured `executable`) reject `attribution: false`
+    attribution: { commit: "", pr: "", sessionUrl: false },
     ...(input.memoryDirectory !== undefined
       ? { autoMemoryEnabled: true, autoMemoryDirectory: input.memoryDirectory }
       : { autoMemoryEnabled: false }),

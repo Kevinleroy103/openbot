@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test"
 import { type ConversationId, LOCAL_NODE_ID } from "@openbot/contracts"
 import { Effect, Layer, Ref } from "effect"
 import { AttachmentService, ConversationService, Messaging, SendFileLimits } from "../../src/ports/index.ts"
+import { BOT_DM_HINT } from "../../src/services/conversation/BotRunner.ts"
 import { NodeFilesFake, runTest } from "../../src/testing/index.ts"
 import { appLayer, createBot, eventsOf, messagesOf, send, settled, TestDriver, transcript, turnsOf } from "./helpers.ts"
 
@@ -78,7 +79,7 @@ describe("bot → bot files", () => {
     // the file was copied into Bob's workspace and the turn text points at it
     expect(out.bobTurns.map((t) => [t.trigger, t.status])).toEqual([["bot", "completed"]])
     expect(out.bobTurn.input.text).toBe(
-      `[Direct message from @Ada]: Here is the architecture diagram\n[Attachments: inbox/${delivered.attachments[0]!.id}/diagram.png (image/png, 5 KB)]`,
+      `${BOT_DM_HINT}\n[Direct message from @Ada]: Here is the architecture diagram\n[Attachments: inbox/${delivered.attachments[0]!.id}/diagram.png (image/png, 5 KB)]`,
     )
     expect(sha(out.copied)).toBe(sha(data))
     // images also reach a harness that can see them (by their brain path)

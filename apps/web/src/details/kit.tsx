@@ -231,7 +231,7 @@ export function LoadingLine({ children = "Loading…", className }: { readonly c
 export function CommandBlock({ command, className }: { readonly command: string; readonly className?: string }): ReactNode {
   return (
     <div className={cn("flex min-h-9 items-center gap-2 rounded-lg bg-quaternary py-1.5 ps-3 pe-1.5 hairline border-line-quaternary", className)}>
-      <code className="min-w-0 flex-1 font-mono text-xs break-all text-fg select-all">{command}</code>
+      <code className="min-w-0 flex-1 font-mono text-xs [overflow-wrap:anywhere] text-fg select-all">{command}</code>
       <CopyButton text={command} label="Copy command" />
     </div>
   )
@@ -428,7 +428,7 @@ export const CAPABILITY_INFO: Record<string, { readonly title: string; readonly 
   pty: { title: "Terminal", description: "Interactive terminal in the Bot's workspace" },
   tunnel: { title: "Network tunnels", description: "Forward ports between the brain and this computer" },
   browser: { title: "Browser", description: "A Chromium window per Bot, with live view and take-over" },
-  desktop: { title: "Desktop control", description: "Screen and input on a display (needs a desktop session)" },
+  desktop: { title: "Full desktop", description: "Each Bot gets its own screen to work on; watch it live and take over" },
   "codex.exec-server": { title: "Codex tools", description: "Run Codex's native tools here" },
   "claude.cli": { title: "Claude CLI", description: "Run the claude CLI here with this computer's own login" },
   "opencode.serve": { title: "OpenCode server", description: "Run OpenCode here" },

@@ -103,6 +103,7 @@ describe("openbot-node CLI (in process)", () => {
         actions: { "run-command": "never" },
         denyGlobs: ["**/*.pem"],
         browser: { enabled: true, executable: "/opt/chrome", headless: "auto" },
+        desktop: { width: 1600, height: 1000 },
       }),
     )
     const file = await Effect.runPromise(loadFileConfig(dir))
@@ -115,13 +116,14 @@ describe("openbot-node CLI (in process)", () => {
     expect(fromFile.policy.actions["run-command"]).toBe("never")
     expect(fromFile.browser.executable).toBe("/opt/chrome")
     expect(fromFile.denyGlobs).toEqual(["**/*.pem"])
+    expect({ w: fromFile.desktop.width, h: fromFile.desktop.height, enabled: fromFile.desktop.enabled }).toEqual({ w: 1600, h: 1000, enabled: true })
 
     const flagged = await Effect.runPromise(
       buildNodeConfig({
         identity: { nodeId: "nod_x" },
         dataDir: dir,
         file,
-        flags: { roots: ["/data/a", "/data/b:ro"], ceiling: "never", noBrowser: true, headless: true },
+        flags: { roots: ["/data/a", "/data/b:ro"], ceiling: "never", noBrowser: true, headless: true, noDesktop: true },
       }),
     )
     expect(flagged.roots).toEqual([parseRootFlag("/data/a", 0), parseRootFlag("/data/b:ro", 1)])
@@ -129,6 +131,7 @@ describe("openbot-node CLI (in process)", () => {
     expect(flagged.policy.ceiling).toBe("never")
     expect(flagged.browser.enabled).toBe(false)
     expect(flagged.browser.headless).toBe(true)
+    expect(flagged.desktop.enabled).toBe(false)
 
     const bad = await Effect.runPromise(
       Effect.flip(buildNodeConfig({ identity: { nodeId: "x" }, dataDir: dir, file, flags: { ceiling: "sometimes" } })),

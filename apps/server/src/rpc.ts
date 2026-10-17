@@ -257,6 +257,8 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "computer.status": ({ botId }) => edge("computer.status", computer.status(botId)),
     "computer.ensure": ({ botId }) => edge("computer.ensure", computer.ensure(botId)),
     "computer.lease": ({ botId, take }) => edge("computer.lease", computer.lease(botId, take)),
+    // stops the bot's desktop (and the owner's control with it); a browser-only screen is unchanged
+    "computer.reset": ({ botId }) => edge("computer.reset", computer.reset(botId)),
 
     // ---------------------------------------------------------------- settings + rules
     "settings.get": () => edge("settings.get", settings.get),

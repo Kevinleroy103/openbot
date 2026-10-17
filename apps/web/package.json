@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@effect/atom-react": "catalog:",
+    "@novnc/novnc": "catalog:",
     "@openbot/client": "workspace:*",
     "@openbot/contracts": "workspace:*",
     "@openbot/ui": "workspace:*",

@@ -14,6 +14,7 @@ import {
   ApprovalRuleRepo,
   ApprovalService,
   BotRepo,
+  ComputerPort,
   EntryRepo,
   HostPaths,
   RequestRepo,
@@ -22,9 +23,11 @@ import {
   TurnRepo,
 } from "../../src/ports/index.ts"
 import { ApprovalServiceLive, BLOCKED_BY_RULES, EXPIRED_MESSAGE } from "../../src/services/automation/index.ts"
+import { HANDOFF_DONE_TEXT, HANDOFF_SKIP_TEXT } from "../../src/services/automation/ApprovalService.ts"
 import { SettingsServiceLive } from "../../src/services/automation/index.ts"
 import {
   advance,
+  ComputerPortFake,
   ConversationServiceFake,
   LiveHubFake,
   makeClaims,
@@ -764,6 +767,142 @@ describe("ApprovalService async tools (D3.3)", () => {
     expect(cardState(out.card)?.status).toBe("expired")
     expect(out.delivered[0]).toMatchObject({ conversationId: GROUP.id, botId: BOT_A.id })
     expect(out.delivered[0]!.text).toContain("expired without an answer")
+  })
+})
+
+describe("ApprovalService hand-offs (request_takeover, D1.7)", () => {
+  const claims = makeClaims({ botId: BOT_A.id, conversationId: DM_A.id })
+  const nextAnswer = Effect.flatMap(ApprovalService, (approvals) =>
+    Stream.runHead(approvals.asyncAnswers).pipe(Effect.map(Option.getOrThrow), Effect.forkChild({ startImmediately: true })))
+
+  test("posts an Action needed card (acknowledge done | skip) and returns pending; done hands the screen back first", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const approvals = yield* ApprovalService
+        const computer = yield* ComputerPort
+        const answer = yield* nextAnswer
+        const receipt = yield* approvals.requestTakeover({ claims, callId: "call-t" }, { instruction: "Sign in to GitHub and approve the 2FA prompt" })
+        const again = yield* approvals.requestTakeover({ claims, callId: "call-t" }, { instruction: "Sign in to GitHub and approve the 2FA prompt" })
+        const request = yield* firstPending
+        const card = yield* entry(request.cardEntryId)
+        // the owner takes over (the card stays open), then answers "done" on the card
+        yield* computer.ensure(BOT_A.id)
+        yield* computer.lease(BOT_A.id, true)
+        const takeOver = yield* Effect.exit(approvals.respond({ requestId: receipt.requestId, response: { type: "acknowledge", action: "take-over" } }))
+        yield* approvals.respond({ requestId: receipt.requestId, response: { type: "acknowledge", action: "done" } })
+        const delivered = yield* Fiber.join(answer)
+        return {
+          receipt,
+          again,
+          request,
+          card,
+          takeOver,
+          delivered,
+          controller: (yield* computer.status(BOT_A.id)).controller,
+          leases: yield* Effect.flatMap(ComputerPortFake, (f) => f.leases),
+          after: yield* entry(request.cardEntryId),
+          notified: yield* Effect.flatMap(NotifierFake, (f) => f.sent),
+        }
+      }),
+      layer(),
+    )
+    expect(out.receipt.status).toBe("pending")
+    expect(out.again).toEqual(out.receipt)
+    expect(out.request).toMatchObject({
+      kind: "handoff",
+      blocking: false,
+      title: "Sign in to GitHub and approve the 2FA prompt",
+      subject: { toolName: "request_takeover", nodeId: "node_local" },
+      responseCapability: { type: "acknowledge", actions: ["done", "skip"] },
+      source: { origin: "openbot", method: "request_takeover", nativeRequestId: "call-t" },
+    })
+    // longer than approvals (10 min by default)
+    expect(out.request.expiresAt! - out.request.createdAt).toBe(30 * 60_000)
+    expect(out.card.kind === "card" ? out.card.card : undefined).toEqual({
+      type: "handoff",
+      requestId: out.receipt.requestId,
+      nodeId: "node_local" as NodeId,
+      instruction: "Sign in to GitHub and approve the 2FA prompt",
+    })
+    expect(out.notified.at(-1)?.body).toBe("Needs you on its screen: Sign in to GitHub and approve the 2FA prompt")
+    // "Take over" is the lease, not an answer
+    expect(Exit.isFailure(out.takeOver)).toBe(true)
+    expect(out.leases).toEqual([{ botId: BOT_A.id, take: true }, { botId: BOT_A.id, take: false }])
+    expect(out.controller).toBe("bot")
+    expect(cardState(out.after)).toMatchObject({ status: "resolved", response: { type: "acknowledge", action: "done" } })
+    expect(out.delivered).toMatchObject({ conversationId: DM_A.id, botId: BOT_A.id, kind: "user-message", urgency: "urgent" })
+    expect(out.delivered.text).toStartWith(HANDOFF_DONE_TEXT)
+  })
+
+  test("handing the screen back from the computer view answers the pending hand-off with done; skip says so", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const approvals = yield* ApprovalService
+        const computer = yield* ComputerPort
+        yield* computer.ensure(BOT_A.id)
+        const first = yield* nextAnswer
+        const receipt = yield* approvals.requestTakeover({ claims, callId: "call-1" }, { instruction: "Solve the CAPTCHA" })
+        const request = yield* firstPending
+        yield* computer.lease(BOT_A.id, true)
+        yield* computer.lease(BOT_A.id, false) // "I'm done" in the computer view
+        const done = yield* Fiber.join(first)
+        const stored = yield* Effect.flatMap(RequestRepo, (r) => r.get(receipt.requestId)).pipe(Effect.map(Option.getOrThrow))
+        const card = yield* entry(request.cardEntryId)
+
+        const second = yield* nextAnswer
+        const skipped = yield* approvals.requestTakeover({ claims, callId: "call-2" }, { instruction: "Enter the code from your phone" })
+        yield* approvals.respond({ requestId: skipped.requestId, response: { type: "acknowledge", action: "skip" } })
+        const skip = yield* Fiber.join(second)
+        return { done, stored, card, skip, leases: yield* Effect.flatMap(ComputerPortFake, (f) => f.leases) }
+      }),
+      layer(),
+    )
+    expect(out.stored).toMatchObject({ status: "resolved", response: { type: "acknowledge", action: "done" } })
+    expect(cardState(out.card)?.status).toBe("resolved")
+    expect(out.done.text).toStartWith(HANDOFF_DONE_TEXT)
+    expect(out.done.text).toContain("Solve the CAPTCHA")
+    expect(out.skip.text).toStartWith(HANDOFF_SKIP_TEXT)
+    // nobody held the screen at the skip: nothing to hand back
+    expect(out.leases).toEqual([{ botId: BOT_A.id, take: true }, { botId: BOT_A.id, take: false }])
+  })
+
+  test("expires after 30 minutes, but waits on while the owner still holds the screen; not from a background task", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const approvals = yield* ApprovalService
+        const computer = yield* ComputerPort
+        yield* computer.ensure(BOT_A.id)
+        const answer = yield* nextAnswer
+        const receipt = yield* approvals.requestTakeover({ claims, callId: "call-x" }, { instruction: "Log in to the bank" })
+        yield* advance("10 minutes")
+        const after10 = yield* Effect.flatMap(RequestRepo, (r) => r.get(receipt.requestId)).pipe(Effect.map(Option.getOrThrow))
+        yield* computer.lease(BOT_A.id, true)
+        yield* advance("21 minutes")
+        const working = yield* Effect.flatMap(RequestRepo, (r) => r.get(receipt.requestId)).pipe(Effect.map(Option.getOrThrow))
+        // the owner went away without handing back… the hand-off expires a period later
+        const fromTask = yield* Effect.exit(
+          approvals.requestTakeover({ claims, taskId: "tsk_1" as never }, { instruction: "Log in" }),
+        )
+        const blank = yield* Effect.exit(approvals.requestTakeover({ claims }, { instruction: "  " }))
+        yield* Effect.flatMap(ComputerPortFake, (f) => f.set({ botId: BOT_A.id, nodeId: "node_local" as NodeId, state: "ready", surface: "desktop", controller: "bot" }))
+        yield* advance("31 minutes")
+        const delivered = yield* Fiber.join(answer)
+        const expired = yield* Effect.flatMap(RequestRepo, (r) => r.get(receipt.requestId)).pipe(Effect.map(Option.getOrThrow))
+        return { after10, working, fromTask, blank, delivered, expired }
+      }),
+      layer(),
+    )
+    expect(out.after10.status).toBe("pending")
+    expect(out.working.status).toBe("pending")
+    expect(out.working.expiresAt).toBeGreaterThan(out.after10.expiresAt!)
+    expect(Exit.isFailure(out.fromTask)).toBe(true)
+    expect(Exit.isFailure(out.blank)).toBe(true)
+    expect(out.expired).toMatchObject({ status: "expired", statusReason: "timeout" })
+    expect(out.delivered.text).toContain("Log in to the bank")
+    expect(out.delivered.text).toContain("expired")
   })
 })
 

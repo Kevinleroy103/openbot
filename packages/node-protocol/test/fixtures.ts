@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer"
 import * as Stream from "effect/Stream"
 import {
   BrainRpcs,
+  DesktopUnavailable,
   generateKeyPair,
   makePeer,
   nodeStamp,
@@ -101,6 +102,10 @@ export const NodeHandlers = (state: NodeState) =>
     "browser.screencast": unused,
     "browser.input": unused,
     "lease.set": ({ botId, holder }) => Effect.succeed({ botId, holder, since: 1 }),
+    "desktop.ensure": () => Effect.fail(new DesktopUnavailable({ message: "no desktop in tests", missing: ["Xvfb"] })),
+    "desktop.stop": () => Effect.void,
+    "computer.act": () => Effect.fail(new DesktopUnavailable({ message: "no desktop in tests" })),
+    "computer.stream": () => Effect.fail(new DesktopUnavailable({ message: "no desktop in tests" })),
   })
 
 export interface BrainState {

@@ -8,6 +8,7 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import {
   BrowserActionFailed,
   BrowserUnavailable,
+  DesktopUnavailable,
   EditFailed,
   FsError,
   LeaseHeld,
@@ -24,6 +25,8 @@ import {
   BrowserEnsureResult,
   BrowserInputEvent,
   ComputerAction,
+  ComputerResult,
+  DesktopInfo,
   ExecEvent,
   FileStat,
   FsDownloadResult,
@@ -47,7 +50,6 @@ import {
   StreamTicket,
   TextEncoding,
   TunnelKind,
-  BrowserImage,
 } from "./schemas.ts"
 
 const FsErrors = Schema.Union([PathDenied, PolicyRefused, FsError, NotAuthenticated])
@@ -298,19 +300,27 @@ export class NodeRpcs extends RpcGroup.make(
     success: LeaseState,
     error: NotAuthenticated,
   }),
-) {}
-
-/**
- * `computer.*` (capability `desktop@1`): designed, not part of `NodeRpcs` in v1. Merge with
- * `NodeRpcs.merge(NodeComputerRpcs)` once a node implements it.
- */
-export class NodeComputerRpcs extends RpcGroup.make(
+  // ------------------------------------------------------------ desktop@1 (D1.7): a screen per bot
+  // starts (or returns) the bot's desktop: its X display with a window manager, dock and VNC servers
+  Rpc.make("desktop.ensure", {
+    payload: { botId: Schema.String },
+    success: DesktopInfo,
+    error: Schema.Union([DesktopUnavailable, NotAuthenticated]),
+  }),
+  // stops the bot's desktop and everything on it ("Reset"); the next ensure starts a fresh one
+  Rpc.make("desktop.stop", {
+    payload: { botId: Schema.String },
+    error: NotAuthenticated,
+  }),
+  // one computer-use action on the bot's desktop (starting it when needed); refused while the
+  // owner holds the lease (LeaseHeld)
   Rpc.make("computer.act", {
     payload: { inv: Invocation, action: ComputerAction },
-    success: Schema.Struct({ text: Schema.String, image: Schema.optional(BrowserImage) }),
-    error: Schema.Union([LeaseHeld, PolicyRefused, BrowserUnavailable, NotAuthenticated]),
+    success: ComputerResult,
+    error: Schema.Union([LeaseHeld, PolicyRefused, DesktopUnavailable, NotAuthenticated]),
   }),
-  // opens a `vnc-view` / `vnc-control` data stream to the node's x11vnc
+  // opens a `vnc-view` (read-only) / `vnc-control` data stream to the bot's VNC server;
+  // `control` needs the owner to hold the lease
   Rpc.make("computer.stream", {
     payload: {
       botId: Schema.String,
@@ -318,7 +328,7 @@ export class NodeComputerRpcs extends RpcGroup.make(
       streamId: Schema.String,
       streamToken: Schema.String,
     },
-    error: Schema.Union([TunnelFailed, LeaseHeld, NotAuthenticated]),
+    error: Schema.Union([TunnelFailed, LeaseHeld, DesktopUnavailable, NotAuthenticated]),
   }),
 ) {}
 

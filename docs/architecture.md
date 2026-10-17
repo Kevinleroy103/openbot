@@ -396,6 +396,8 @@ Native request → `onRequest(req)`:
    - On expiry, the status becomes `expired`, the native side gets a deny, and the card shows "Always allow next time".
    - `allow-always` → save a rule (bot-scoped, surface + toolName/commandPrefix) and return allow.
 
+The gateway's async asks (`ask_user`, `request_approval`, `request_takeover`) post the same requests and cards but never block: the tool returns `{status: pending}` and the answer (or the expiry) becomes a delivery to the bot. A hand-off (`request_takeover`, kind `handoff`, D1.7) follows the owner's screen lease (`ComputerPort.leaseChanges`): handing the screen back answers it `done`; answering it `done` / `skip` hands the screen back before the bot is told. It expires after 30 minutes, re-armed while the owner still holds the screen.
+
 #### 4.3.5 Routines (D5.3)
 
 The scheduler fiber keeps, for each enabled routine, `nextRunAt` from `Cron.parse` (effect `Cron`), an interval or once. It sleeps until the earliest one, using `Clock` so tests can drive it with `TestClock`.
@@ -557,6 +559,7 @@ Per-adapter specifics:
   - `BotToolkit` (calls core services): `message_bot`, `post_to_group`, `handoff_task`, `list_bots`, `ask_user`, `request_approval`, `notify_user`, `remember`, `forget`, `recall_memory`, `create_routine`, `update_routine`, `list_routines`, `save_skill`, `list_skills`, `enable_skill`, `disable_skill`, `find_skills`, `preview_skill`, `install_skill`, `list_nodes`.
   - `NodeToolkit` (calls `NodeDirectory.client(node)` → NodeRpcs): `shell`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`. The `node` parameter is optional and defaults to the host node; it must be one of the bot's bound nodes.
   - `BrowserToolkit` → `browser.action` on the host node.
+  - `ComputerToolkit` (D1.7): `computer` (toolset `computer`, host node with `desktop@1`) → `computer.act` on the host node, Anthropic's action names in a 1280-wide screenshot space, text + image results; `LeaseHeld` → "The owner is using your screen right now. Wait until they hand it back.". `request_takeover` (with any screen; not in background tasks) → `ApprovalService.requestTakeover`.
 - **Result rules** (mcp-conformance.md):
   - text plus optional image content, **never `structuredContent`**;
   - errors start with `ERROR:`;
@@ -571,23 +574,28 @@ Per-adapter specifics:
   - `shell.exec` via `Bun.spawn` with `detached` (setsid) and process-group kill on interrupt or timeout, output capped and spilled;
   - `pty.open` via `Bun.spawn({terminal})` piped to the data stream;
   - `tunnel.open` for kinds `codex.exec-server` (and, later, `claude.cli`, `tcp`);
-  - `browser.*` via `BrowserManager`.
+  - `browser.*` via `BrowserManager`; `desktop.*` and `computer.*` via `DesktopManager`;
+  - one control lease per bot (`LeaseBook`, mirrored by `lease.set`) shared by both.
+- **`DesktopManager`** (`desktop@1`, D1.7; `src/desktop/`): a screen per bot, offered only when Xvfb, x11vnc, xdotool, xfwm4 or openbox, and ImageMagick `import` are found (on `desktop.path` / `OPENBOT_DESKTOP_PATH`, then PATH).
+  - `ensure` (once per bot, concurrent calls share it): Xvfb `:N` (first free display from `:100`; stale lock files of dead servers are reclaimed; `-auth` cookie, `-nolisten tcp`, `-noreset`), a private `dbus-daemon`, a gradient background, xfwm4 (`--compositor=off`; openbox with a maximize-all rule and an app menu when xfwm4 fails or there is no dock), plank with launchers for the bot's browser, xfce4-terminal / xterm, thunar and mousepad, then two loopback x11vnc servers (`-localhost -shared -forever -nopw -noxdamage`, one `-viewonly`) whose ports come from `PORT=` on stdout.
+  - Children run detached (own process groups) with an environment built from scratch: `DISPLAY=:N`, the cookie, per-bot XDG dirs under `<nodeData>/desktops/<botId>/home`, no `WAYLAND_DISPLAY` (x11vnc exits on it) and never the owner's session bus (apps would open on the owner's screen). Each carries `OPENBOT_DESKTOP=<node key>/<botId>/`, so `stop`, the node's shutdown (scope finalizer) and the next start after a SIGKILL find and kill everything that ran on the screen via /proc.
+  - `act`: xdotool (`mousemove --sync`, `click --repeat`, buttons 4–7 for scroll, `type --delay 12` in 50-character chunks, `key`, `keydown`/`keyup` for held modifiers, always released) and ImageMagick `import -window root -resize 1280x800!` → JPEG q80, after a 400 ms settle. External programs only: no FFI in the node process (the local node runs inside the brain).
 - **`BrowserManager`** (vendor/scratch/browser):
-  - launches Chromium or Chrome (detected from PATH) headful when a display is available, otherwise headless=new;
-  - persistent profile `<nodeData>/browser-profile`, remote-debugging-port on loopback;
-  - one window per bot (`Target.createTarget {newWindow:true}`);
+  - without desktops: one Chromium or Chrome (detected from PATH), **headless by default** (`--headful` puts windows on the node's own display), persistent profile `<nodeData>/browser-profile`, one window per bot (`Target.createTarget {newWindow:true}`);
+  - with desktops: one Chromium **per bot**, headful on the bot's display (`--ozone-platform=x11`, maximized) with the profile `<nodeData>/desktops/<botId>/browser-profile`; every page in it is the bot's, and a browser opened from the dock (same command line and DevTools port) is adopted rather than replaced. A desktop reset closes it gracefully first;
+  - remote-debugging-port on loopback, a free fixed port from 9300–9799 (one reserved per bot screen), never `0`: Google sign-in rejects a Chrome whose DevTools port is random. The browser WebSocket URL comes from `/json/version` (Chrome writes `DevToolsActivePort` only for port 0);
   - a CDP client over WebSocket (raw, no Playwright);
   - actions: navigate, snapshot (accessibility tree → compact text with ref ids), click/type by ref or coordinates, key, scroll, screenshot (JPEG), tabs;
   - screencast via `Page.startScreencast` with ack pacing;
   - user input via `Input.dispatch*` when the lease holder is the user;
   - graceful close on shutdown (`Browser.close`) so cookies persist.
-- **`NodePolicy`:** a ceiling of never/ask/always per surface. `ask` → `BrainLink.requestApproval`.
+- **`NodePolicy`:** a ceiling of never/ask/always per surface (`computer` included: `never` also withdraws `desktop@1`). `ask` → `BrainLink.requestApproval`.
 - **`AuditLog`:** JSONL under the node data dir.
 - **`DialOut`:** connects to `wss://brain/node` with a signed upgrade; reconnects with backoff (250 ms → 30 s, with jitter, reset after 10 s up); builds the mux, `RpcServer(NodeRpcs)` and `RpcClient(BrainRpcs)`.
 - **`KeyStore`:** Ed25519 keypair plus the pinned brain key at `<nodeData>/identity.json` (0600).
 - **`apps/node` CLI:**
   - `openbot-node pair <brainUrl> <code>`: generates a key, POSTs `/node/pair`, stores the identity;
-  - `openbot-node run [--root path]…`;
+  - `openbot-node run [--root path]… [--no-browser] [--no-desktop] [--headful]`;
   - `openbot-node status`.
 
 ### 4.8 brain-nodes
@@ -601,10 +609,14 @@ Per-adapter specifics:
 - **`Pairing`:** `nodes.createPairingCode` (8 characters, 10 min, single use) and `POST /node/pair {code, publicKey, hostname, platform}` → `{nodeId, brainPublicKey}`.
 - **`LocalNode`:** runs `NodeHandlersLive` in-process with roots `[<data>/bots/*/workspace, …configured]`; registered as `node_local` with kind `local`; no socket.
 - **`PlacementServiceLive`:** the rules in §3.3. For `codex-environment` it calls `tunnel.open{codex.exec-server}` and exposes an internal relay URL `ws://127.0.0.1:<internal>/relay/<nodeId>/codex.exec-server` with a per-process relay secret.
-- **`ComputerService`:** `computer.status/ensure/lease`.
-  - `/ws/computer/:botId?mode=view|control` (public listener, cookie auth + bot ACL) relays CDP screencast frames to viewers and input events from the lease holder.
-  - Lease: while the user holds control, the bot's browser actions return `ERROR: The user is controlling the browser`.
-  - VNC is designed only (`desktop@1`).
+- **`ComputerService`:** `computer.status/ensure/lease/reset` (`ComputerPort`) plus `leaseChanges`.
+  - Surface per host node: `desktop` (`desktop@1`: a whole X desktop per bot) > `browser` (`browser@1`: the bot's browser window) > `none`. A node that lacks desktops but reports `hello.desktop.missing` has `missing` in the status, whatever its surface.
+  - `ensure` → `desktop.ensure` (60 s budget; `DesktopUnavailable` → `error` with its message and `missing`) or `browser.ensure`, one at a time per bot.
+  - Lease: the brain owns it and mirrors it with `lease.set` (taking it needs the node; handing back never fails on an offline node, which gets every lease again when it reconnects). While the user holds it, the node refuses the bot's `computer.act` / `browser.action` with `LeaseHeld`. Handing it back closes the control viewers. Every change of holder is published on `leaseChanges`.
+  - `reset` → `desktop.stop` (it also ends the user's control); every desktop viewer closes with 1012. Nothing to reset on a browser-only node.
+  - `/ws/computer/:botId?mode=view|control` (public listener, cookie auth + bot ACL; `control` needs the lease, else 403):
+    - desktop: raw RFB both ways between the viewer (noVNC) and ONE node stream per viewer (`computer.stream` → `vnc-view` / `vnc-control`; VNC is stateful per connection), after ensuring the desktop. Close codes: 1000 control released, 1012 screen reset, 4403 control refused, 1011 + reason when the screen cannot start or its stream ends.
+    - browser: one CDP screencast per bot fanned out to every viewer, plus input events from the lease holder.
 
 ### 4.9 server (composition root)
 
@@ -707,8 +719,22 @@ The native callback calls `onRequest` → `ApprovalService.evaluate`:
 2. Target node = `node ?? hostNodeId`, which must be in `boundNodeIds ∪ {hostNodeId}`.
 3. `NodeDirectory.client(node).shell.exec` streams output (with progress notifications), capped, and returns text.
 
-### 5.5 Watching the browser
+### 5.5 Watching and taking over a Bot's screen (D1.7)
 
+Desktop (`desktop@1`):
+1. Details › Computer → `computer.ensure {botId}` → `desktop.ensure` on the host node (the bot's own X display, window manager, dock, VNC servers). The status carries `surface: "desktop"`, `width`, `height`.
+2. The UI opens `/ws/computer/:botId?mode=view` with noVNC (view only). The brain ensures the desktop, mints a ticket and calls `computer.stream {mode: "view"}`; the node dials `/node/stream/:id` and bridges it to the bot's view-only VNC server; the brain splices raw RFB both ways. Every viewer gets its own node stream.
+3. "Take control" → `computer.lease {take: true}` (mirrored with `lease.set`: the bot's `computer.act` now gets `LeaseHeld`) → a second socket with `mode=control` → `vnc-control`.
+4. "I'm done" → `computer.lease {take: false}`: the control sockets close (1000), watchers stay, and any pending hand-off of the bot is answered `done`.
+5. "Reset" → `computer.reset`: `desktop.stop`, every viewer closes (1012); the next viewer or `computer` action starts a fresh desktop.
+
+Hand-off (`request_takeover`, any screen):
+1. The bot brings a login, 2FA prompt or CAPTCHA up on its screen and calls `request_takeover {instruction}`; the gateway calls `ApprovalService.requestTakeover`: a `handoff` RuntimeRequest + `HandoffCard` ("Action needed": Take over / Skip) in the conversation, a notification, and `{status: pending}` back to the bot, which ends its turn.
+2. Take over → the UI opens the computer view and calls `computer.lease {take: true}` (the card stays pending).
+3. I'm done → `computer.lease {take: false}` (or `requests.respond {acknowledge: done}`, which hands the screen back too) → the request resolves `done` and the bot gets "The owner finished on your screen and handed it back." as a new message. Skip → `requests.respond {acknowledge: skip}` → "The owner skipped taking over."
+4. No answer within 30 minutes (re-armed while the owner holds the screen) → expired, and the bot is told.
+
+Browser only (`browser@1`, no desktop):
 1. Details › Computer → `computer.ensure {botId}` → `browser.ensure` on the host node.
 2. The UI opens `/ws/computer/:botId?mode=view`.
 3. The brain asks the node for `browser.screencast` → the node dials `/node/stream/:id` → frames are spliced to the viewer.

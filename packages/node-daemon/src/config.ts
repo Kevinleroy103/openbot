@@ -18,6 +18,7 @@ export const NodeActions = [
   "service",
   "forward",
   "browser",
+  "computer",
 ] as const
 export type NodeAction = (typeof NodeActions)[number]
 
@@ -38,7 +39,11 @@ export interface BrowserConfig {
   readonly enabled: boolean
   /** Chromium/Chrome binary; detected from PATH when undefined. */
   readonly executable?: string | undefined
-  /** `auto` = headful when a display is available, else `--headless=new`. */
+  /**
+   * `auto` (default): headless, so bots' windows never pop up on the owner's own screen (the web
+   * app shows them). `false` forces headful windows on the node's display. On a node that offers
+   * desktops, every bot's browser runs headful on the bot's own screen regardless.
+   */
   readonly headless: "auto" | boolean
   /** Persistent profile (cookies survive restarts). Default `<dataDir>/browser-profile`. */
   readonly profileDir: string
@@ -47,6 +52,32 @@ export interface BrowserConfig {
   readonly extraArgs: ReadonlyArray<string>
   /** Timeout for page loads after `navigate`, ms. */
   readonly navigationTimeoutMs: number
+}
+
+/** Per-bot desktops (capability `desktop@1`, D1.7): one virtual X display per bot. */
+export interface DesktopConfig {
+  /** Offer desktops when the programs are installed (default: true unless `detectBinaries: false`). */
+  readonly enabled: boolean
+  /** Screen size of every bot desktop (default 1920×1200, like Grok's computer). */
+  readonly width: number
+  readonly height: number
+  /** Width of the model-facing screenshot space (default 1280; `apiH = round(apiW · H / W)`). */
+  readonly apiWidth: number
+  /** First X display number tried (default 100). */
+  readonly displayBase: number
+  /**
+   * Program directories searched first and put first on the desktop's PATH (env
+   * `OPENBOT_DESKTOP_PATH`, colon-separated). For a rootless install (`<prefix>/usr/bin`), the
+   * sibling `lib` and `share` dirs are added to LD_LIBRARY_PATH and XDG_DATA_DIRS.
+   */
+  readonly path: ReadonlyArray<string>
+  /** Extra environment for every desktop program. */
+  readonly env: Readonly<Record<string, string>>
+  /** Delay before the screenshot that follows a computer action, ms (default 400). */
+  readonly settleMs: number
+  /** Screenshot encoding for the model (default JPEG quality 80). */
+  readonly imageFormat: "jpeg" | "webp" | "png"
+  readonly imageQuality: number
 }
 
 export interface NodeLimits {
@@ -96,6 +127,7 @@ export interface NodeConfigShape {
     readonly rg?: string | undefined
   }
   readonly browser: BrowserConfig
+  readonly desktop: DesktopConfig
   readonly hostname: string
   readonly platform: string
   readonly arch: string
@@ -134,22 +166,30 @@ export interface NodeConfigInput {
   readonly limits?: Partial<NodeLimits> | undefined
   readonly shell?: Partial<NodeConfigShape["shell"]> | undefined
   readonly binaries?: NodeConfigShape["binaries"] | undefined
-  /** Look up codex/opencode/rg/chromium on PATH when not given (default true). */
+  /** Look up codex/opencode/rg/chromium (and the desktop programs) on PATH when not given (default true). */
   readonly detectBinaries?: boolean | undefined
   readonly browser?: Partial<BrowserConfig> | undefined
+  readonly desktop?: Partial<DesktopConfig> | undefined
   readonly hostname?: string | undefined
   readonly forwardAudit?: boolean | undefined
 }
 
 const which = (name: string): string | undefined => Bun.which(name) ?? undefined
 
+/**
+ * Google Chrome first (what Grok's computer runs, and what sites like Google sign-in trust most),
+ * then Chromium. On Linux the browser binaries come before the distro launchers: Arch's `chromium` and
+ * `google-chrome-stable` add the user's own `~/.config/chrom*-flags.conf` (extensions, Wayland flags).
+ */
 export const BROWSER_CANDIDATES: ReadonlyArray<string> = [
-  "chromium",
-  "chromium-browser",
+  "/opt/google/chrome/google-chrome",
   "google-chrome-stable",
   "google-chrome",
   "chrome",
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/usr/lib/chromium/chromium",
+  "chromium",
+  "chromium-browser",
   "/Applications/Chromium.app/Contents/MacOS/Chromium",
 ]
 
@@ -164,6 +204,32 @@ export const detectBrowserExecutable = (): string | undefined => {
     if (found) return found
   }
   return undefined
+}
+
+/** `OPENBOT_DESKTOP_PATH` (colon-separated program dirs). */
+export const desktopPathFromEnv = (env: Readonly<Record<string, string | undefined>> = process.env): ReadonlyArray<string> =>
+  (env.OPENBOT_DESKTOP_PATH ?? "")
+    .split(":")
+    .map((p) => p.trim())
+    .filter((p) => p !== "")
+
+/**
+ * Environment for desktop programs found in rootless prefixes: for each `<prefix>/usr/bin` (or
+ * `<prefix>/bin`) dir, its sibling `lib` goes on LD_LIBRARY_PATH and `share` on XDG_DATA_DIRS.
+ */
+export const desktopPrefixEnv = (dirs: ReadonlyArray<string>, exists: (p: string) => boolean = existsSync): Record<string, string> => {
+  const libs: Array<string> = []
+  const shares: Array<string> = []
+  for (const d of dirs) {
+    const prefix = path.dirname(path.resolve(d))
+    if (prefix === "/" || prefix === "/usr" || prefix === "/usr/local") continue
+    if (exists(path.join(prefix, "lib"))) libs.push(path.join(prefix, "lib"))
+    if (exists(path.join(prefix, "share"))) shares.push(path.join(prefix, "share"))
+  }
+  const env: Record<string, string> = {}
+  if (libs.length > 0) env.LD_LIBRARY_PATH = libs.join(":")
+  if (shares.length > 0) env.XDG_DATA_DIRS = [...shares, "/usr/local/share", "/usr/share"].join(":")
+  return env
 }
 
 /** Expand a leading `~` to the home directory. */
@@ -223,6 +289,22 @@ export const makeNodeConfig = (input: NodeConfigInput): NodeConfigShape => {
       extraArgs: input.browser?.extraArgs ?? [],
       navigationTimeoutMs: input.browser?.navigationTimeoutMs ?? 15_000,
     },
+    desktop: (() => {
+      const desktopPath = (input.desktop?.path ?? desktopPathFromEnv()).map((p) => path.resolve(expandHome(p)))
+      return {
+        // like the other programs, desktops are only probed for when binaries are detected
+        enabled: input.desktop?.enabled ?? detect,
+        width: input.desktop?.width ?? 1920,
+        height: input.desktop?.height ?? 1200,
+        apiWidth: input.desktop?.apiWidth ?? 1280,
+        displayBase: input.desktop?.displayBase ?? 100,
+        path: desktopPath,
+        env: input.desktop?.env ?? desktopPrefixEnv(desktopPath),
+        settleMs: input.desktop?.settleMs ?? 400,
+        imageFormat: input.desktop?.imageFormat ?? "jpeg",
+        imageQuality: input.desktop?.imageQuality ?? 80,
+      }
+    })(),
     hostname: input.hostname ?? osHostname(),
     platform: process.platform,
     arch: osArch(),
@@ -231,6 +313,6 @@ export const makeNodeConfig = (input: NodeConfigInput): NodeConfigShape => {
 }
 
 export const NodeConfigLive = (input: NodeConfigInput | NodeConfigShape): Layer.Layer<NodeConfig> =>
-  Layer.succeed(NodeConfig)("limits" in input && "shell" in input && "browser" in input && "platform" in input
+  Layer.succeed(NodeConfig)("limits" in input && "shell" in input && "browser" in input && "desktop" in input && "platform" in input
     ? (input as NodeConfigShape)
     : makeNodeConfig(input as NodeConfigInput))

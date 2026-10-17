@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { LOCAL_NODE_ID } from "@openbot/contracts"
 import { McpTokenRepo } from "@openbot/core"
 import { conversationId, localNodeSummary, makeTurn, OrchestratorFake, remoteNodeSummary, turnId } from "@openbot/core/testing"
-import type { ExecEvent } from "@openbot/node-protocol"
+import { DesktopUnavailable, type ExecEvent, LeaseHeld } from "@openbot/node-protocol"
+import type { TaskId } from "@openbot/contracts"
 import { Effect, Option, Stream } from "effect"
 import { hashMcpToken } from "../src/McpBindingIssuer.ts"
 import { McpGateway } from "../src/McpGateway.ts"
@@ -464,5 +465,115 @@ describe("node tools", () => {
 
     const bad = await client.callTool({ name: "browser", arguments: { action: "navigate" } })
     expect(textOf(bad)).toBe("ERROR: `url` is required for action navigate")
+  })
+})
+
+describe("screen tools (D1.7)", () => {
+  const desktopNode = localNodeSummary({
+    capabilities: ["fs@1", "shell@1", "pty@1", "browser@1", "desktop@1"],
+    declaredCapabilities: ["fs@1", "shell@1", "pty@1", "browser@1", "desktop@1"],
+  })
+
+  test("computer is offered with the computer toolset; request_takeover with a screen, never to a task", async () => {
+    h = await startHarness({ nodes: [desktopNode] })
+    const names = async (claims: Parameters<Harness["issue"]>[0]) =>
+      (await (await h.connect((await h.issue(claims)).binding)).listTools()).tools.map((t) => t.name)
+    const botOnly = await names({ toolsets: ["bot"] })
+    expect(botOnly).not.toContain("computer")
+    expect(botOnly).not.toContain("request_takeover")
+    const browserOnly = await names({ toolsets: ["bot", "browser"] })
+    expect(browserOnly).toContain("request_takeover")
+    expect(browserOnly).not.toContain("computer")
+    expect(await names({ toolsets: ["bot", "browser", "computer"] })).toEqual(expect.arrayContaining(["browser", "computer", "request_takeover"]))
+    const task = await names({ toolsets: ["bot", "computer"], taskId: "tsk_1" as TaskId })
+    expect(task).toContain("computer")
+    expect(task).not.toContain("request_takeover")
+
+    const client = await h.connect((await h.issue({ toolsets: ["computer"] })).binding)
+    const tool = (await client.listTools()).tools.find((t) => t.name === "computer")!
+    const props = tool.inputSchema.properties as Record<string, { type: string; items?: unknown; enum?: ReadonlyArray<string> }>
+    expect(props.coordinate).toMatchObject({ type: "array", items: { type: "number" }, minItems: 2 })
+    expect(props.region).toMatchObject({ type: "array", items: { type: "number" }, minItems: 4 })
+    expect(props.action!.enum).toContain("left_click_drag")
+    expect(tool.description).toContain("1280")
+  })
+
+  test("computer maps the arguments to computer.act and returns text + image", async () => {
+    h = await startHarness({ nodes: [desktopNode] })
+    const acts: Array<{ readonly inv: { readonly botId: string }; readonly action: Record<string, unknown> }> = []
+    await setNodeClient(h, LOCAL_NODE_ID, {
+      "computer.act": (payload: (typeof acts)[number]) => {
+        acts.push(payload)
+        return Effect.succeed(
+          payload.action.action === "screenshot"
+            ? { text: "Screenshot 1280x800 (display 1920x1200).", image: { mimeType: "image/png", data: "iVBORw0KGgo=", width: 1280, height: 800 } }
+            : payload.action.action === "zoom"
+            ? { text: "ERROR: region [x0, y0, x1, y1] is outside the screen" }
+            : { text: "" },
+        )
+      },
+    })
+    const client = await h.connect((await h.issue({ toolsets: ["computer"] })).binding)
+    const shot = await client.callTool({ name: "computer", arguments: { action: "screenshot" } })
+    assertConformant(shot)
+    const content = shot.content as Array<{ type: string; data?: string; mimeType?: string }>
+    expect(content.map((c) => c.type)).toEqual(["text", "image"])
+    expect(content[1]).toMatchObject({ data: "iVBORw0KGgo=", mimeType: "image/png" })
+    expect(textOf(shot)).toContain("1280x800")
+
+    const click = await client.callTool({ name: "computer", arguments: { action: "double_click", coordinate: [640, 400] } })
+    assertConformant(click)
+    expect(textOf(click)).toBe("Done: double_click.")
+    expect(acts.map((a) => a.action)).toEqual([{ action: "screenshot" }, { action: "double_click", coordinate: [640, 400] }])
+    expect(acts[0]!.inv.botId).toBe(BOT_A)
+
+    // no tuples on the wire, but the gateway checks the length
+    const bad = await client.callTool({ name: "computer", arguments: { action: "left_click", coordinate: [1, 2, 3] } })
+    expect(textOf(bad)).toContain("`coordinate` must have at most 2 items")
+    const missing = await client.callTool({ name: "computer", arguments: { action: "type" } })
+    expect(textOf(missing)).toBe("ERROR: `text` is required for action type")
+    expect(acts).toHaveLength(2)
+
+    // the node answers bad arguments as text: an error for the bot
+    const zoom = await client.callTool({ name: "computer", arguments: { action: "zoom", region: [0, 0, 5000, 5000] } })
+    expect(zoom.isError).toBe(true)
+    expect(textOf(zoom)).toBe("ERROR: region [x0, y0, x1, y1] is outside the screen")
+  })
+
+  test("computer explains the owner's control and a missing desktop; no desktop@1 → refused", async () => {
+    h = await startHarness({ nodes: [desktopNode] })
+    let failure: unknown = new LeaseHeld({ botId: BOT_A, holder: "user", reason: "the user took control" })
+    await setNodeClient(h, LOCAL_NODE_ID, { "computer.act": () => Effect.fail(failure) })
+    const client = await h.connect((await h.issue({ toolsets: ["computer"] })).binding)
+    const held = await client.callTool({ name: "computer", arguments: { action: "screenshot" } })
+    assertConformant(held)
+    expect(held.isError).toBe(true)
+    expect(textOf(held)).toBe("ERROR: The owner is using your screen right now. Wait until they hand it back.")
+
+    failure = new DesktopUnavailable({ message: "This computer cannot show desktops", missing: ["Xvfb", "xdotool"] })
+    const none = await client.callTool({ name: "computer", arguments: { action: "screenshot" } })
+    expect(textOf(none)).toBe("ERROR: This computer cannot show desktops. This computer lacks: Xvfb, xdotool.")
+
+    await upsertNode(h, localNodeSummary())
+    const refused = await client.callTool({ name: "computer", arguments: { action: "screenshot" } })
+    expect(textOf(refused)).toContain("does not offer desktop")
+  })
+
+  test("request_takeover posts a hand-off and returns pending at once", async () => {
+    h = await startHarness({ nodes: [desktopNode] })
+    const client = await h.connect((await h.issue({ toolsets: ["bot", "computer"] })).binding)
+    const result = await client.callTool({
+      name: "request_takeover",
+      arguments: { instruction: "Sign in to GitHub and approve the 2FA prompt" },
+    })
+    assertConformant(result)
+    expect(result.isError).toBeFalsy()
+    const requests = await toolRequests(h)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]).toMatchObject({ tool: "request_takeover", input: { instruction: "Sign in to GitHub and approve the 2FA prompt" } })
+    expect(textOf(result)).toContain("status: pending")
+    expect(textOf(result)).toContain(requests[0]!.requestId)
+    const empty = await client.callTool({ name: "request_takeover", arguments: { instruction: "" } })
+    expect(textOf(empty)).toContain("`instruction` must not be empty")
   })
 })

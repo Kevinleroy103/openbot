@@ -176,7 +176,7 @@ for (const theme of ["dark", "light"] as const) {
       expect(inputs.some((e) => e["_tag"] === "key" && e["type"] === "down" && e["text"] === "h")).toBe(true)
       await shot(page, `computer-live-control-${theme}`)
 
-      await page.getByRole("button", { name: "Stop" }).click()
+      await page.getByTestId("control-pill").getByRole("button", { name: "I'm done" }).click()
       await page.getByRole("button", { name: "Take control" }).waitFor()
 
       await page.getByTestId("computer-tab-terminal").click()

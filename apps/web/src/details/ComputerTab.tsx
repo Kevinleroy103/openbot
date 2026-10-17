@@ -1,15 +1,18 @@
-// Details › Computer: where the bot runs (host node + status), its live screen thumbnail (opens the
-// full-screen ComputerView) and a terminal in its workspace.
+// Details › Computer: the bot's live screen thumbnail (opens the full-screen ComputerView), where it
+// runs (host node + status), what that computer lacks for full desktops (with install commands),
+// Reset computer (`computer.reset`: stops its desktop and everything on it), and a terminal in its
+// workspace.
 import { useAtomSet } from "@effect/atom-react"
 import { nodesAtom } from "@openbot/client"
 import type { Bot, NodeSummary } from "@openbot/contracts"
 import { PillButton, StatusPill } from "@openbot/ui"
-import { SquareTerminal } from "lucide-react"
-import type { ReactNode } from "react"
-import { computerInitialTabAtom } from "../computer/useComputer.ts"
+import { RotateCcw, SquareTerminal } from "lucide-react"
+import { type ReactNode, useState } from "react"
+import { DesktopSetupNote } from "../computer/DesktopSetupNote.tsx"
+import { computerInitialTabAtom, useComputer } from "../computer/useComputer.ts"
 import { ScreenThumbnail } from "../computer/ScreenThumbnail.tsx"
 import { useComputerView, useSettingsDialog } from "../contracts.ts"
-import { Section, SectionSheet, SheetLine, StatusDot, capabilityName, formatAgo, nodeTone, useRosterValue } from "./kit.tsx"
+import { ConfirmDialog, Section, SectionSheet, SheetLine, StatusDot, capabilityName, formatAgo, nodeTone, useCommand, useRosterValue } from "./kit.tsx"
 
 export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
   const nodes = useRosterValue<ReadonlyArray<NodeSummary>>(nodesAtom, [])
@@ -17,9 +20,15 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
   const view = useComputerView()
   const settings = useSettingsDialog()
   const setInitialTab = useAtomSet(computerInitialTabAtom)
+  const { status } = useComputer(bot.id)
+  const reset = useCommand("computer.reset", bot.id)
+  const [confirmReset, setConfirmReset] = useState(false)
   const caps = new Set((node?.capabilities ?? []).map(capabilityName))
   const hasTerminal = caps.has("pty")
-  const nodeLabel = node ? (node.kind === "local" ? "this server" : node.label) : undefined
+  const nodeName = node ? (node.kind === "local" ? "this server" : node.label) : "its computer"
+  const missing = status.value?.missing ?? []
+  // a desktop to reset: the node offers desktops and the bot's is (or may be) running
+  const canReset = status.value?.surface === "desktop" && status.value.state !== "unsupported"
 
   const open = (tab: "screen" | "terminal") => {
     setInitialTab(tab)
@@ -28,7 +37,7 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
 
   return (
     <div className="flex flex-col gap-6">
-      <ScreenThumbnail botId={bot.id} botName={bot.name} nodeLabel={nodeLabel} onOpen={() => open("screen")} className="pt-1" />
+      <ScreenThumbnail botId={bot.id} botName={bot.name} nodeLabel={node ? (node.kind === "local" ? "this server" : node.label) : undefined} onOpen={() => open("screen")} className="pt-1" />
       <Section title="Computer">
         <SectionSheet>
           <SheetLine label={node ? (node.kind === "local" ? "This server" : node.label) : bot.hostNodeId} hint={node ? `${node.hostname} · ${node.platform}` : "Unknown computer"}>
@@ -38,8 +47,8 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
           </SheetLine>
           {node && (
             <SheetLine label="Can use">
-              <span className="flex min-w-0 flex-wrap justify-end gap-1">
-                {[...caps].slice(0, 5).map((c) => (
+              <span className="flex min-w-0 max-w-[72%] flex-wrap justify-end gap-1">
+                {[...caps].slice(0, 6).map((c) => (
                   <span key={c} className="rounded-sm bg-secondary px-1.5 py-px text-2xs text-fg-secondary">
                     {c}
                   </span>
@@ -64,7 +73,8 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
             </SheetLine>
           )}
         </SectionSheet>
-        <div className="flex items-center gap-2 px-1">
+        {missing.length > 0 && <DesktopSetupNote missing={missing} nodeName={nodeName} platform={node?.platform} local={node?.kind === "local"} className="px-1" />}
+        <div className="flex flex-wrap items-center gap-2 px-1">
           <PillButton
             size="md"
             variant="secondary"
@@ -76,11 +86,36 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
           >
             Open terminal
           </PillButton>
+          {canReset && (
+            <PillButton size="md" variant="secondary" leadingIcon={RotateCcw} onClick={() => setConfirmReset(true)} data-testid="reset-computer">
+              Reset computer
+            </PillButton>
+          )}
           <button type="button" className="ms-auto px-2 text-sm text-fg-secondary transition-colors hover:text-fg" onClick={() => settings.show("computers")}>
             Manage computers
           </button>
         </div>
       </Section>
+      <ConfirmDialog
+        open={confirmReset}
+        title={`Reset ${bot.name}'s computer?`}
+        body="Open apps and unsaved work on its screen are lost."
+        confirmLabel="Reset"
+        danger
+        pending={reset.pending}
+        error={reset.error}
+        onCancel={() => {
+          reset.clearError()
+          setConfirmReset(false)
+        }}
+        onConfirm={async () => {
+          const r = await reset.run({ botId: bot.id })
+          if (r.ok) {
+            setConfirmReset(false)
+            status.refresh()
+          }
+        }}
+      />
     </div>
   )
 }

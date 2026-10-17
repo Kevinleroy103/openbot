@@ -49,14 +49,18 @@ Options:
   --ceiling <level>       never | ask | always: the most this node allows without asking (default always)
   --browser <path>        Chromium/Chrome executable (default: detected on PATH)
   --no-browser            do not offer the browser capability
-  --headless / --headful  force the browser mode (default: headful when a display is available)
+  --headless / --headful  force the browser mode (default: headless; with desktops, each bot's
+                          browser runs on the bot's own screen)
+  --no-desktop            do not offer per-bot desktops (desktop@1; needs Xvfb, x11vnc, xdotool,
+                          xfwm4 or openbox, ImageMagick; env OPENBOT_DESKTOP_PATH adds program dirs)
   --log-level <level>     debug | info | warn | error (default info)
   --force                 pair: replace an existing identity
   --json                  status: machine-readable output
 
 Optional <data-dir>/config.json:
   {"roots": ["~/openbot", {"id": "docs", "path": "~/Documents", "mode": "ro"}], "ceiling": "ask",
-   "actions": {"run-command": "ask"}, "denyGlobs": ["**/*.pem"], "browser": {"enabled": true, "headless": "auto"}}
+   "actions": {"run-command": "ask", "computer": "ask"}, "denyGlobs": ["**/*.pem"], "browser": {"enabled": true, "headless": "auto"},
+   "desktop": {"enabled": true, "width": 1920, "height": 1200}}
 `
 
 export class CliError extends Schema.TaggedError<CliError>()("CliError", {
@@ -100,6 +104,14 @@ const FileConfig = Schema.Struct({
     }),
   ),
   shell: Schema.optional(Schema.Struct({ program: Schema.optional(Schema.String), interactive: Schema.optional(Schema.String) })),
+  desktop: Schema.optional(
+    Schema.Struct({
+      enabled: Schema.optional(Schema.Boolean),
+      width: Schema.optional(Schema.Number),
+      height: Schema.optional(Schema.Number),
+      path: Schema.optional(Schema.Array(Schema.String)),
+    }),
+  ),
 })
 export type FileConfig = typeof FileConfig.Type
 
@@ -133,6 +145,7 @@ export interface RunFlags {
   readonly noBrowser?: boolean | undefined
   readonly headless?: boolean | undefined
   readonly headful?: boolean | undefined
+  readonly noDesktop?: boolean | undefined
 }
 
 /** File config, then flags on top. */
@@ -181,6 +194,13 @@ export const buildNodeConfig = (input: {
         ...(file.browser?.width !== undefined ? { width: file.browser.width } : {}),
         ...(file.browser?.height !== undefined ? { height: file.browser.height } : {}),
         ...(file.browser?.extraArgs ? { extraArgs: file.browser.extraArgs } : {}),
+      },
+      desktop: {
+        ...(file.desktop?.enabled !== undefined ? { enabled: file.desktop.enabled } : {}),
+        ...(flags.noDesktop ? { enabled: false } : {}),
+        ...(file.desktop?.width !== undefined ? { width: file.desktop.width } : {}),
+        ...(file.desktop?.height !== undefined ? { height: file.desktop.height } : {}),
+        ...(file.desktop?.path ? { path: file.desktop.path.map(expandHome) } : {}),
       },
     }
     return makeNodeConfig(config)
@@ -361,7 +381,14 @@ export const statusCommand = (input: { readonly io: CliIo; readonly dataDir: str
                   pairedAt: identity.pairedAt,
                 }
               : {}),
-            ...(config ? { roots: config.roots, ceiling: config.policy.ceiling, browser: config.browser.enabled ? (config.browser.executable ?? null) : null } : {}),
+            ...(config
+              ? {
+                  roots: config.roots,
+                  ceiling: config.policy.ceiling,
+                  browser: config.browser.enabled ? (config.browser.executable ?? null) : null,
+                  desktop: config.desktop.enabled,
+                }
+              : {}),
             daemon: running ? { pid: status.pid, startedAt: status.startedAt, state: status.state, capabilities: status.capabilities } : null,
           },
           null,
@@ -383,6 +410,7 @@ export const statusCommand = (input: { readonly io: CliIo; readonly dataDir: str
       io.out(`roots:     ${config.roots.map((r) => `${r.path}${r.mode === "ro" ? " (ro)" : ""}`).join(", ")}`)
       io.out(`ceiling:   ${config.policy.ceiling}`)
       io.out(`browser:   ${config.browser.enabled ? (config.browser.executable ?? "not found") : "disabled"}`)
+      io.out(`desktops:  ${config.desktop.enabled ? "on when Xvfb, x11vnc, xdotool, xfwm4/openbox and ImageMagick are installed" : "disabled"}`)
     }
     io.out(running ? `daemon:    running (pid ${status.pid}), ${describeState(status.state)}` : "daemon:    not running")
     return 0
@@ -405,6 +433,7 @@ export const runCli = (argv: ReadonlyArray<string>, io: CliIo = processIo): Effe
             ceiling: { type: "string" },
             browser: { type: "string" },
             "no-browser": { type: "boolean" },
+            "no-desktop": { type: "boolean" },
             headless: { type: "boolean" },
             headful: { type: "boolean" },
             "log-level": { type: "string" },
@@ -451,6 +480,7 @@ export const runCli = (argv: ReadonlyArray<string>, io: CliIo = processIo): Effe
               noBrowser: values["no-browser"],
               headless: values.headless,
               headful: values.headful,
+              noDesktop: values["no-desktop"],
             },
           }),
         )

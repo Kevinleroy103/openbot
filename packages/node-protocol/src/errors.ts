@@ -58,7 +58,14 @@ export class BrowserUnavailable extends Schema.TaggedError<BrowserUnavailable>()
   reason: Schema.String,
 }) {}
 
-/** The control lease for the bot's browser is held by someone else (e.g. the user took control). */
+/** The node cannot give a bot a desktop (`desktop@1`): programs missing, or the display failed. */
+export class DesktopUnavailable extends Schema.TaggedError<DesktopUnavailable>()("DesktopUnavailable", {
+  message: Schema.String,
+  /** Programs the node lacks (Xvfb, x11vnc, xdotool, …) when that is the reason. */
+  missing: Schema.optional(Schema.Array(Schema.String)),
+}) {}
+
+/** The control lease for the bot's screen (browser or desktop) is held by someone else (e.g. the user took control). */
 export class LeaseHeld extends Schema.TaggedError<LeaseHeld>()("LeaseHeld", {
   botId: Schema.String,
   holder: Schema.Literals(["user", "bot"]),
@@ -96,7 +103,8 @@ export const describeNodeError = (
     | NodeUnavailable
     | BrowserUnavailable
     | LeaseHeld
-    | BrowserActionFailed,
+    | BrowserActionFailed
+    | DesktopUnavailable,
 ): string => {
   switch (error._tag) {
     case "PathDenied":
@@ -121,5 +129,9 @@ export const describeNodeError = (
       return error.holder === "user" ? "The user is controlling the browser" : `The browser is controlled by the bot: ${error.reason}`
     case "BrowserActionFailed":
       return `Browser ${error.action} failed: ${error.reason}`
+    case "DesktopUnavailable":
+      return error.missing !== undefined && error.missing.length > 0
+        ? `${error.message} (missing on the computer: ${error.missing.join(", ")})`
+        : error.message
   }
 }

@@ -8,7 +8,7 @@ import { LOCAL_NODE_ID, NodeUnavailable, NotFound } from "@openbot/contracts"
 import { FsError, PathDenied } from "@openbot/node-protocol"
 import { Clock, Context, Effect, Layer, PubSub, Ref, Result, Stream } from "effect"
 import type { ComputerStatus } from "@openbot/contracts"
-import { ComputerPort } from "../ports/Computer.ts"
+import { type ComputerLeaseChange, ComputerPort } from "../ports/Computer.ts"
 import { DataDir } from "../ports/DataDir.ts"
 import { PlacementError } from "../ports/errors.ts"
 import { IdGen } from "../ports/IdGen.ts"
@@ -253,11 +253,21 @@ export class McpBindingIssuerFake extends Context.Service<McpBindingIssuerFake, 
 
 export class ComputerPortFake extends Context.Service<ComputerPortFake, {
   readonly set: (status: ComputerStatus) => Effect.Effect<void>
+  /** `lease` calls (`{botId, take}`), oldest first. */
+  readonly leases: Effect.Effect<ReadonlyArray<{ readonly botId: Bot["id"]; readonly take: boolean }>>
+  /** `reset` calls, oldest first. */
+  readonly resets: Effect.Effect<ReadonlyArray<Bot["id"]>>
 }>()("openbot/core/testing/ComputerPortFake") {
-  /** `status` → "absent" until `ensure`, which makes it "ready" on the given node. */
+  /**
+   * `status` → "absent" until `ensure`, which makes it "ready" on the given node. `lease` and `reset`
+   * publish `leaseChanges` when the holder changes; `reset` makes the screen "absent" again.
+   */
   static readonly layer: Layer.Layer<ComputerPort | ComputerPortFake> = Layer.effectContext(
     Effect.gen(function*() {
       const statuses = yield* Ref.make<ReadonlyMap<string, ComputerStatus>>(new Map())
+      const leaseCalls = yield* Ref.make<ReadonlyArray<{ readonly botId: Bot["id"]; readonly take: boolean }>>([])
+      const resetCalls = yield* Ref.make<ReadonlyArray<Bot["id"]>>([])
+      const changes = yield* PubSub.unbounded<ComputerLeaseChange>()
       const current = (botId: Bot["id"]): Effect.Effect<ComputerStatus> =>
         Effect.map(Ref.get(statuses), (map) =>
           map.get(botId) ?? { botId, nodeId: LOCAL_NODE_ID, state: "absent", surface: "browser", controller: "bot" })
@@ -272,14 +282,32 @@ export class ComputerPortFake extends Context.Service<ComputerPortFake, {
           }),
         lease: (botId, take) =>
           Effect.gen(function*() {
+            yield* Ref.update(leaseCalls, (all) => [...all, { botId, take }])
             const before = yield* current(botId)
             if (before.state !== "ready") return yield* new NotFound({ entity: "computer", id: botId })
             const status: ComputerStatus = { ...before, controller: take ? "user" : "bot" }
             yield* put(status)
+            if (status.controller !== before.controller) {
+              yield* PubSub.publish(changes, { botId, holder: status.controller, cause: "lease" } satisfies ComputerLeaseChange)
+            }
             return status
           }),
+        reset: (botId) =>
+          Effect.gen(function*() {
+            yield* Ref.update(resetCalls, (all) => [...all, botId])
+            const before = yield* current(botId)
+            const status: ComputerStatus = { ...before, state: "absent", controller: "bot" }
+            yield* put(status)
+            if (before.controller === "user") {
+              yield* PubSub.publish(changes, { botId, holder: "bot", cause: "reset" } satisfies ComputerLeaseChange)
+            }
+            return status
+          }),
+        leaseChanges: Stream.fromPubSub(changes),
       })
-      return Context.make(ComputerPort, port).pipe(Context.add(ComputerPortFake, ComputerPortFake.of({ set: put })))
+      return Context.make(ComputerPort, port).pipe(
+        Context.add(ComputerPortFake, ComputerPortFake.of({ set: put, leases: Ref.get(leaseCalls), resets: Ref.get(resetCalls) })),
+      )
     }),
   )
 }

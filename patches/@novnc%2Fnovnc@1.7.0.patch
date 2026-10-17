@@ -1,0 +1,28 @@
+diff --git a/core/rfb.js b/core/rfb.js
+index 80011e4a10203806f14df1ffc3b8425861a965a7..9b893c480915198b501d139ce822e5e811e1bcc3 100644
+--- a/core/rfb.js
++++ b/core/rfb.js
+@@ -87,6 +87,9 @@ const extendedClipboardActionPeek    = 1 << 26;
+ const extendedClipboardActionNotify  = 1 << 27;
+ const extendedClipboardActionProvide = 1 << 28;
+ 
++// OpenBot patch: the log level, for embedders (the package exports only this module).
++export { initLogging } from './util/logging.js';
++
+ export default class RFB extends EventTargetMixin {
+     constructor(target, urlOrChannel, options) {
+         if (!target) {
+diff --git a/core/util/browser.js b/core/util/browser.js
+index 63596d211bc3f2ac0c1853d58488dcbb18bd8949..70209c58e2137c17913e7c4ea73b922969557e9c 100644
+--- a/core/util/browser.js
++++ b/core/util/browser.js
+@@ -149,7 +149,8 @@ async function _checkWebCodecsH264DecodeSupport() {
+ 
+     return true;
+ }
+-supportsWebCodecsH264Decode = await _checkWebCodecsH264DecodeSupport();
++// OpenBot patch: no top-level await (Bun's dev server cannot initialize async modules in order).
++_checkWebCodecsH264DecodeSupport().then((supported) => { supportsWebCodecsH264Decode = supported; });
+ 
+ /*
+  * The functions for detection of platforms and browsers below are exported

@@ -462,7 +462,7 @@ export interface EvaluatedRequest {
 }
 
 export interface ToolRequestRecord {
-  readonly tool: "ask_user" | "request_approval"
+  readonly tool: "ask_user" | "request_approval" | "request_takeover"
   readonly ctx: ToolContext
   readonly input: unknown
   readonly requestId: RequestId
@@ -471,7 +471,7 @@ export interface ToolRequestRecord {
 export class ApprovalServiceFake extends Context.Service<ApprovalServiceFake, {
   readonly evaluated: Effect.Effect<ReadonlyArray<EvaluatedRequest>>
   readonly setPolicy: (policy: ApprovalPolicy) => Effect.Effect<void>
-  /** `ask_user` / `request_approval` calls, oldest first. */
+  /** `ask_user` / `request_approval` / `request_takeover` calls, oldest first. */
   readonly toolRequests: Effect.Effect<ReadonlyArray<ToolRequestRecord>>
   /** `evaluateNode` calls, oldest first. */
   readonly nodeRequests: Effect.Effect<ReadonlyArray<NodeApprovalInput>>
@@ -522,6 +522,7 @@ export class ApprovalServiceFake extends Context.Service<ApprovalServiceFake, {
           listPending: () => Effect.succeed([]),
           askUser: (ctx, input) => toolRequest("ask_user", ctx, input),
           requestApproval: (ctx, input) => toolRequest("request_approval", ctx, input),
+          requestTakeover: (ctx, input) => toolRequest("request_takeover", ctx, input),
           asyncAnswers: Stream.fromQueue(answers),
           cancelPending: (input) => Ref.update(cancelled, (all) => [...all, input]).pipe(Effect.as(0)),
         })

@@ -132,6 +132,9 @@ const summarize = (record: NodeRecord, connection: NodeConnection | undefined, l
     hostname: record.hostname,
     roots: record.roots,
     ...(record.version === undefined ? {} : { version: record.version }),
+    ...(connection?.hello.desktop !== undefined && connection.hello.desktop.missing.length > 0
+      ? { desktopMissing: connection.hello.desktop.missing }
+      : {}),
     ...(seen === undefined ? {} : { lastSeenAt: seen as NodeSummary["createdAt"] }),
     createdAt: record.createdAt,
   }

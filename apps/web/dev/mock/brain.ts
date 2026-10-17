@@ -17,6 +17,7 @@ import {
   type BotUsage,
   type Card,
   compareEntries,
+  type ComputerStatus,
   type CardState,
   Conflict,
   type Conversation,
@@ -629,6 +630,121 @@ export class MockBrain {
     })
   }
 
+  // ------------------------------------------------------------------------------- computers
+  // Desktops (D1.7) on nodes with `desktop@1`: one per bot, asleep (`absent`) until woken, 1920×1200;
+  // the owner's control lease; `/ws/computer/:botId` (dev/mock-server.ts) serves a fake RFB desktop.
+  // Like the brain, handing control back answers the bot's pending hand-offs "done".
+  readonly desktops = new Map<string, { state: "absent" | "ready"; controller: "bot" | "user" }>()
+  /** What a node lacks for desktops (`node.hello.desktop.missing`), by node id. */
+  readonly desktopMissing = new Map<string, ReadonlyArray<string>>()
+  /** Open desktop viewer sockets per bot (closed on release / reset). */
+  readonly desktopViewers = new Map<string, Set<{ readonly mode: "view" | "control"; readonly close: (code: number, reason: string) => void }>>()
+  /** Bots whose screen can't be reached: their viewer sockets close at once with 1011 + this reason. */
+  readonly desktopBroken = new Map<string, string>()
+  /** Input the fake desktops received (dev diagnostics, `/api/mock/desktop`). */
+  readonly desktopInput = { pointer: 0, keys: 0 }
+
+  private desktopOf(botId: string) {
+    let d = this.desktops.get(botId)
+    if (!d) {
+      d = { state: "absent", controller: "bot" }
+      this.desktops.set(botId, d)
+    }
+    return d
+  }
+
+  computerStatus(botId: string): ComputerStatus {
+    const bot = this.bot(botId)
+    if (!bot) throw new NotFound({ entity: "bot", id: botId })
+    const node = this.roster.state.nodes.get(bot.hostNodeId)
+    const missing = this.desktopMissing.get(bot.hostNodeId)
+    const base = { botId: bot.id, nodeId: bot.hostNodeId, ...(missing && missing.length > 0 ? { missing } : {}) }
+    if (node?.capabilities.includes("desktop@1")) {
+      const d = this.desktopOf(botId)
+      return { ...base, state: d.state, surface: "desktop", controller: d.controller, viewPath: `/ws/computer/${bot.id}`, ...(d.state === "ready" ? { width: 1920, height: 1200 } : {}) }
+    }
+    if (node?.capabilities.includes("browser@1")) {
+      return { ...base, state: "error", surface: "browser", controller: "bot", viewPath: `/ws/computer/${bot.id}`, message: "The dev mock has no browser screencast." }
+    }
+    return { ...base, state: "unsupported", surface: "none", controller: "bot", message: `${node?.label ?? "This computer"} has no screen to show.` }
+  }
+
+  computerEnsure(botId: string): ComputerStatus {
+    const st = this.computerStatus(botId)
+    if (st.surface === "desktop") this.desktopOf(botId).state = "ready"
+    return this.computerStatus(botId)
+  }
+
+  computerLease(botId: string, take: boolean): ComputerStatus {
+    const st = this.computerStatus(botId)
+    if (st.surface !== "desktop") throw new Conflict({ reason: "This computer has no screen to take over" })
+    const d = this.desktopOf(botId)
+    d.controller = take ? "user" : "bot"
+    if (!take) {
+      for (const v of this.desktopViewers.get(botId) ?? []) if (v.mode === "control") v.close(1000, "control released")
+      // the brain answers the bot's pending hand-offs when the owner hands the screen back
+      for (const c of this.convs.values()) {
+        for (const q of c.state.requests.values()) {
+          if (q.botId === botId && q.kind === "handoff" && q.status === "pending") this.respond(q.id, { type: "acknowledge", action: "done" })
+        }
+      }
+    }
+    return this.computerStatus(botId)
+  }
+
+  computerReset(botId: string): ComputerStatus {
+    const st = this.computerStatus(botId)
+    if (st.surface !== "desktop") return st
+    for (const v of this.desktopViewers.get(botId) ?? []) v.close(1012, "screen reset")
+    this.desktops.set(botId, { state: "absent", controller: "bot" })
+    return this.computerStatus(botId)
+  }
+
+  /** `/ws/computer/:botId` before the upgrade: the brain's HTTP refusals. */
+  desktopViewerCheck(botId: string, mode: "view" | "control"): { readonly ok: true; readonly accent: string; readonly page: "signin" | "dashboard" } | { readonly ok: false; readonly status: number; readonly text: string } {
+    const bot = this.bot(botId)
+    if (!bot) return { ok: false, status: 404, text: "unknown bot" }
+    const st = this.computerStatus(botId)
+    if (st.surface !== "desktop") return { ok: false, status: 409, text: st.message ?? "no live view" }
+    if (mode === "control" && st.controller !== "user") return { ok: false, status: 403, text: "Take control first" }
+    // a viewer wakes the desktop (like the brain's viewer, which ensures it first)
+    this.desktopOf(botId).state = "ready"
+    const handoff = [...this.convs.values()].some((c) => [...c.state.requests.values()].some((q) => q.botId === botId && q.kind === "handoff" && q.status === "pending"))
+    return { ok: true, accent: bot.avatar.color, page: handoff ? "signin" : "dashboard" }
+  }
+
+  joinDesktop(botId: string, viewer: { readonly mode: "view" | "control"; readonly close: (code: number, reason: string) => void }): () => void {
+    let set = this.desktopViewers.get(botId)
+    if (!set) {
+      set = new Set()
+      this.desktopViewers.set(botId, set)
+    }
+    set.add(viewer)
+    return () => set.delete(viewer)
+  }
+
+  /** A bot's `request_takeover`: an async "Action needed" hand-off card (D1.7). */
+  takeover(conversationId: string, botId: string, instruction: string, at = this.now(), turnId?: string) {
+    const requestId = this.id("req") as RequestId
+    const bot = this.bot(botId)
+    const { request, entry } = this.request({
+      conversationId,
+      botId,
+      ...(turnId ? { turnId } : {}),
+      kind: "handoff",
+      title: instruction,
+      card: { type: "handoff", requestId, nodeId: (bot?.hostNodeId ?? "node_local") as NodeId, instruction },
+      capability: { type: "acknowledge", actions: ["done", "skip"] },
+      subject: { toolName: "request_takeover" },
+      blocking: false,
+      at,
+      expiresInMs: 60 * 60_000,
+    })
+    this.put(entry)
+    this.putRequest(request)
+    return request
+  }
+
   // ----------------------------------------------------------------------------------- RPCs
   send(input: SendInput): SendResult {
     const r = this.conv(input.conversationId)
@@ -1203,9 +1319,10 @@ export class MockBrain {
           this.putNode(next)
           return next
         })(),
-      "computer.status": ({ botId }) => Effect.succeed({ botId, nodeId: this.bot(botId)?.hostNodeId ?? "node_local", state: "absent", surface: "browser", controller: "bot" }),
-      "computer.ensure": ({ botId }) => Effect.succeed({ botId, nodeId: this.bot(botId)?.hostNodeId ?? "node_local", state: "unsupported", surface: "none", controller: "bot", message: "The dev mock has no live screen." }),
-      "computer.lease": ({ botId }) => Effect.fail(new Conflict({ reason: `The dev mock has no live screen for ${this.bot(botId)?.name ?? "this Bot"}.` })),
+      "computer.status": ({ botId }) => sync(() => this.computerStatus(botId))(),
+      "computer.ensure": ({ botId }) => sync(() => this.computerEnsure(botId))(),
+      "computer.lease": ({ botId, take }) => sync(() => this.computerLease(botId, take))(),
+      "computer.reset": ({ botId }) => sync(() => this.computerReset(botId))(),
       "settings.get": () => Effect.succeed(this.settings),
       "settings.update": ({ patch }) =>
         sync(() => {

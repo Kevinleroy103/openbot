@@ -24,6 +24,13 @@
  *   delivery on `asyncAnswers`, which the Orchestrator drains. Idempotent on the tool call id.
  * - `evaluateNode` serves a node's own `ask` ceiling with the same rules and cards (autonomy never
  *   overrides a node owner's explicit `ask`).
+ * - `requestTakeover` (gateway tool `request_takeover`, D1.7) is async too: an "Action needed"
+ *   hand-off card (kind `handoff`, acknowledge `done` | `skip`). With a `ComputerPort` in the
+ *   context (optional, like `HostPaths`), the owner's control lease and the card stay in step:
+ *   handing the screen back (`computer.lease {take: false}`) answers the bot's pending hand-offs
+ *   with `done`, and answering a hand-off gives the lease back BEFORE the bot is told, so its next
+ *   `computer` action is not refused. Hand-offs expire after `HANDOFF_EXPIRY_MINUTES`, re-armed
+ *   while the owner still holds control (they are working on it).
  *
  * Pending waiters live in memory; a brain restart expires every pending request (boot recovery,
  * D2.5). ApprovalService never writes Turns and never calls the Orchestrator.
@@ -75,6 +82,7 @@ import {
   SettingsService,
   type ToolContext,
 } from "../../ports/services.ts"
+import { ComputerPort } from "../../ports/Computer.ts"
 import { evaluateAutonomy, isInsideWorkspace, offerableFolder, outsideWorkDir } from "./autonomy.ts"
 import { describeRule, evaluateRules, type PolicySubject, suggestRule, surfaceOf } from "./policy.ts"
 import { oneLine, truncate } from "./text.ts"
@@ -84,7 +92,18 @@ export const BLOCKED_BY_RULES = "Blocked by your rules"
 export const EXPIRED_MESSAGE = "The approval request expired without an answer."
 
 /** Limits for the async tools (model-readable refusals). */
-export const ASK_LIMITS = { questions: 10, options: 12, titleChars: 200 } as const
+export const ASK_LIMITS = { questions: 10, options: 12, titleChars: 200, instructionChars: 1_000 } as const
+
+/**
+ * How long a hand-off (`request_takeover`) waits for the owner: longer than approvals (a login or a
+ * 2FA code needs the owner at their desk). While the owner holds control at that moment, it waits
+ * another period instead of expiring.
+ */
+export const HANDOFF_EXPIRY_MINUTES = 30
+
+/** What the bot reads when the owner answered its hand-off. */
+export const HANDOFF_DONE_TEXT = "The owner finished on your screen and handed it back."
+export const HANDOFF_SKIP_TEXT = "The owner skipped taking over."
 
 /** How a pending request left `pending`. */
 type SettledBy = "rule" | "user" | "expired" | "cancelled"
@@ -122,6 +141,8 @@ interface NewRequest {
   readonly card: (requestId: RequestId) => KnownCard
   /** Raised by a background task (D5.7): the card is labelled with its title. */
   readonly task?: { readonly id: TaskId; readonly title: string } | undefined
+  /** Overrides Settings' `approvalExpiryMinutes` (hand-offs). */
+  readonly expiryMinutes?: number | undefined
 }
 
 const cancelResolution: HarnessRequestResolution = { decision: "cancel" }
@@ -144,6 +165,9 @@ const approvalOptions = (
   return options
 }
 
+const notificationLead = (kind: RuntimeRequestKind): string =>
+  kind === "question" ? "Has a question" : kind === "handoff" ? "Needs you on its screen" : "Needs approval"
+
 const answersText = (questions: ReadonlyArray<Question>, answers: Readonly<Record<string, ReadonlyArray<string>>>): string =>
   questions
     .map((q) => {
@@ -164,6 +188,7 @@ export const makeApprovalService = Effect.gen(function*() {
   const hub = yield* LiveHub
   const turns = yield* TurnRepo
   const hostPaths = Option.getOrUndefined(yield* Effect.serviceOption(HostPaths))
+  const computer = Option.getOrUndefined(yield* Effect.serviceOption(ComputerPort))
 
   const pending = new Map<RequestId, PendingEntry>()
   /** Expiry timers of async requests (interrupted when answered or cancelled). */
@@ -236,6 +261,7 @@ export const makeApprovalService = Effect.gen(function*() {
     Effect.gen(function*() {
       const now = yield* Clock.currentTimeMillis
       const { approvalExpiryMinutes } = yield* settings.get
+      const expiryMinutes = input.expiryMinutes ?? approvalExpiryMinutes
       const conversationId = input.originConversationId
       const requestId = yield* ids.requestId
       const cardEntryId = yield* ids.entryId
@@ -252,7 +278,7 @@ export const makeApprovalService = Effect.gen(function*() {
         source: input.source,
         blocking: input.blocking,
         createdAt: now,
-        expiresAt: now + approvalExpiryMinutes * 60_000,
+        expiresAt: now + expiryMinutes * 60_000,
         ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
         ...(input.detail === undefined ? {} : { detail: input.detail }),
         ...(input.suggestedRule === undefined ? {} : { suggestedRule: input.suggestedRule }),
@@ -278,7 +304,7 @@ export const makeApprovalService = Effect.gen(function*() {
         botId: input.bot.id,
         conversationId,
         title: input.bot.name,
-        body: `${input.kind === "question" ? "Has a question" : "Needs approval"}: ${truncate(oneLine(input.title), 120)}`,
+        body: `${notificationLead(input.kind)}: ${truncate(oneLine(input.title), 120)}`,
       })
       return request
     })
@@ -631,18 +657,60 @@ export const makeApprovalService = Effect.gen(function*() {
         sourceEntryId: request.cardEntryId,
       }).pipe(Effect.asVoid)
 
-  const expireAsync = (requestId: RequestId) =>
+  /** The owner holds the bot's control lease right now (false without a ComputerPort or on error). */
+  const ownerHoldsScreen = (botId: BotId) =>
+    computer === undefined
+      ? Effect.succeed(false)
+      : computer.status(botId).pipe(
+        Effect.map((status) => status.controller === "user"),
+        Effect.orElseSucceed(() => false),
+      )
+
+  /**
+   * Gives the bot its screen back when the owner holds it (answered hand-offs: the bot is about to
+   * act on its screen again). Best effort: an unreachable node changes nothing here.
+   */
+  const handBackScreen = (botId: BotId) =>
+    computer === undefined
+      ? Effect.void
+      : Effect.gen(function*() {
+        if (!(yield* ownerHoldsScreen(botId))) return
+        yield* computer.lease(botId, false)
+      }).pipe(
+        Effect.timeout(Duration.seconds(10)),
+        Effect.catchCause((cause) => Effect.logWarning("ApprovalService: the screen was not handed back", cause)),
+      )
+
+  const expiredText = (request: RuntimeRequest, approvalExpiryMinutes: number): string => {
+    const title = oneLine(request.title)
+    switch (request.kind) {
+      case "handoff":
+        return `Nobody took over your screen for "${title}" within ${HANDOFF_EXPIRY_MINUTES} minutes; the request expired. Do not assume it was done.`
+      case "question":
+        return `Your question "${title}" expired without an answer after ${approvalExpiryMinutes} minutes. Do not assume an answer.`
+      default:
+        return `Your approval request "${title}" expired without an answer after ${approvalExpiryMinutes} minutes. Do not assume an answer.`
+    }
+  }
+
+  const expireAsync = (requestId: RequestId): Effect.Effect<void> =>
     Effect.gen(function*() {
+      const current = yield* getRequest(requestId).pipe(Effect.orDie)
+      // a hand-off the owner is still working on (they hold the screen) waits another period
+      if (current.kind === "handoff" && current.status === "pending" && pending.has(requestId) && (yield* ownerHoldsScreen(current.botId))) {
+        const now = yield* Clock.currentTimeMillis
+        yield* conversations.upsertRequest({ ...current, expiresAt: now + HANDOFF_EXPIRY_MINUTES * 60_000 }).pipe(
+          Effect.catch((error) => Effect.logWarning("ApprovalService: hand-off expiry not extended", error)),
+        )
+        yield* Effect.sleep(Duration.minutes(HANDOFF_EXPIRY_MINUTES))
+        return yield* expireAsync(requestId)
+      }
       const claimed = yield* takePending(requestId)
       if (Option.isNone(claimed)) return
       const request = yield* getRequest(requestId).pipe(Effect.orDie)
       const { approvalExpiryMinutes } = yield* settings.get
       yield* finish(request, { status: "expired", statusReason: "timeout" })
-      yield* deliverAsync(
-        claimed.value,
-        request,
-        `Your ${request.kind === "question" ? "question" : "approval request"} "${oneLine(request.title)}" expired without an answer after ${approvalExpiryMinutes} minutes. Do not assume an answer.`,
-      )
+      yield* deliverAsync(claimed.value, request, expiredText(request, approvalExpiryMinutes))
     }).pipe(Effect.catchDefect((defect) => Effect.logError("ApprovalService: expiry failed", defect)))
 
   const resolveToolBot = (ctx: ToolContext) =>
@@ -758,6 +826,50 @@ export const makeApprovalService = Effect.gen(function*() {
         }),
       })
     })
+
+  const requestTakeover = (ctx: ToolContext, input: { readonly instruction: string }) =>
+    Effect.gen(function*() {
+      if (ctx.taskId !== undefined) {
+        return yield* new InvalidInput({
+          message: "Background work cannot hand the screen to the owner. Say what you need from them in your result.",
+        })
+      }
+      const existing = yield* existingReceipt(ctx)
+      if (Option.isSome(existing)) return existing.value
+      const instruction = input.instruction.trim()
+      if (instruction.length === 0) {
+        return yield* new InvalidInput({ message: "request_takeover needs an instruction: what the owner should do on your screen." })
+      }
+      if (instruction.length > ASK_LIMITS.instructionChars) {
+        return yield* new InvalidInput({ message: `Keep the instruction under ${ASK_LIMITS.instructionChars} characters.` })
+      }
+      const bot = yield* resolveToolBot(ctx)
+      const nodeId = ctx.claims.hostNodeId
+      return yield* createAsync(ctx, bot, {
+        kind: "handoff",
+        title: truncate(oneLine(instruction), ASK_LIMITS.titleChars),
+        subject: { toolName: "request_takeover", nodeId },
+        // "Take over" is the computer lease (`computer.lease`), not an answer: the card stays open
+        responseCapability: { type: "acknowledge", actions: ["done", "skip"] },
+        source: { origin: "openbot", method: "request_takeover", nativeRequestId: ctx.callId ?? "" },
+        expiryMinutes: HANDOFF_EXPIRY_MINUTES,
+        card: (requestId) => ({ type: "handoff", requestId, nodeId, instruction }),
+      })
+    })
+
+  /**
+   * The owner handed the bot's screen back: every pending hand-off of the bot is answered `done`
+   * (the card closes as "Done" and the bot is told).
+   */
+  const answerHandoffs = (botId: BotId) =>
+    Effect.gen(function*() {
+      const open = (yield* requests.list({ statuses: ["pending"], botId }).pipe(Effect.orDie)).filter((r) =>
+        r.kind === "handoff" && !r.blocking && pending.has(r.id)
+      )
+      for (const request of open) {
+        yield* Effect.ignore(respond({ requestId: request.id, response: { type: "acknowledge", action: "done" } }))
+      }
+    }).pipe(Effect.catchDefect((defect) => Effect.logError("ApprovalService: hand-offs not answered", defect)))
 
   // ------------------------------------------------------------------------ respond
 
@@ -900,6 +1012,11 @@ export const makeApprovalService = Effect.gen(function*() {
     const title = oneLine(request.title)
     if (interpreted.status === "cancelled") return `The user dismissed your request "${title}" without answering.`
     const stored = interpreted.stored
+    if (request.kind === "handoff" && stored.type === "acknowledge") {
+      return stored.action === "skip"
+        ? `${HANDOFF_SKIP_TEXT} (You asked: "${title}".) Carry on without it if you can, or tell them what you still need.`
+        : `${HANDOFF_DONE_TEXT} (You asked: "${title}".) Look at the screen again before you continue.`
+    }
     if (stored.type === "answers" && request.responseCapability.type === "answers") {
       return `The user answered your question "${title}":\n${answersText(request.responseCapability.questions, stored.answers)}`
     }
@@ -947,6 +1064,8 @@ export const makeApprovalService = Effect.gen(function*() {
           response: interpreted.stored,
           cardDetail,
         })
+        // an answered hand-off gives the screen back first: the bot acts on it as soon as it is told
+        if (request.kind === "handoff") yield* handBackScreen(request.botId)
         yield* deliverAsync(entry, request, asyncAnswerText(request, interpreted))
         return next
       }).pipe(
@@ -993,6 +1112,17 @@ export const makeApprovalService = Effect.gen(function*() {
       Effect.catchDefect((defect) => Effect.logError("ApprovalService.cancelPending failed", defect).pipe(Effect.as(0))),
     )
 
+  // the owner handed the screen back (computer view "I'm done"): pending hand-offs are done
+  if (computer !== undefined) {
+    yield* computer.leaseChanges.pipe(
+      Stream.runForEach((change) =>
+        change.holder === "bot" && change.cause === "lease" ? answerHandoffs(change.botId) : Effect.void
+      ),
+      Effect.catchCause((cause) => Effect.logWarning("ApprovalService: lease changes ended", cause)),
+      Effect.forkScoped({ startImmediately: true }),
+    )
+  }
+
   return ApprovalService.of({
     evaluate,
     evaluateNode,
@@ -1001,12 +1131,16 @@ export const makeApprovalService = Effect.gen(function*() {
       requests.list({ statuses: ["pending"], ...(conversationId === undefined ? {} : { conversationId }) }).pipe(Effect.orDie),
     askUser,
     requestApproval,
+    requestTakeover,
     asyncAnswers: Stream.fromQueue(answers),
     cancelPending,
   })
 })
 
-/** `HostPaths` is optional (read with `Effect.serviceOption`): without it `~` is never expanded. */
+/**
+ * `HostPaths` and `ComputerPort` are optional (read with `Effect.serviceOption`): without HostPaths
+ * `~` is never expanded; without ComputerPort hand-offs do not follow the owner's control lease.
+ */
 export const ApprovalServiceLive: Layer.Layer<
   ApprovalService,
   never,

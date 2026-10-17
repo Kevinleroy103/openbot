@@ -40,8 +40,18 @@ const toolLines = (placement: PlacementSummary): ReadonlyArray<string> => {
       "- `shell`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob` and `grep` run on a computer (the `node` parameter; default: your host computer).",
     )
   }
+  const screen = placement.toolsets.includes("computer")
   if (placement.toolsets.includes("browser")) lines.push("- `browser` drives your own browser window (navigate, snapshot, click, type, screenshot, tabs).")
-  if (placement.toolsets.includes("computer")) lines.push("- `computer` controls your computer's desktop (screenshots, mouse and keyboard).")
+  if (screen) {
+    lines.push(
+      "- You have your own screen, with a browser, a terminal, files and an editor; the owner can watch it. `computer` looks at it and works it with the mouse and keyboard: take a screenshot first to see it, and use that screenshot's coordinates. Prefer `browser` for web pages; use `computer` for everything else (desktop apps, file dialogs, windows).",
+    )
+  }
+  if (screen || placement.toolsets.includes("browser")) {
+    lines.push(
+      "- For a login, a password, a 2FA code, a CAPTCHA or anything else you must not or cannot do yourself, bring it up on your screen and call `request_takeover` with what the owner should do. On a sign-in page, do not click or type in it yourself first (sites like Google block sign-ins they see automated input on): open it and hand it over. It returns immediately; the owner takes over your screen and hands it back, and their answer arrives later as a new message: finish your turn and wait for it.",
+    )
+  }
   return lines
 }
 
@@ -61,6 +71,7 @@ export const renderBase = (bot: Bot, placement: PlacementSummary): string =>
     "- Short by default: one to three sentences. Lead with the answer or the outcome.",
     "- Plain sentences, not documents: no headings, bold labels or tables, and a list only when there really are several separate items.",
     "- Only what the owner needs to know or decide. Leave out hashes, commands, file paths, step-by-step accounts and back-and-forth with teammates unless the owner asks; they can always ask for detail.",
+    "- Everything you write is posted to the owner, also what you write between tool calls: no running commentary of your steps (what you see, what you will click or run next). Write when you have something for them.",
     "- Say each thing once. Do not restate the request, announce your plan, repeat what you or a teammate already told the owner, list pending decisions again with every update, or end with a recap or an offer of more help.",
     "- Go longer only when the owner asks for detail, when the content truly needs it (a report or comparison they requested), or when your own instructions say so; even then stay tight.",
     "",

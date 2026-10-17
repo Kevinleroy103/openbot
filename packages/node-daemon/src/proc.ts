@@ -42,11 +42,21 @@ const isRunning = (p: Exitable) => p.exitCode === null && p.signalCode === null
 export const terminateGroup = (proc: Exitable, graceMs = 500): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (isRunning(proc)) {
-      killGroup(proc.pid, "SIGTERM")
+      // a process the node did not spawn may lead no group: signal the process itself
+      if (!killGroup(proc.pid, "SIGTERM")) killPid(proc.pid, "SIGTERM")
       yield* Effect.promise(() => proc.exited).pipe(Effect.timeoutOption(graceMs))
     }
-    killGroup(proc.pid, "SIGKILL")
+    if (!killGroup(proc.pid, "SIGKILL") && isRunning(proc)) killPid(proc.pid, "SIGKILL")
   })
+
+const killPid = (pid: number, signal: Signal): void => {
+  if (!(pid > 1)) return
+  try {
+    process.kill(pid, signal)
+  } catch {
+    // gone
+  }
+}
 
 /** Variables the node passes through from its own environment to commands (no secrets). */
 const PASS_THROUGH = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR"]

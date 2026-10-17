@@ -618,3 +618,18 @@ describe("nodes", () => {
       expect(nodes.find((n) => n.id === identity.nodeId)).toMatchObject({ kind: "remote", label: "remote-box", roots: [root] })
     })), 30_000)
 })
+
+describe("computer", () => {
+  test("computer.reset over RPC: returns the bot's screen status (no desktop: unchanged); unknown bot → NotFound", () =>
+    server.run(Effect.gen(function*() {
+      const client = yield* connect()
+      const bot = yield* createBot(client, "Screeny")
+      const before = yield* client["computer.status"]({ botId: bot.id })
+      const reset = yield* client["computer.reset"]({ botId: bot.id })
+      expect(reset).toMatchObject({ botId: bot.id, nodeId: LOCAL_NODE_ID, controller: "bot" })
+      if (before.surface !== "desktop") expect(reset).toEqual(before)
+      expect(yield* client["computer.status"]({ botId: bot.id })).toEqual(reset)
+      const unknown = yield* Effect.flip(client["computer.reset"]({ botId: "bot_nobody" as Bot["id"] }))
+      expect(unknown._tag).toBe("NotFound")
+    })), 30_000)
+})

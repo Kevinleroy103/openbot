@@ -314,6 +314,8 @@ export const NodeSummary = Schema.Struct({
   roots: Schema.Array(Schema.String),
   /** node-daemon version, when known. */
   version: Schema.optionalKey(Schema.String),
+  /** Programs the node lacks for per-bot desktops (D1.7), while online; absent when it has them all. */
+  desktopMissing: Schema.optionalKey(Schema.Array(Schema.String)),
   lastSeenAt: Schema.optionalKey(Millis),
   createdAt: Millis,
 })

@@ -167,6 +167,11 @@ export const ComputerStatus = Schema.Struct({
   viewPath: Schema.optionalKey(Schema.String),
   /** Human message for `error`/`unsupported` ("Can't reach Scout's screen"). */
   message: Schema.optionalKey(Schema.String),
+  /** Desktop screen size (surface `desktop`), for the viewer's aspect ratio. */
+  width: Schema.optionalKey(Schema.Number),
+  height: Schema.optionalKey(Schema.Number),
+  /** Programs the host node lacks for desktops (`unsupported`), to show what to install. */
+  missing: Schema.optionalKey(Schema.Array(Schema.String)),
 })
 export type ComputerStatus = typeof ComputerStatus.Type
 
@@ -348,6 +353,8 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("computer.ensure", { payload: { botId: BotId }, success: ComputerStatus, error: errors(NotFound, NodeUnavailable) }),
   /** take=true: the owner takes control (bot browser actions then fail); false: hand back. */
   Rpc.make("computer.lease", { payload: { botId: BotId, take: Schema.Boolean }, success: ComputerStatus, error: errors(NotFound, NodeUnavailable, Conflict) }),
+  /** "Reset": stops the bot's desktop and everything on it; the next use starts a fresh one. */
+  Rpc.make("computer.reset", { payload: { botId: BotId }, success: ComputerStatus, error: errors(NotFound, NodeUnavailable) }),
 
   // settings + approval rules
   Rpc.make("settings.get", { success: Settings, error: errors() }),

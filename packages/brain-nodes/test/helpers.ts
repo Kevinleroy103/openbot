@@ -8,10 +8,14 @@ import { BotRepo, DataDir, InternalAddress } from "@openbot/core"
 import { ApprovalServiceFake, MemoryBotRepo, MemoryNodeRepo, SequentialIdGen } from "@openbot/core/testing"
 import {
   BrainRpcs,
+  type ComputerAction,
+  type DesktopSupport,
+  DesktopUnavailable,
   encodeScreencastFrame,
   type ExecEvent,
   generateKeyPair,
   type KeyPair,
+  LeaseHeld,
   makePeer,
   makeUpgradeAuth,
   type NodeHello,
@@ -137,7 +141,19 @@ export interface TestNodeState {
   readonly ptys: Array<{ cols: number; rows: number; cwd: string }>
   readonly leases: Array<{ botId: string; holder: string }>
   readonly inputs: Array<unknown>
+  /** desktop@1: `desktop.ensure` / `desktop.stop` calls (bot ids), `computer.act` actions */
+  readonly desktops: Array<string>
+  readonly stopped: Array<string>
+  readonly acts: Array<{ botId: string; action: ComputerAction }>
+  /** `computer.stream` calls, and the bytes each VNC stream received from the brain */
+  readonly vncStreams: Array<{ botId: string; mode: string }>
+  readonly vncReceived: Array<Uint8Array>
+  /** `desktop.ensure` fails with this when set (programs missing) */
+  desktopFailure?: DesktopUnavailable | undefined
 }
+
+/** What the fake node's VNC server sends first (an RFB ProtocolVersion). */
+export const RFB_GREETING = new TextEncoder().encode("RFB 003.008\n")
 
 export type NodeRpcHandlers = Rpc.ToHandler<RpcGroup.Rpcs<typeof NodeRpcs>>
 
@@ -170,8 +186,10 @@ export const testNodeHandlers = (input: {
   readonly wsBase: string
   readonly capabilities: ReadonlyArray<string>
   readonly state: TestNodeState
+  readonly desktop?: DesktopSupport | undefined
 }) => {
   const { state } = input
+  const leaseOf = (botId: string) => state.leases.filter((l) => l.botId === botId).at(-1)?.holder ?? "bot"
   const gate = <A, E>(effect: Effect.Effect<A, E>) =>
     state.verified ? effect : Effect.fail(new NotAuthenticated({ reason: "node.hello first" }))
   /** Echo a data stream verbatim (dialed like a real node: `/node/stream/:id` + bearer). */
@@ -216,6 +234,7 @@ export const testNodeHandlers = (input: {
           tunnels: ["codex.exec-server"],
           policy: { ceiling: "ask" as const, remoteManaged: false },
           brainVerified: true,
+          ...(input.desktop === undefined ? {} : { desktop: input.desktop }),
         } satisfies NodeHello
       }),
     "fs.read": ({ path }) =>
@@ -297,6 +316,62 @@ export const testNodeHandlers = (input: {
         state.leases.push({ botId, holder })
         return { botId, holder, since: 1 }
       })),
+    "desktop.ensure": ({ botId }) =>
+      gate(
+        state.desktopFailure !== undefined
+          ? Effect.fail(state.desktopFailure)
+          : Effect.sync(() => {
+            state.desktops.push(botId)
+            return { botId, display: ":101", width: 1920, height: 1200 }
+          }),
+      ),
+    "desktop.stop": ({ botId }) =>
+      gate(Effect.sync(() => {
+        state.stopped.push(botId)
+        // stopping a desktop ends the user's control (like the real node)
+        state.leases.push({ botId, holder: "bot" })
+      })),
+    "computer.act": ({ action, inv }) =>
+      gate(
+        leaseOf(inv.botId) === "user"
+          ? Effect.fail(new LeaseHeld({ botId: inv.botId, holder: "user", reason: "the user is controlling the screen" }))
+          : Effect.sync(() => {
+            state.acts.push({ botId: inv.botId, action })
+            return { text: `did ${action.action}` }
+          }),
+      ),
+    "computer.stream": ({ botId, mode, streamId, streamToken }) =>
+      gate(
+        mode === "control" && leaseOf(botId) !== "user"
+          ? Effect.fail(new LeaseHeld({ botId, holder: "bot", reason: "take control first" }))
+          : Effect.gen(function*() {
+            state.vncStreams.push({ botId, mode })
+            // like x11vnc behind the node: greet, then answer every binary frame (0xEE + the bytes)
+            yield* Effect.forkDetach(
+              Effect.scoped(
+                Effect.gen(function*() {
+                  const socket = yield* dialWebSocket(`${input.wsBase}${Routes.stream(streamId)}`, {
+                    authorization: formatStreamAuth(streamToken),
+                  })
+                  const reader = yield* socket.reader
+                  const writer = yield* socket.writer
+                  yield* writer.write(RFB_GREETING)
+                  yield* Effect.forever(
+                    Effect.flatMap(reader.pull, (frames) =>
+                      Effect.forEach(frames, (f) => {
+                        if (typeof f === "string") return Effect.void
+                        state.vncReceived.push(f)
+                        const reply = new Uint8Array(f.byteLength + 1)
+                        reply[0] = 0xee
+                        reply.set(f, 1)
+                        return writer.write(reply)
+                      }, { discard: true })),
+                  )
+                }),
+              ).pipe(Effect.ignore),
+            )
+          }),
+      ),
   })
 }
 
@@ -316,6 +391,11 @@ export const newNodeState = (): TestNodeState => ({
   inputs: [],
   ensured: [],
   screencasts: [],
+  desktops: [],
+  stopped: [],
+  acts: [],
+  vncStreams: [],
+  vncReceived: [],
 })
 
 /** Dial `/node` with a signed upgrade and serve NodeRpcs. The connection lives in the caller's scope. */
@@ -333,6 +413,8 @@ export const connectTestNode = (input: {
   readonly silenced?: { on: boolean }
   /** The node's client ping interval (default 5 s). */
   readonly pingInterval?: number
+  /** What the node reports about desktops in `node.hello`. */
+  readonly desktop?: DesktopSupport
 }): Effect.Effect<TestNode, Socket.SocketError, Scope.Scope> =>
   Effect.gen(function*() {
     const brainOrigin = input.brainOrigin ?? BRAIN_ORIGIN
@@ -357,6 +439,7 @@ export const connectTestNode = (input: {
         wsBase: input.wsBase,
         capabilities: input.capabilities ?? ["fs@1", "shell@1", "pty@1", "codex.exec-server@1"],
         state,
+        desktop: input.desktop,
       }),
     )
     const peer = yield* makePeer({ socket, serve: NodeRpcs, call: BrainRpcs, pingInterval: input.pingInterval }).pipe(

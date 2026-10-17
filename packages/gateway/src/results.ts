@@ -206,6 +206,11 @@ export const renderToolError = (error: unknown): string => {
       }
       case "RpcClientError":
         return errorText(`The node did not answer: ${str(e.message) ?? "connection error"}`)
+      case "DesktopUnavailable": {
+        // not covered by describeNodeError: `{message, missing?}`
+        const missing = Array.isArray(e.missing) && e.missing.length > 0 ? ` (missing: ${e.missing.join(", ")})` : ""
+        return errorText(`${str(e.message) ?? "The desktop is unavailable"}${missing}`)
+      }
       case "Internal":
         return "ERROR: Internal error"
       default:

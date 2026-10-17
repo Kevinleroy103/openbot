@@ -21,8 +21,10 @@ import {
   Switch,
   cn,
 } from "@openbot/ui"
-import { ChevronDown, Ellipsis, Laptop, Pencil, Plus, RefreshCw, Server, ShieldCheck, Trash2 } from "lucide-react"
+import { Check, ChevronDown, Ellipsis, Laptop, Monitor, Pencil, Plus, RefreshCw, Server, ShieldCheck, Trash2 } from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
+import { nodeDesktopState } from "../computer/desktop.ts"
+import { DesktopSetupNote } from "../computer/DesktopSetupNote.tsx"
 import { InlineEdit } from "../details/InlineEdit.tsx"
 import { CommandBlock, ConfirmDialog, ErrorLine, capabilityInfo, capabilityName, formatAgo, useCommand, useRosterValue } from "../details/kit.tsx"
 import { GroupLabel, PageHeader, SettingsCard } from "./layout.tsx"
@@ -126,6 +128,12 @@ function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummar
               <span className="truncate text-base font-medium text-fg">{node.label}</span>
             )}
             {node.kind === "local" && <LabelChip>Brain</LabelChip>}
+            {nodeDesktopState(node) === "on" && (
+              <LabelChip className="gap-0.5 max-sm:hidden">
+                <Icon icon={Monitor} size="xs" />
+                Desktop
+              </LabelChip>
+            )}
           </div>
           <span className="max-w-full truncate text-sm text-fg-secondary">{desc}</span>
         </div>
@@ -167,8 +175,9 @@ function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummar
       </div>
       {(rename.error ?? revoke.error) && <ErrorLine className="px-4">{rename.error ?? revoke.error}</ErrorLine>}
       {expanded && (
-        <div className="flex flex-col gap-4 px-4 pt-1 pb-4 ps-[60px]">
+        <div className="flex min-w-0 flex-col gap-4 px-4 pt-1 pb-4 sm:ps-[60px]">
           <CapabilityEditor node={node} />
+          <NodeDesktop node={node} />
           {node.roots.length > 0 && (
             <div className="flex flex-col gap-1">
               <span className="text-xs text-fg-secondary">Allowed folders</span>
@@ -213,6 +222,33 @@ function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummar
           if (r.ok) setConfirmRemove(false)
         }}
       />
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------------------------- desktops
+
+/** Settings › Computers › a node: whether its Bots get full desktops, and what to install if not. */
+function NodeDesktop({ node }: { readonly node: NodeSummary }): ReactNode {
+  const state = nodeDesktopState(node)
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5" data-testid="node-desktop" data-desktop={state}>
+      <span className="text-xs text-fg-secondary">Full desktop</span>
+      {state === "on" ? (
+        <span className="inline-flex items-center gap-1.5 text-sm text-fg">
+          <Icon icon={Check} size="sm" className="text-success-fg" />
+          Each Bot that works here gets its own screen to watch and take over.
+        </span>
+      ) : state === "unapproved" ? (
+        <span className="text-sm text-fg-secondary">This computer offers full desktops. Turn on Full desktop above to use them.</span>
+      ) : (
+        <DesktopSetupNote
+          missing={node.desktopMissing ?? []}
+          nodeName={node.kind === "local" ? "this server" : node.label}
+          platform={node.platform}
+          local={node.kind === "local"}
+        />
+      )}
     </div>
   )
 }

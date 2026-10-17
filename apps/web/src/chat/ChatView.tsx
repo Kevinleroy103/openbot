@@ -87,7 +87,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
   const tint = settings.accent === "bot" && !isGroup && primary ? botTintStyle(primary.avatar.color) : {}
   // Phone / tablet header: the monitor button when the Bot's computer has a screen or a terminal.
   const host = !isGroup && primary ? roster.state.nodes.get(primary.hostNodeId) : undefined
-  const hasComputer = host !== undefined && host.capabilities.some((c) => /^(browser|pty)@/.test(c))
+  const hasComputer = host !== undefined && host.capabilities.some((c) => /^(desktop|browser|pty)@/.test(c))
 
   // ----------------------------------------------------------------------------- unread boundary
   // Captured once per opened conversation so the NEW divider stays put after we mark it read.

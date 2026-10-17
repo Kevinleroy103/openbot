@@ -32,7 +32,17 @@ directory's `bunfig.toml`, and only `apps/web` declares `bun-plugin-tailwind`.
   `bots.create` (the new Bot introduces itself with a question card), `conversations.createGroup`,
   `attachments.upload` (served at `/api/attachments/:id`), `bots.compact` / `bots.newSession`,
   routines (`runNow` streams a briefing), memory, skills, rules, nodes, pairing codes and settings.
-- The mock counts only blocking requests in `pendingRequestCount`; there is no live computer view.
+- Computers (D1.7): "This computer" offers full desktops (`desktop@1`). `/ws/computer/:botId` serves a
+  fake RFB (VNC) desktop per viewer (`dev/mock/rfb.ts`: a 1920×1200 desktop of flat rectangles, RRE
+  encoded), so the noVNC view, Take control (control sockets need the lease: 403 otherwise) and I'm done
+  (closes control sockets with 1000) run end to end; in control, clicks leave a marker and typing fills
+  the focused field. `computer.reset` closes viewers with 1012 and puts the desktop to sleep. Travel
+  Desk's desktop starts asleep (Wake), Data Analyst's screen can't be reached (1011 + reason), and
+  Expense Clerk runs on `vps-1`, which lacks the desktop programs (`missing`).
+- Research Scout has a pending **Action needed** hand-off card (`request_takeover`); handing control back
+  answers it "done", like the brain. `POST /api/mock/takeover/:botId` asks again;
+  `GET /api/mock/desktop` counts the input the fake desktops received.
+- The mock counts only blocking requests in `pendingRequestCount`; browser-only nodes have no screencast.
 
 ## Screenshots and smoke test
 

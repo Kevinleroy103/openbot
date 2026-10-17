@@ -22,7 +22,6 @@ import {
   LeaseHeld,
   mintStreamTicket,
   negotiateProtocol,
-  NodeComputerRpcs,
   NodeApprovalRequest,
   NodeHello,
   NodeRpcs,
@@ -73,10 +72,19 @@ describe("contract", () => {
         "browser.screencast",
         "browser.input",
         "lease.set",
+        "desktop.ensure",
+        "desktop.stop",
+        "computer.act",
+        "computer.stream",
       ].sort(),
     )
     expect([...BrainRpcs.requests.keys()].sort()).toEqual(["node.event", "node.heartbeat", "node.openStream", "node.requestApproval"])
-    expect([...NodeComputerRpcs.requests.keys()].sort()).toEqual(["computer.act", "computer.stream"])
+    expect([...NodeRpcs.requests.keys()].filter((k) => /^(computer|desktop)\./.test(k)).sort()).toEqual([
+      "computer.act",
+      "computer.stream",
+      "desktop.ensure",
+      "desktop.stop",
+    ])
     expect(PROTOCOL_VERSION).toBe(1)
   })
 

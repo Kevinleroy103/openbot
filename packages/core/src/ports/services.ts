@@ -29,7 +29,8 @@
  *                                                  forwards `NodeDirectory.changes` to the roster)
  *   2. SettingsService, UsageService, Notifier (LiveHub-backed), ConversationService, AttachmentService
  *   3. MemoryService, SkillService                (events via ConversationService)
- *   4. ApprovalService                            (never calls Orchestrator: emits `asyncAnswers`)
+ *   4. ApprovalService                            (never calls Orchestrator: emits `asyncAnswers`;
+ *                                                  optional ComputerPort for hand-offs, D1.7)
  *   5. InstructionRenderer                        (MemoryService, BotRepo, SettingsService)
  *   5b. BackgroundTasks                           (never calls Orchestrator: emits `results`)
  *   6. Orchestrator                               (drains `ApprovalService.asyncAnswers`; group
@@ -731,7 +732,20 @@ export class ApprovalService extends Context.Service<ApprovalService, {
     },
   ) => Effect.Effect<PendingRequestReceipt, InvalidInput>
   /**
-   * Answers to NON-blocking requests (`ask_user` / `request_approval`, D3.3), each as a
+   * `request_takeover` tool (D1.7): posts an "Action needed" hand-off card (kind `handoff`,
+   * acknowledge `done` | `skip`) asking the owner to take over the bot's screen, returns immediately.
+   * The owner takes control with `computer.lease {take: true}`; handing it back (`computer.lease
+   * {take: false}`, the computer view's "I'm done") answers every pending hand-off of the bot with
+   * `done`, and answering the card (`done` / `skip`) gives the lease back. The answer (or the expiry,
+   * `HANDOFF_EXPIRY_MINUTES`, extended while the owner still holds control) becomes a delivery.
+   * `InvalidInput` from a background task or for an empty instruction.
+   */
+  readonly requestTakeover: (
+    ctx: ToolContext,
+    input: { readonly instruction: string },
+  ) => Effect.Effect<PendingRequestReceipt, InvalidInput>
+  /**
+   * Answers to NON-blocking requests (`ask_user` / `request_approval` / `request_takeover`), each as a
    * `user-message` delivery for the asking bot. Buffered single-consumer stream: the Orchestrator
    * drains it from its layer (this keeps ApprovalService independent of Orchestrator).
    */

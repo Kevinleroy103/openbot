@@ -90,6 +90,7 @@ const V1_RPCS = [
   "computer.status",
   "computer.ensure",
   "computer.lease",
+  "computer.reset",
   "settings.get",
   "settings.update",
   "rules.list",

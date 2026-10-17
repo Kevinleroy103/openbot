@@ -23,6 +23,7 @@ const OPENBOT_TOOL_ACTIVITY: Readonly<Record<string, string>> = {
   send_file: "Sending a file",
   ask_user: "Asking you a question",
   request_approval: "Asking for your approval",
+  request_takeover: "Needs you on its screen",
   browser: "Using the browser",
   computer: "Using the computer",
 }

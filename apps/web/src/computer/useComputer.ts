@@ -1,28 +1,35 @@
-// `computer.status` / `computer.ensure` / `computer.lease` for one bot, folded into what the UI needs:
-// can we stream a screen right now, and if not, why.
+// `computer.status` / `computer.ensure` / `computer.lease` / `computer.reset` for one bot, folded into
+// what the UI needs: can we stream a screen right now, which kind (the bot's whole desktop over noVNC,
+// or its browser window over the CDP screencast), and if not, why.
 import { computerStatusAtom } from "@openbot/client"
 import type { BotId, ComputerStatus } from "@openbot/contracts"
 import { Atom } from "effect/reactivity"
 import { useMemo } from "react"
 import { useCommand, useQuery } from "../details/kit.tsx"
 
+/** Which live view a node offers: a whole desktop (`desktop@1`, noVNC) or a browser window (CDP). */
+export type ScreenSurface = "browser" | "desktop"
+
 export type ScreenAvailability =
   | { readonly kind: "loading" }
-  /** The host node has no browser (or only the not-yet-built desktop view). */
-  | { readonly kind: "unsupported"; readonly message: string }
-  /** The host node is offline / unreachable. */
-  | { readonly kind: "unreachable"; readonly message: string }
-  /** A browser view exists but no window is open yet (needs `computer.ensure`). */
-  | { readonly kind: "absent" }
+  /** The host node has no screen to show (no `browser@1` / `desktop@1`); `missing` = what to install. */
+  | { readonly kind: "unsupported"; readonly message: string; readonly missing?: ReadonlyArray<string> | undefined }
+  /** The host node is offline / unreachable, or the screen failed to start. */
+  | { readonly kind: "unreachable"; readonly message: string; readonly surface?: ScreenSurface | undefined }
+  /** No screen yet: a desktop that is asleep, or no browser window (needs `computer.ensure`). */
+  | { readonly kind: "absent"; readonly surface: ScreenSurface }
   /** `ready` or `starting`: connect the viewer socket. */
-  | { readonly kind: "stream" }
+  | { readonly kind: "stream"; readonly surface: ScreenSurface }
 
 export const availabilityOf = (status: ComputerStatus | undefined, error: string | undefined): ScreenAvailability => {
   if (!status) return error ? { kind: "unreachable", message: error } : { kind: "loading" }
-  if (status.surface !== "browser" || status.state === "unsupported") return { kind: "unsupported", message: status.message ?? "This computer has no screen to show" }
-  if (status.state === "error") return { kind: "unreachable", message: status.message ?? "Can't reach the screen" }
-  if (status.state === "absent") return { kind: "absent" }
-  return { kind: "stream" }
+  if (status.surface === "none" || status.state === "unsupported") {
+    return { kind: "unsupported", message: status.message ?? "This computer has no screen to show", ...(status.missing ? { missing: status.missing } : {}) }
+  }
+  const surface: ScreenSurface = status.surface
+  if (status.state === "error") return { kind: "unreachable", message: status.message ?? "Can't reach the screen", surface }
+  if (status.state === "absent") return { kind: "absent", surface }
+  return { kind: "stream", surface }
 }
 
 export function useComputer(botId: BotId) {

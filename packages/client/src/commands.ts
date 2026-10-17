@@ -70,6 +70,7 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "nodes.setCapabilities": [Keys.nodes, Keys.computer],
   "computer.ensure": [Keys.computer],
   "computer.lease": [Keys.computer],
+  "computer.reset": [Keys.computer],
   "settings.update": [Keys.settings],
   "harnesses.addProfile": [Keys.harnesses],
   "harnesses.removeProfile": [Keys.harnesses],

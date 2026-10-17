@@ -6,13 +6,17 @@ import * as Context from "effect/Context"
 import * as Cause from "effect/Cause"
 import * as Deferred from "effect/Deferred"
 import * as Effect from "effect/Effect"
+import * as Exit from "effect/Exit"
 import * as FiberSet from "effect/FiberSet"
 import * as Layer from "effect/Layer"
 import type { Rpc, RpcGroup } from "effect/rpc"
 import {
   BrainLink,
+  NodeEventTypes,
   BrowserUnavailable,
   Capabilities,
+  DesktopUnavailable,
+  LeaseHeld,
   MIN_SUPPORTED_PROTOCOL_VERSION,
   NotAuthenticated,
   NodeRpcs,
@@ -27,17 +31,24 @@ import {
 import { AuditLog, AuditLogLive } from "./AuditLog.ts"
 import { BrowserManager, BrowserManagerLive } from "./browser/BrowserManager.ts"
 import { NodeConfig, NodeConfigLive, type NodeConfigInput, type NodeConfigShape } from "./config.ts"
+import { describeComputerAction } from "./desktop/actions.ts"
+import { DesktopManager, DesktopManagerLive } from "./desktop/DesktopManager.ts"
+import { LeaseBook, LeaseBookLive } from "./lease.ts"
 import { makeFsOps } from "./fs.ts"
 import { makeGuard } from "./guard.ts"
 import { NodePolicy, NodePolicyLive } from "./NodePolicy.ts"
 import { PathPolicy, PathPolicyLive } from "./PathPolicy.ts"
 import {
   availableTunnels,
+  bridgeNet,
+  connectTcp,
+  dialSession,
   makeForwardListen,
   makePtyOpen,
   makeServiceStart,
   makeServiceStop,
   makeTunnelOpen,
+  startSession,
   type ServiceRegistry,
 } from "./sessions.ts"
 import { makeShellExec } from "./shell.ts"
@@ -87,12 +98,13 @@ const describeAction = (a: BrowserAction): string => {
 }
 
 /** Capabilities this node declares, from its config and what is installed. */
-export const nodeCapabilities = (config: NodeConfigShape, browserAvailable: boolean): ReadonlyArray<string> => [
+export const nodeCapabilities = (config: NodeConfigShape, browserAvailable: boolean, desktopOffered = false): ReadonlyArray<string> => [
   Capabilities.fs,
   Capabilities.shell,
   Capabilities.pty,
   Capabilities.tunnel,
   ...(browserAvailable ? [Capabilities.browser] : []),
+  ...(desktopOffered ? [Capabilities.desktop] : []),
   ...(config.binaries.codex ? [Capabilities.codexExecServer] : []),
   ...(config.binaries.opencode ? [Capabilities.opencodeServe] : []),
 ]
@@ -104,8 +116,13 @@ export const makeNodeHandlers = Effect.gen(function* () {
   const policy = yield* NodePolicy
   const audit = yield* AuditLog
   const browser = yield* BrowserManager
+  const desktop = yield* DesktopManager
+  const leases = yield* LeaseBook
   const brain = yield* BrainLink
   const dialer = yield* StreamDialer
+  // the brain learns when a bot's screen comes and goes (its live view and status follow)
+  desktop.onStart((info) => brain.event(NodeEventTypes.desktopStarted, info))
+  desktop.onStop((botId) => brain.event(NodeEventTypes.desktopStopped, { botId }))
   const scope = yield* Effect.scope
   const sessions = yield* FiberSet.make<unknown, unknown>()
   const runFork = yield* FiberSet.makeRuntime<never>()
@@ -114,7 +131,9 @@ export const makeNodeHandlers = Effect.gen(function* () {
   const registry: ServiceRegistry = { services: new Map(), next: 0 }
   const fs = makeFsOps({ config, paths, guard })
   const sessionDeps = { config, paths, guard, dialer, brain, sessions, scope }
-  const capabilities = nodeCapabilities(config, browser.available)
+  // the node's own ceiling can rule the computer out entirely: then it does not offer desktops
+  const desktopOffered = desktop.offered && policy.ceilingFor("computer") !== "never"
+  const capabilities = nodeCapabilities(config, browser.available, desktopOffered)
 
   const info: NodeInfoShape = {
     nodeId: config.nodeId,
@@ -132,12 +151,19 @@ export const makeNodeHandlers = Effect.gen(function* () {
       tunnels: [...availableTunnels(config)],
       policy: { ceiling: policy.summary.ceiling, remoteManaged: policy.summary.remoteManaged },
       brainVerified,
+      desktop: { missing: [...desktop.support.missing], width: desktop.support.width, height: desktop.support.height },
     }),
   }
 
   const browserAllowed = Effect.suspend(() =>
     policy.ceilingFor("browser") === "never"
       ? Effect.fail(new PolicyRefused({ action: "browser", reason: "The node's policy does not allow the browser.", retry: false }))
+      : Effect.void,
+  )
+
+  const desktopAllowed = Effect.suspend(() =>
+    policy.ceilingFor("computer") === "never"
+      ? Effect.fail(new DesktopUnavailable({ message: "The node's policy does not allow the computer." }))
       : Effect.void,
   )
 
@@ -208,7 +234,46 @@ export const makeNodeHandlers = Effect.gen(function* () {
         return { windowTargetId: yield* Deferred.await(ready) }
       }),
     "browser.input": ({ botId, event }) => browser.input(botId, event),
-    "lease.set": ({ botId, holder }) => browser.setLease(botId, holder),
+    "lease.set": ({ botId, holder }) => Effect.sync(() => leases.set(botId, holder)),
+    "desktop.ensure": ({ botId }) => Effect.andThen(desktopAllowed, desktop.ensure(botId)),
+    "desktop.stop": ({ botId }) => desktop.stop(botId),
+    "computer.act": ({ inv, action }) =>
+      Effect.gen(function* () {
+        // no approval question while the owner is at the controls
+        if (leases.get(inv.botId).holder === "user") {
+          return yield* new LeaseHeld({ botId: inv.botId, holder: "user", reason: "The user is controlling this screen. Wait until they hand it back." })
+        }
+        // the node's ceiling (never → PolicyRefused, ask → the owner is asked), audited
+        return yield* guard({ inv, action: "computer", target: describeComputerAction(action) }, desktop.act(inv.botId, action))
+      }),
+    "computer.stream": ({ botId, mode, streamId, streamToken }) =>
+      Effect.gen(function* () {
+        const kind = mode === "control" ? "vnc-control" : "vnc-view"
+        // the control server takes input: only while the owner holds the lease
+        if (mode === "control" && leases.get(botId).holder !== "user") {
+          return yield* new LeaseHeld({ botId, holder: "bot", reason: "take control before opening the control stream" })
+        }
+        yield* desktopAllowed
+        const port = yield* desktop.vncPort(botId, mode)
+        yield* startSession<null>(sessionDeps, kind, (ready) =>
+          Effect.gen(function* () {
+            const sock = yield* connectTcp(port, kind)
+            const io = yield* dialSession(sessionDeps, { streamId, streamToken }, kind)
+            yield* Deferred.succeed(ready, null)
+            if (mode === "view") return yield* bridgeNet(io, sock)
+            // handing control back (lease → bot) closes the control stream; watchers keep theirs
+            const revoked = yield* Deferred.make<void>()
+            const off = leases.subscribe((s) => {
+              if (s.botId === botId && s.holder !== "user") Deferred.doneUnsafe(revoked, Exit.void)
+            })
+            yield* Effect.addFinalizer(() => Effect.sync(off))
+            // a control connection that ends mid-keystroke must not leave a key held
+            yield* Effect.addFinalizer(() => desktop.releaseKeys(botId))
+            if (leases.get(botId).holder !== "user") return
+            yield* Effect.raceFirst(bridgeNet(io, sock), Deferred.await(revoked))
+          }),
+        )
+      }),
   })
 
   return { handlers, info }
@@ -224,7 +289,11 @@ export const NodeHandlersLive = (
   config: NodeConfigInput | NodeConfigShape,
 ): Layer.Layer<NodeHandlersContext | NodeInfo | NodeHandlers, never, BrainLink | StreamDialer> =>
   NodeHandlersFromServices.pipe(
-    Layer.provide(Layer.mergeAll(PathPolicyLive, NodePolicyLive, AuditLogLive, BrowserManagerLive)),
+    // the browser depends on the desktops (a bot's browser runs on its screen), so it is released
+    // first: browsers close gracefully before the screens go away
+    Layer.provide(BrowserManagerLive),
+    Layer.provideMerge(Layer.mergeAll(PathPolicyLive, NodePolicyLive, AuditLogLive, DesktopManagerLive)),
+    Layer.provideMerge(LeaseBookLive),
     Layer.provide(NodeConfigLive(config)),
   )
 
@@ -232,7 +301,7 @@ export const NodeHandlersLive = (
 export const NodeHandlersFromServices: Layer.Layer<
   NodeHandlersContext | NodeInfo | NodeHandlers,
   never,
-  NodeConfig | PathPolicy | NodePolicy | AuditLog | BrowserManager | BrainLink | StreamDialer
+  NodeConfig | PathPolicy | NodePolicy | AuditLog | BrowserManager | DesktopManager | LeaseBook | BrainLink | StreamDialer
 > = Layer.effectContext(
   Effect.gen(function* () {
     const { handlers, info } = yield* makeNodeHandlers

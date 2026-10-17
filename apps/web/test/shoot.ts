@@ -196,6 +196,121 @@ export const SCENES: ReadonlyArray<Shot> = [
   },
 ]
 
+/** The full-desktop view's picture is live (noVNC connected to the mock's fake RFB desktop). */
+const desktopLive = async (page: Page, interactive = false) => {
+  await page.locator(`[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]${interactive ? "[data-interactive]" : ""}`).waitFor({ timeout: 10_000 })
+  await page.waitForTimeout(400)
+}
+
+/** Details › Computer of the open chat's Bot. */
+const computerTab = async (page: Page) => {
+  await page.getByRole("button", { name: "View conversation details" }).click()
+  await page.getByRole("tab", { name: "Computer" }).click()
+  await page.getByTestId("screen-thumbnail").waitFor()
+}
+
+/** Full-desktop computer view (D1.7): Watching / in control / asleep / unreachable, the hand-off card, Details › Computer. */
+export const COMPUTER_SCENES: ReadonlyArray<Shot> = [
+  {
+    name: "70-computer-watching",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await computerTab(page)
+      await page.getByTestId("screen-thumbnail").click()
+      await desktopLive(page)
+    },
+  },
+  {
+    name: "72-takeover-card",
+    route: "#/c/cnv_scout",
+    act: async (page) => {
+      const card = page.locator('[data-card="handoff"][data-status="pending"]')
+      await card.scrollIntoViewIfNeeded()
+      await card.getByRole("button", { name: "Take over" }).waitFor()
+      await card.locator('[data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+    },
+  },
+  {
+    name: "71-computer-control",
+    route: "#/c/cnv_scout",
+    act: async (page) => {
+      await page.locator('[data-card="handoff"]').getByRole("button", { name: "Take over" }).click()
+      await desktopLive(page, true)
+      const box = (await page.getByTestId("computer-view").getByTestId("desktop-screen").boundingBox())!
+      // the password field of the fake sign-in page, then type
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.52)
+      await page.keyboard.type("correct horse")
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    // after 71 the owner still holds Scout's screen (the view was left open): the card offers I'm done
+    name: "72b-takeover-in-control",
+    route: "#/c/cnv_scout",
+    act: async (page) => {
+      const card = page.locator('[data-card="handoff"][data-status="pending"]')
+      await card.scrollIntoViewIfNeeded()
+      await card.getByRole("button", { name: "I'm done" }).waitFor({ timeout: 10_000 })
+      await card.locator('[data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+    },
+  },
+  {
+    name: "73-takeover-done",
+    route: "#/c/cnv_release",
+    act: async (page) => {
+      const card = page.locator('[data-card="handoff"][data-status="resolved"]')
+      await card.scrollIntoViewIfNeeded()
+      await page.evaluate(() => document.querySelector('[data-card="handoff"]')?.scrollIntoView({ block: "center" }))
+    },
+  },
+  {
+    name: "74-details-computer",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await computerTab(page)
+      await page.getByTestId("screen-thumbnail").locator('[data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+    },
+  },
+  { name: "75-details-missing", route: "#/c/cnv_expense", act: async (page) => void (await computerTab(page)) },
+  {
+    name: "76-reset-confirm",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await computerTab(page)
+      await page.getByTestId("reset-computer").click()
+      await page.getByRole("dialog", { name: /Reset Chief of Staff's computer/ }).waitFor()
+    },
+  },
+  {
+    name: "77-computer-asleep",
+    route: "#/c/cnv_travel",
+    act: async (page) => {
+      await computerTab(page)
+      await page.getByTestId("screen-thumbnail").click()
+      await page.getByTestId("computer-view").getByTestId("screen-message").waitFor()
+    },
+  },
+  {
+    name: "78-computer-unreachable",
+    // the mock closes Data Analyst's screen with 1011 + a reason, like the brain when it can't start it
+    route: "#/c/cnv_data",
+    act: async (page) => {
+      await computerTab(page)
+      await page.getByTestId("screen-thumbnail").click()
+      await page.locator('[data-testid="computer-view"] [data-notice="unplug"]').waitFor({ timeout: 10_000 })
+    },
+  },
+  {
+    name: "79-settings-computers",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await page.getByRole("button", { name: "Computers" }).click()
+      await page.getByTestId("node-row").filter({ hasText: "vps-1" }).getByRole("button", { name: "Show details" }).click()
+      await page.getByTestId("desktop-setup").waitFor()
+    },
+  },
+]
+
 /** Settings › Skills (from the sidebar's Computers pill, then the nav). */
 const openSkills = async (page: Page) => {
   await page.getByRole("button", { name: "Computers" }).click()
@@ -227,7 +342,7 @@ export const takeScreens = async (options: { readonly only?: ReadonlyArray<strin
     for (const theme of options.themes ?? (["dark", "light"] as const)) {
       const mock = await startMock()
       try {
-        for (const shot of SCENES) {
+        for (const shot of [...SCENES, ...COMPUTER_SCENES]) {
           if (options.only && options.only.length > 0 && !options.only.some((o) => shot.name.includes(o))) continue
           const { page, errors: errs } = await openPage(browser, mock.url, theme, shot.route)
           if (shot.route?.startsWith("#/c/")) await page.waitForSelector(`[data-conversation="${shot.route.slice(4)}"] [data-entry], [data-conversation="${shot.route.slice(4)}"] [role="separator"]`, { timeout: 10_000 }).catch(() => {})

@@ -268,8 +268,8 @@ const bridgeNdjson = (
     return ended
   })
 
-/** Raw bytes between a node:net socket and the stream. */
-const bridgeNet = (io: Duplex, sock: net.Socket): Effect.Effect<void, never, Scope.Scope> =>
+/** Raw bytes between a node:net socket and the stream, until either side ends. */
+export const bridgeNet = (io: Duplex, sock: net.Socket): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     const out = yield* Queue.unbounded<Uint8Array | string, Cause.Done>()
     const closed = yield* Deferred.make<void>()
@@ -291,10 +291,11 @@ const bridgeNet = (io: Duplex, sock: net.Socket): Effect.Effect<void, never, Sco
     yield* Effect.ignore(io.writer.write(new Socket.CloseEvent(1000)))
   })
 
-const connectTcp = (port: number): Effect.Effect<net.Socket, TunnelFailed> =>
+/** Connect to a node-loopback TCP port (`kind` labels the error). */
+export const connectTcp = (port: number, kind = "tcp"): Effect.Effect<net.Socket, TunnelFailed> =>
   Effect.callback<net.Socket, TunnelFailed>((resume) => {
     const sock = net.connect(port, "127.0.0.1")
-    const onError = (e: Error) => resume(Effect.fail(new TunnelFailed({ kind: "tcp", reason: `connect 127.0.0.1:${port}: ${e.message}` })))
+    const onError = (e: Error) => resume(Effect.fail(new TunnelFailed({ kind, reason: `connect 127.0.0.1:${port}: ${e.message}` })))
     sock.once("error", onError)
     sock.once("connect", () => {
       sock.off("error", onError)

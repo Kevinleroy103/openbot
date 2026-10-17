@@ -20,6 +20,7 @@ import {
 import type { ToolCallContext } from "../src/tool.ts"
 import { BotToolkit } from "../src/toolkits/bot.ts"
 import { toBrowserAction } from "../src/toolkits/browser.ts"
+import { toComputerAction } from "../src/toolkits/computer.ts"
 import { resolveNodePath } from "../src/toolkits/node.ts"
 import { textOf } from "./harness.ts"
 
@@ -72,7 +73,7 @@ describe("params", () => {
         "message_bot", "post_to_group", "react", "handoff_task", "list_bots", "list_models", "create_bot", "update_bot", "list_sections", "create_section", "rename_section", "delete_section", "move_bot_to_section", "ask_user", "request_approval", "notify_user", "send_file",
         "remember", "forget", "recall_memory", "create_routine", "update_routine", "list_routines", "save_skill",
         "list_skills", "enable_skill", "disable_skill", "find_skills", "preview_skill", "install_skill", "list_nodes", "start_task", "list_tasks", "check_task", "cancel_task", "update_task", "shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep",
-        "browser",
+        "browser", "computer", "request_takeover",
       ].sort(),
     )
   })
@@ -150,6 +151,41 @@ describe("helpers", () => {
     expect(await run(toBrowserAction({ action: "click", x: 1, y: 2 }))).toEqual(Exit.succeed({ _tag: "click", x: 1, y: 2 }))
     expect(await run(toBrowserAction({ action: "tabs" }))).toEqual(Exit.succeed({ _tag: "tabs", op: "list" }))
     expect(Exit.isFailure(await run(toBrowserAction({ action: "click", ref: undefined })))).toBe(true)
+  })
+
+  test("toComputerAction keeps the node-protocol names and checks each action's fields", async () => {
+    const run = <A, E>(e: Effect.Effect<A, E>) => Effect.runPromiseExit(e)
+    expect(await run(toComputerAction({ action: "screenshot", coordinate: [1, 2] }))).toEqual(Exit.succeed({ action: "screenshot" }))
+    expect(await run(toComputerAction({ action: "left_click", coordinate: [640, 400], text: "shift" }))).toEqual(
+      Exit.succeed({ action: "left_click", coordinate: [640, 400], text: "shift" }),
+    )
+    expect(await run(toComputerAction({ action: "left_click_drag", start_coordinate: [1, 2], coordinate: [3, 4] }))).toEqual(
+      Exit.succeed({ action: "left_click_drag", start_coordinate: [1, 2], coordinate: [3, 4] }),
+    )
+    expect(await run(toComputerAction({ action: "scroll", scroll_direction: "down" }))).toEqual(
+      Exit.succeed({ action: "scroll", scroll_direction: "down", scroll_amount: 3 }),
+    )
+    expect(await run(toComputerAction({ action: "zoom", region: [0, 0, 100, 50] }))).toEqual(
+      Exit.succeed({ action: "zoom", region: [0, 0, 100, 50] }),
+    )
+    expect(await run(toComputerAction({ action: "wait" }))).toEqual(Exit.succeed({ action: "wait", duration: 1 }))
+    for (const bad of [
+      { action: "mouse_move" },
+      { action: "left_click_drag", coordinate: [1, 2] },
+      { action: "type" },
+      { action: "key" },
+      { action: "hold_key", text: "shift" },
+      { action: "zoom" },
+      { action: "scroll" },
+    ] as const) {
+      expect(Exit.isFailure(await run(toComputerAction(bad)))).toBe(true)
+    }
+  })
+
+  test("renderToolError explains DesktopUnavailable with the missing programs", () => {
+    expect(renderToolError({ _tag: "DesktopUnavailable", message: "No desktop here", missing: ["Xvfb", "x11vnc"] })).toBe(
+      "ERROR: No desktop here (missing: Xvfb, x11vnc)",
+    )
   })
 })
 

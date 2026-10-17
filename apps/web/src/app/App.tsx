@@ -259,7 +259,7 @@ export function App(): ReactNode {
         overlay={
           computer.botId ? (
             <Suspense fallback={<PaneLoading className="bg-[rgba(20,20,20,.95)]" />}>
-              <ComputerView botId={computer.botId} onClose={computer.close} />
+              <ComputerView key={computer.botId} botId={computer.botId} onClose={computer.close} />
             </Suspense>
           ) : undefined
         }

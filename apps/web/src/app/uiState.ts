@@ -83,6 +83,8 @@ export const settingsDialogAtom: Atom.Writable<SettingsDialogState> = Atom.make<
 
 export interface ComputerViewState {
   readonly botId: BotId | null
+  /** Take control right away (a hand-off card's "Take over"). */
+  readonly takeControl?: boolean
 }
 export const computerViewAtom: Atom.Writable<ComputerViewState> = Atom.make<ComputerViewState>({ botId: null }).pipe(
   Atom.keepAlive,
@@ -196,7 +198,9 @@ export const useComputerView = () => {
   return useMemo(
     () => ({
       botId: state.botId,
-      open: (botId: BotId) => set({ botId }),
+      takeControl: state.takeControl === true,
+      /** `takeControl`: open in control (the view takes the lease) instead of Watching. */
+      open: (botId: BotId, options?: { readonly takeControl?: boolean }) => set({ botId, ...(options?.takeControl ? { takeControl: true } : {}) }),
       close: () => set({ botId: null }),
     }),
     [state, set],

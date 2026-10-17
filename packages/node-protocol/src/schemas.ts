@@ -35,6 +35,19 @@ export const NodeHelloRequest = Schema.Struct({
 })
 export type NodeHelloRequest = typeof NodeHelloRequest.Type
 
+/**
+ * A node's per-bot desktops (D1.7, Grok's "each Bot gets its own screen"): one virtual X display
+ * per bot (Xvfb + window manager + dock + x11vnc), started on demand.
+ */
+export const DesktopSupport = Schema.Struct({
+  /** Programs this node lacks for desktops; empty when it offers `desktop@1`. */
+  missing: Schema.Array(Schema.String),
+  /** Size of every bot desktop, in screen pixels. */
+  width: Schema.Number,
+  height: Schema.Number,
+})
+export type DesktopSupport = typeof DesktopSupport.Type
+
 export const NodeHello = Schema.Struct({
   nodeId: Schema.String,
   /** node software version */
@@ -52,6 +65,8 @@ export const NodeHello = Schema.Struct({
   policy: Schema.Struct({ ceiling: PolicyCeiling, remoteManaged: Schema.Boolean }),
   /** the node verified the brain signature with its pinned brain key */
   brainVerified: Schema.Boolean,
+  /** Per-bot desktops (D1.7): what this node offers or lacks; absent on older nodes. */
+  desktop: Schema.optional(DesktopSupport),
 })
 export type NodeHello = typeof NodeHello.Type
 
@@ -346,8 +361,21 @@ export type BrowserInputEvent = typeof BrowserInputEvent.Type
 export const LeaseState = Schema.Struct({ botId: Schema.String, holder: LeaseHolder, since: Schema.Number })
 export type LeaseState = typeof LeaseState.Type
 
-// ---------------------------------------------------------------- computer (capability desktop@1, design only)
-/** Anthropic computer-use action names; fixed 1280-wide API coordinate space. */
+// ---------------------------------------------------------------- computer (capability desktop@1)
+/** A bot's running desktop (`desktop.ensure`). */
+export const DesktopInfo = Schema.Struct({
+  botId: Schema.String,
+  /** X display, e.g. ":101". */
+  display: Schema.String,
+  width: Schema.Number,
+  height: Schema.Number,
+})
+export type DesktopInfo = typeof DesktopInfo.Type
+
+/**
+ * Anthropic computer-use action names. Coordinates are in the API space: screenshots are scaled to
+ * 1280 pixels wide (`apiH = round(1280 · H / W)`), and the node maps them back to the screen.
+ */
 export const ComputerActionName = Schema.Literals([
   "screenshot",
   "zoom",
@@ -381,6 +409,10 @@ export const ComputerAction = Schema.Struct({
   duration: Schema.optional(Schema.Number),
 })
 export type ComputerAction = typeof ComputerAction.Type
+
+/** A computer action's result: what happened, plus a screenshot (API space) when one was taken. */
+export const ComputerResult = Schema.Struct({ text: Schema.String, image: Schema.optional(BrowserImage) })
+export type ComputerResult = typeof ComputerResult.Type
 
 // ---------------------------------------------------------------- BrainRpcs shapes
 export const ApprovalDecision = Schema.Literals(["allow-once", "allow-always", "deny"])
@@ -420,6 +452,10 @@ export const NodeEventTypes = {
   browserClosed: "browser.closed",
   /** A bot's browser window was created on the node (by a bot action or `browser.ensure`): `{botId, windowTargetId}`. */
   browserOpened: "browser.opened",
+  /** A bot's desktop started (by a bot action or `desktop.ensure`): `{botId, display, width, height}`. */
+  desktopStarted: "desktop.started",
+  /** A bot's desktop stopped (`desktop.stop`, the X server died, node shutdown): `{botId}`. */
+  desktopStopped: "desktop.stopped",
   rootsChanged: "node.roots-changed",
 } as const
 

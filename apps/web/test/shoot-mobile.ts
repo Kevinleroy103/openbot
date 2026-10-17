@@ -25,6 +25,12 @@ export const IPHONE: Device = {
   options: { viewport: { width: 393, height: 852 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IOS_UA },
   insets: { top: 59, bottom: 34 },
 }
+/** The iPhone turned sideways (852 wide: the tablet layout). */
+export const IPHONE_LANDSCAPE: Device = {
+  name: "iphone-landscape",
+  options: { viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IOS_UA },
+  insets: { top: 0, bottom: 21 },
+}
 export const IPAD: Device = {
   name: "ipad",
   options: { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: IPAD_UA },
@@ -254,7 +260,83 @@ export const SCENES: ReadonlyArray<Scene> = [
     run: async (page, shot) => {
       await page.getByTestId("chat-computer").tap()
       await page.getByTestId("computer-view").waitFor()
-      await settle(page, 800)
+      // the bot's whole desktop (noVNC against the mock's fake RFB desktop), watching
+      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+      await page.getByTestId("landscape-hint").waitFor()
+      await settle(page, 600)
+      await shot()
+      await page.getByTestId("control-pill").getByRole("button", { name: "Take control" }).tap()
+      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live][data-interactive]').waitFor({ timeout: 10_000 })
+      await page.getByTestId("desktop-keyboard").waitFor()
+      await settle(page, 600)
+      await shot("control")
+      await page.getByTestId("control-pill").getByRole("button", { name: "I'm done" }).tap()
+      await page.getByTestId("control-pill").getByRole("button", { name: "Take control" }).waitFor()
+    },
+  },
+  {
+    name: "18-takeover",
+    device: IPHONE,
+    route: "#/c/cnv_scout",
+    run: async (page, shot) => {
+      const card = page.locator('[data-card="handoff"][data-status="pending"]')
+      // an earlier run answered the seeded hand-off: ask again
+      await page.locator('[data-card="handoff"]').first().waitFor()
+      if ((await card.count()) === 0) await page.evaluate(() => fetch("/api/mock/takeover/bot_scout", { method: "POST" }))
+      await card.waitFor()
+      await card.scrollIntoViewIfNeeded()
+      await card.locator('[data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+      await settle(page, 600)
+      await shot("card")
+      await card.getByRole("button", { name: "Take over" }).tap()
+      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live][data-interactive]').waitFor({ timeout: 10_000 })
+      await page.getByTestId("handoff-banner").waitFor()
+      await settle(page, 600)
+      await shot("control")
+      await page.getByTestId("control-pill").getByRole("button", { name: "I'm done" }).tap()
+      await page.getByRole("button", { name: "Exit fullscreen" }).tap()
+      await page.locator('[data-card="handoff"][data-status="resolved"]').last().waitFor({ timeout: 8000 })
+      await settle(page, 600)
+      await shot("done")
+    },
+  },
+  {
+    name: "19-computer-landscape",
+    device: IPHONE_LANDSCAPE,
+    route: "#/c/cnv_chief",
+    run: async (page, shot) => {
+      await page.getByTestId("chat-computer").tap()
+      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+      await settle(page, 600)
+      await shot()
+    },
+  },
+  {
+    name: "21-details-computer",
+    device: IPHONE,
+    route: "#/c/cnv_expense",
+    run: async (page, shot) => {
+      await page.getByRole("button", { name: "View conversation details" }).tap()
+      await page.getByTestId("details-pane").waitFor()
+      await page.getByRole("tab", { name: "Computer" }).tap()
+      await page.getByTestId("desktop-setup").waitFor()
+      await settle(page)
+      await shot()
+      await page.getByTestId("desktop-setup").scrollIntoViewIfNeeded()
+      await settle(page)
+      await shot("setup")
+    },
+  },
+  {
+    name: "22-settings-computers",
+    device: IPHONE,
+    run: async (page, shot) => {
+      await page.getByRole("button", { name: "Account" }).tap()
+      await page.getByRole("menuitem", { name: /Settings/ }).tap()
+      await page.getByTestId("settings-nav-computers").tap()
+      await page.getByTestId("node-row").filter({ hasText: "vps-1" }).getByRole("button", { name: "Show details" }).tap()
+      await page.getByTestId("desktop-setup").scrollIntoViewIfNeeded()
+      await settle(page)
       await shot()
     },
   },

@@ -8,12 +8,14 @@
 // --empty starts with no Bots (first-run onboarding); --fast speeds simulated turns up 4x.
 // Prints `OPENBOT_MOCK_URL=<url>` once listening (the screenshot test reads it).
 import { BunHttpServer } from "@effect/platform-bun"
-import { Effect, Layer, ManagedRuntime } from "effect"
+import { Deferred, Effect, Layer, ManagedRuntime, Result } from "effect"
 import { OpenBotRpcs } from "@openbot/contracts"
-import { HttpRouter, HttpServer, HttpServerResponse } from "effect/http"
+import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"
+import * as Socket from "effect/socket/Socket"
 import indexHtml from "../index.html"
 import { MockBrain } from "./mock/brain.ts"
+import { ACCENTS, desktopScene, RfbSession } from "./mock/rfb.ts"
 import { seed } from "./mock/seed.ts"
 
 const arg = (name: string): string | undefined => {
@@ -47,8 +49,38 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
       return a ? HttpServerResponse.uint8Array(a.bytes, { contentType: a.mime }) : HttpServerResponse.text("not found", { status: 404 })
     }),
   )
+  // `/ws/computer/:botId?mode=view|control`: a fake RFB desktop per viewer (dev/mock/rfb.ts), with the
+  // brain's refusals (404 / 409 / 403) and close codes (1000 control released, 1012 screen reset)
+  const Desktop = HttpRouter.add(
+    "GET",
+    "/ws/computer/:botId",
+    Effect.gen(function* () {
+      const { botId = "" } = yield* HttpRouter.params
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const mode = new URL(request.url, "http://mock").searchParams.get("mode") === "control" ? "control" : "view"
+      const check = brain.desktopViewerCheck(botId, mode)
+      if (!check.ok) return HttpServerResponse.text(check.text, { status: check.status })
+      const upgraded = yield* Effect.result(request.upgrade)
+      if (Result.isFailure(upgraded)) return HttpServerResponse.text("expected a WebSocket upgrade", { status: 400 })
+      yield* runDesktop(brain, upgraded.success, botId, mode, check)
+      return HttpServerResponse.empty()
+    }),
+  )
+  const DesktopInput = HttpRouter.add("GET", "/api/mock/desktop", Effect.sync(() => HttpServerResponse.text(JSON.stringify(brain.desktopInput), { contentType: "application/json" })))
+  // dev helper: the Bot asks for a hand-off again (`request_takeover`) in its direct chat
+  const Takeover = HttpRouter.add(
+    "POST",
+    "/api/mock/takeover/:botId",
+    Effect.gen(function* () {
+      const { botId = "" } = yield* HttpRouter.params
+      const bot = brain.bot(botId)
+      if (!bot) return HttpServerResponse.text("unknown bot", { status: 404 })
+      const request = brain.takeover(bot.directConversationId, bot.id, "Sign in to globex.io on my screen, then hand it back")
+      return HttpServerResponse.text(JSON.stringify({ requestId: request.id }), { contentType: "application/json" })
+    }),
+  )
   const development = options.development ?? process.env.NODE_ENV !== "production"
-  const ServerLive = HttpRouter.serve(Layer.mergeAll(RpcLive, Attachments), { disableLogger: true, disableListenLog: true }).pipe(
+  const ServerLive = HttpRouter.serve(Layer.mergeAll(RpcLive, Attachments, Desktop, DesktopInput, Takeover), { disableLogger: true, disableListenLog: true }).pipe(
     Layer.provideMerge(
       BunHttpServer.layer({
         port: options.port ?? 4321,
@@ -72,6 +104,53 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
     },
   }
 }
+
+/** One viewer: RFB handshake + updates until either side closes (or the brain closes it: release / reset). */
+const runDesktop = (brain: MockBrain, socket: Socket.Socket, botId: string, mode: "view" | "control", look: { readonly accent: string; readonly page: "signin" | "dashboard" }) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const reader = yield* socket.reader
+      const writer = yield* socket.writer
+      // like the brain when it can't start or reach the screen: 1011 + the reason
+      const broken = brain.desktopBroken.get(botId)
+      if (broken !== undefined) return yield* Effect.ignore(writer.write(new Socket.CloseEvent(1011, broken)))
+      const width = 1920
+      const height = 1200
+      const session = new RfbSession({
+        width,
+        height,
+        name: `${brain.bot(botId)?.name ?? "Bot"}'s computer`,
+        scene: desktopScene({ width, height, accent: ACCENTS[look.accent] ?? ACCENTS["blue"]!, page: look.page }),
+        control: mode === "control",
+        onInput: (e) => {
+          if (e.kind === "pointer") brain.desktopInput.pointer++
+          else brain.desktopInput.keys++
+        },
+      })
+      const closed = yield* Deferred.make<{ readonly code: number; readonly reason: string }>()
+      const leave = brain.joinDesktop(botId, { mode, close: (code, reason) => void Deferred.doneUnsafe(closed, Effect.succeed({ code, reason })) })
+      yield* Effect.addFinalizer(() => Effect.sync(leave))
+      yield* writer.write(session.greeting())
+      const pump = Effect.forever(
+        Effect.flatMap(reader.pull, (frames) =>
+          Effect.forEach(
+            frames,
+            (frame) => {
+              const out = session.receive(typeof frame === "string" ? new TextEncoder().encode(frame) : frame)
+              if (session.closed) return Effect.andThen(writer.write(new Socket.CloseEvent(1011, "unsupported RFB message")), Effect.fail("closed" as const))
+              return out.length > 0 ? writer.writeAll(out as unknown as readonly [Uint8Array, ...Uint8Array[]]) : Effect.void
+            },
+            { discard: true },
+          ),
+        ),
+      )
+      const ended = yield* Effect.raceFirst(
+        Effect.as(Effect.exit(pump), undefined),
+        Deferred.await(closed),
+      )
+      if (ended) yield* Effect.ignore(writer.write(new Socket.CloseEvent(ended.code, ended.reason)))
+    }),
+  ).pipe(Effect.catchCause(() => Effect.void))
 
 const webDir = new URL("..", import.meta.url).pathname.replace(/\/$/, "")
 

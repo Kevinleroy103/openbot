@@ -1,6 +1,6 @@
 // E2E (W3.1): computers. (1) The browser computer view on the local node: computer.ensure → the
 // bot's browser (navigated through the gateway's `browser` tool) streams screencast frames into
-// ComputerView → Take control → Stop; the Terminal tab echoes. (2) Settings › Computers: create a
+// ComputerView → Take control → I'm done; the Terminal tab echoes. (2) Settings › Computers: create a
 // pairing code, pair + run a REAL second node daemon (apps/node CLI, own data dir and root) → it
 // shows online → approve its capabilities → a bot runs a shell command there. Fake harness only.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
@@ -47,7 +47,7 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     rmSync(nodeRoot, { recursive: true, force: true })
   }, 60_000)
 
-  test("the local node's browser streams into ComputerView; Take control → Stop", async () => {
+  test("the local node's browser streams into ComputerView; Take control → I'm done", async () => {
     const { page } = app
     const local = (await rpc.call((c) => c["nodes.list"]())).find((n) => n.kind === "local")
     expect(local?.status).toBe("online")
@@ -115,7 +115,7 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     await pill.getByText("You're in control").waitFor()
     expect((await rpc.call((c) => c["computer.status"]({ botId: bot.id }))).controller).toBe("user")
     await app.shot("e2e-42-computer-control")
-    await pill.getByRole("button", { name: "Stop" }).click()
+    await pill.getByRole("button", { name: "I'm done" }).click()
     await pill.getByText("Watching").waitFor()
     expect((await rpc.call((c) => c["computer.status"]({ botId: bot.id }))).controller).toBe("bot")
     expect(app.errors).toEqual([])

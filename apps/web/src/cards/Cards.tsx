@@ -3,7 +3,7 @@
 // `requests.respond`. Unknown card types render a placeholder.
 import { Check, Clock, FolderCheck, Globe, KeyRound, Monitor, ShieldCheck, TriangleAlert } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useMemo, useRef, useState } from "react"
-import type { Bot, Card as CardModel, CardState, DecisionId, Question, RuntimeRequest, RuntimeResponse } from "@openbot/contracts"
+import type { Bot, BotId, Card as CardModel, CardState, DecisionId, Question, RuntimeRequest, RuntimeResponse } from "@openbot/contracts"
 import {
   Card,
   CardActions,
@@ -23,6 +23,8 @@ import {
 } from "@openbot/ui"
 import { useComputerView, useDetailsPane, useSelection, useSettingsDialog } from "../app/uiState.ts"
 import { renderInline } from "../chat/Markdown.tsx"
+import { ScreenPeek } from "../computer/ScreenThumbnail.tsx"
+import { useComputer } from "../computer/useComputer.ts"
 import { useRespond, useSaveRule } from "./useRespond.ts"
 
 export interface CardViewProps {
@@ -577,51 +579,86 @@ function SecretCard({ card, state, request, bot, className }: CardViewProps & { 
 
 type HandoffModel = Extract<CardModel, { type: "handoff" }>
 
+/**
+ * "Action needed" (a bot's `request_takeover`, D1.7; Grok's computer hand-off card): the bot's
+ * instruction ("Sign in to GitHub on my screen"), a live peek at its screen, **Take over** (opens the
+ * computer view in control: the lease, not an answer) and **Skip**. While the owner holds the screen
+ * the card offers **I'm done**: handing the screen back makes the brain answer the hand-off "done".
+ */
 function HandoffCard({ card, state, request, bot, className }: CardViewProps & { readonly card: HandoffModel }): ReactNode {
   const status = statusOf(state, request)
   const response = responseOf(state, request)
-  const { respond, busy } = useRespond(request?.id ?? card.requestId)
-  const computer = useComputerView()
+  const name = bot?.name ?? "Bot"
+  const skipped = response?.type === "acknowledge" && response.action === "skip"
   const pill =
     status === "pending" ? (
       <StatusPill tone="success" spinner>
         Action needed
       </StatusPill>
     ) : status === "resolved" ? (
-      <StatusPill tone="success" dot>
-        {response?.type === "acknowledge" && response.action === "skip" ? "Skipped" : "Done"}
-      </StatusPill>
+      skipped ? (
+        <StatusPill tone="neutral">Skipped</StatusPill>
+      ) : (
+        <StatusPill tone="success" dot>
+          You took over · Done
+        </StatusPill>
+      )
     ) : (
       <StatusPill dot>{status === "expired" ? "Expired" : "Closed"}</StatusPill>
     )
+  const botId = bot?.id ?? request?.botId
   return (
     <Card className={className} data-card="handoff" data-status={status}>
       <CardHeader title="Computer" icon={<Icon icon={Monitor} size="lg" className="text-icon-secondary" />} status={pill} />
-      <CardBody className="-mt-1 text-base">{card.instruction}</CardBody>
-      {card.screenshotUrl && <img src={card.screenshotUrl} alt={`${bot?.name ?? "Bot"}'s screen`} className="aspect-[16/10] w-full rounded-xl object-cover hairline border-line-tertiary" />}
-      {status === "pending" && (
-        <CardActions>
-          <PillButton
-            variant="secondary"
-            size="card"
-            disabled={busy !== null}
-            loading={busy === "take-over"}
-            onClick={() => {
-              if (bot) computer.open(bot.id)
-              void respond({ type: "acknowledge", action: "take-over" }, "take-over")
-            }}
-          >
+      <CardBody className="-mt-1 text-base break-words">{card.instruction}</CardBody>
+      {card.screenshotUrl && status !== "pending" && (
+        <img src={card.screenshotUrl} alt={`${name}'s screen`} className="aspect-[16/10] w-full rounded-xl object-cover hairline border-line-tertiary" />
+      )}
+      {status === "pending" && botId !== undefined && <HandoffPending requestId={request?.id ?? card.requestId} botId={botId} botName={name} screenshotUrl={card.screenshotUrl} />}
+    </Card>
+  )
+}
+
+function HandoffPending({ requestId, botId, botName, screenshotUrl }: { readonly requestId: string; readonly botId: BotId; readonly botName: string; readonly screenshotUrl: string | undefined }): ReactNode {
+  const { respond, busy } = useRespond(requestId)
+  const { status, availability, lease } = useComputer(botId)
+  const computer = useComputerView()
+  // the owner holds the bot's screen: they took over (the view may be closed by now)
+  const controlling = status.value?.controller === "user"
+  const hasScreen = availability.kind === "stream" || availability.kind === "absent"
+  const skip = async () => {
+    const ok = await respond({ type: "acknowledge", action: "skip" }, "skip")
+    // answered first, so handing the screen back does not count as "done"
+    if (ok && controlling) await lease.run({ botId, take: false })
+  }
+  return (
+    <>
+      {screenshotUrl ? (
+        <img src={screenshotUrl} alt={`${botName}'s screen`} className="aspect-[16/10] w-full rounded-xl object-cover hairline border-line-tertiary" />
+      ) : (
+        hasScreen && computer.botId !== botId && <ScreenPeek botId={botId} botName={botName} onOpen={() => computer.open(botId)} />
+      )}
+      {lease.error && <p className="text-sm text-danger-fg">{lease.error}</p>}
+      <CardActions>
+        {controlling ? (
+          <>
+            <PillButton variant="primary" size="card" loading={lease.pending} disabled={busy !== null} onClick={() => void lease.run({ botId, take: false })}>
+              I'm done
+            </PillButton>
+            <PillButton variant="secondary" size="card" disabled={busy !== null} onClick={() => computer.open(botId)}>
+              Open screen
+            </PillButton>
+          </>
+        ) : (
+          <PillButton variant="secondary" size="card" disabled={busy !== null || availability.kind === "unsupported"} onClick={() => computer.open(botId, { takeControl: true })}>
             Take over
           </PillButton>
-          <PillButton variant="outline" size="card" disabled={busy !== null} loading={busy === "done"} onClick={() => respond({ type: "acknowledge", action: "done" }, "done")}>
-            I'm done
-          </PillButton>
-          <PillButton variant="tertiary" size="card" className="ms-auto" disabled={busy !== null} onClick={() => respond({ type: "acknowledge", action: "skip" }, "skip")}>
-            Skip
-          </PillButton>
-        </CardActions>
-      )}
-    </Card>
+        )}
+        <PillButton variant="tertiary" size="card" className="ms-auto" disabled={busy !== null || lease.pending} loading={busy === "skip"} onClick={() => void skip()}>
+          Skip
+        </PillButton>
+      </CardActions>
+    </>
   )
 }
 

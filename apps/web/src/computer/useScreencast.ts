@@ -2,6 +2,7 @@
 // Frames are decoded off the socket and painted onto a caller-owned <canvas>; React state only changes
 // on phase / size / lease / URL changes, never per frame. Only the newest pending frame is drawn.
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { containFit } from "./desktop.ts"
 import {
   type BrowserInputEvent,
   computerSocketUrl,
@@ -206,8 +207,7 @@ export function useContainFit(containerRef: RefObject<HTMLElement | null>, aspec
       const w = el.clientWidth
       const h = el.clientHeight
       if (w <= 0 || h <= 0) return
-      const fitW = Math.min(w, h * aspect)
-      const next = { width: Math.floor(fitW), height: Math.floor(fitW / aspect) }
+      const next = containFit(w, h, aspect)
       setSize((s) => (s.width === next.width && s.height === next.height ? s : next))
     }
     measure()

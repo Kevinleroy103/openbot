@@ -83,10 +83,11 @@ The success value is `NodeHello`:
 {"nodeId":"nod_…","version":"0.1.0","hostname":"box","platform":"linux","arch":"x64","protocol":1,
  "roots":[{"id":"work","path":"/home/u/openbot","mode":"rw"}],
  "capabilities":["fs@1","shell@1","pty@1","browser@1"],"tunnels":["codex.exec-server"],
- "policy":{"ceiling":"ask","remoteManaged":false},"brainVerified":true}
+ "policy":{"ceiling":"ask","remoteManaged":false},"brainVerified":true,
+ "desktop":{"missing":[],"width":1920,"height":1200}}
 ```
 
-`protocol` is the highest version in both ranges. Close codes used on the control socket:
+`protocol` is the highest version in both ranges. `desktop` (absent on older nodes) describes per-bot desktops: `missing` names the required programs the node lacks (`Xvfb`, `x11vnc`, `xdotool`, `xfwm4 or openbox`, `ImageMagick (import)`). Whether desktops are offered is the `desktop@1` capability: `missing` is empty when they are, and also when the owner turned them off on the node (config `desktop.enabled: false`, `--no-desktop`, or a `computer: never` ceiling). Close codes used on the control socket:
 
 | Code | Meaning |
 |---|---|
@@ -163,6 +164,10 @@ Every **bot-originated, side-effecting** call carries `inv: {invocationId, botId
 | `browser.screencast` | `{botId, streamId, streamToken, options?: {format?, quality?, maxWidth?, maxHeight?, everyNthFrame?}}` | `{windowTargetId}` | `BrowserUnavailable`, `TunnelFailed` |
 | `browser.input` | `{botId, event: BrowserInputEvent}` | `null` | `BrowserUnavailable`, `LeaseHeld` |
 | `lease.set` | `{botId, holder: user\|bot}` | `{botId, holder, since}` | |
+| `desktop.ensure` | `{botId}` | `{botId, display: ":101", width, height}` (starts the bot's desktop once; concurrent calls share the start; ~1 s) | `DesktopUnavailable` (`missing` when programs are absent; also when the node's `computer` ceiling is `never`) |
+| `desktop.stop` | `{botId}` | `null` (closes the bot's browser gracefully, then kills everything on the screen; the next use starts a fresh one) | |
+| `computer.act` | `{inv, action: ComputerAction}` (starts the desktop when needed) | `{text, image?: {mimeType, data(base64), width, height}}` | `LeaseHeld` (holder `user`), `PolicyRefused` (`computer` ceiling), `DesktopUnavailable` |
+| `computer.stream` | `{botId, mode: view\|control, streamId, streamToken}` (starts the desktop when needed) | `null`, answered once the `vnc-view` / `vnc-control` stream is dialed | `LeaseHeld` (`control` while the holder is not `user`), `DesktopUnavailable`, `TunnelFailed` |
 
 Every RPC may also fail with `NotAuthenticated` (before `node.hello`).
 
@@ -172,9 +177,15 @@ Every RPC may also fail with `NotAuthenticated` (before `node.hello`).
 **`BrowserInputEvent`** (user takeover; coordinates in the screencast's CSS viewport):
 `mouse{type: move|down|up|wheel, x, y, button?, clickCount?, deltaX?, deltaY?, modifiers?}`, `key{type: down|up, key, code?, text?, modifiers?}`, `text{text}`; `modifiers = {alt?, ctrl?, meta?, shift?}`.
 
-**Lease.** The brain's `ComputerService` owns the control lease and mirrors it with `lease.set`. While `holder = "user"`, `browser.action` fails with `LeaseHeld` (model text: "The user is controlling the browser") and `browser.input` is accepted; while `holder = "bot"` (the default), `browser.input` fails with `LeaseHeld`.
+**Lease.** The brain's `ComputerService` owns the control lease and mirrors it with `lease.set`; the node keeps ONE lease per bot for its browser and its desktop. While `holder = "user"`, `browser.action` and `computer.act` fail with `LeaseHeld` (a long `type` stops between chunks), and `browser.input` and `computer.stream {mode: "control"}` are accepted; while `holder = "bot"` (the default), those two fail with `LeaseHeld`. When the lease returns to `bot`, the node closes every open `vnc-control` stream of that bot (1000); `vnc-view` streams stay.
 
-**`computer.*`** (capability `desktop@1`) is designed but not part of `NodeRpcs` in v1: `computer.act{inv, action}` with Anthropic's action names and a fixed 1280-wide coordinate space, and `computer.stream{botId, mode: view|control, streamId, streamToken}` for VNC. See `NodeComputerRpcs`.
+**Desktops** (capability `desktop@1`, D1.7). Each bot that uses the node's computer gets its own virtual X display (Xvfb 1920×1200 on the first free display from `:100`, cookie auth, no TCP), a window manager (xfwm4, or openbox), a dock (plank) with the bot's browser, a terminal, a file manager and an editor, and two loopback x11vnc servers (control and `-viewonly`). On such a node the bot's Chromium (`browser.*`) runs on that display with the bot's own profile, so `browser` and `computer` act on the same windows.
+
+**`ComputerAction`**: Anthropic's computer-use actions `{action, coordinate?, start_coordinate?, region?, text?, scroll_direction?, scroll_amount?, duration?}`, with `action` one of `screenshot`, `zoom`, `left_click`, `right_click`, `middle_click`, `double_click`, `triple_click`, `mouse_move`, `left_click_drag`, `left_mouse_down`, `left_mouse_up`, `scroll`, `type`, `key`, `hold_key`, `wait`, `cursor_position`.
+- Coordinates are in the screenshot space: 1280 px wide, `apiH = round(1280 · H / W)` (1280×800 for 1920×1200). `zoom.region` is `[x0, y0, x1, y1]` in that space; the crop is taken at screen resolution and fitted into 1280×800.
+- `text` is the typed text (`type`), an xdotool key or combination (`key`: `"Return"`, `"ctrl+l"`, several separated by spaces; `hold_key`), or modifier keys held during a click or scroll (`"shift"`, `"ctrl+shift"`). DOM / macOS names (`Enter`, `ArrowDown`, `cmd+c` → `ctrl+c`) are mapped.
+- Every action except `cursor_position` returns a fresh screenshot (JPEG, 1280×800) after a short settle; `cursor_position` returns `X=…, Y=…` (screenshot space).
+- Invalid arguments are not errors: the result's `text` starts with `ERROR:` (e.g. `ERROR: coordinate [x, y] is required`) and has no image.
 
 ### 5.2 `BrainRpcs` (served by the brain, called by the node)
 
@@ -203,6 +214,7 @@ All errors are tagged objects (`_tag`) inside `Fail` reasons:
 | `BrowserUnavailable` | `reason` |
 | `BrowserActionFailed` | `action, reason` |
 | `LeaseHeld` | `botId, holder, reason` |
+| `DesktopUnavailable` | `message, missing?` (programs the node lacks) |
 | `NodeUnavailable` | `nodeId, reason` (brain-side only) |
 
 ## 6. Capabilities and versions
@@ -213,7 +225,7 @@ All errors are tagged objects (`_tag`) inside `Fail` reasons:
 
 ## 7. Data streams (`/node/stream/:id`)
 
-- A stream is requested by the brain (`pty.open`, `tunnel.open`, `browser.screencast`, `fs.download`, `fs.upload`) or by the node (`node.openStream`). Either way the brain mints `{streamId (96-bit), streamToken (128-bit)}`.
+- A stream is requested by the brain (`pty.open`, `tunnel.open`, `browser.screencast`, `computer.stream`, `fs.download`, `fs.upload`) or by the node (`node.openStream`). Either way the brain mints `{streamId (96-bit), streamToken (128-bit)}`.
 - The node dials `wss://<brain>/node/stream/<streamId>` with `Authorization: Bearer <streamToken>`. The token is single use and expires 30 s after minting.
 - The brain splices frames **verbatim**: binary stays binary, text stays text. Each kind defines its own framing:
 
@@ -222,7 +234,8 @@ All errors are tagged objects (`_tag`) inside `Fail` reasons:
 | `pty` | binary = terminal bytes (both ways). Text: brain→node `{"resize":{"cols":120,"rows":40}}`; node→brain `{"exit":0,"signal":null}` then close. |
 | `claude.cli` | binary = stdin (brain→node) / stdout (node→brain). Text: brain→node `{"eof":true}` or `{"kill":"SIGTERM"}`; node→brain `{"exit":0,"signal":null}`. |
 | `codex.exec-server`, `codex.app-server` | one JSON-RPC message per **text** frame (the node converts NDJSON stdio). |
-| `tcp`, `mcp-http`, `anthropic-api`, `model-api`, `vnc-view`, `vnc-control` | raw binary. |
+| `tcp`, `mcp-http`, `anthropic-api`, `model-api` | raw binary. |
+| `vnc-view`, `vnc-control` | raw RFB (binary, both ways) to the bot's view-only / control x11vnc; one stream per viewer (RFB is stateful). Text frames from the brain are ignored. Either side closing ends the other; a lease handed back closes `vnc-control` streams. |
 | `cdp-screencast` | each frame is ONE binary message: `[u32 big-endian N][N bytes UTF-8 JSON meta][image bytes]`, `meta = {seq, mime, width, height, viewportWidth, viewportHeight, timestamp}`. Text frames are notices: `{"_tag":"Ended","reason"}`, `{"_tag":"Lease","holder"}`, `{"_tag":"Url","url","title"}`. |
 | `transfer` (`fs.download`, `fs.upload`) | The **sender** (the node for `fs.download`, the brain for `fs.upload`): binary chunks ≤ 1 MiB, then ONE text frame `{"done":true,"sha256":"<hex of all bytes>","size":N}` (or `{"error":"…"}` when reading fails midway). The **receiver**: text `{"ack":N}` (total bytes received), at least every 1 MiB. The sender keeps at most 8 MiB sent but unacknowledged, so neither side buffers a whole file. The receiver verifies size and sha256; closing early aborts. `fs.download`: the node waits for the brain to close; `fs.upload`: the node answers the RPC. |
 

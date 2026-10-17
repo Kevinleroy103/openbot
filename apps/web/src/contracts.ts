@@ -88,7 +88,7 @@ export interface OnboardingProps {
 //   useDetailsPane()      -> { open, tab, botId, show(tab?, botId?), hide(), toggle(), setTab(tab) }
 //                            (`botId`: a member bot whose details a group chat's pane shows instead)
 //   useSettingsDialog()   -> { open, page, show(page?), hide() }
-//   useComputerView()     -> { botId, open(botId), close() }
+//   useComputerView()     -> { botId, takeControl, open(botId, {takeControl?}), close() }
 //   useDialogs()          -> { dialog, show(dialog), hide() }   dialog: "new-bot" | "new-group" | …
 //   useResolvedTheme()    -> "dark" | "light" (resolved from settings.theme + system)
 export {

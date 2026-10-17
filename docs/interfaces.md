@@ -130,7 +130,7 @@ Files are in `packages/contracts/src/`, and everything is re-exported from `inde
 | `memory.ts` / `skills.ts` | `MemoryFact{id: MemoryFactId(slug),title,description?,body,updatedAt}`, `BotMemory{index,facts}`, `MemoryFactInput`, `memoryFactIdFromTitle`, `MEMORY_INDEX_PROMPT_CAP_BYTES=4096`. `Skill{name: SkillName(slug),description,body,updatedAt,source?{kind:"skills.sh",id,hash?},files?}`, `SkillInput`, `SkillSearchResult{id,name,repo,installs}`, `SkillPreview{id,name,description,body,files[{path,bytes}],replaces}` |
 | `stream.ts` | `StreamCursor{epoch,sequence}`. Conversation changes: `entry.upserted`, `entry.removed`, `request.upserted`, `turn.upserted` and `conversation.updated`. Conversation stream items: `snapshot{cursor,conversation,entries,requests,turns,hasMoreBefore,beforeCursor}`, `change`, `synchronized` and `reset{epoch,reason}`. Roster changes: `bot.upserted`/`removed`, `conversation.upserted`/`removed`, `activity.updated`, `node.upserted`/`removed`, `section.upserted`/`removed`, `settings.updated`, `notification` and `task.upserted`/`task.removed` (D5.7). Roster snapshot: `{bots,conversations,activities,nodes,sections,settings,tasks?}` (`tasks`: every active task + each bot's 5 latest finished ones; absent from older brains). `Known*` variants are the encodable server-side unions. `TranscriptPage` |
 | `projection.ts` | Pure reducers: `applyConversationStreamItem`, `applyRosterStreamItem` (a gap sets `gap:true`; `RosterState.tasks`, at most `ROSTER_TASKS_KEPT=200`, a removed bot takes its tasks), `prependHistory`, `transcriptOf`, `pendingRequestsOf`, `sectionsOf`, `activeTasksOf(state, botId)`. Server helpers: `resumePlan(after, head, oldestBuffered)`, `coalesce`, `compareEntries`, `MAX_REPLAY_GAP=256`, `SNAPSHOT_TAIL_ENTRIES=100` |
-| `rpc.ts` | errors (§1), payload types (`SessionInfo`, `BotCreateInput`, `BotPatch`, `BotContext`, `SendMode`, `SendInput`, `SendResult{entryId,turnIds,disposition}`, `SendLookup`, `RoutineSpec`, `ComputerState`, `ComputerStatus{botId,nodeId,state,surface,controller,viewPath?,message?}`, `BotUsage`), `OpenBotRpcs`, `OpenBotRpcTag` |
+| `rpc.ts` | errors (§1), payload types (`SessionInfo`, `BotCreateInput`, `BotPatch`, `BotContext`, `SendMode`, `SendInput`, `SendResult{entryId,turnIds,disposition}`, `SendLookup`, `RoutineSpec`, `ComputerState`, `ComputerStatus{botId,nodeId,state,surface: browser|desktop|none,controller,viewPath?,message?,width?,height?,missing?}`, `BotUsage`), `OpenBotRpcs`, `OpenBotRpcTag` |
 
 ### 3.1 `OpenBotRpcs` (62 RPCs; every error union also contains `Internal`)
 
@@ -164,7 +164,7 @@ Each RPC maps to one method. Service methods are in §6; port methods are `NodeA
 | `harnesses.profiles {kind?}` / `addProfile {kind, label, configDir}` / `removeProfile {profileId}` / `discover {kind}` | → `HarnessProfile[]` / `HarnessProfile` / void / `HarnessProfileCandidate[]` | server `HarnessProfiles` (apps/server/src/profiles.ts; D2.7) |
 | `nodes.list` | → `NodeSummary[]` | `NodeDirectory.list` |
 | `nodes.createPairingCode/rename/revoke/setCapabilities` | … | `NodeAdmin.*` |
-| `computer.status/ensure/lease` | `{botId}` / `{botId, take}` → `ComputerStatus` | `ComputerPort.*` |
+| `computer.status/ensure/lease/reset` | `{botId}` / `{botId, take}` → `ComputerStatus` (`reset`: stops the bot's desktop and the owner's control; unchanged without a desktop) | `ComputerPort.*` |
 | `settings.get/update` | … | `SettingsService.get` / `update` |
 | `rules.list/upsert/delete` | … | `SettingsService.listRules` / `upsertRule` / `deleteRule` |
 | `tasks.list` | `{botId, limit?}` → `Task[]` (newest first, default 50; `NotFound` for an unknown bot) | `BackgroundTasks.list` |
@@ -188,15 +188,15 @@ Files are in `packages/node-protocol/src/`. The full wire spec is `docs/node-pro
   - `shell.exec`, which streams `ExecEvent` (Started, Output, Exit);
   - `pty.open`, `tunnel.open`, `service.start`, `service.stop` and `forward.listen`;
   - the browser calls `browser.ensure{botId}`, `browser.action{inv, action}`, `browser.screencast{botId, streamId, streamToken, options?}` and `browser.input{botId, event}`;
-  - `lease.set{botId, holder}`.
+  - `lease.set{botId, holder}`;
+  - the desktop calls (`desktop@1`, D1.7: a screen per bot): `desktop.ensure{botId} → DesktopInfo{botId, display, width, height}`, `desktop.stop{botId}` (also ends the owner's control), `computer.act{inv, action: ComputerAction} → ComputerResult{text, image?}` (`LeaseHeld` while the owner holds the screen) and `computer.stream{botId, mode: view|control, streamId, streamToken}`, which opens a raw-binary `vnc-view` / `vnc-control` data stream (control needs the owner's lease).
 
   Every bot-originated, side-effecting payload carries `inv: Invocation{invocationId, botId, runId, toolCallId?}`.
 - **`BrainRpcs`** is served by the brain and called by the node. It contains `node.requestApproval(NodeApprovalRequest{invocationId, botId, runId?, toolCallId?, action, target, reason}) → {decision: allow-once|allow-always|deny, by}`, `node.openStream{kind, botId} → StreamTicket`, `node.event{type, data}` and `node.heartbeat`.
-- **`NodeComputerRpcs`** is design only: `computer.act` and `computer.stream`.
 
 ### 4.2 Errors (`errors.ts`)
 
-- The wire errors are `PathDenied`, `PolicyRefused`, `EditFailed`, `FsError{op,path,code,reason}`, `TunnelFailed`, `StreamRefused{kind,reason}`, `NotAuthenticated`, `NodeUnavailable{nodeId,reason}`, `BrowserUnavailable`, `LeaseHeld` and `BrowserActionFailed`.
+- The wire errors are `PathDenied`, `PolicyRefused`, `EditFailed`, `FsError{op,path,code,reason}`, `TunnelFailed`, `StreamRefused{kind,reason}`, `NotAuthenticated`, `NodeUnavailable{nodeId,reason}`, `BrowserUnavailable`, `LeaseHeld`, `BrowserActionFailed` and `DesktopUnavailable{message, missing?}` (not covered by `describeNodeError`: the brain renders it itself).
 - `describeNodeError(e)` turns any of them into text a model can read.
 - Node-protocol's `NodeUnavailable` has a `reason` field. The contract error of the same name has `message`. Map one to the other at the edge.
 
@@ -206,7 +206,7 @@ Files are in `packages/node-protocol/src/`. The full wire spec is `docs/node-pro
 - The fs results, `ExecEvent` and `TunnelKind`.
 - `StreamKind`, `BrainStreamKind` and `StreamTicket`.
 - `BrowserAction` (the verbs navigate, snapshot, click, type, key, scroll, screenshot and tabs), `BrowserActionResult` and `BrowserInputEvent`.
-- `LeaseHolder`, `LeaseState`, `ComputerAction`.
+- `LeaseHolder`, `LeaseState`, `ComputerActionName` (Anthropic's 17 computer-use actions), `ComputerAction` (flat: `coordinate`, `start_coordinate`, `region` as number arrays), `ComputerResult`, `DesktopInfo`; `NodeHello.desktop?: DesktopSupport{missing[], width, height}`.
 - `NodeApprovalRequest`, `NodeApprovalResponse` and `NodeHeartbeat`.
 - `NodeEventTypes`, `PairRequest{code, publicKey, hostname, platform, …}` and `PairResponse{nodeId, brainPublicKey, brainOrigin}`.
 
@@ -321,7 +321,9 @@ class NodeDirectory { list: Effect<NodeSummary[]>; get(nodeId): Effect<NodeSumma
 class NodeAdmin { createPairingCode: Effect<PairingCode>; rename(id, label): Effect<NodeSummary, NotFound|InvalidInput>;
   revoke(id): Effect<void, NotFound|Forbidden>; setCapabilities(id, approved): Effect<NodeSummary, NotFound|InvalidInput> }
 class ComputerPort { status(botId): Effect<ComputerStatus, NotFound>; ensure(botId): Effect<ComputerStatus, NotFound|NodeUnavailable>;
-  lease(botId, take): Effect<ComputerStatus, NotFound|NodeUnavailable|Conflict> }
+  lease(botId, take): Effect<ComputerStatus, NotFound|NodeUnavailable|Conflict>;   // take: mirrored to the node first; release never fails on an offline node
+  reset(botId): Effect<ComputerStatus, NotFound|NodeUnavailable>;                   // desktop.stop; a browser-only screen is returned unchanged
+  leaseChanges: Stream<ComputerLeaseChange{botId, holder: bot|user, cause: lease|reset}> }   // hot; ApprovalService answers hand-offs from it
 // NodeFiles.ts (brain-nodes `NodeFilesLive`, part of BrainNodesLive): node → brain file transfer for send_file
 class NodeFiles { download({nodeId, inv, path, cwd?, maxBytes}): Effect<NodeDownload{path,name,size,mtimeMs,head,
   chunks: Stream<Uint8Array, TunnelFailed>}, NodeDownloadError, Scope>     // fs.download + `transfer` stream; sha256/size verified
@@ -453,6 +455,7 @@ ApprovalService      evaluate(ApprovalContext{bot, conversationId, turnId?, harn
                      respond({requestId, response}): RuntimeRequest ! NotFound|RequestNotPending|InvalidInput
                      listPending({conversationId?});  askUser(ctx, {title?, questions}): PendingRequestReceipt ! InvalidInput
                      requestApproval(ctx, {title, detail?, command?, paths?}): PendingRequestReceipt ! InvalidInput
+                     requestTakeover(ctx, {instruction}): PendingRequestReceipt ! InvalidInput   // kind handoff, D1.7
                      asyncAnswers: Stream<DeliveryInput>   // single consumer: Orchestrator
                      cancelPending({botId?, conversationId?, turnId?, taskId?, reason}): number
 BackgroundTasks      start(ctx, {title, brief}): Task ! NotFound|InvalidInput   // returns at once; origin = ctx.claims.conversationId
@@ -490,6 +493,8 @@ Gateway bot tools map onto these methods:
 | `list_bots` | `BotService.list` |
 | `ask_user` | `ApprovalService.askUser` |
 | `request_approval` | `ApprovalService.requestApproval` |
+| `request_takeover` | `ApprovalService.requestTakeover` (offered with a screen: toolset `computer` or `browser`; not in a task's own session) |
+| `computer` | node `computer.act` on the host node (toolset `computer`: host has `desktop@1`); `LeaseHeld` → "The owner is using your screen right now. Wait until they hand it back." |
 | `notify_user` | `Notifier.notify` |
 | `remember` / `forget` | `MemoryService.putFact` / `deleteFact` |
 | `recall_memory` | `MemoryService.recall` |
@@ -533,7 +538,7 @@ Deliveries with files are not steered into a running turn; they queue.
   - `NodeDirectoryFake` (`upsert`, `remove`, `setClient`), with nodes built by `localNodeSummary()` and `remoteNodeSummary(id)`;
   - `PlacementServiceFake` (`resolutions`), which follows the real rules;
   - `McpBindingIssuerFake` (`issued`, `verify`), with tokens `test-token-n`;
-  - `ComputerPortFake` (`set`);
+  - `ComputerPortFake` (`set`, `leases`, `resets`; `leaseChanges` when the holder changes);
   - `NotifierFake` (`sent`).
 - **Service fakes** (`serviceFakes.ts`; methods a fake does not implement die). Each has a control tag:
   - `LiveHubFake` (`published`, `conversationChanges`, `rosterChanges`, `resets`; subscriptions stream `synchronized` and then live items);
@@ -595,6 +600,7 @@ Deliveries with files are not steered into a running turn; they queue.
 13. **Pairing codes.** `PairingCodeRecord.code` may hold `hashPairingCode(code)`; brain-nodes decides. `NodeRepo.consumePairingCode` compares it verbatim.
 14. **Error rendering.** Gateway node tools render `NodeUnavailable` as `ERROR: Node ‹label› is offline` and node-protocol errors with `describeNodeError`.
 15. **Background tasks (D5.7).** A task runs in its own session of the bot (`taskSessionKeyOf`, a fresh native session) with a token whose claims carry `taskId` and its origin conversation (`sessionKey` = `sessionKeyOf(botId, origin)`, so node approvals route there). Its gateway calls get `ToolContext.taskId` (no `turnId`); `Orchestrator.approveToolCall` hands them to `BackgroundTasks.approve`; `Messaging` neither notes group addresses nor extends the main turn's causal chain for them. Its harness events become `TaskRepo` steps; the roster carries `task.upserted` (status changes at once, progress throttled). The fake harness: `bg: <seconds> <title>` calls `start_task`, `work: <seconds> <title>` is a slow task turn, and a `[Result of "…"]` turn replies "Update on …".
+16. **Screens (D1.7).** `ComputerStatus.surface` is `desktop` when the host node has `desktop@1`, else `browser` (`browser@1`), else `none`; `missing` carries `node.hello.desktop.missing` (or `DesktopUnavailable.missing` from a failed `desktop.ensure`). The viewer socket `/ws/computer/:botId?mode=view|control` answers 404 (unknown bot), 409 (no screen), 503 (node offline) or 403 (`control` without the lease) before upgrading. On a desktop it relays raw RFB (binary frames) between noVNC and one node stream per viewer (`computer.stream` → `vnc-view` / `vnc-control`, the desktop ensured first) and closes with 1000 "control released" (control viewers, lease handed back), 1012 "screen reset" (every viewer, `computer.reset`), 4403 "Take control first" (control refused after the upgrade) or 1011 + reason (the screen could not start or the stream ended). Hand-offs: `request_takeover` → `RuntimeRequest{kind: "handoff", blocking: false, responseCapability: acknowledge [done, skip]}` + `HandoffCard{requestId, nodeId, instruction}`; "Take over" is `computer.lease {take: true}` (not an answer); handing the screen back (`computer.lease {take: false}`) answers the bot's pending hand-offs `done`; answering `done` / `skip` (`requests.respond`) gives the screen back before the bot is told. Hand-offs expire after 30 minutes (`HANDOFF_EXPIRY_MINUTES`), re-armed while the owner holds the screen.
 
 ## 9. Known gaps (not in the v1 contracts)
 

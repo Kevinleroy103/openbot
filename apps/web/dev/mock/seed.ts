@@ -69,8 +69,12 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
     { kind: "opencode", displayName: "OpenCode", installed: true, version: "2.0.29", auth: { state: "unknown" }, problems: [], checkedAt: now },
     { kind: "fake", displayName: "Fake (offline demo)", installed: true, auth: { state: "signed-in" }, problems: [], checkedAt: now },
   ]
-  brain.putNode({ id: "node_local" as NodeId, label: "This computer", kind: "local", status: "online", capabilities: ["fs@1", "shell@1", "pty@1", "browser@1"], declaredCapabilities: ["fs@1", "shell@1", "pty@1", "browser@1"], platform: "linux", hostname: "brain", roots: ["~/openbot"], version: "0.0.0", lastSeenAt: now, createdAt: at(60 * 24 * 7) })
-  brain.putNode({ id: "nod_vps1" as NodeId, label: "vps-1", kind: "remote", status: "online", capabilities: ["fs@1", "shell@1"], declaredCapabilities: ["fs@1", "shell@1", "pty@1", "desktop@1"], platform: "linux", hostname: "vps-1", roots: ["/srv/openbot"], version: "0.0.0", lastSeenAt: now, createdAt: at(60 * 24 * 3) })
+  brain.putNode({ id: "node_local" as NodeId, label: "This computer", kind: "local", status: "online", capabilities: ["fs@1", "shell@1", "pty@1", "browser@1", "desktop@1"], declaredCapabilities: ["fs@1", "shell@1", "pty@1", "browser@1", "desktop@1"], platform: "linux", hostname: "brain", roots: ["~/openbot"], version: "0.0.0", lastSeenAt: now, createdAt: at(60 * 24 * 7) })
+  // a paired VPS without the desktop programs (Settings › Computers and Expense Clerk's Computer tab say what to install)
+  brain.putNode({ id: "nod_vps1" as NodeId, label: "vps-1", kind: "remote", status: "online", capabilities: ["fs@1", "shell@1"], declaredCapabilities: ["fs@1", "shell@1", "pty@1"], platform: "linux", hostname: "vps-1", roots: ["/srv/openbot"], version: "0.0.0", desktopMissing: ["Xvfb", "x11vnc", "xdotool"], lastSeenAt: now, createdAt: at(60 * 24 * 3) })
+  brain.desktopMissing.set("nod_vps1", ["Xvfb", "x11vnc", "xdotool"])
+  // Data Analyst's screen fails to start ("Can't reach Data Analyst's screen")
+  brain.desktopBroken.set("bot_data", "Can't reach the screen: Xvfb exited (display :103 is in use)")
   brain.putSection({ id: "sec_revenue" as SectionId, name: "Revenue", order: 1 })
   brain.putSection({ id: "sec_engineering" as SectionId, name: "Engineering", order: 2 })
 
@@ -85,7 +89,7 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
       ...(b.label ? { label: b.label } : {}),
       avatar: { shape: b.shape, color: b.color },
       harness: b.harness,
-      hostNodeId: "node_local" as NodeId,
+      hostNodeId: (b.key === "expense" ? "nod_vps1" : "node_local") as NodeId,
       boundNodeIds: [],
       instructions: b.instructions,
       directConversationId: conv,
@@ -100,6 +104,7 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
       updatedAt: at(60),
     })
     brain.memory.set(bot, { index: "", facts: [] })
+    if (b.key !== "travel" && b.key !== "expense") brain.desktops.set(bot, { state: "ready", controller: "bot" })
   }
 
   const direct = (key: string, lastMinutesAgo: number, extra: { unread?: number; boundary?: number; context?: number } = {}) => {
@@ -251,6 +256,9 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
     ])
     brain.put(brain.message(conv, botAuthor(bot), "Three competitor launches this week:", at(40, 5), { turnId: t }))
     brain.put(brain.message(conv, botAuthor(bot), "1. **Acme** shipped team workspaces (paid tier only)\n2. **Initech** cut prices by 20%\n3. **Globex** opened a waitlist for an agent product; their changelog blocked me, so this is from their newsletter", at(40, 8), { turnId: t }))
+    brain.put(brain.message(conv, botAuthor(bot), "Their changelog needs an account. If you sign in for me, I'll read the full notes.", at(40, 12), { turnId: t }))
+    // request_takeover: an "Action needed" hand-off card (D1.7)
+    brain.takeover(conv, bot, "Sign in to globex.io on my screen, then hand it back", at(40, 14), t)
   }
 
   // ------------------------------------------------- Sales Outreach <-> Research Scout (bot-to-bot)
@@ -321,6 +329,14 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
       { name: "Edit", toolKind: "file-edit", summary: "CHANGELOG.md" },
     ])
     brain.put(brain.message(conv, botAuthor(bot), "Build is green after reinstalling deps. Tagging now.", at(60 * 26, 50), { turnId: t0 }))
+    {
+      // a hand-off the owner already finished (took over, entered the code, "I'm done")
+      const q = brain.takeover(conv, bot, "Enter the App Store Connect two-factor code on my screen", at(60 * 26, 52), t0)
+      const response = { type: "acknowledge", action: "done" } as const
+      brain.putRequest({ ...q, status: "resolved", response, resolvedAt: at(60 * 26, 54) })
+      const entry = brain.conv(conv).state.entries.get(q.cardEntryId)
+      if (entry?.kind === "card") brain.put({ ...entry, state: { status: "resolved", response } })
+    }
     const ex = brain.request({
       conversationId: conv,
       botId: bot,

@@ -48,6 +48,7 @@ import { errorResult, MAX_RESULT_TEXT_BYTES, renderToolError, toWireResult, type
 import { type AnyTool, MAX_DESCRIPTION_CHARS, type ToolCallContext } from "./tool.ts"
 import { BotToolkit, type BotToolkitServices } from "./toolkits/bot.ts"
 import { BrowserToolkit } from "./toolkits/browser.ts"
+import { ComputerToolkit } from "./toolkits/computer.ts"
 import { NodeToolkit, type NodeToolkitServices } from "./toolkits/node.ts"
 import { TaskToolkit, type TaskToolkitServices } from "./toolkits/tasks.ts"
 
@@ -67,8 +68,14 @@ export class McpGateway extends Context.Service<McpGateway, McpGatewayShape>()("
 /** Every service the default toolkits need. */
 export type GatewayToolServices = BotToolkitServices | NodeToolkitServices | TaskToolkitServices
 
-/** The default toolkits: bot, task, node and browser tools (`computer` has no tools in v1). */
-export const DefaultToolkits: ReadonlyArray<AnyTool<GatewayToolServices>> = [...BotToolkit, ...TaskToolkit, ...NodeToolkit, ...BrowserToolkit]
+/** The default toolkits: bot, task, node, browser and screen (`computer`, `request_takeover`) tools. */
+export const DefaultToolkits: ReadonlyArray<AnyTool<GatewayToolServices>> = [
+  ...BotToolkit,
+  ...TaskToolkit,
+  ...NodeToolkit,
+  ...BrowserToolkit,
+  ...ComputerToolkit,
+]
 
 export interface McpGatewayOptions<R = GatewayToolServices> {
   /** Tools offered by the gateway (filtered per session by the token's toolsets). Default: all toolkits. */
@@ -92,7 +99,7 @@ export interface McpGatewayOptions<R = GatewayToolServices> {
 }
 
 const DEFAULT_INSTRUCTIONS =
-  "OpenBot tools: talk to your team (message_bot, post_to_group, handoff_task, list_bots), ask the user (ask_user, request_approval, notify_user — these never block: end your turn and the answer arrives as a new message), keep memory (remember, forget, recall_memory), schedule routines, save skills, and work on your computers (shell, files, browser; `node` picks a computer from list_nodes). Results starting with ERROR: are failures."
+  "OpenBot tools: talk to your team (message_bot, post_to_group, handoff_task, list_bots), ask the user (ask_user, request_approval, notify_user — these never block: end your turn and the answer arrives as a new message), keep memory (remember, forget, recall_memory), schedule routines, save skills, and work on your computers (shell, files, browser, your screen with `computer`; `node` picks a computer from list_nodes; `request_takeover` hands your screen to the owner for logins and codes). Results starting with ERROR: are failures."
 
 // ============================================================================ helpers
 

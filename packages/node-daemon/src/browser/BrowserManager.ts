@@ -1,6 +1,9 @@
 // BrowserManager (capability browser@1; docs/architecture.md §4.7, computer-and-tools.md §3.2):
-//  - one Chromium/Chrome per node, launched lazily, persistent profile, loopback CDP;
-//  - one window per bot (`Target.createTarget {newWindow: true}`), tabs tracked per bot;
+//  - one Chromium/Chrome per node, launched lazily (headless by default), persistent profile,
+//    loopback CDP; one window per bot (`Target.createTarget {newWindow: true}`), tabs tracked per bot;
+//  - on a node that offers desktops (D1.7, `onScreen`): one Chromium PER BOT, headful on the bot's
+//    own X display with the bot's own profile, so the `browser` tool (CDP) and the `computer` tool
+//    act on the same windows; a browser the bot or the owner opened from the dock is adopted;
 //  - actions over raw CDP (navigate, snapshot with refs, click/type by ref or coordinates, key,
 //    scroll, screenshot, tabs);
 //  - screencast (`Page.startScreencast`) with ack pacing onto a `cdp-screencast` data stream;
@@ -36,12 +39,14 @@ import {
   type ScreencastOptions,
 } from "@openbot/node-protocol"
 import { NodeConfig, type BrowserConfig } from "../config.ts"
+import { DesktopManager } from "../desktop/DesktopManager.ts"
+import { LeaseBook, makeLeaseBook, type LeaseBookShape } from "../lease.ts"
 import { terminateGroup } from "../proc.ts"
 import type { Duplex } from "../sockets.ts"
 import { connectCdp, type CdpClient, type CdpError, type CdpEvent } from "./cdp.ts"
 import { imageSize } from "./image.ts"
 import { modifierBits, parseKeyCombo } from "./keys.ts"
-import { clearStaleLock, launchBrowser, type LaunchedBrowser } from "./launch.ts"
+import { clearStaleLock, launchBrowser, onScreenBrowserConfig, type LaunchedBrowser } from "./launch.ts"
 import { renderSnapshot, type AXNode } from "./snapshot.ts"
 
 export interface ScreencastInput {
@@ -68,7 +73,11 @@ export interface BrowserManagerShape {
   readonly screencast: (input: ScreencastInput) => Effect.Effect<void, BrowserUnavailable>
   /** Graceful `Browser.close`, then kill. Also runs when the layer's scope closes. */
   readonly shutdown: Effect.Effect<void>
-  /** loopback DevTools port of the running browser, if any */
+  /** Close the bot's own browser gracefully (per-bot browsers on desktops; a no-op otherwise). */
+  readonly closeBot: (botId: string) => Effect.Effect<void>
+  /** the browsers run per bot on the bots' desktops */
+  readonly onScreen: boolean
+  /** loopback DevTools port of the running (shared) browser, if any */
   readonly cdpPort: () => number | undefined
 }
 
@@ -88,6 +97,8 @@ interface BotWindow {
 }
 
 interface Running {
+  /** "" for the shared browser, the bot id for a bot's own browser */
+  readonly key: string
   readonly launched: LaunchedBrowser
   readonly cdp: CdpClient
   readonly scope: Scope.Closeable
@@ -98,8 +109,26 @@ interface Running {
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/
 
+/** Where a bot's own browser runs (its desktop): from `DesktopManager.screen`. */
+export interface BrowserScreen {
+  readonly env: Readonly<Record<string, string>>
+  readonly profileDir: string
+  readonly width: number
+  readonly height: number
+  readonly cwd: string
+  readonly logDir: string
+  readonly debugPort?: number | undefined
+}
+
 export interface BrowserManagerOptions {
   readonly logFile?: string | undefined
+  /**
+   * Per-bot browsers on the bots' desktops (D1.7). When set, each bot gets its own Chromium on its
+   * screen instead of a window in the node's shared (headless) browser.
+   */
+  readonly onScreen?: ((botId: string) => Effect.Effect<BrowserScreen, BrowserUnavailable>) | undefined
+  /** the node's control leases (shared with the desktop); a private book when undefined */
+  readonly leases?: LeaseBookShape | undefined
   /**
    * Node events for the brain (`BrainLink.event`): `browser.opened {botId, windowTargetId}` when a
    * bot's window is created, `browser.closed {botId, reason}` when it goes away (its last tab
@@ -112,8 +141,15 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
   Effect.gen(function* () {
     // An orphaned browser of a previous run (brain / daemon SIGKILLed) still holds the profile: free it
     // at startup, not only at the next (lazy) launch.
-    if (config.enabled) yield* Effect.ignore(Effect.try(() => clearStaleLock(config.profileDir)))
-    const lock = yield* Semaphore.make(1)
+    if (config.enabled && !options?.onScreen) yield* Effect.ignore(Effect.try(() => clearStaleLock(config.profileDir)))
+    const onScreen = options?.onScreen
+    const locks = new Map<string, Semaphore.Semaphore>()
+    const lockFor = (key: string) => {
+      let l = locks.get(key)
+      if (!l) locks.set(key, (l = Semaphore.makeUnsafe(1)))
+      return l
+    }
+    const keyOf = (botId: string) => (onScreen ? botId : "")
     const runFork = yield* FiberSet.makeRuntime<never>()
     const emit = (type: string, data: Record<string, unknown>) => {
       if (!options?.onEvent) return
@@ -124,8 +160,9 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       }
     }
     const emitClosed = (botId: string, reason: string) => emit(NodeEventTypes.browserClosed, { botId, reason })
-    const leases = new Map<string, LeaseState>()
-    let running: Running | undefined
+    const leases = options?.leases ?? makeLeaseBook()
+    const instances = new Map<string, Running>()
+    const instanceOf = (botId: string) => instances.get(keyOf(botId))
     const available = config.enabled && config.executable !== undefined
 
     const notify = (set: Set<() => void>) => {
@@ -154,6 +191,21 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         return { targetId, sessionId, refs: new Map<string, number>() } satisfies Tab
       })
 
+    /** a bot's own browser: every page in it is the bot's (dock windows, Ctrl+N, popups) */
+    const adoptPage = (r: Running, targetId: string) =>
+      runFork(
+        Effect.gen(function* () {
+          // let `newTab` (our own Target.createTarget) register its target first
+          yield* Effect.sleep(300)
+          const w = r.bots.get(r.key)
+          if (!w || [...r.bots.values()].some((x) => x.tabs.has(targetId))) return
+          const tab = yield* attach(r.cdp, targetId)
+          if (w.tabs.has(targetId)) return
+          w.tabs.set(tab.targetId, tab)
+          notify(w.listeners)
+        }).pipe(Effect.ignore),
+      )
+
     const onEvent = (r: Running) => (e: CdpEvent) => {
       if (e.method === "Target.targetDestroyed") removeTab(r, e.params.targetId)
       else if (e.method === "Target.detachedFromTarget" && e.params.targetId) {
@@ -164,7 +216,9 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       } else if (e.method === "Target.targetCreated") {
         // popups opened by a bot's tab belong to that bot
         const info = e.params.targetInfo
-        if (!info || info.type !== "page" || !info.openerId) return
+        if (!info || info.type !== "page") return
+        if (r.key !== "") return void adoptPage(r, info.targetId)
+        if (!info.openerId) return
         for (const w of r.bots.values()) {
           if (!w.tabs.has(info.openerId) || w.tabs.has(info.targetId)) continue
           runFork(
@@ -177,19 +231,28 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       }
     }
 
-    const start: Effect.Effect<Running, BrowserUnavailable> = Effect.gen(function* () {
-      const launched = yield* launchBrowser(config, options?.logFile)
+    const start = (key: string): Effect.Effect<Running, BrowserUnavailable> => Effect.gen(function* () {
+      const launched = yield* (onScreen && key !== ""
+        ? Effect.flatMap(onScreen(key), (screen) =>
+            launchBrowser({ ...onScreenBrowserConfig(config, screen), debugPort: screen.debugPort }, {
+              env: screen.env,
+              cwd: screen.cwd,
+              logFile: path.join(screen.logDir, "browser.log"),
+              adopt: true,
+            }),
+          )
+        : launchBrowser(config, { logFile: options?.logFile }))
       const scope = yield* Scope.make()
       const cdp = yield* connectCdp(launched.wsUrl).pipe(
         Scope.provide(scope),
         Effect.tapError(() => Effect.andThen(Scope.close(scope, Exit.void), terminateGroup(launched.proc, 200))),
         Effect.mapError((e) => new BrowserUnavailable({ reason: `cannot connect to the browser: ${e.message}` })),
       )
-      const r: Running = { launched, cdp, scope, bots: new Map(), closedListeners: new Set(), closing: false }
+      const r: Running = { key, launched, cdp, scope, bots: new Map(), closedListeners: new Set(), closing: false }
       cdp.on(onEvent(r))
       yield* cdp.send("Target.setDiscoverTargets", { discover: true }).pipe(Effect.ignore)
       cdp.closed.then(() => {
-        if (running === r) running = undefined
+        if (instances.get(r.key) === r) instances.delete(r.key)
         for (const w of r.bots.values()) {
           notify(w.listeners)
           emitClosed(w.botId, r.closing ? "the node closed the browser" : "the browser exited")
@@ -199,17 +262,19 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       return r
     })
 
-    const getRunning: Effect.Effect<Running, BrowserUnavailable> = Effect.suspend(() => {
+    const getRunning = (key: string): Effect.Effect<Running, BrowserUnavailable> => Effect.suspend(() => {
       if (!available) {
         return Effect.fail(
           new BrowserUnavailable({ reason: config.enabled ? "no Chromium or Chrome was found on this node" : "the browser is disabled on this node" }),
         )
       }
-      if (running && running.cdp.isOpen() && !running.closing) return Effect.succeed(running)
+      const current = instances.get(key)
+      if (current && current.cdp.isOpen() && !current.closing) return Effect.succeed(current)
       return Effect.gen(function* () {
-        if (running) yield* stop(running)
-        running = yield* start
-        return running
+        if (current) yield* stop(current)
+        const r = yield* start(key)
+        instances.set(key, r)
+        return r
       })
     })
 
@@ -223,27 +288,49 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         return yield* attach(r.cdp, targetId)
       })
 
-    /** The bot's window, created on first use. Serialized so concurrent calls share one window. */
-    const windowFor = (botId: string): Effect.Effect<{ r: Running; w: BotWindow }, BrowserUnavailable> =>
-      lock.withPermits(1)(
-        Effect.gen(function* () {
-          if (!SAFE_ID.test(botId)) return yield* new BrowserUnavailable({ reason: "invalid bot id" })
-          const r = yield* getRunning
-          const existing = r.bots.get(botId)
-          if (existing && existing.tabs.size > 0 && existing.tabs.has(existing.active)) return { r, w: existing }
-          const tab = yield* newTab(r, "about:blank", true).pipe(
-            Effect.mapError((e) => new BrowserUnavailable({ reason: `cannot open a window: ${e.message}` })),
+    /** The bot's window, created on first use. Serialized per browser so concurrent calls share one window. */
+    const openWindow = (botId: string): Effect.Effect<{ r: Running; w: BotWindow }, BrowserUnavailable> =>
+      Effect.gen(function* () {
+        const r = yield* getRunning(keyOf(botId))
+        const existing = r.bots.get(botId)
+        if (existing && existing.tabs.size > 0 && existing.tabs.has(existing.active)) return { r, w: existing }
+        const w: BotWindow = existing ?? { botId, tabs: new Map(), active: "", listeners: new Set() }
+        if (r.key !== "") {
+          // the bot's own browser: its open pages (the startup window, or windows opened from the dock) are the bot's tabs
+          const pages = yield* r.cdp.send<{ targetInfos: ReadonlyArray<{ targetId: string; type: string; url: string }> }>("Target.getTargets").pipe(
+            Effect.map((res) => res.targetInfos.filter((t) => t.type === "page" && !t.url.startsWith("devtools://"))),
+            Effect.orElseSucceed(() => []),
           )
-          const w: BotWindow = existing ?? { botId, tabs: new Map(), active: "", listeners: new Set() }
-          w.tabs.set(tab.targetId, tab)
-          w.active = tab.targetId
-          r.bots.set(botId, w)
-          notify(w.listeners)
-          // the brain's computer view learns the window exists even when a bot action opened it
-          emit(NodeEventTypes.browserOpened, { botId, windowTargetId: tab.targetId })
-          return { r, w }
-        }),
-      )
+          for (const p of pages) {
+            if (w.tabs.has(p.targetId)) continue
+            const tab = yield* attach(r.cdp, p.targetId).pipe(Effect.option)
+            if (tab._tag === "Some") w.tabs.set(tab.value.targetId, tab.value)
+          }
+          const first = w.tabs.keys().next()
+          if (!first.done) {
+            w.active = first.value
+            r.bots.set(botId, w)
+            notify(w.listeners)
+            emit(NodeEventTypes.browserOpened, { botId, windowTargetId: w.active })
+            return { r, w }
+          }
+        }
+        const tab = yield* newTab(r, "about:blank", true).pipe(
+          Effect.mapError((e) => new BrowserUnavailable({ reason: `cannot open a window: ${e.message}` })),
+        )
+        w.tabs.set(tab.targetId, tab)
+        w.active = tab.targetId
+        r.bots.set(botId, w)
+        notify(w.listeners)
+        // the brain's computer view learns the window exists even when a bot action opened it
+        emit(NodeEventTypes.browserOpened, { botId, windowTargetId: tab.targetId })
+        return { r, w }
+      })
+
+    const windowFor = (botId: string): Effect.Effect<{ r: Running; w: BotWindow }, BrowserUnavailable> =>
+      SAFE_ID.test(botId)
+        ? lockFor(keyOf(botId)).withPermits(1)(openWindow(botId))
+        : Effect.fail(new BrowserUnavailable({ reason: "invalid bot id" }))
 
     const viewport = (r: Running, sid: string) =>
       r.cdp.send<any>("Page.getLayoutMetrics", {}, sid).pipe(
@@ -263,17 +350,16 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         return { windowTargetId: tab.targetId, cdpPort: r.launched.port, width: vp.width, height: vp.height } satisfies BrowserEnsureResult
       })
 
-    const lease = (botId: string): LeaseState => leases.get(botId) ?? { botId, holder: "bot", since: 0 }
+    const lease = (botId: string): LeaseState => leases.get(botId)
 
-    const setLease = (botId: string, holder: LeaseHolder) =>
-      Effect.sync(() => {
-        const prev = lease(botId)
-        const next: LeaseState = prev.holder === holder && prev.since > 0 ? prev : { botId, holder, since: Date.now() }
-        leases.set(botId, next)
-        const w = running?.bots.get(botId)
-        if (w) notify(w.listeners)
-        return next
-      })
+    // a lease change re-attaches the bot's screencast (its first notice tells the viewer the holder)
+    const unsubscribe = leases.subscribe((state) => {
+      const w = instanceOf(state.botId)?.bots.get(state.botId)
+      if (w) notify(w.listeners)
+    })
+    yield* Effect.addFinalizer(() => Effect.sync(unsubscribe))
+
+    const setLease = (botId: string, holder: LeaseHolder) => Effect.sync(() => leases.set(botId, holder))
 
     // ------------------------------------------------------------ actions
     const fail = (action: string, reason: string) => new BrowserActionFailed({ action, reason })
@@ -482,7 +568,7 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         if (l.holder === "user") return yield* new LeaseHeld({ botId, holder: "user", reason: "The user is controlling the browser" })
         return yield* doAction(botId, a).pipe(
           Effect.catchTag("CdpError", (e): Effect.Effect<never, BrowserActionFailed | BrowserUnavailable> =>
-            running && running.cdp.isOpen()
+            instanceOf(botId)?.cdp.isOpen()
               ? Effect.fail(fail(a._tag, e.message))
               : Effect.fail(new BrowserUnavailable({ reason: `the browser closed: ${e.message}` })),
           ),
@@ -675,10 +761,30 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         }
         yield* terminateGroup(r.launched.proc, 1000)
         yield* Scope.close(r.scope, Exit.void)
-        if (running === r) running = undefined
+        if (instances.get(r.key) === r) instances.delete(r.key)
       })
 
-    const shutdown = lock.withPermits(1)(Effect.suspend(() => (running ? stop(running) : Effect.void)))
+    const shutdown = Effect.suspend(() =>
+      Effect.forEach(
+        [...new Set([...locks.keys(), ...instances.keys()])],
+        (key) =>
+          lockFor(key).withPermits(1)(
+            Effect.suspend(() => {
+              const r = instances.get(key)
+              return r ? stop(r) : Effect.void
+            }),
+          ),
+        { concurrency: "unbounded", discard: true },
+      ),
+    )
+
+    // no lock: the desktop calls this while it may hold the bot's screen, which `windowFor` may be waiting for
+    const closeBot = (botId: string) =>
+      Effect.suspend(() => {
+        if (!onScreen) return Effect.void
+        const r = instances.get(botId)
+        return r && !r.closing ? stop(r) : Effect.void
+      })
 
     yield* Effect.addFinalizer(() => shutdown)
 
@@ -692,17 +798,31 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       lease,
       screencast,
       shutdown,
-      cdpPort: () => running?.launched.port,
+      closeBot,
+      onScreen: onScreen !== undefined,
+      cdpPort: () => instances.get("")?.launched.port,
     } satisfies BrowserManagerShape
   })
 
-export const BrowserManagerLive: Layer.Layer<BrowserManager, never, NodeConfig | BrainLink> = Layer.effect(
+export const BrowserManagerLive: Layer.Layer<BrowserManager, never, NodeConfig | BrainLink | LeaseBook | DesktopManager> = Layer.effect(
   BrowserManager,
   Effect.gen(function* () {
     const config = yield* NodeConfig
     const brain = yield* BrainLink
-    return BrowserManager.of(
-      yield* makeBrowserManager(config.browser, { logFile: path.join(config.dataDir, "browser.log"), onEvent: brain.event }),
-    )
+    const leases = yield* LeaseBook
+    const desktop = yield* DesktopManager
+    const manager = yield* makeBrowserManager(config.browser, {
+      logFile: path.join(config.dataDir, "browser.log"),
+      onEvent: brain.event,
+      leases,
+      // with desktops, every bot's browser runs on the bot's own screen
+      onScreen:
+        desktop.offered && config.browser.enabled && config.browser.executable !== undefined
+          ? (botId) => desktop.screen(botId).pipe(Effect.mapError((e) => new BrowserUnavailable({ reason: `the bot's screen is unavailable: ${e.message}` })))
+          : undefined,
+    })
+    // a desktop reset closes the bot's browser first, so its cookies are saved
+    desktop.onStop((botId) => manager.closeBot(botId))
+    return BrowserManager.of(manager)
   }),
 )

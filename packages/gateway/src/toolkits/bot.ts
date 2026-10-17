@@ -862,16 +862,22 @@ const saveSkill = defineTool({
 const listSkills = defineTool({
   name: "list_skills",
   toolset: "bot",
-  description: "List the skills library: each skill's name, when to use it, and whether you have it.",
+  description:
+    "List the skills library: each skill's name, when to use it, where it came from, and which Bots have it (you included).",
   params: p.params({}),
   annotations: { title: "List skills", readOnlyHint: true, openWorldHint: false },
   idempotent: false,
   handler: (_args, ctx) =>
     Effect.gen(function*() {
       const skills = yield* (yield* SkillService).list
-      const self = yield* (yield* BotService).get(ctx.tool.claims.botId).pipe(Effect.orDie)
+      const team = yield* (yield* BotService).list
       return linesResult(
-        skills.map((skill) => `${skill.name}${self.skills.includes(skill.name) ? " (you have it)" : ""} — ${skill.description}`),
+        skills.map((skill) => {
+          const holders = team.filter((bot) => bot.skills.includes(skill.name))
+            .map((bot) => (bot.id === ctx.tool.claims.botId ? "you" : `@${bot.name}`))
+          const source = skill.source === undefined ? "written here" : `from skills.sh (${skill.source.id})`
+          return `${skill.name} — ${skill.description} [${source}; ${holders.length === 0 ? "no Bot has it" : `has it: ${holders.join(", ")}`}]`
+        }),
         "The skills library is empty.",
       )
     }),
@@ -1008,6 +1014,12 @@ const previewSkill = defineTool({
     }),
 })
 
+/** A failed install as a refusal that says what to do next (never a manual copy). */
+const installFailed = (error: { readonly _tag: string; readonly message?: string }) =>
+  new ToolRefusal({
+    message: `${(error._tag === "NotFound" ? "skills.sh has no such skill" : error.message ?? "The install failed").replace(/\.$/, "")}. Tell the owner; do not install it another way (copied files are not loaded).`,
+  })
+
 const installSkill = defineTool({
   name: "install_skill",
   toolset: "bot",
@@ -1025,7 +1037,7 @@ const installSkill = defineTool({
       const targets = args.bots === undefined || args.bots.length === 0
         ? [yield* bots.get(ctx.tool.claims.botId).pipe(Effect.orDie)]
         : yield* Effect.forEach(args.bots, (ref) => bots.resolve(ref))
-      const preview = yield* skills.preview(args.id)
+      const preview = yield* skills.preview(args.id).pipe(Effect.mapError(installFailed))
       const who = targets.map((bot) => (bot.id === ctx.tool.claims.botId ? "you" : `@${bot.name}`)).join(", ")
       yield* approve(ctx, {
         kind: "mcp-approval",
@@ -1038,7 +1050,7 @@ const installSkill = defineTool({
         }`,
         input: { id: preview.id, bots: targets.map((bot) => bot.name) },
       }, `installing ${preview.name}`)
-      const installed = yield* skills.install(preview.id, targets.map((bot) => bot.id))
+      const installed = yield* skills.install(preview.id, targets.map((bot) => bot.id)).pipe(Effect.mapError(installFailed))
       const forSelf = targets.some((bot) => bot.id === ctx.tool.claims.botId)
       return textResult(
         `Installed ${installed.name} for ${who}; it loads from the next message on.${

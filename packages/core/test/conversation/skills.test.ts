@@ -25,7 +25,14 @@ const downloads = {
 
 const layer = () =>
   SkillServiceLive.pipe(
-    Layer.provide(SkillDirectoryFake.layer({ results: [{ id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 12 }], downloads })),
+    Layer.provide(SkillDirectoryFake.layer({
+      results: [
+        { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 12 },
+        // hosted outside GitHub: not installable through skills.sh, so never offered
+        { id: "notes.example.com/release-notes", name: "release-notes", repo: "notes.example.com", installs: 3 },
+      ],
+      downloads,
+    })),
     Layer.provideMerge(appLayer()),
   )
 

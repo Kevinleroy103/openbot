@@ -38,6 +38,7 @@ const getJson = (url: string, what: string, fetchImpl: typeof fetch) =>
     try: async (signal) => {
       const response = await fetchImpl(url, { signal, headers: { accept: "application/json" } })
       if (response.status === 404) return undefined
+      if (response.status === 429) throw new Error("too many requests, try again in a minute")
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       return (await response.json()) as unknown
     },

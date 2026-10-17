@@ -359,6 +359,31 @@ describe("bot tools", () => {
     ])
   })
 
+  test("list_skills says where each skill came from and who has it; a failed install says to tell the owner", async () => {
+    const layer = Layer.mergeAll(
+      Layer.mock(SkillService, {
+        list: Effect.succeed([
+          { name: "effect" as SkillName, description: "Effect 4 code.", body: "b", updatedAt: 0, source: { kind: "skills.sh" as const, id: "kitlangton/skills/effect" } },
+          { name: "triage" as SkillName, description: "Bug triage.", body: "b", updatedAt: 0 },
+        ]),
+        preview: () => Effect.fail(new InvalidInput({ message: "A skill needs a description of when to use it." })),
+      }),
+      Layer.mock(BotService, {
+        get: () => Effect.succeed(makeBot({ id: BOT, name: "Alpha" })),
+        list: Effect.succeed([
+          makeBot({ id: BOT, name: "Alpha", skills: ["effect" as SkillName] }),
+          makeBot({ id: "bot_beta" as BotId, name: "Beta", skills: ["effect" as SkillName] }),
+        ]),
+      }),
+    )
+    expect(textOf(await callTool("list_skills", {}, layer))).toBe(
+      "effect — Effect 4 code. [from skills.sh (kitlangton/skills/effect); has it: you, @Beta]\ntriage — Bug triage. [written here; no Bot has it]",
+    )
+    expect(textOf(await callTool("install_skill", { id: "vercel-labs/agent-skills/x" }, layer))).toBe(
+      "ERROR: A skill needs a description of when to use it. Tell the owner; do not install it another way (copied files are not loaded).",
+    )
+  })
+
   test("refusals from services surface as ERROR text", async () => {
     const layer = Layer.mergeAll(
       Layer.mock(NodeDirectory, { list: Effect.succeed([]) }),

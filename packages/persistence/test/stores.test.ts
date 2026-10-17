@@ -117,6 +117,35 @@ describe("SkillStore files (Claude plugin layout)", () => {
 })
 
 describe("SkillStore imports (skills.sh)", () => {
+  test("a description continued on indented lines (plain multi-line YAML) is read as one line", async () => {
+    const dir = await tempDataDir()
+    const given = [
+      "---",
+      "name: vercel-composition-patterns",
+      "description:",
+      "  React composition patterns that scale. Use when refactoring components with",
+      "  boolean prop proliferation.",
+      "license: MIT",
+      "allowed-tools:",
+      "  - Read",
+      "metadata:",
+      "  author: vercel",
+      "---",
+      "# React Composition Patterns",
+      "",
+    ].join("\n")
+    const parsed = await run(Effect.map(SkillStore, (store) => store.parse(given)), testPersistence(dir))
+    expect(parsed).toEqual({
+      name: "vercel-composition-patterns",
+      description: "React composition patterns that scale. Use when refactoring components with boolean prop proliferation.",
+      body: "# React Composition Patterns\n",
+    })
+    // lists and maps keep their shape
+    const front = parseFrontmatter(given)
+    expect(front.fields.get("allowed-tools")).toEqual({ kind: "raw", lines: ["  - Read"] })
+    expect(front.fields.get("metadata")).toMatchObject({ kind: "map" })
+  })
+
   test("install replaces the folder, keeps extra files and frontmatter keys, records the source; put keeps both", async () => {
     const dir = await tempDataDir()
     const given = [

@@ -222,7 +222,8 @@ export const makeSkillService = Effect.gen(function*() {
     search: (query) =>
       query.trim() === ""
         ? Effect.fail(new InvalidInput({ message: "Type something to search for." }))
-        : directory.search(query.trim()),
+        // skills hosted outside GitHub (`site/skill`) cannot be downloaded through skills.sh
+        : directory.search(query.trim()).pipe(Effect.map((found) => found.filter((hit) => SKILLS_SH_ID.test(hit.id)))),
     preview,
     install,
   })

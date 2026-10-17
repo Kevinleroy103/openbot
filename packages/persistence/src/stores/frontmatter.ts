@@ -115,7 +115,19 @@ export const parseFrontmatter = (text: string): Frontmatter => {
       }
       entries.set(nested[1] ?? "", unquote(nested[2] ?? ""))
     }
-    fields.set(key, isMap ? { kind: "map", entries } : block.length === 0 ? { kind: "scalar", value: "" } : { kind: "raw", lines: block })
+    // `key:` then indented plain text (no list items, no `key: value` lines): a multi-line plain
+    // scalar, folded into one line (e.g. a long SKILL.md `description`)
+    const plainText = !isMap && block.length > 0 && block.every((line) => !/^\s*-(\s|$)/.test(line))
+    fields.set(
+      key,
+      isMap
+        ? { kind: "map", entries }
+        : plainText
+        ? { kind: "scalar", value: block.map((line) => line.trim()).join(" ") }
+        : block.length === 0
+        ? { kind: "scalar", value: "" }
+        : { kind: "raw", lines: block },
+    )
   }
   return { fields, body }
 }

@@ -554,7 +554,7 @@ Per-adapter specifics:
   - GET returns 405; session-id 404 makes the client re-initialize.
   - Progress notifications every ≤5 s on long tools.
 - **Toolkits.** Each is a list of `{name, description, inputSchema (JSON schema, no tuples), annotations, handler(args, ctx) → Effect<ToolResult>}`.
-  - `BotToolkit` (calls core services): `message_bot`, `post_to_group`, `handoff_task`, `list_bots`, `ask_user`, `request_approval`, `notify_user`, `remember`, `forget`, `recall_memory`, `create_routine`, `update_routine`, `list_routines`, `save_skill`, `list_skills`, `enable_skill`, `disable_skill`, `list_nodes`.
+  - `BotToolkit` (calls core services): `message_bot`, `post_to_group`, `handoff_task`, `list_bots`, `ask_user`, `request_approval`, `notify_user`, `remember`, `forget`, `recall_memory`, `create_routine`, `update_routine`, `list_routines`, `save_skill`, `list_skills`, `enable_skill`, `disable_skill`, `find_skills`, `preview_skill`, `install_skill`, `list_nodes`.
   - `NodeToolkit` (calls `NodeDirectory.client(node)` → NodeRpcs): `shell`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`. The `node` parameter is optional and defaults to the host node; it must be one of the bot's bound nodes.
   - `BrowserToolkit` → `browser.action` on the host node.
 - **Result rules** (mcp-conformance.md):

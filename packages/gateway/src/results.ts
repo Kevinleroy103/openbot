@@ -194,6 +194,8 @@ export const renderToolError = (error: unknown): string => {
         return errorText(str(e.reason) ?? "Not authorized")
       case "HarnessUnavailable":
         return errorText(str(e.message) ?? "The harness is unavailable")
+      case "Unavailable":
+        return errorText(str(e.message) ?? "An outside service did not answer")
       case "RequestNotPending":
         return errorText(`Request ${str(e.requestId) ?? ""} is no longer pending (${str(e.status) ?? "unknown"})`)
       case "NodeUnavailable": {

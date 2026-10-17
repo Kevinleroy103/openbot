@@ -958,6 +958,96 @@ const disableSkill = defineTool({
     }),
 })
 
+// ---------------------------------------------------------------------------- skills.sh (D5.5)
+
+const formatInstalls = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}K` : String(n))
+
+const findSkills = defineTool({
+  name: "find_skills",
+  toolset: "bot",
+  description:
+    "Search skills.sh, the public catalog of agent skills, for skills on a topic. Returns ids (owner/repo/skill) with install counts, most installed first. Read one with preview_skill before suggesting it.",
+  params: p.params({
+    query: p.text("What the skill is about, e.g. \"react\" or \"pdf forms\"."),
+  }),
+  annotations: { title: "Find skills", readOnlyHint: true, openWorldHint: true },
+  idempotent: false,
+  handler: (args) =>
+    Effect.gen(function*() {
+      const skills = yield* SkillService
+      const found = yield* skills.search(args.query)
+      const library = new Set((yield* skills.list).flatMap((skill) => (skill.source === undefined ? [] : [skill.source.id])))
+      return linesResult(
+        found.map((hit) => `${hit.id} — ${formatInstalls(hit.installs)} installs${library.has(hit.id) ? " (already in the library)" : ""}`),
+        `No skills on skills.sh match "${args.query}".`,
+      )
+    }),
+})
+
+const previewSkill = defineTool({
+  name: "preview_skill",
+  toolset: "bot",
+  description: "Read a skills.sh skill before installing it: its description, instructions and files. Nothing is installed.",
+  params: p.params({
+    id: p.text("The skill's id from find_skills: owner/repo/skill."),
+  }),
+  annotations: { title: "Preview a skill", readOnlyHint: true, openWorldHint: true },
+  idempotent: false,
+  handler: (args) =>
+    Effect.gen(function*() {
+      const preview = yield* (yield* SkillService).preview(args.id)
+      const files = preview.files.map((file) => `- ${file.path} (${formatBytes(file.bytes)})`).join("\n")
+      return textResult(
+        [
+          `${preview.name} (${preview.id})${preview.replaces ? " — the library already has a skill with this name; installing replaces it" : ""}`,
+          `When to use it: ${preview.description}`,
+          `Files:\n${files}`,
+          `SKILL.md:\n${capText(preview.body, SKILL_RESULT_BYTES).text}`,
+        ].join("\n\n"),
+      )
+    }),
+})
+
+const installSkill = defineTool({
+  name: "install_skill",
+  toolset: "bot",
+  description:
+    "Install a skill from skills.sh into the library and give it to Bots (default: you). Waits for the owner's approval on a card that shows the skill and who gets it.",
+  params: p.params({
+    id: p.text("The skill's id: owner/repo/skill."),
+    bots: p.optional(p.array(p.text(), "Who gets it: Bot names or ids (omit for yourself).", { maxItems: 20 })),
+  }),
+  annotations: { title: "Install a skill", destructiveHint: false, openWorldHint: true },
+  handler: (args, ctx) =>
+    Effect.gen(function*() {
+      const skills = yield* SkillService
+      const bots = yield* BotService
+      const targets = args.bots === undefined || args.bots.length === 0
+        ? [yield* bots.get(ctx.tool.claims.botId).pipe(Effect.orDie)]
+        : yield* Effect.forEach(args.bots, (ref) => bots.resolve(ref))
+      const preview = yield* skills.preview(args.id)
+      const who = targets.map((bot) => (bot.id === ctx.tool.claims.botId ? "you" : `@${bot.name}`)).join(", ")
+      yield* approve(ctx, {
+        kind: "mcp-approval",
+        toolName: "install_skill",
+        server: "openbot",
+        surface: "skills",
+        title: `Install the skill “${preview.name}” from skills.sh for ${targets.map((bot) => bot.name).join(", ")}`,
+        detail: `${preview.description}\n\n${preview.id} · ${preview.files.length} file${preview.files.length === 1 ? "" : "s"}${
+          preview.replaces ? " · replaces the library's skill with this name" : ""
+        }`,
+        input: { id: preview.id, bots: targets.map((bot) => bot.name) },
+      }, `installing ${preview.name}`)
+      const installed = yield* skills.install(preview.id, targets.map((bot) => bot.id))
+      const forSelf = targets.some((bot) => bot.id === ctx.tool.claims.botId)
+      return textResult(
+        `Installed ${installed.name} for ${who}; it loads from the next message on.${
+          forSelf ? ` Its instructions, to use it right away:\n\n${capText(installed.body, SKILL_RESULT_BYTES).text}` : ""
+        }`,
+      )
+    }),
+})
+
 // ============================================================================ nodes
 
 /** One line per node, as shown by `list_nodes`. */
@@ -1065,5 +1155,8 @@ export const BotToolkit: ReadonlyArray<AnyTool<BotToolkitServices>> = [
   listSkills,
   enableSkill,
   disableSkill,
+  findSkills,
+  previewSkill,
+  installSkill,
   listNodes,
 ]

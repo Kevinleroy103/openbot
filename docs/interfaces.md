@@ -499,6 +499,8 @@ Gateway bot tools map onto these methods:
 | `save_skill` | `SkillService.upsert` (the calling Bot gets the skill) |
 | `list_skills` | `SkillService.list`, marking the caller's skills |
 | `enable_skill` / `disable_skill` | approval card (surface `skills`; not for dropping one's own skill), then `BotService.update {skills}` |
+| `find_skills` / `preview_skill` | `SkillService.search` / `preview` (skills.sh; read-only) |
+| `install_skill` | `SkillService.preview`, approval card (surface `skills`), then `SkillService.install` |
 | `list_nodes` | `NodeDirectory.list`, filtered to the host node and bound nodes |
 | `send_file` | `Messaging.sendFiles` (node chosen like the node tools; relative paths from the bot's workspace there; `to` = another Bot or a group) |
 | `start_task` | `BackgroundTasks.start` (D5.7; not offered in a task's own session, nor are the next three and `ask_user` / `request_approval`) |

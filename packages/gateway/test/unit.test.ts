@@ -3,7 +3,7 @@ import type { BotId, HarnessApprovalRequest, Routine, RoutineId, SkillName } fro
 import { BotService, NodeDirectory, Notifier, Orchestrator, RoutineScheduler, SkillService } from "@openbot/core"
 import { makeBot, makeClaims } from "@openbot/core/testing"
 import { NodeUnavailable, PathDenied } from "@openbot/node-protocol"
-import { NodeUnavailable as ContractNodeUnavailable, InvalidInput, NotFound } from "@openbot/contracts"
+import { NodeUnavailable as ContractNodeUnavailable, InvalidInput, NotFound, Unavailable } from "@openbot/contracts"
 import { Effect, Exit, Layer } from "effect"
 import { botIdFromPath, callIdOf, DefaultToolkits } from "../src/McpGateway.ts"
 import * as p from "../src/params.ts"
@@ -71,7 +71,7 @@ describe("params", () => {
       [
         "message_bot", "post_to_group", "react", "handoff_task", "list_bots", "list_models", "create_bot", "update_bot", "list_sections", "create_section", "rename_section", "delete_section", "move_bot_to_section", "ask_user", "request_approval", "notify_user", "send_file",
         "remember", "forget", "recall_memory", "create_routine", "update_routine", "list_routines", "save_skill",
-        "list_skills", "enable_skill", "disable_skill", "list_nodes", "start_task", "list_tasks", "check_task", "cancel_task", "update_task", "shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep",
+        "list_skills", "enable_skill", "disable_skill", "find_skills", "preview_skill", "install_skill", "list_nodes", "start_task", "list_tasks", "check_task", "cancel_task", "update_task", "shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep",
         "browser",
       ].sort(),
     )
@@ -304,6 +304,59 @@ describe("bot tools", () => {
       ["skills", "Give @Beta the skill “triage”"],
     ])
     expect(updates).toEqual([["triage"], [], ["triage"]])
+  })
+
+  test("find_skills / preview_skill read skills.sh; install_skill installs only after the owner approves", async () => {
+    const preview = {
+      id: "acme/skills/release-notes",
+      name: "release-notes",
+      description: "Use when writing release notes.",
+      body: "1. Collect",
+      files: [{ path: "SKILL.md", bytes: 120 }, { path: "scripts/a.sh", bytes: 2048 }],
+      replaces: false,
+    }
+    const asked: Array<HarnessApprovalRequest> = []
+    const installs: Array<[string, ReadonlyArray<string>]> = []
+    const layer = (decision: "allow-once" | "deny", offline = false) =>
+      Layer.mergeAll(
+        Layer.mock(SkillService, {
+          search: () =>
+            offline
+              ? Effect.fail(new Unavailable({ message: "skills.sh did not answer (search): HTTP 503" }))
+              : Effect.succeed([
+                { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 48_200 },
+                { id: "x/y/react", name: "react", repo: "x/y", installs: 950 },
+              ]),
+          list: Effect.succeed([{ name: "react" as SkillName, description: "d", body: "b", updatedAt: 0, source: { kind: "skills.sh" as const, id: "x/y/react" } }]),
+          preview: () => Effect.succeed(preview),
+          install: (id, botIds) =>
+            Effect.sync(() => (installs.push([id, botIds]), { name: "release-notes" as SkillName, description: preview.description, body: "1. Collect", updatedAt: 0 })),
+        }),
+        Layer.mock(BotService, {
+          get: () => Effect.succeed(makeBot({ id: BOT, name: "Alpha" })),
+          resolve: (ref) => Effect.succeed(makeBot({ id: `bot_${ref.toLowerCase()}` as BotId, name: ref })),
+        }),
+        Layer.mock(Orchestrator, { approveToolCall: (_tool, request) => Effect.sync(() => (asked.push(request), { decision })) }),
+      )
+    expect(textOf(await callTool("find_skills", { query: "notes" }, layer("allow-once")))).toBe(
+      "acme/skills/release-notes — 48K installs\nx/y/react — 950 installs (already in the library)",
+    )
+    expect(textOf(await callTool("find_skills", { query: "notes" }, layer("allow-once", true)))).toBe("ERROR: skills.sh did not answer (search): HTTP 503")
+    const read = textOf(await callTool("preview_skill", { id: "acme/skills/release-notes" }, layer("allow-once")))
+    expect(read).toContain("When to use it: Use when writing release notes.")
+    expect(read).toContain("- scripts/a.sh (2 KB)")
+    expect(textOf(await callTool("install_skill", { id: "acme/skills/release-notes", bots: ["Beta"] }, layer("deny")))).toStartWith(
+      "ERROR: The user did not allow installing release-notes",
+    )
+    expect(installs).toEqual([])
+    expect(textOf(await callTool("install_skill", { id: "acme/skills/release-notes" }, layer("allow-once")))).toStartWith(
+      "Installed release-notes for you; it loads from the next message on. Its instructions, to use it right away:\n\n1. Collect",
+    )
+    expect(installs).toEqual([["acme/skills/release-notes", [BOT]]])
+    expect(asked.map((r) => [r.surface, r.title])).toEqual([
+      ["skills", "Install the skill “release-notes” from skills.sh for Beta"],
+      ["skills", "Install the skill “release-notes” from skills.sh for Alpha"],
+    ])
   })
 
   test("refusals from services surface as ERROR text", async () => {

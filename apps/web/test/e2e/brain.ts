@@ -73,11 +73,12 @@ const waitFor = async (sink: { text: string }, pattern: RegExp, timeoutMs: numbe
   throw new Error(`${what} did not show up within ${timeoutMs} ms:\n${sink.text.slice(-4000)}`)
 }
 
-export const startBrain = async (options?: { readonly harnesses?: string; readonly args?: ReadonlyArray<string> }): Promise<Brain> => {
+/** `env`: extra variables for the brain, e.g. `OPENBOT_SKILLS_SH_URL` (a fake skills.sh). */
+export const startBrain = async (options?: { readonly harnesses?: string; readonly args?: ReadonlyArray<string>; readonly env?: Record<string, string> }): Promise<Brain> => {
   const dataDir = mkdtempSync(join(tmpdir(), "openbot-e2e-brain-"))
   const child = Bun.spawn(
     [process.execPath, serverMain, "--data-dir", dataDir, "--port", "0", "--harness", options?.harnesses ?? "fake", ...(options?.args ?? [])],
-    { cwd: repoRoot, stdout: "pipe", stderr: "pipe", env: childEnv() },
+    { cwd: repoRoot, stdout: "pipe", stderr: "pipe", env: childEnv(options?.env) },
   )
   const sink = { text: "" }
   pump(child.stdout, sink)

@@ -4,7 +4,11 @@
 import { Schema } from "effect"
 import { ApprovalRuleId, BotId, Millis } from "./base.ts"
 
-export const ApprovalSurface = Schema.Literals(["shell", "file-edit", "file-read", "mcp", "browser", "computer", "network", "other"])
+/**
+ * What a request touches (rule surfaces). `skills`: a Bot changing which skills a Bot has; its
+ * autonomy never decides that (only a rule or the owner).
+ */
+export const ApprovalSurface = Schema.Literals(["shell", "file-edit", "file-read", "mcp", "browser", "computer", "network", "skills", "other"])
 export type ApprovalSurface = typeof ApprovalSurface.Type
 
 export const ApprovalAction = Schema.Literals(["ask", "allow", "deny"])

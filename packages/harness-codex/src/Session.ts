@@ -141,7 +141,7 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
           Effect.logWarning(`Codex: skills/list failed, host skills stay visible: ${error._tag}`).pipe(Effect.as(undefined))
         ),
       )
-      return skillRulesFor(listed, root)
+      return skillRulesFor(listed, root, input.bot.skills)
     })
     : []
   const config = threadConfig(input.mcp, { ...deps.threadConfig, skillRules, effort: input.effort })

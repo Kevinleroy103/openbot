@@ -42,9 +42,10 @@ export const phoneHomeAtom: Atom.Writable<boolean> = Atom.make<boolean>(!isChatH
 /**
  * History entries the app creates carry a marker in `history.state`:
  * - `{ ob: "chat" }`: pushed when a phone opens a chat from Home (Back / iOS swipe-back pops it);
- * - `{ ob: "sheet", sheet }`: pushed while a phone sheet is open (Back closes it, nav.ts).
+ * - `{ ob: "sheet", sheet, depth }`: pushed while a phone sheet is open (Back closes it, nav.ts);
+ *   `depth` counts the sheets open under it, itself included (Settings › a page › an editor = 3).
  */
-export type HistoryMark = { readonly ob: "chat" } | { readonly ob: "sheet"; readonly sheet: string }
+export type HistoryMark = { readonly ob: "chat" } | { readonly ob: "sheet"; readonly sheet: string; readonly depth?: number }
 export const historyMark = (): HistoryMark | undefined => {
   if (typeof history === "undefined") return undefined
   const s = history.state as { ob?: unknown } | null

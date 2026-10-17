@@ -1,7 +1,7 @@
 // Search palette (Cmd/Ctrl+K, grok-bot-ui.md §4.10): Bots (unread first), group chats, settings
 // pages and actions. Rows: 22 px avatar + name + label chip, unread dot at the right. Phone: a
 // full-screen sheet with an iOS "Cancel", without the keyboard-only actions.
-import { ChartNoAxesColumn, Cpu, MessageSquarePlus, Monitor, Moon, PanelLeft, Plus, Settings, ShieldCheck, Sun, Users } from "lucide-react"
+import { ChartNoAxesColumn, Cpu, MessageSquarePlus, Monitor, Moon, PanelLeft, Plus, Settings, ShieldCheck, Sparkles, Sun, Users } from "lucide-react"
 import { type ReactNode, useMemo } from "react"
 import { useAtomSet } from "@effect/atom-react"
 import { DEFAULT_SETTINGS, type ConversationSummary } from "@openbot/contracts"
@@ -112,6 +112,7 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
       page("harnesses", "Harnesses", Cpu, ["claude", "codex", "opencode", "sign in"]),
       page("computers", "Computers", Monitor, ["nodes", "pair", "pairing"]),
       page("permissions", "Permissions", ShieldCheck, ["rules", "approvals", "allow"]),
+      page("skills", "Skills", Sparkles, ["library", "skills.sh", "import"]),
       page("usage", "Usage", ChartNoAxesColumn, ["tokens", "cost"]),
       ...(phone ? actions.filter((a) => a.id !== "action:compact").map(({ trailing: _shortcut, ...a }) => a) : actions),
     ]

@@ -16,6 +16,7 @@ import {
   type BotMemory,
   type BotUsage,
   type Card,
+  compareEntries,
   type CardState,
   Conflict,
   type Conversation,
@@ -55,14 +56,17 @@ import {
   type Settings,
   type Skill,
   type SkillName,
+  type SkillPreview,
   type ToolKind,
   type Turn,
   type TurnFailure,
   type TurnId,
+  Unavailable,
   applySettingsPatch,
   memoryFactIdFromTitle,
 } from "@openbot/contracts"
 import { ConversationReplica, RosterReplica, subscribeTo } from "./replica.ts"
+import { parseSkillMd, SKILLS_SH } from "./skillsSh.ts"
 
 export const OWNER: Author = { kind: "user", userId: OWNER_USER_ID }
 export const botAuthor = (botId: string): Author => ({ kind: "bot", botId: botId as BotId })
@@ -722,6 +726,8 @@ export class MockBrain {
       hidden: false,
       notify: "all",
       autonomy: input.autonomy ?? "workspace",
+      projectFolders: [],
+      skills: [],
       createdAt: at,
       updatedAt: at,
     }
@@ -793,6 +799,34 @@ export class MockBrain {
     } else this.updateConversation(conversationId, { unreadCount: 0, unreadBoundaryAt: at ?? this.now() })
   }
 
+  // ---------------------------------------------------------------------------------- skills
+  /** Exactly `botIds` have the skill afterwards (skills.assign; delete passes none). */
+  setSkillHolders(name: string, botIds: ReadonlyArray<string>) {
+    for (const bot of this.roster.state.bots.values()) {
+      const has = (bot.skills ?? []).includes(name as SkillName)
+      const wants = botIds.includes(bot.id)
+      if (has === wants) continue
+      const skills = wants ? [...(bot.skills ?? []), name as SkillName] : (bot.skills ?? []).filter((n) => n !== name)
+      this.putBot({ ...bot, skills, updatedAt: this.now() })
+    }
+  }
+
+  /** A canned skills.sh skill as `skills.preview` shows it. */
+  previewSkill(id: string): SkillPreview {
+    const canned = SKILLS_SH.find((c) => c.result.id === id)
+    if (!canned) throw new NotFound({ entity: "skill", id })
+    const md = parseSkillMd(canned.files.find((f) => f.path === "SKILL.md")!.contents)
+    const name = md.name ?? canned.result.name
+    return {
+      id,
+      name,
+      description: md.description ?? "",
+      body: md.body,
+      files: canned.files.map((f) => ({ path: f.path, bytes: new TextEncoder().encode(f.contents).byteLength })),
+      replaces: this.skills.has(name),
+    }
+  }
+
   // -------------------------------------------------------------------------------- handlers
   handlers(): Record<string, (payload: any) => unknown> {
     const sync =
@@ -813,6 +847,8 @@ export class MockBrain {
         sync(() => {
           const bot = this.bot(botId)
           if (!bot) throw new NotFound({ entity: "bot", id: botId })
+          const unknown = (patch.skills as string[] | undefined)?.find((n) => !this.skills.has(n))
+          if (unknown) throw new InvalidInput({ message: `There's no skill named "${unknown}" in the library.` })
           const next: Record<string, unknown> = { ...bot, updatedAt: this.now() }
           for (const [k, v] of Object.entries(patch as Record<string, unknown>)) {
             if (v === null) delete next[k]
@@ -1024,11 +1060,57 @@ export class MockBrain {
       "skills.list": () => Effect.succeed([...this.skills.values()]),
       "skills.upsert": (input) =>
         sync(() => {
-          const s: Skill = { ...input, updatedAt: this.now() }
+          // an imported skill keeps its source and other files
+          const s: Skill = { ...this.skills.get(input.name), ...input, updatedAt: this.now() }
           this.skills.set(s.name, s)
           return s
         })(),
-      "skills.delete": ({ name }) => sync(() => void this.skills.delete(name as SkillName))(),
+      "skills.delete": ({ name }) =>
+        sync(() => {
+          if (!this.skills.delete(name)) throw new NotFound({ entity: "skill", id: name })
+          this.setSkillHolders(name, [])
+        })(),
+      "skills.assign": ({ name, botIds }) =>
+        sync(() => {
+          if (!this.skills.has(name)) throw new NotFound({ entity: "skill", id: name })
+          const missing = (botIds as string[]).find((id) => !this.bot(id))
+          if (missing) throw new NotFound({ entity: "bot", id: missing })
+          this.setSkillHolders(name, botIds)
+        })(),
+      // skills.sh (canned, with a little latency); "offline" fails like skills.sh being down
+      "skills.search": ({ query }) =>
+        Effect.promise(() => sleep(250)).pipe(
+          Effect.andThen(() =>
+            sync(() => {
+              const q = (query as string).trim().toLowerCase()
+              if (q === "") throw new InvalidInput({ message: "Type something to search for." })
+              if (q.includes("offline")) throw new Unavailable({ message: "skills.sh did not answer (search): fetch failed" })
+              return SKILLS_SH.map((c) => c.result).filter((r) => q.split(/\s+/).every((w) => r.id.toLowerCase().includes(w)))
+            })(),
+          ),
+        ),
+      "skills.preview": ({ id }) => Effect.promise(() => sleep(400)).pipe(Effect.andThen(() => sync(() => this.previewSkill(id))())),
+      "skills.install": ({ id, botIds }) =>
+        Effect.promise(() => sleep(400)).pipe(
+          Effect.andThen(() =>
+            sync(() => {
+              const p = this.previewSkill(id)
+              const canned = SKILLS_SH.find((c) => c.result.id === id)!
+              const skill: Skill = {
+                name: p.name as SkillName,
+                description: p.description,
+                body: p.body,
+                updatedAt: this.now(),
+                source: { kind: "skills.sh", id, hash: `sha-${id.length}` },
+                files: canned.files.map((f) => f.path).filter((f) => f !== "SKILL.md"),
+              }
+              this.skills.set(skill.name, skill)
+              const holders = [...this.roster.state.bots.values()].filter((b) => (b.skills ?? []).includes(skill.name)).map((b) => b.id as string)
+              this.setSkillHolders(skill.name, [...new Set([...holders, ...(botIds as string[])])])
+              return skill
+            })(),
+          ),
+        ),
       "harnesses.status": () => Effect.succeed(this.harnesses),
       "harnesses.models": ({ kind }) => Effect.succeed(MODELS[kind] ?? []),
       // accounts (profiles) derived from the seeded statuses; add/remove edit `harnesses`

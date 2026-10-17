@@ -269,7 +269,7 @@ Port `vendor/scratch/contracts/src` (domain-contract.md §F.4) and extend it. Fi
 - `harness.ts`: `HarnessEvent`, `HarnessItem`, `HarnessRequest`, `HarnessRequestResolution`, `HarnessStatus {kind, installed, version?, auth: {state: signed-in|signed-out|unknown, label?}, problems[]}`, `ModelInfo {id, label, default?}`, `ContextUsage`.
 - `policy.ts`: `ApprovalRule {id, botId?, surface: shell|file-edit|file-read|mcp|browser|computer|network|other, match {toolName?, commandPrefix?, pathPrefix?}, action: ask|allow|deny, createdAt}`.
 - `settings.ts`: `Settings {theme: system|dark|light, accent: bot|black, showSteps: boolean, botMessaging: boolean, defaultHarness?, approvalExpiryMinutes}`.
-- `memory.ts`, `skills.ts`: `MemoryFact {id, title, body, updatedAt}`, `BotMemory {index, facts[]}`, `Skill {name, description, body, updatedAt}` (library-level; v1 has no per-bot subsets).
+- `memory.ts`, `skills.ts`: `MemoryFact {id, title, body, updatedAt}`, `BotMemory {index, facts[]}`, `Skill {name, description, body, updatedAt, source?, files?}`, `SkillSearchResult`, `SkillPreview` (D5.5: a library plus `Bot.skills`; skills.sh import).
 - `stream.ts`: replica stream items for conversation and roster (seed), `StreamCursor {epoch, sequence}`.
 - `rpc.ts`: `OpenBotRpcs` (§4.1.1), errors.
 - `projection.ts`: a pure client reducer `applyConversationStreamItem(state, item)` and `applyRosterStreamItem`. Clients keep the highest revision.
@@ -289,7 +289,7 @@ Start from the seed `rpc.ts`. **Cut for v1:** connectors.*, tasks.*, messages.fe
 | requests | `requests.respond {requestId, response}`, `requests.listPending` |
 | routines | `routines.list/create/update/setEnabled/delete/runNow`, `routines.runs {routineId}` |
 | memory | `memory.get {botId}`, `memory.putFact`, `memory.deleteFact`, `memory.setIndex` |
-| skills | `skills.list`, `skills.upsert`, `skills.delete` |
+| skills | `skills.list`, `skills.upsert`, `skills.delete`, `skills.assign`, `skills.search`, `skills.preview`, `skills.install` (skills.sh) |
 | harnesses | `harnesses.status` → `HarnessStatus[]`, `harnesses.models {kind}` |
 | nodes | `nodes.list`, `nodes.createPairingCode` → `{code, expiresAt, command}`, `nodes.rename`, `nodes.revoke`, `nodes.setCapabilities {nodeId, approved[]}` |
 | computer | `computer.status {botId}`, `computer.ensure {botId}` (start browser window), `computer.lease {botId, take: boolean}` |
@@ -343,7 +343,7 @@ core/src/
     ApprovalService.ts    policy eval (rules), RuntimeRequest lifecycle (create → card entry → Deferred → resolve/expire), allow-always rule creation, boot-time expiry, onRequest implementation for runners, ask_user/request_approval tools (non-blocking, D3.3)
     RoutineScheduler.ts   cron/interval/once via effect Cron; next-run computation; fires → Orchestrator.deliverSystem; runs history; runNow
     MemoryService.ts      read/write MEMORY.md + facts; remember/forget/recall for tools; emits "updated-memory" events
-    SkillService.ts       skills library CRUD on SkillStore
+    SkillService.ts       skills library on SkillStore, per-Bot skills (via BotService), skills.sh import (SkillDirectory)
     SettingsService.ts    typed settings with defaults; rules CRUD
     UsageService.ts       aggregate usage per bot
   testing/                 in-memory repos, TestClock helpers, fake NodeDirectory, fake PlacementService, fake McpBindingIssuer
@@ -554,7 +554,7 @@ Per-adapter specifics:
   - GET returns 405; session-id 404 makes the client re-initialize.
   - Progress notifications every ≤5 s on long tools.
 - **Toolkits.** Each is a list of `{name, description, inputSchema (JSON schema, no tuples), annotations, handler(args, ctx) → Effect<ToolResult>}`.
-  - `BotToolkit` (calls core services): `message_bot`, `post_to_group`, `handoff_task`, `list_bots`, `ask_user`, `request_approval`, `notify_user`, `remember`, `forget`, `recall_memory`, `create_routine`, `update_routine`, `list_routines`, `save_skill`, `list_skills`, `list_nodes`.
+  - `BotToolkit` (calls core services): `message_bot`, `post_to_group`, `handoff_task`, `list_bots`, `ask_user`, `request_approval`, `notify_user`, `remember`, `forget`, `recall_memory`, `create_routine`, `update_routine`, `list_routines`, `save_skill`, `list_skills`, `enable_skill`, `disable_skill`, `list_nodes`.
   - `NodeToolkit` (calls `NodeDirectory.client(node)` → NodeRpcs): `shell`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`. The `node` parameter is optional and defaults to the host node; it must be one of the bot's bound nodes.
   - `BrowserToolkit` → `browser.action` on the host node.
 - **Result rules** (mcp-conformance.md):

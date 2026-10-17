@@ -37,7 +37,7 @@ import {
   RoutineScheduler,
   SettingsService,
 } from "../../ports/services.ts"
-import { MemoryStore } from "../../ports/stores.ts"
+import { MemoryStore, SkillStore } from "../../ports/stores.ts"
 import { ConversationStore, ConversationStoreLive } from "./internal/ConversationStore.ts"
 import { compact, findBotByRef, nameKey, orDie, required } from "./internal/util.ts"
 
@@ -102,6 +102,7 @@ export const BotServiceLive: Layer.Layer<
   | ReplicaLog
   | SettingsRepo
   | MemoryStore
+  | SkillStore
   | McpTokenRepo
 > = Layer.effect(
   BotService,
@@ -125,6 +126,7 @@ export const BotServiceLive: Layer.Layer<
     const conversations = yield* ConversationRepo
     const settingsRepo = yield* SettingsRepo
     const memoryStore = yield* MemoryStore
+    const skillStore = yield* SkillStore
     const tokens = yield* McpTokenRepo
 
     const getBot = (botId: BotId) => required(bots.get(botId), "bot", botId)
@@ -199,6 +201,7 @@ export const BotServiceLive: Layer.Layer<
         notify: "all" as const,
         autonomy,
         projectFolders: [],
+        skills: [],
         createdAt: now,
         updatedAt: now,
       })
@@ -275,6 +278,16 @@ export const BotServiceLive: Layer.Layer<
         const cleaned = cleanProjectFolders(patch.projectFolders)
         if ("problem" in cleaned) return yield* new InvalidInput({ message: cleaned.problem })
         next = { ...next, projectFolders: cleaned.folders }
+      }
+      if (patch.skills !== undefined) {
+        const skills = [...new Set(patch.skills)]
+        for (const name of skills) {
+          // a skill already deleted from the library may be dropped, never added
+          if (!before.skills.includes(name) && Option.isNone(yield* orDie(skillStore.get(name)))) {
+            return yield* new InvalidInput({ message: `There is no skill named "${name}" in the library.` })
+          }
+        }
+        next = { ...next, skills }
       }
 
       const relocated = next.harness.kind !== before.harness.kind ||

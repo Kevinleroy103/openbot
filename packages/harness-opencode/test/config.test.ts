@@ -97,6 +97,14 @@ describe("session permission rules", () => {
     expect(effectOf(rules, "openbot-aaaaaaaaaa_shell")).toBe("allow")
   })
 
+  test("skills: only the Bot's own skills are allowed (D5.5)", () => {
+    const rules = sessionRules({ disableBuiltinTools: false, mcpServerNames: [], skills: ["triage"] })
+    expect(effectOf(rules, "skill", "triage")).toBe("allow")
+    expect(effectOf(rules, "skill", "release-notes")).toBe("deny")
+    expect(effectOf(sessionRules({ disableBuiltinTools: false, mcpServerNames: [], skills: [] }), "skill", "triage")).toBe("deny")
+    expect(effectOf(sessionRules({ disableBuiltinTools: false, mcpServerNames: [] }), "skill", "triage")).toBeUndefined()
+  })
+
   test("grants default to every resource", () => {
     expect(sessionGrants("edit", undefined)).toEqual([{ action: "edit", resource: "*", effect: "allow" }])
     expect(sessionGrants("edit", ["a", "b"]).map((r) => r.resource)).toEqual(["a", "b"])

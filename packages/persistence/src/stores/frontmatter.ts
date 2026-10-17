@@ -75,6 +75,24 @@ export const parseFrontmatter = (text: string): Frontmatter => {
     }
     const key = match[1] ?? ""
     const rest = match[2]
+    const blockStyle = rest === undefined ? null : /^([|>])[+-]?\d*\s*$/.exec(rest.trim())
+    if (blockStyle !== null) {
+      // `key: |` (literal) / `key: >` (folded) block scalar: the indented lines below
+      const lines: Array<string> = []
+      i++
+      while (i < header.length && /^(\s+|$)/.test(header[i] ?? "")) {
+        lines.push(header[i] ?? "")
+        i++
+      }
+      while (lines.length > 0 && (lines.at(-1) ?? "").trim() === "") lines.pop()
+      const indent = Math.min(...lines.filter((l) => l.trim() !== "").map((l) => l.length - l.trimStart().length))
+      const text = lines.map((l) => l.slice(Number.isFinite(indent) ? indent : 0))
+      const value = blockStyle[1] === "|"
+        ? text.join("\n")
+        : text.reduce((acc, line) => (line === "" ? `${acc}\n` : acc === "" || acc.endsWith("\n") ? `${acc}${line}` : `${acc} ${line}`), "")
+      fields.set(key, { kind: "scalar", value })
+      continue
+    }
     if (rest !== undefined && rest.trim().length > 0) {
       fields.set(key, { kind: "scalar", value: unquote(rest) })
       i++

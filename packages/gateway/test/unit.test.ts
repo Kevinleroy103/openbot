@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import type { BotId, Routine, RoutineId } from "@openbot/contracts"
-import { BotService, NodeDirectory, Notifier, RoutineScheduler, SkillService } from "@openbot/core"
+import type { BotId, HarnessApprovalRequest, Routine, RoutineId, SkillName } from "@openbot/contracts"
+import { BotService, NodeDirectory, Notifier, Orchestrator, RoutineScheduler, SkillService } from "@openbot/core"
 import { makeBot, makeClaims } from "@openbot/core/testing"
 import { NodeUnavailable, PathDenied } from "@openbot/node-protocol"
 import { NodeUnavailable as ContractNodeUnavailable, InvalidInput, NotFound } from "@openbot/contracts"
@@ -71,7 +71,7 @@ describe("params", () => {
       [
         "message_bot", "post_to_group", "react", "handoff_task", "list_bots", "list_models", "create_bot", "update_bot", "list_sections", "create_section", "rename_section", "delete_section", "move_bot_to_section", "ask_user", "request_approval", "notify_user", "send_file",
         "remember", "forget", "recall_memory", "create_routine", "update_routine", "list_routines", "save_skill",
-        "list_skills", "list_nodes", "start_task", "list_tasks", "check_task", "cancel_task", "update_task", "shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep",
+        "list_skills", "enable_skill", "disable_skill", "list_nodes", "start_task", "list_tasks", "check_task", "cancel_task", "update_task", "shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep",
         "browser",
       ].sort(),
     )
@@ -251,7 +251,7 @@ describe("bot tools", () => {
       "ERROR: Invalid skill",
     )
     expect(textOf(await callTool("save_skill", { name: "weekly-report", description: "d", body: "b" }, skills))).toBe(
-      "Saved skill weekly-report.",
+      "Saved skill weekly-report; you have it from your next message on.",
     )
 
     const muted = Layer.mergeAll(
@@ -259,6 +259,51 @@ describe("bot tools", () => {
       Layer.mock(BotService, { get: () => Effect.succeed(makeBot({ id: BOT, name: "Alpha" })) }),
     )
     expect(textOf(await callTool("notify_user", { text: "done" }, muted))).toContain("muted notifications")
+  })
+
+  test("enable_skill asks the owner (skills surface) before giving a skill; disable_skill drops your own freely", async () => {
+    const skill = { name: "triage" as SkillName, description: "Use when triaging bugs.", body: "b", updatedAt: 0 }
+    const asked: Array<HarnessApprovalRequest> = []
+    const updates: Array<ReadonlyArray<string>> = []
+    let current: ReadonlyArray<SkillName> = []
+    const layer = (decision: "allow-once" | "deny") =>
+      Layer.mergeAll(
+        Layer.mock(SkillService, {
+          get: (name) => (name === "triage" ? Effect.succeed(skill) : Effect.fail(new NotFound({ entity: "skill", id: name }))),
+        }),
+        Layer.mock(BotService, {
+          get: () => Effect.sync(() => makeBot({ id: BOT, name: "Alpha", skills: current })),
+          resolve: () => Effect.sync(() => makeBot({ id: "bot_beta" as BotId, name: "Beta", skills: [] })),
+          update: (_id, patch) =>
+            Effect.sync(() => {
+              current = patch.skills ?? current
+              updates.push([...(patch.skills ?? [])])
+              return makeBot({ id: BOT, name: "Alpha", skills: current })
+            }),
+        }),
+        Layer.mock(Orchestrator, {
+          approveToolCall: (_tool, request) => Effect.sync(() => (asked.push(request), { decision })),
+        }),
+      )
+    const denied = textOf(await callTool("enable_skill", { name: "triage" }, layer("deny")))
+    const given = textOf(await callTool("enable_skill", { name: "triage" }, layer("allow-once")))
+    const already = textOf(await callTool("enable_skill", { name: "triage" }, layer("allow-once")))
+    const missing = textOf(await callTool("enable_skill", { name: "nope" }, layer("allow-once")))
+    const dropped = textOf(await callTool("disable_skill", { name: "triage" }, layer("deny")))
+    const teammate = textOf(await callTool("enable_skill", { name: "triage", bot: "Beta" }, layer("allow-once")))
+    expect(denied).toStartWith("ERROR: The user did not allow the skill triage")
+    expect(given).toBe("You have triage now; from your next message on it loads like your other skills. Its instructions, to use it right away:\n\nb")
+    expect(already).toBe("You already have triage.")
+    expect(missing).toStartWith("ERROR: There is no skill named \"nope\"")
+    expect(dropped).toBe("You no longer have triage.")
+    expect(teammate).toBe("@Beta has triage now, from its next message on.")
+    // asked twice for itself (denied, then allowed), once for Beta; dropping its own skill asked nothing
+    expect(asked.map((r) => [r.surface, r.title])).toEqual([
+      ["skills", "Use the skill “triage”"],
+      ["skills", "Use the skill “triage”"],
+      ["skills", "Give @Beta the skill “triage”"],
+    ])
+    expect(updates).toEqual([["triage"], [], ["triage"]])
   })
 
   test("refusals from services surface as ERROR text", async () => {

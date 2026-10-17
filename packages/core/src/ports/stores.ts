@@ -30,15 +30,41 @@ export class MemoryStore extends Context.Service<MemoryStore, {
  * The skills library at `<data>/skills-lib` in Claude plugin layout
  * (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md`). v1 has no per-bot subsets.
  */
+/** One file of a skill's folder, path relative to it (`SKILL.md`, `scripts/run.sh`). */
+export interface SkillFile {
+  readonly path: string
+  readonly contents: string
+}
+
+/** The parts of a SKILL.md OpenBot reads (frontmatter `name` / `description`, the body). */
+export interface ParsedSkillFile {
+  readonly name?: string | undefined
+  readonly description?: string | undefined
+  readonly body: string
+}
+
 export class SkillStore extends Context.Service<SkillStore, {
-  /** Ordered by name. */
+  /** Ordered by name. Each skill lists its other files (`files`) and its `source` when imported. */
   readonly list: Effect.Effect<ReadonlyArray<Skill>, RepoError>
   readonly get: (name: SkillName) => Effect.Effect<Option.Option<Skill>, RepoError>
-  /** Insert or replace by `skill.name`; keeps `plugin.json` present. */
+  /**
+   * Insert or replace the SKILL.md of `skill.name` (other files and unknown frontmatter are kept;
+   * `skill.source` is recorded when given); keeps `plugin.json` present.
+   */
   readonly put: (skill: Skill) => Effect.Effect<void, RepoError>
+  /**
+   * Replaces the skill's whole folder with `files` (an imported skill). Its SKILL.md is the given
+   * one's frontmatter (unknown keys kept) with `skill`'s name, description, body and source.
+   * Paths are already validated (relative, inside the folder).
+   */
+  readonly install: (skill: Skill, files: ReadonlyArray<SkillFile>) => Effect.Effect<void, RepoError>
+  /** Reads a SKILL.md (imported skills) the way the library does. */
+  readonly parse: (text: string) => ParsedSkillFile
   readonly delete: (name: SkillName) => Effect.Effect<boolean, RepoError>
   /** Absolute path of the library root (mounted per harness). */
   readonly root: string
+  /** Absolute folder of one skill, `<root>/skills/<name>`. */
+  readonly dir: (name: SkillName) => string
 }>()("openbot/core/SkillStore") {}
 
 export const AttachmentRecord = Schema.Struct({

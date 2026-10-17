@@ -1,10 +1,17 @@
 // Phone sheets and the browser history: while a full-screen sheet (details, settings, search, the
 // computer view, forms, action sheets) is open on a phone, it owns a history entry, so the browser
 // Back button and the iOS edge swipe close the sheet instead of leaving the chat. Closing the sheet
-// in the UI pops that entry again. Tablet and desktop are unaffected.
+// in the UI pops that entry again. Sheets nest (Settings › a page › an editor): each entry knows its
+// depth, and a sheet closes only when Back goes below its own entry. Tablet and desktop are unaffected.
 import { useEffect, useRef } from "react"
 import { useIsPhone } from "./layout.ts"
 import { historyMark } from "./uiState.ts"
+
+/** How many sheet entries the current history entry sits on (0: none). */
+const sheetDepth = (): number => {
+  const mark = historyMark()
+  return mark?.ob === "sheet" ? (mark.depth ?? 1) : 0
+}
 
 export function useBackDismiss(open: boolean, onClose: () => void, key: string): void {
   const phone = useIsPhone()
@@ -13,18 +20,20 @@ export function useBackDismiss(open: boolean, onClose: () => void, key: string):
   // A pending "pop our entry" from the previous cleanup. React StrictMode re-runs effects at once in
   // development: the re-run cancels it and keeps the entry instead of pushing a second one.
   const pendingPop = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const depth = useRef(0)
   useEffect(() => {
     if (!open || !phone || typeof history === "undefined") return
     if (pendingPop.current !== undefined) {
       clearTimeout(pendingPop.current)
       pendingPop.current = undefined
     } else {
-      history.pushState({ ob: "sheet", sheet: key }, "", location.href)
+      depth.current = sheetDepth() + 1
+      history.pushState({ ob: "sheet", sheet: key, depth: depth.current }, "", location.href)
     }
     let popped = false
     const onPop = () => {
-      const mark = historyMark()
-      if (mark?.ob === "sheet" && mark.sheet === key) return
+      // still on our entry or a nested sheet's (one closed above us): stay open
+      if (sheetDepth() >= depth.current) return
       popped = true
       close.current()
     }

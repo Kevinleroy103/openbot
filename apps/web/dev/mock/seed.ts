@@ -12,6 +12,7 @@ import {
   type RequestId,
   type RoutineId,
   type SectionId,
+  type Skill,
   type SkillName,
   type Turn,
   type TurnId,
@@ -48,6 +49,16 @@ const BOTS: ReadonlyArray<BotSeed> = [
   { key: "proto", name: "Old Prototype", color: "gray", shape: "tablet", hidden: true, harness: { kind: "fake" }, instructions: "", preview: "Archived." },
 ]
 
+/** Library skills each seeded Bot has (D5.5); the library itself is seeded at the end. */
+const SKILLS_OF: Readonly<Record<string, ReadonlyArray<string>>> = {
+  chief: ["inbox-triage", "weekly-report"],
+  inbox: ["inbox-triage"],
+  expense: ["pdf"],
+  travel: ["pdf"],
+  release: ["release-checklist"],
+  data: ["weekly-report"],
+}
+
 export const seed = (brain: MockBrain, now = Date.now()) => {
   const at = (minutesAgo: number, sec = 0) => now - minutesAgo * MIN + sec * 1000
   brain.roster.apply({ type: "settings.updated", settings: { ...DEFAULT_SETTINGS, ownerName: "Alex" } })
@@ -83,6 +94,8 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
       hidden: b.hidden ?? false,
       notify: "all",
       autonomy: "workspace",
+      projectFolders: [],
+      skills: (SKILLS_OF[b.key] ?? []) as ReadonlyArray<SkillName>,
       createdAt: at(60 * 24 * 7) + BOTS.indexOf(b) * MIN,
       updatedAt: at(60),
     })
@@ -373,6 +386,28 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
   }
 
   brain.rules.set("rul_git_status", { id: "rul_git_status" as never, surface: "shell", match: { commandPrefix: "git status" }, action: "allow", note: "Read-only git", origin: "user", createdAt: at(60 * 24 * 5) })
+
+  // skills library (D5.5): written by the owner, saved by a Bot (release-checklist, above), imported
+  const skill = (name: string, description: string, body: string, minutesAgo: number, extra: Partial<Skill> = {}) =>
+    brain.skills.set(name, { name: name as SkillName, description, body, updatedAt: at(minutesAgo), ...extra })
+  skill(
+    "weekly-report",
+    "Use when asked for the weekly status report",
+    "# Weekly report\n\n1. Collect last week's done tickets from Linear\n2. Group them by project, biggest first\n3. Three bullets per project at most\n4. Post it to #status on Friday by 4pm\n",
+    60 * 24 * 3,
+  )
+  skill(
+    "inbox-triage",
+    "Use when sorting the inbox: label, archive, and flag what needs Alex",
+    "# Inbox triage\n\n- **Needs Alex**: from a customer, the board or anything with a deadline this week\n- **FYI**: newsletters and receipts, label and archive\n- Never reply on Alex's behalf\n",
+    60 * 24 * 2,
+  )
+  skill("meeting-notes", "Use when turning a meeting transcript into notes with decisions and action items", "# Meeting notes\n\n## Decisions\n## Action items (owner, due date)\n## Open questions\n", 60 * 30)
+  const pdf = brain.previewSkill("anthropics/skills/pdf")
+  skill(pdf.name, pdf.description, pdf.body, 60 * 24, {
+    source: { kind: "skills.sh", id: "anthropics/skills/pdf", hash: "3f9c2e1" },
+    files: pdf.files.map((f) => f.path).filter((f) => f !== "SKILL.md"),
+  })
   for (const b of BOTS) {
     const id = ids[b.key]!.bot
     brain.usage.set(id, { botId: id, usage: { inputTokens: 40_000 + b.name.length * 9_000, outputTokens: 6_000 + b.name.length * 700, costUsd: Number((0.4 + b.name.length * 0.11).toFixed(2)) }, turnCount: 3 + b.name.length, lastAt: at(30) })

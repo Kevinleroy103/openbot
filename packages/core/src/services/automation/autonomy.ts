@@ -406,6 +406,8 @@ export const evaluateAutonomy = (
   workspace: ApprovalWorkspace | undefined,
 ): AutonomyDecision => {
   if (autonomy === "ask") return ask("autonomy is ask")
+  // which skills a Bot has is the owner's call (or a rule's), whatever the autonomy
+  if (surfaceOf(request) === "skills") return ask("changes a Bot's skills")
   if (autonomy === "full") return { action: "allow", reason: "full" }
   if (workspace === undefined) return ask("workspace unknown")
   const roots = rootsOf(workspace.path, workspace)

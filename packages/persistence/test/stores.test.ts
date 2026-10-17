@@ -116,6 +116,55 @@ describe("SkillStore files (Claude plugin layout)", () => {
   })
 })
 
+describe("SkillStore imports (skills.sh)", () => {
+  test("install replaces the folder, keeps extra files and frontmatter keys, records the source; put keeps both", async () => {
+    const dir = await tempDataDir()
+    const given = [
+      "---",
+      "name: Release Notes",
+      "description: >",
+      "  Use when writing",
+      "  release notes.",
+      "license: MIT",
+      "---",
+      "# Notes",
+      "",
+    ].join("\n")
+    const out = await run(
+      Effect.gen(function*() {
+        const store = yield* SkillStore
+        const parsed = store.parse(given)
+        const skill = {
+          name: "release-notes" as SkillName,
+          description: parsed.description ?? "",
+          body: parsed.body,
+          updatedAt: 7 as Millis,
+          source: { kind: "skills.sh" as const, id: "acme/skills/release-notes", hash: "h1" },
+        }
+        yield* store.put({ ...skill, source: undefined } as never) // a stale same-named skill
+        yield* store.install(skill, [{ path: "SKILL.md", contents: given }, { path: "scripts/collect.sh", contents: "git log\n" }])
+        const installed = Option.getOrThrow(yield* store.get(skill.name))
+        yield* store.put({ name: skill.name, description: "Edited.", body: "v2", updatedAt: 8 as Millis })
+        return { parsed, installed, edited: Option.getOrThrow(yield* store.get(skill.name)), dir: store.dir(skill.name) }
+      }),
+      testPersistence(dir),
+    )
+    expect(out.parsed).toEqual({ name: "Release Notes", description: "Use when writing release notes.", body: "# Notes\n" })
+    expect(out.installed).toMatchObject({
+      name: "release-notes",
+      description: "Use when writing release notes.",
+      source: { kind: "skills.sh", id: "acme/skills/release-notes", hash: "h1" },
+      files: ["scripts/collect.sh"],
+    })
+    expect(out.edited).toMatchObject({ description: "Edited.", body: "v2", source: { id: "acme/skills/release-notes" }, files: ["scripts/collect.sh"] })
+    expect(out.dir).toBe(join(dir, "skills-lib", "skills", "release-notes"))
+    const text = await readFile(join(out.dir, "SKILL.md"), "utf8")
+    expect(text).toContain("license: MIT")
+    expect(text).toContain("  source: skills.sh:acme/skills/release-notes\n")
+    expect(await readFile(join(out.dir, "scripts", "collect.sh"), "utf8")).toBe("git log\n")
+  })
+})
+
 describe("AttachmentStore files", () => {
   test("stores bytes at <data>/attachments/<id>", async () => {
     const dir = await tempDataDir()

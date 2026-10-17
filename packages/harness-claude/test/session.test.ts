@@ -4,7 +4,7 @@ import { type HarnessSession, HarnessRegistry, makeDataDir, type OpenSessionInpu
 import { TestPorts } from "@openbot/core/testing"
 import { Effect, Exit, Layer, Scope } from "effect"
 import type { ChildProcess } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { join } from "node:path"
 import { type ClaudeHarnessConfig, ClaudeHarnessLive, makeClaudeDriver } from "../src/Driver.ts"
 import type { ClaudeQueryFunction } from "../src/sdk.ts"
@@ -579,13 +579,26 @@ describe("Claude session (fake query)", () => {
       expect(existsSync(dir)).toBe(true)
     })))
 
-  test("the skills library is mounted as a local plugin when it has a plugin manifest", () =>
+  test("a Bot's skills (only those, still in the library) are mounted as its own plugin of library symlinks", () =>
     run(Effect.gen(function*() {
       const env0 = yield* makeEnv()
       const lib = join(env0.root, "skills-lib")
-      yield* Effect.promise(() => Bun.write(join(lib, ".claude-plugin", "plugin.json"), JSON.stringify({ name: "openbot" })))
-      yield* env0.driver.openSession(env0.input)
-      expect(env0.fake().options.plugins).toEqual([{ type: "local", path: lib, skipMcpDiscovery: true }])
+      for (const name of ["triage", "release-notes", "other"]) {
+        yield* Effect.promise(() => Bun.write(join(lib, "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: d\n---\nbody\n`))
+      }
+      const input = { ...env0.input, bot: { ...env0.input.bot, skills: ["triage", "release-notes", "deleted"] as never } }
+      yield* env0.driver.openSession(input)
+      const plugins = env0.fake().options.plugins as ReadonlyArray<{ path: string }>
+      expect(plugins).toHaveLength(1)
+      const dir = plugins[0]!.path
+      expect(dir.startsWith(join(env0.root, "bots", env0.input.bot.id, "skills-plugin"))).toBe(true)
+      expect(JSON.parse(readFileSync(join(dir, ".claude-plugin", "plugin.json"), "utf8")).name).toBe("openbot-skills")
+      expect(readdirSync(join(dir, "skills")).sort()).toEqual(["release-notes", "triage"])
+      expect(realpathSync(join(dir, "skills", "triage"))).toBe(realpathSync(join(lib, "skills", "triage")))
+      // a Bot without skills mounts nothing
+      const env1 = yield* makeEnv()
+      yield* env1.driver.openSession(env1.input)
+      expect(env1.fake().options.plugins).toBeUndefined()
     })))
 })
 

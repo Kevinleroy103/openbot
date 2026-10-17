@@ -122,6 +122,7 @@ export const openOpenCodeSession = (
         disableBuiltinTools: input.placement.disableBuiltinTools,
         mcpServerNames: servers.map((s) => s.name),
         grants,
+        skills: input.bot.skills,
       })
     const metadata = {
       openbot: { botId: input.bot.id, conversationId: input.conversationId, sessionKey: input.sessionKey },

@@ -47,7 +47,18 @@ export const routinesAtom = Atom.family((botId: BotId | "*") =>
 /** The last runs of a routine, most recent first. */
 export const routineRunsAtom = Atom.family((routineId: RoutineId) => OpenBotClient.query("routines.runs", { routineId }, { reactivityKeys: [Keys.routines] }))
 
+/** The skills library (D5.5). Which Bots have which skill is live in the roster (`Bot.skills`). */
 export const skillsAtom = OpenBotClient.query("skills.list", undefined, { reactivityKeys: [Keys.skills] })
+
+/**
+ * skills.sh search hits for one query. Debounce typing in the UI and read the atom of the latest
+ * query: every query is its own atom, so a slow answer to an older query never shows for a newer one
+ * (and unmounting an old query's atom interrupts its request).
+ */
+export const skillSearchAtom = Atom.family((query: string) => OpenBotClient.query("skills.search", { query }))
+
+/** A skills.sh skill as it would install (downloaded by the brain; nothing is written). */
+export const skillPreviewAtom = Atom.family((id: string) => OpenBotClient.query("skills.preview", { id }))
 
 /** Approval rules (Settings › Permissions), optionally for one bot (`"*"` = all). */
 export const rulesAtom = Atom.family((botId: BotId | "*") => OpenBotClient.query("rules.list", botId === "*" ? {} : { botId }, { reactivityKeys: [Keys.rules] }))

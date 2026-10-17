@@ -18,6 +18,7 @@ import {
   TurnId,
 } from "./base.ts"
 import { BotAutonomy, DEFAULT_BOT_AUTONOMY, ProjectFolders } from "./policy.ts"
+import { SkillName } from "./skills.ts"
 
 // ---------------------------------------------------------------------------- Bot
 /** Avatar colors (D6.3, Grok's 11-color picker; OpenBot ships its own SVG art). */
@@ -103,6 +104,11 @@ export const Bot = Schema.Struct({
    * cannot change them); "Allow in ‹folder›" on an approval card adds one.
    */
   projectFolders: ProjectFolders.pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+  /**
+   * The library skills this Bot can use (D5.5); the others are invisible to it. The owner sets them;
+   * a Bot asks with an approval card (`enable_skill`), except for skills it saves itself.
+   */
+  skills: Schema.Array(SkillName).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   createdAt: Millis,
   updatedAt: Millis,
 })

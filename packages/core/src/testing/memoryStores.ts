@@ -6,7 +6,7 @@ import { Clock, Effect, Layer, Option, Stream } from "effect"
 import { joinPath } from "../ports/DataDir.ts"
 import { RepoError } from "../ports/errors.ts"
 import { IdGen } from "../ports/IdGen.ts"
-import { type AttachmentRecord, AttachmentStore, MemoryStore, SkillStore } from "../ports/stores.ts"
+import { type AttachmentRecord, AttachmentStore, MemoryStore, type ParsedSkillFile, SkillStore } from "../ports/stores.ts"
 
 const byKey = <A>(key: (a: A) => string) => (a: A, b: A) => {
   const x = key(a)
@@ -41,15 +41,39 @@ export const makeMemoryMemoryStore = () =>
     })
   })
 
+/** A SKILL.md read with one-line `name:` / `description:` fields (enough for test fixtures). */
+const parseSkillFile = (text: string): ParsedSkillFile => {
+  const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text)
+  if (match === null) return { body: text }
+  const field = (key: string) => new RegExp(`^${key}:\\s*(.*)$`, "m").exec(match[1]!)?.[1]?.trim().replace(/^["']|["']$/g, "")
+  return { name: field("name"), description: field("description"), body: match[2]! }
+}
+
 export const makeMemorySkillStore = (root = "/openbot-test/skills-lib") =>
   Effect.sync(() => {
     const skills = new Map<SkillName, Skill>()
     return SkillStore.of({
       list: Effect.sync(() => [...skills.values()].sort(byKey((s) => s.name))),
       get: (name) => Effect.sync(() => Option.fromNullishOr(skills.get(name))),
-      put: (skill) => Effect.sync(() => void skills.set(skill.name, skill)),
+      // like the file store: an existing skill keeps its source and other files
+      put: (skill) =>
+        Effect.sync(() => {
+          const existing = skills.get(skill.name)
+          skills.set(skill.name, {
+            ...skill,
+            ...(existing?.source === undefined ? {} : { source: existing.source }),
+            ...(existing?.files === undefined ? {} : { files: existing.files }),
+          })
+        }),
+      install: (skill, files) =>
+        Effect.sync(() => {
+          const others = files.map((file) => file.path).filter((path) => path !== "SKILL.md").sort()
+          skills.set(skill.name, { ...skill, ...(others.length === 0 ? {} : { files: others }) })
+        }),
+      parse: parseSkillFile,
       delete: (name) => Effect.sync(() => skills.delete(name)),
       root,
+      dir: (name) => joinPath(root, "skills", name),
     })
   })
 

@@ -125,8 +125,83 @@ export const SCENES: ReadonlyArray<Shot> = [
   { name: "40-group", route: "#/c/cnv_launch" },
   { name: "41-forms", route: "#/c/cnv_travel" },
   { name: "42-scout", route: "#/c/cnv_scout" },
+  {
+    name: "43-exchange",
+    route: "#/c/cnv_sales",
+    act: async (page) => {
+      // the middle "3 messages with Research Scout" run: the dialog opens there, lit up
+      await page.getByTestId("transcript").locator('button[data-exchange="bot_scout"]').filter({ hasText: "3 messages with" }).nth(1).click()
+      await page.getByRole("dialog").locator("[data-exchange-item][data-target]").first().waitFor()
+    },
+  },
   { name: "50-settings", route: "#/c/cnv_chief", act: async (page) => void (await page.getByRole("button", { name: "Computers" }).click()) },
+  // skills (D5.5): the library, the editor, the skills.sh import, a Bot's Library tab
+  { name: "60-skills", route: "#/c/cnv_chief", act: async (page) => void (await openSkills(page)) },
+  {
+    name: "61-skill-editor",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await openSkills(page)
+      await page.getByTestId("skill-row").filter({ hasText: "pdf" }).click()
+      await page.getByTestId("skill-files").waitFor()
+    },
+  },
+  {
+    name: "62-skill-new",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await openSkills(page)
+      await page.getByTestId("new-skill").click()
+      await page.getByTestId("skill-name").fill("Standup Notes")
+    },
+  },
+  {
+    name: "63-skills-search",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await openSkills(page)
+      await page.getByTestId("import-skill").click()
+      await page.getByTestId("skills-sh-search").fill("skills")
+      await page.getByTestId("skills-sh-result").first().waitFor()
+    },
+  },
+  {
+    name: "64-skills-preview",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await openSkills(page)
+      await page.getByTestId("import-skill").click()
+      await page.getByTestId("skills-sh-search").fill("pdf")
+      await page.getByTestId("skills-sh-result").first().click()
+      await page.getByTestId("skill-preview-body").waitFor()
+    },
+  },
+  {
+    name: "65-library",
+    route: "#/c/cnv_chief",
+    act: async (page) => {
+      await page.getByRole("button", { name: "View conversation details" }).click()
+      await page.getByRole("tab", { name: "Library" }).click()
+      await page.getByTestId("details-tab-library").getByTestId("skill-row").first().waitFor()
+    },
+  },
+  {
+    name: "66-library-add",
+    route: "#/c/cnv_scout",
+    act: async (page) => {
+      await page.getByRole("button", { name: "View conversation details" }).click()
+      await page.getByRole("tab", { name: "Library" }).click()
+      await page.getByTestId("add-skill").click()
+    },
+  },
 ]
+
+/** Settings › Skills (from the sidebar's Computers pill, then the nav). */
+const openSkills = async (page: Page) => {
+  await page.getByRole("button", { name: "Computers" }).click()
+  await page.getByTestId("settings-nav-skills").click()
+  await page.getByTestId("skills-library").getByTestId("skill-row").first().waitFor()
+}
 
 export const openPage = async (browser: Browser, url: string, theme: "dark" | "light", route = "#/"): Promise<{ page: Page; errors: string[] }> => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: theme })

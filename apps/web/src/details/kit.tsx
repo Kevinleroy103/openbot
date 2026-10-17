@@ -70,8 +70,9 @@ export interface CommandHandle<T extends CommandTag> {
 /**
  * One command RPC with pending/error state. `key` picks an independent single-flight instance
  * (`commandAtom(tag, key)`), so e.g. saving the name never interrupts saving the instructions.
+ * `describe` words some errors itself (undefined: `errorText`).
  */
-export function useCommand<T extends CommandTag>(tag: T, key = ""): CommandHandle<T> {
+export function useCommand<T extends CommandTag>(tag: T, key = "", describe?: (e: unknown) => string | undefined): CommandHandle<T> {
   const atom = useMemo(() => commandAtom(tag, key), [tag, key])
   const set = useAtomSet(atom as never, { mode: "promise" } as never) as unknown as (payload: CommandPayload<T>) => Promise<CommandSuccess<T>>
   const [pending, setPending] = useState(false)
@@ -91,14 +92,14 @@ export function useCommand<T extends CommandTag>(tag: T, key = ""): CommandHandl
         const value = await set(payload)
         return { ok: true, value: value as CommandSuccess<T> }
       } catch (e) {
-        const error = errorText(e)
+        const error = describe?.(e) ?? errorText(e)
         if (alive.current) setError(error)
         return { ok: false, error }
       } finally {
         if (alive.current) setPending(false)
       }
     },
-    [set],
+    [set, describe],
   )
   const clearError = useCallback(() => setError(undefined), [])
   return { run, pending, error, clearError }

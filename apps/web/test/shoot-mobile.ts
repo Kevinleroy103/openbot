@@ -279,6 +279,66 @@ export const SCENES: ReadonlyArray<Scene> = [
     },
   },
   {
+    name: "15-exchange",
+    device: IPHONE,
+    route: "#/c/cnv_sales",
+    run: async (page, shot) => {
+      // a full-screen sheet, opened at the tapped run of messages
+      await page.getByTestId("transcript").locator('button[data-exchange="bot_scout"]').filter({ hasText: "3 messages with" }).nth(1).tap()
+      await page.getByRole("dialog", { name: "Sales Outreach and Research Scout" }).locator("[data-exchange-item][data-target]").first().waitFor()
+      await settle(page)
+      await shot()
+    },
+  },
+  {
+    name: "16-skills",
+    device: IPHONE,
+    run: async (page, shot) => {
+      await page.getByRole("button", { name: "Account" }).tap()
+      await page.getByRole("menuitem", { name: /Settings/ }).tap()
+      await page.getByTestId("settings-nav-skills").tap()
+      await page.getByTestId("skills-library").getByTestId("skill-row").first().waitFor()
+      await settle(page)
+      await shot()
+      await page.getByTestId("skill-row").filter({ hasText: "pdf" }).tap()
+      await page.getByTestId("skill-files").waitFor()
+      await settle(page)
+      await shot("editor")
+      await page.getByTestId("skill-bot-picker").scrollIntoViewIfNeeded()
+      await settle(page)
+      await shot("editor-end")
+      await page.getByRole("button", { name: "Cancel" }).tap()
+      await page.getByTestId("import-skill").tap()
+      await page.getByTestId("skills-sh-search").fill("skills")
+      await page.getByTestId("skills-sh-result").first().waitFor()
+      await settle(page)
+      await shot("search")
+      await page.getByTestId("skills-sh-result").filter({ hasText: "pdf" }).tap()
+      await page.getByTestId("skill-preview-body").waitFor()
+      await settle(page)
+      await shot("preview")
+      await page.getByTestId("skill-bot-picker").scrollIntoViewIfNeeded()
+      await settle(page)
+      await shot("preview-end")
+    },
+  },
+  {
+    name: "17-library",
+    device: IPHONE,
+    route: "#/c/cnv_chief",
+    run: async (page, shot) => {
+      await page.getByRole("button", { name: "View conversation details" }).tap()
+      await page.getByRole("tab", { name: "Library" }).tap()
+      await page.getByTestId("details-tab-library").getByTestId("skill-row").first().waitFor()
+      await settle(page)
+      await shot()
+      await page.getByTestId("add-skill").tap()
+      await page.getByRole("menu", { name: "Add a skill" }).waitFor()
+      await settle(page)
+      await shot("add")
+    },
+  },
+  {
     name: "20-tablet-chat",
     device: IPAD,
     route: "#/c/cnv_chief",

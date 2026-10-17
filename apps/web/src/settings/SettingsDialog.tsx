@@ -2,7 +2,7 @@
 // hairline, content column with a round × at the top right. Phone: a full-screen sheet whose nav is
 // an iOS-style list that drills down into each page (‹ Settings back, browser Back too).
 import { Dialog, Icon, IconButton, cn } from "@openbot/ui"
-import { ChartNoAxesColumn, ChevronLeft, ChevronRight, Cpu, Info, type LucideIcon, Monitor, Settings, ShieldCheck, X } from "lucide-react"
+import { ChartNoAxesColumn, ChevronLeft, ChevronRight, Cpu, Info, type LucideIcon, Monitor, Settings, ShieldCheck, Sparkles, X } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import { useIsPhone } from "../app/layout.ts"
 import { useBackDismiss } from "../app/nav.ts"
@@ -11,6 +11,7 @@ import { ComputersPage } from "./ComputersPage.tsx"
 import { GeneralPage } from "./GeneralPage.tsx"
 import { HarnessesPage } from "./HarnessesPage.tsx"
 import { PermissionsPage } from "./PermissionsPage.tsx"
+import { SkillsPage } from "./SkillsPage.tsx"
 import { AboutPage, UsagePage } from "./UsagePage.tsx"
 
 const NAV: ReadonlyArray<{ readonly id: SettingsPage; readonly label: string; readonly icon: LucideIcon }> = [
@@ -18,6 +19,7 @@ const NAV: ReadonlyArray<{ readonly id: SettingsPage; readonly label: string; re
   { id: "harnesses", label: "Harnesses", icon: Cpu },
   { id: "computers", label: "Computers", icon: Monitor },
   { id: "permissions", label: "Permissions", icon: ShieldCheck },
+  { id: "skills", label: "Skills", icon: Sparkles },
   { id: "usage", label: "Usage", icon: ChartNoAxesColumn },
   { id: "updates", label: "About", icon: Info },
 ]
@@ -33,6 +35,7 @@ function PageBody({ page }: { readonly page: SettingsPage }): ReactNode {
       {page === "harnesses" && <HarnessesPage />}
       {page === "computers" && <ComputersPage />}
       {page === "permissions" && <PermissionsPage />}
+      {page === "skills" && <SkillsPage />}
       {page === "usage" && <UsagePage />}
       {page === "updates" && <AboutPage />}
     </>

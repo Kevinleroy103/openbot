@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { MemoryFactId, SkillName } from "@openbot/contracts"
+import type { MemoryFactId } from "@openbot/contracts"
 import { MEMORY_INDEX_PROMPT_CAP_BYTES } from "@openbot/contracts"
 import { Effect, Exit, Fiber, Layer, Stream } from "effect"
 import {
@@ -8,14 +8,12 @@ import {
   MemoryStore,
   SettingsRepo,
   SettingsService,
-  SkillService,
   UsageService,
   userActor,
 } from "../../src/ports/index.ts"
 import {
   MemoryServiceLive,
   SettingsServiceLive,
-  SkillServiceLive,
   UsageServiceLive,
 } from "../../src/services/automation/index.ts"
 import { botId, ConversationServiceFake, LiveHubFake, makeClaims, runTest, setTime, turnId } from "../../src/testing/index.ts"
@@ -105,44 +103,6 @@ describe("MemoryService", () => {
     )
     expect(new TextEncoder().encode(index).length).toBeLessThanOrEqual(MEMORY_INDEX_PROMPT_CAP_BYTES)
     expect(index.length).toBe(MEMORY_INDEX_PROMPT_CAP_BYTES / 2)
-  })
-})
-
-describe("SkillService", () => {
-  const layer = () => SkillServiceLive.pipe(Layer.provideMerge(baseLayer()))
-
-  test("CRUD over the library; save_skill by a bot emits skill-saved; validation", async () => {
-    const out = await runTest(
-      Effect.gen(function*() {
-        yield* seed
-        const skills = yield* SkillService
-        const name = "weekly-report" as SkillName
-        const saved = yield* skills.upsert(botActor({ claims: makeClaims({ botId: BOT_A.id, conversationId: DM_A.id }) }), {
-          name,
-          description: "  Use for the Friday report ",
-          body: "1. Collect\n2. Summarize",
-        })
-        const listed = yield* skills.list
-        const got = yield* skills.get(name)
-        const badName = yield* Effect.exit(skills.upsert(userActor, { name: "Bad Name" as SkillName, description: "d", body: "b" }))
-        const noDescription = yield* Effect.exit(skills.upsert(userActor, { name, description: " ", body: "b" }))
-        yield* skills.delete(name)
-        const gone = yield* Effect.exit(skills.get(name))
-        const deleteAgain = yield* Effect.exit(skills.delete(name))
-        const written = yield* (yield* ConversationServiceFake).written
-        return { saved, listed, got, badName, noDescription, gone, deleteAgain, written }
-      }),
-      layer(),
-    )
-    expect(out.saved).toMatchObject({ name: "weekly-report", description: "Use for the Friday report" })
-    expect(out.listed).toEqual([out.saved])
-    expect(out.got).toEqual(out.saved)
-    expect(failsWith(out.badName, "InvalidInput")).toBe(true)
-    expect(failsWith(out.noDescription, "InvalidInput")).toBe(true)
-    expect(failsWith(out.gone, "NotFound")).toBe(true)
-    expect(failsWith(out.deleteAgain, "NotFound")).toBe(true)
-    expect(out.written).toHaveLength(1)
-    expect(out.written[0]).toMatchObject({ conversationId: DM_A.id, event: { type: "skill-saved", name: "weekly-report" } })
   })
 })
 

@@ -129,4 +129,13 @@ describe("thread config", () => {
     expect(skillRulesFor(undefined, "/lib")).toEqual([])
     expect(skillRulesFor(listed, undefined).length).toBe(3)
   })
+
+  test("library skills the Bot does not have are disabled too (D5.5)", () => {
+    const listed = { data: [{ cwd: "/w", skills: [{ path: "/lib/skills/a/SKILL.md" }, { path: "/lib/skills/b/SKILL.md" }] }] }
+    expect(skillRulesFor(listed, "/lib/skills", ["a"])).toEqual([{ path: "/lib/skills/b/SKILL.md", enabled: false }])
+    expect(skillRulesFor(listed, "/lib/skills", [])).toEqual([
+      { path: "/lib/skills/a/SKILL.md", enabled: false },
+      { path: "/lib/skills/b/SKILL.md", enabled: false },
+    ])
+  })
 })

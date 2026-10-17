@@ -13,6 +13,7 @@
  * | `--harness <list>` (repeatable, comma separated) | `OPENBOT_HARNESSES` | `fake,claude,codex,opencode` |
  * | `--claude-path <path>` | `OPENBOT_CLAUDE_PATH` | the Agent SDK's bundled CLI (version-matched) |
  * | `--max-file-mb <n>` | `OPENBOT_MAX_FILE_MB` | `200` (largest file a bot may send with `send_file`) |
+ * | (env only) | `OPENBOT_SKILLS_SH_URL` | `https://skills.sh` (the skills catalog; tests point it at a fake) |
  */
 import { KnownHarnessKinds } from "@openbot/contracts"
 import { Context, Layer } from "effect"
@@ -46,6 +47,8 @@ export interface ServerConfigShape {
   readonly claudePath: string | undefined
   /** Largest file a bot may send (`send_file`), bytes; absent = core's default (200 MB). */
   readonly maxFileBytes?: number | undefined
+  /** skills.sh base URL (D5.5 import); absent = https://skills.sh. */
+  readonly skillsShUrl?: string | undefined
 }
 
 export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShape>()("openbot/server/ServerConfig") {
@@ -259,6 +262,13 @@ export const parseCommand = (
     maxFileBytes = Math.round(mb * 1_000_000)
   }
 
+  const skillsShInput = env["OPENBOT_SKILLS_SH_URL"]?.trim()
+  let skillsShUrl: string | undefined
+  if (skillsShInput !== undefined && skillsShInput !== "") {
+    if (!/^https?:\/\/[^/\s]+/i.test(skillsShInput)) throw new ConfigError(`OPENBOT_SKILLS_SH_URL: "${skillsShInput}" is not an http(s) URL`)
+    skillsShUrl = skillsShInput.replace(/\/+$/, "")
+  }
+
   return {
     _tag: "Run",
     config: {
@@ -271,6 +281,7 @@ export const parseCommand = (
       harnesses,
       claudePath,
       ...(maxFileBytes === undefined ? {} : { maxFileBytes }),
+      ...(skillsShUrl === undefined ? {} : { skillsShUrl }),
     },
   }
 }

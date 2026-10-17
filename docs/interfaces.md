@@ -127,7 +127,7 @@ Files are in `packages/contracts/src/`, and everything is re-exported from `inde
 | `harness.ts` | `PlacementMode`: native-local, brain-mcp-hands, codex-environment. `HarnessCapabilities{resume,steer,interrupt,approvals,questions,compact,contextUsage,images,remotePlacements}`, `HarnessStatus{kind,displayName?,installed,version?,auth{state,label?},problems,capabilities?,checkedAt?}`, `ModelInfo{id,label,default?,efforts?}`. `HarnessItem` (`_tag`): `Message`, `Reasoning`, `ToolCall` and `Notice`. `HarnessEvent` (`_tag`): `SessionBound`, `TurnStarted{turnId,initiator?:"harness"}`, `ItemUpserted{turnId,key,item}`, `Activity`, `Usage`, `ContextUsage`, `TurnCompleted`, `TurnFailed{error{code,message,retryable}}`, `TurnInterrupted` and `SessionClosed`. `HarnessRequest` = `HarnessApprovalRequest{kind,toolName,title,detail,`**`surface?`**`,toolKey?,nativeRequestId?,command?,cwd?,paths?,diff?,server?,input?,nodeId?,suggestions?}` \| `HarnessQuestionRequest{kind:"question",title?,toolKey?,nativeRequestId?,questions}`. `HarnessRequestResolution` = `{decision,message?,updatedInput?,native?}` \| `{answers: Record<id, string\|string[]>}`, plus `isAnswersResolution` |
 | `policy.ts` | `ApprovalRule{id,botId?,surface,match{toolName?,commandPrefix?,pathPrefix?},action:ask\|allow\|deny,note?,origin?,createdAt}`, `ApprovalRuleInput`, `ApprovalSurface` (shell, file-edit, file-read, mcp, browser, computer, network, other), `SuggestedRule` |
 | `settings.ts` | `Settings{theme,accent,showSteps,botMessaging,defaultHarness?,approvalExpiryMinutes,ownerName?}` (every key has a decoding default), `DEFAULT_SETTINGS`, `SettingsPatch` (`null` clears), `applySettingsPatch` |
-| `memory.ts` / `skills.ts` | `MemoryFact{id: MemoryFactId(slug),title,description?,body,updatedAt}`, `BotMemory{index,facts}`, `MemoryFactInput`, `memoryFactIdFromTitle`, `MEMORY_INDEX_PROMPT_CAP_BYTES=4096`. `Skill{name: SkillName(slug),description,body,updatedAt}`, `SkillInput` |
+| `memory.ts` / `skills.ts` | `MemoryFact{id: MemoryFactId(slug),title,description?,body,updatedAt}`, `BotMemory{index,facts}`, `MemoryFactInput`, `memoryFactIdFromTitle`, `MEMORY_INDEX_PROMPT_CAP_BYTES=4096`. `Skill{name: SkillName(slug),description,body,updatedAt,source?{kind:"skills.sh",id,hash?},files?}`, `SkillInput`, `SkillSearchResult{id,name,repo,installs}`, `SkillPreview{id,name,description,body,files[{path,bytes}],replaces}` |
 | `stream.ts` | `StreamCursor{epoch,sequence}`. Conversation changes: `entry.upserted`, `entry.removed`, `request.upserted`, `turn.upserted` and `conversation.updated`. Conversation stream items: `snapshot{cursor,conversation,entries,requests,turns,hasMoreBefore,beforeCursor}`, `change`, `synchronized` and `reset{epoch,reason}`. Roster changes: `bot.upserted`/`removed`, `conversation.upserted`/`removed`, `activity.updated`, `node.upserted`/`removed`, `section.upserted`/`removed`, `settings.updated`, `notification` and `task.upserted`/`task.removed` (D5.7). Roster snapshot: `{bots,conversations,activities,nodes,sections,settings,tasks?}` (`tasks`: every active task + each bot's 5 latest finished ones; absent from older brains). `Known*` variants are the encodable server-side unions. `TranscriptPage` |
 | `projection.ts` | Pure reducers: `applyConversationStreamItem`, `applyRosterStreamItem` (a gap sets `gap:true`; `RosterState.tasks`, at most `ROSTER_TASKS_KEPT=200`, a removed bot takes its tasks), `prependHistory`, `transcriptOf`, `pendingRequestsOf`, `sectionsOf`, `activeTasksOf(state, botId)`. Server helpers: `resumePlan(after, head, oldestBuffered)`, `coalesce`, `compareEntries`, `MAX_REPLAY_GAP=256`, `SNAPSHOT_TAIL_ENTRIES=100` |
 | `rpc.ts` | errors (§1), payload types (`SessionInfo`, `BotCreateInput`, `BotPatch`, `BotContext`, `SendMode`, `SendInput`, `SendResult{entryId,turnIds,disposition}`, `SendLookup`, `RoutineSpec`, `ComputerState`, `ComputerStatus{botId,nodeId,state,surface,controller,viewPath?,message?}`, `BotUsage`), `OpenBotRpcs`, `OpenBotRpcTag` |
@@ -158,7 +158,7 @@ Each RPC maps to one method. Service methods are in §6; port methods are `NodeA
 | `requests.listPending` | `{conversationId?}` | `ApprovalService.listPending` |
 | `routines.list/create/update/setEnabled/delete/runNow/runs` | … | `RoutineScheduler.*`, called with `userActor` |
 | `memory.get/putFact/deleteFact/setIndex` | … | `MemoryService.*` |
-| `skills.list/upsert/delete` | … | `SkillService.*` |
+| `skills.list/upsert/delete/assign/search/preview/install` | … | `SkillService.*` |
 | `harnesses.status` / `harnesses.models {kind, profileId?}` | → `HarnessStatus[]` (one per (kind, account), with `profileId`, `profileLabel`, `configDir`, `account`) / `ModelInfo[]` | server `HarnessProfiles.status` over `HarnessRegistry` (`probe` / `listModels`) |
 | `harnesses.profiles {kind?}` / `addProfile {kind, label, configDir}` / `removeProfile {profileId}` / `discover {kind}` | → `HarnessProfile[]` / `HarnessProfile` / void / `HarnessProfileCandidate[]` | server `HarnessProfiles` (apps/server/src/profiles.ts; D2.7) |
 | `nodes.list` | → `NodeSummary[]` | `NodeDirectory.list` |
@@ -369,7 +369,8 @@ Settings storage uses one `SettingsRepo` key per `Settings` field. Read and writ
 
 ```ts
 MemoryStore    readIndex(botId) writeIndex(botId, md) listFacts getFact putFact(botId, fact) deleteFact deleteAll(botId)
-SkillStore     list get(name) put(skill) delete(name) root
+SkillStore     list get(name) put(skill) install(skill, files) parse(text) delete(name) root dir(name)
+SkillDirectory search(query) ! Unavailable; download(id): {files, hash?} ! NotFound | Unavailable   (skills.sh; server)
 AttachmentStore put({name,mime,bytes}): AttachmentRecord{id,name,mime,byteSize,path,createdAt,width?,height?} get read delete
                putStream({name,mime,chunks: Stream<Uint8Array,E>,width?,height?})   // chunk by chunk to a temp file, renamed when complete
                stream(id): Stream<Uint8Array, RepoError>
@@ -468,7 +469,8 @@ RoutineScheduler     list({botId?}); get(id) ! NotFound; create(actor, {botId, s
 MemoryService        get(botId): BotMemory ! NotFound; putFact(actor, botId, MemoryFactInput): MemoryFact ! NotFound|InvalidInput
                      deleteFact(actor, botId, factId) ! NotFound; setIndex(botId, md): BotMemory ! NotFound|InvalidInput
                      recall(botId, query?): MemoryFact[] ! NotFound; promptIndex(botId): string   // ≤ 4 KB
-SkillService         list; get(name) ! NotFound; upsert(actor, SkillInput): Skill ! InvalidInput; delete(name) ! NotFound
+SkillService         list; get(name) ! NotFound; upsert(actor, SkillInput): Skill ! InvalidInput (a Bot gets its skill); delete(name) ! NotFound (from every Bot);
+                     assign(name, botIds) ! NotFound | InvalidInput; search(query); preview(id); install(id, botIds) ! NotFound | InvalidInput | Unavailable
 SettingsService      get: Settings; update(SettingsPatch): Settings ! InvalidInput; changes: Stream<Settings> (current first)
                      listRules({botId?}); upsertRule(ApprovalRuleInput): ApprovalRule ! NotFound|InvalidInput; deleteRule(id) ! NotFound
 UsageService         record({botId, conversationId, turnId?, harness, model?, usage}); byBot({sinceMs?}): BotUsage[]
@@ -492,8 +494,9 @@ Gateway bot tools map onto these methods:
 | `create_routine` | `RoutineScheduler.create`, with `botActor` |
 | `update_routine` | `RoutineScheduler.get`, then merge the arguments, then `update` |
 | `list_routines` | `RoutineScheduler.list` |
-| `save_skill` | `SkillService.upsert` |
-| `list_skills` | `SkillService.list` |
+| `save_skill` | `SkillService.upsert` (the calling Bot gets the skill) |
+| `list_skills` | `SkillService.list`, marking the caller's skills |
+| `enable_skill` / `disable_skill` | approval card (surface `skills`; not for dropping one's own skill), then `BotService.update {skills}` |
 | `list_nodes` | `NodeDirectory.list`, filtered to the host node and bound nodes |
 | `send_file` | `Messaging.sendFiles` (node chosen like the node tools; relative paths from the bot's workspace there; `to` = another Bot or a group) |
 | `start_task` | `BackgroundTasks.start` (D5.7; not offered in a task's own session, nor are the next three and `ask_user` / `request_approval`) |

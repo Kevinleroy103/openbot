@@ -58,6 +58,7 @@ export const makeBot = (overrides?: Partial<Mutable<Bot>>): Bot => {
     // Test bots ask for everything unless a test opts into autonomy (new bots default to "workspace").
     autonomy: "ask",
     projectFolders: [],
+    skills: [],
     createdAt: 0,
     updatedAt: 0,
     ...overrides,

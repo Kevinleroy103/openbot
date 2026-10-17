@@ -84,6 +84,10 @@ describe("parseCommand", () => {
     expect(run([], env).maxFileBytes).toBeUndefined()
     expect(run([], { ...env, OPENBOT_MAX_FILE_MB: "50" }).maxFileBytes).toBe(50_000_000)
     expect(run(["--max-file-mb", "1024"], { ...env, OPENBOT_MAX_FILE_MB: "50" }).maxFileBytes).toBe(1_024_000_000)
+    // skills.sh base URL (env only; tests point it at a fake)
+    expect(run([], env).skillsShUrl).toBeUndefined()
+    expect(run([], { OPENBOT_SKILLS_SH_URL: "http://127.0.0.1:4000/" }).skillsShUrl).toBe("http://127.0.0.1:4000")
+    expect(() => run([], { OPENBOT_SKILLS_SH_URL: "skills.example" })).toThrow("not an http(s) URL")
   })
 
   test("help, version and errors", () => {

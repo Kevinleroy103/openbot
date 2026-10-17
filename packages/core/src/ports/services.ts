@@ -103,6 +103,8 @@ import type {
   Skill,
   SkillInput,
   SkillName,
+  SkillPreview,
+  SkillSearchResult,
   StreamCursor,
   Task,
   TaskDetail,
@@ -110,6 +112,7 @@ import type {
   TaskStoppedBy,
   TranscriptEntry,
   TranscriptPage,
+  Unavailable,
   Turn,
   TurnId,
   Usage,
@@ -852,10 +855,24 @@ export class SkillService extends Context.Service<SkillService, {
   /** `skills.list` / `list_skills` tool. */
   readonly list: Effect.Effect<ReadonlyArray<Skill>>
   readonly get: (name: SkillName) => Effect.Effect<Skill, NotFound>
-  /** `skills.upsert` / `save_skill` tool (bot actor: emits a `skill-saved` event). */
+  /**
+   * `skills.upsert` / `save_skill` tool. A Bot saving a skill gets it (`Bot.skills`) and a
+   * `skill-saved` event; it may replace only a skill it has (InvalidInput otherwise).
+   */
   readonly upsert: (actor: Actor, input: SkillInput) => Effect.Effect<Skill, InvalidInput>
-  /** `skills.delete`. */
+  /** `skills.delete`: from the library and from every Bot. */
   readonly delete: (name: SkillName) => Effect.Effect<void, NotFound>
+  /** `skills.assign`: exactly `botIds` have the skill afterwards. */
+  readonly assign: (name: SkillName, botIds: ReadonlyArray<BotId>) => Effect.Effect<void, NotFound | InvalidInput>
+  /** `skills.search` (skills.sh). */
+  readonly search: (query: string) => Effect.Effect<ReadonlyArray<SkillSearchResult>, InvalidInput | Unavailable>
+  /** `skills.preview`: downloads and reads a skills.sh skill without installing it. */
+  readonly preview: (id: string) => Effect.Effect<SkillPreview, NotFound | InvalidInput | Unavailable>
+  /**
+   * `skills.install`: downloads a skills.sh skill into the library (replacing a same-named one,
+   * which keeps its Bots) and gives it to `botIds` too.
+   */
+  readonly install: (id: string, botIds: ReadonlyArray<BotId>) => Effect.Effect<Skill, NotFound | InvalidInput | Unavailable>
 }>()("openbot/core/SkillService") {}
 
 // ============================================================================ SettingsService

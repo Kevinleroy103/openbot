@@ -30,7 +30,7 @@ import { BotMemory, MemoryFact, MemoryFactId, MemoryFactInput } from "./memory.t
 import { ApprovalRule, ApprovalRuleInput, BotAutonomy, ProjectFolders } from "./policy.ts"
 import { RuntimeRequest, RuntimeResponseInput } from "./runtime-request.ts"
 import { Settings, SettingsPatch } from "./settings.ts"
-import { Skill, SkillInput, SkillName } from "./skills.ts"
+import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
 import { ConversationStreamItem, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
 import { Task, TaskDetail } from "./task.ts"
 import { Attachment, MessageDelivery, Turn } from "./transcript.ts"
@@ -46,6 +46,8 @@ export class RequestNotPending extends Schema.TaggedError<RequestNotPending>()("
 export class NodeUnavailable extends Schema.TaggedError<NodeUnavailable>()("NodeUnavailable", { nodeId: NodeId, message: Schema.String }) {}
 /** A defect or repository failure, logged with its cause on the brain; the message is safe to show. */
 export class Internal extends Schema.TaggedError<Internal>()("Internal", { message: Schema.String }) {}
+/** An outside service (skills.sh) did not answer or failed. */
+export class Unavailable extends Schema.TaggedError<Unavailable>()("Unavailable", { message: Schema.String }) {}
 
 /** Every RPC may fail with `Internal` (defects are mapped at the edge, never thrown). */
 const errors = <const E extends ReadonlyArray<Schema.Top>>(...members: E) => Schema.Union([...members, Internal])
@@ -97,6 +99,8 @@ export const BotPatch = Schema.Struct({
   autonomy: Schema.optionalKey(BotAutonomy),
   /** Replaces the bot's project folders (owner-only; normalized and validated by BotService). */
   projectFolders: Schema.optionalKey(ProjectFolders),
+  /** Replaces the bot's skills (library names; unknown names are refused). */
+  skills: Schema.optionalKey(Schema.Array(SkillName)),
 })
 export type BotPatch = typeof BotPatch.Type
 
@@ -275,10 +279,21 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("memory.deleteFact", { payload: { botId: BotId, factId: MemoryFactId }, error: Missing }),
   Rpc.make("memory.setIndex", { payload: { botId: BotId, index: Schema.String }, success: BotMemory, error: errors(NotFound, InvalidInput) }),
 
-  // skills (library-level in v1)
+  // skills (D5.5): the library, which Bots have which skill, skills.sh import
   Rpc.make("skills.list", { success: Schema.Array(Skill), error: errors() }),
   Rpc.make("skills.upsert", { payload: SkillInput, success: Skill, error: errors(InvalidInput) }),
+  /** Removes it from the library and from every Bot. */
   Rpc.make("skills.delete", { payload: { name: SkillName }, error: Missing }),
+  /** Exactly these Bots have the skill afterwards. */
+  Rpc.make("skills.assign", { payload: { name: SkillName, botIds: Schema.Array(BotId) }, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("skills.search", { payload: { query: Schema.String }, success: Schema.Array(SkillSearchResult), error: errors(InvalidInput, Unavailable) }),
+  Rpc.make("skills.preview", { payload: { id: Schema.String }, success: SkillPreview, error: errors(NotFound, InvalidInput, Unavailable) }),
+  /** Downloads a skills.sh skill into the library (replacing a same-named one) and gives it to `botIds`. */
+  Rpc.make("skills.install", {
+    payload: { id: Schema.String, botIds: Schema.Array(BotId) },
+    success: Skill,
+    error: errors(NotFound, InvalidInput, Unavailable),
+  }),
 
   // harnesses
   /** One status per (kind, profile) of every registered harness (D2.6; no model call). */

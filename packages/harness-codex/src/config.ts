@@ -248,11 +248,16 @@ export const turnSteerParams = (threadId: string, nativeTurnId: string, turn: Tu
   input: userInputOf(turn),
 })
 
-/** `skills/list` result → rules disabling every skill outside OpenBot's library (`skills.config`). */
+/**
+ * `skills/list` result → rules disabling every skill outside OpenBot's library and every library
+ * skill the Bot does not have (`skills.config`; D5.5). `enabled` absent: the whole library stays on.
+ */
 export const skillRulesFor = (
   listResult: unknown,
   libraryRoot: string | undefined,
+  enabled?: ReadonlyArray<string> | undefined,
 ): ReadonlyArray<{ readonly path: string; readonly enabled: boolean }> => {
+  const library = libraryRoot?.replace(/\/+$/, "")
   const rules: Array<{ path: string; enabled: boolean }> = []
   const seen = new Set<string>()
   const data = typeof listResult === "object" && listResult !== null && "data" in listResult
@@ -265,7 +270,11 @@ export const skillRulesFor = (
       const path = (skill as { path?: unknown }).path
       if (typeof path !== "string" || path === "" || seen.has(path)) continue
       seen.add(path)
-      if (libraryRoot && (path === libraryRoot || path.startsWith(`${libraryRoot.replace(/\/+$/, "")}/`))) continue
+      if (library && (path === library || path.startsWith(`${library}/`))) {
+        // `<library>/<name>/SKILL.md`: on only when the Bot has `<name>`
+        const name = path.slice(library.length + 1).split("/")[0] ?? ""
+        if (enabled === undefined || enabled.includes(name)) continue
+      }
       rules.push({ path, enabled: false })
     }
   }

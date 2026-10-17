@@ -187,9 +187,11 @@ All three adapters implement one `HarnessDriver` / `HarnessSession` port (t3code
   - Stored per bot in Claude auto-memory format: a `MEMORY.md` index plus one file per fact under `<data>/bots/<id>/memory`.
   - Claude reads and writes it natively via `autoMemoryDirectory`. Codex and OpenCode receive the index in their instructions plus the `remember` / `forget` tools.
   - Viewable and editable in the details pane. Source: harness-context-isolation.md.
-- **D5.5 Skills.**
-  - One library at `<data>/skills-lib` in Claude plugin layout (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md`), mounted per harness.
-  - Per-bot subsets in v1.1.
+- **D5.5 Skills** (revised 2026-10-17 with the owner: a library plus per-Bot skills, so a community catalog fits).
+  - **Library:** one at `<data>/skills-lib` in Claude plugin layout (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md`, plus any other files of a skill: scripts, references). Agent Skills format, so community skills work unchanged.
+  - **Per-Bot skills:** `Bot.skills` lists the library skills a Bot has; it sees no others. The owner creates skills and turns them on or off per Bot (Settings › Skills, Details › Library). A Bot's `save_skill` saves and gives the skill to itself; it may update only skills it has. `enable_skill` (for itself or a teammate) and taking a skill from a teammate (`disable_skill`) wait for the owner on an approval card (surface `skills`): autonomy never decides it, only a rule or the owner. Dropping its own skill needs no approval. Deleting a library skill takes it from every Bot.
+  - **Mounting:** Claude gets a per-Bot plugin (`<bot>/skills-plugin/<hash>/`, symlinks into the library: verified that the CLI loads symlinked skill folders); Codex mounts the library root and disables, per thread, every skill the Bot does not have (`skills.config`); OpenCode denies the `skill` permission except for the Bot's skills (skill id = folder name). A change to a Bot's skills reopens its session on the next turn (it is part of the session signature).
+  - **Community import:** skills.sh first (`/api/search`, `/api/download/<owner>/<repo>/<skill>`, the endpoints of its `skills` CLI): search, preview (nothing written), install into the library with `metadata.source` (`skills.sh:<id>`) and given to chosen Bots. Paths are checked (relative, inside the folder) and size-capped (200 files, 5 MB). An OpenBot community catalog can come later behind the same `SkillDirectory` port.
 - **D5.6 Approval policy.**
   - Allow once / Always allow (saved as a rule) / Deny.
   - "Ask first" rules beat "Allow automatically" rules.

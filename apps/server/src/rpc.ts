@@ -224,6 +224,10 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "skills.list": () => edge("skills.list", skills.list),
     "skills.upsert": (input) => edge("skills.upsert", skills.upsert(userActor, input)),
     "skills.delete": ({ name }) => edge("skills.delete", skills.delete(name)),
+    "skills.assign": ({ name, botIds }) => edge("skills.assign", skills.assign(name, botIds)),
+    "skills.search": ({ query }) => edge("skills.search", skills.search(query)),
+    "skills.preview": ({ id }) => edge("skills.preview", skills.preview(id)),
+    "skills.install": ({ id, botIds }) => edge("skills.install", skills.install(id, botIds)),
 
     // ---------------------------------------------------------------- harnesses
     "harnesses.status": () => edge("harnesses.status", profiles.status(probeDriver)),

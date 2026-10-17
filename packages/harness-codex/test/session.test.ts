@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { HarnessRequest, HarnessRequestResolution, NodeId } from "@openbot/contracts"
+import type { HarnessRequest, HarnessRequestResolution, NodeId, SkillName } from "@openbot/contracts"
 import { HarnessError, makeDataDir } from "@openbot/core"
 import { Deferred, Effect, Exit, Fiber, Scope } from "effect"
 import { type CodexHarnessConfig, makeCodexDriver } from "../src/Driver.ts"
@@ -286,7 +286,7 @@ describe("Codex session: thread setup", () => {
     expect(failureOf(exit)).toMatchObject({ _tag: "HarnessError", code: "open-failed", message: expect.stringContaining("thread not found") })
   })
 
-  test("skills: the OpenBot library is mounted once and every other skill is disabled per thread", async () => {
+  test("skills: the OpenBot library is mounted once; other skills and library skills the Bot lacks are disabled per thread", async () => {
     const result = await run(Effect.gen(function*() {
       let library = ""
       const ctx = yield* setup({
@@ -304,19 +304,24 @@ describe("Codex session: thread setup", () => {
       library = join(ctx.root, "skills-lib", "skills")
       mkdirSync(library, { recursive: true })
       // The library is looked up when a session opens (`<data>/skills-lib/skills`).
-      yield* ctx.driver.openSession(makeSessionInput(ctx.workspace, allow()))
+      const withNotes = makeSessionInput(ctx.workspace, allow())
+      yield* ctx.driver.openSession({ ...withNotes, bot: { ...withNotes.bot, skills: ["notes" as SkillName] } })
       yield* ctx.driver.openSession(makeSessionInput(ctx.workspace, allow()))
       return { server: ctx.server(), library }
     }))
     expect(result.server.requests("skills/extraRoots/set")).toEqual([{ extraRoots: [result.library] }])
     const starts = result.server.requests("thread/start")
     expect(starts.length).toBe(2)
-    for (const start of starts) {
-      expect((start.config as Record<string, unknown>)["skills.config"]).toEqual([
-        { path: "/home/u/.agents/skills/omarchy/SKILL.md", enabled: false },
-        { path: "/w/.agents/skills/repo/SKILL.md", enabled: false },
-      ])
-    }
+    const host = [
+      { path: "/home/u/.agents/skills/omarchy/SKILL.md", enabled: false },
+      { path: "/w/.agents/skills/repo/SKILL.md", enabled: false },
+    ]
+    expect((starts[0]!.config as Record<string, unknown>)["skills.config"]).toEqual(host)
+    expect((starts[1]!.config as Record<string, unknown>)["skills.config"]).toEqual([
+      host[0],
+      { path: `${result.library}/notes/SKILL.md`, enabled: false },
+      host[1],
+    ])
   })
 })
 

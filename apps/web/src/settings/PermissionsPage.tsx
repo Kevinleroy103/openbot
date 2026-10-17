@@ -23,6 +23,7 @@ export const SURFACES: ReadonlyArray<{ value: ApprovalSurface; label: string; ma
   { value: "browser", label: "Use the browser", match: "toolName", placeholder: "tool name (optional)" },
   { value: "computer", label: "Control the computer", match: "toolName", placeholder: "tool name (optional)" },
   { value: "network", label: "Use the network", match: "toolName", placeholder: "tool name (optional)" },
+  { value: "skills", label: "Change Bots' skills", match: "toolName", placeholder: "tool name (optional)" },
   { value: "other", label: "Use other tools", match: "toolName", placeholder: "tool name, e.g. WebFetch" },
 ]
 

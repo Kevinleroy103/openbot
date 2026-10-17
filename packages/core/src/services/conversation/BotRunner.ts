@@ -263,7 +263,15 @@ const triggerOf = (delivery: Delivery): Turn["trigger"] => {
 
 /** Harness settings a live session was opened with; a change means reopening. */
 const signatureOf = (bot: Bot): string =>
-  JSON.stringify([bot.harness.kind, bot.harness.model ?? null, bot.harness.effort ?? null, bot.hostNodeId, [...bot.boundNodeIds].sort()])
+  JSON.stringify([
+    bot.harness.kind,
+    bot.harness.model ?? null,
+    bot.harness.effort ?? null,
+    bot.hostNodeId,
+    [...bot.boundNodeIds].sort(),
+    // the skills a session mounts (D5.5)
+    [...bot.skills].sort(),
+  ])
 
 const isWaking = (delivery: Delivery): boolean => delivery.kind !== "bot-message" || delivery.urgency === "urgent"
 

@@ -27,6 +27,7 @@ import {
   RoutineSpec,
   type Section,
   SkillInput,
+  type SkillName,
 } from "@openbot/contracts"
 import {
   ApprovalService,
@@ -40,14 +41,15 @@ import {
   HarnessRegistry,
   NodeDirectory,
   Notifier,
+  Orchestrator,
   RoutineScheduler,
   SkillService,
 } from "@openbot/core"
 import { Effect, Result, Schema } from "effect"
 import * as p from "../params.ts"
-import { linesResult, textResult, ToolRefusal } from "../results.ts"
-import { type AnyTool, defineTool } from "../tool.ts"
-import { chooseNode } from "./node.ts"
+import { capText, linesResult, textResult, ToolRefusal } from "../results.ts"
+import { type AnyTool, defineTool, type ToolCallContext } from "../tool.ts"
+import { approve, chooseNode } from "./node.ts"
 import { notInTask } from "./tasks.ts"
 
 export type BotToolkitServices =
@@ -62,6 +64,7 @@ export type BotToolkitServices =
   | HarnessRegistry
   | IdGen
   | DataDir
+  | Orchestrator
 
 /** Decodes `value` with an Effect schema; failures become a model-readable refusal. */
 const decodeOrRefuse = <S extends Schema.Top & { readonly DecodingServices: never }>(
@@ -840,7 +843,7 @@ const saveSkill = defineTool({
   name: "save_skill",
   toolset: "bot",
   description:
-    "Save a reusable skill to the shared skills library (a SKILL.md with a description of when to use it and the instructions). Saving an existing name replaces it.",
+    "Save a reusable skill (a SKILL.md: when to use it, and the instructions) to the skills library and give it to yourself. Saving the name of one of your skills updates it; a library skill you do not have cannot be replaced.",
   params: p.params({
     name: p.text("Lower-case slug, e.g. \"weekly-report\"."),
     description: p.text("When to use this skill (one or two sentences)."),
@@ -852,21 +855,106 @@ const saveSkill = defineTool({
       const skills = yield* SkillService
       const input = yield* decodeOrRefuse(SkillInput, args, "skill (name must be a lower-case slug)")
       const skill = yield* skills.upsert(botActor(ctx.tool), input)
-      return textResult(`Saved skill ${skill.name}.`)
+      return textResult(`Saved skill ${skill.name}; you have it from your next message on.`)
     }),
 })
 
 const listSkills = defineTool({
   name: "list_skills",
   toolset: "bot",
-  description: "List the skills in the shared skills library (name and when to use it).",
+  description: "List the skills library: each skill's name, when to use it, and whether you have it.",
   params: p.params({}),
   annotations: { title: "List skills", readOnlyHint: true, openWorldHint: false },
   idempotent: false,
-  handler: () =>
+  handler: (_args, ctx) =>
     Effect.gen(function*() {
       const skills = yield* (yield* SkillService).list
-      return linesResult(skills.map((skill) => `${skill.name} — ${skill.description}`), "The skills library is empty.")
+      const self = yield* (yield* BotService).get(ctx.tool.claims.botId).pipe(Effect.orDie)
+      return linesResult(
+        skills.map((skill) => `${skill.name}${self.skills.includes(skill.name) ? " (you have it)" : ""} — ${skill.description}`),
+        "The skills library is empty.",
+      )
+    }),
+})
+
+/** How much of a skill's instructions `enable_skill` returns (results stay under ~10 KB, D1.6). */
+const SKILL_RESULT_BYTES = 8 * 1024
+
+/** The skill and the Bot a skill tool is about (`bot` absent: the caller). */
+const skillTarget = (ctx: ToolCallContext, name: string, bot: string | undefined) =>
+  Effect.gen(function*() {
+    const bots = yield* BotService
+    const skill = yield* (yield* SkillService).get(name as SkillName).pipe(
+      Effect.catchTag("NotFound", () => new ToolRefusal({ message: `There is no skill named "${name}" in the library (see list_skills).` })),
+    )
+    const target = bot === undefined || bot.trim() === "" ? yield* bots.get(ctx.tool.claims.botId).pipe(Effect.orDie) : yield* bots.resolve(bot)
+    return { skill, target, self: target.id === ctx.tool.claims.botId }
+  })
+
+const enableSkill = defineTool({
+  name: "enable_skill",
+  toolset: "bot",
+  description:
+    "Ask the owner to give you (or a teammate) a skill from the library. Waits for their answer on an approval card; the skill works from the Bot's next message on.",
+  params: p.params({
+    name: p.text("The skill's name, from list_skills."),
+    bot: p.optional(p.text("A teammate to give it to (name or id). Omit for yourself.")),
+  }),
+  annotations: { title: "Turn on a skill", destructiveHint: false, openWorldHint: false },
+  handler: (args, ctx) =>
+    Effect.gen(function*() {
+      const { skill, target, self } = yield* skillTarget(ctx, args.name, args.bot)
+      if (target.skills.includes(skill.name)) return textResult(`${self ? "You already have" : `@${target.name} already has`} ${skill.name}.`)
+      yield* approve(ctx, {
+        kind: "mcp-approval",
+        toolName: "enable_skill",
+        server: "openbot",
+        surface: "skills",
+        title: self ? `Use the skill “${skill.name}”` : `Give @${target.name} the skill “${skill.name}”`,
+        detail: skill.description,
+        input: { name: skill.name, bot: target.name },
+      }, `the skill ${skill.name}`)
+      // re-read: the Bot's skills may have changed while the card was open
+      const fresh = yield* (yield* BotService).get(target.id)
+      if (!fresh.skills.includes(skill.name)) yield* (yield* BotService).update(target.id, { skills: [...fresh.skills, skill.name] })
+      if (!self) return textResult(`@${target.name} has ${skill.name} now, from its next message on.`)
+      // it loads natively from the next turn; its instructions come along so it can be used right away
+      return textResult(
+        `You have ${skill.name} now; from your next message on it loads like your other skills. Its instructions, to use it right away:\n\n${
+          capText(skill.body, SKILL_RESULT_BYTES).text
+        }`,
+      )
+    }),
+})
+
+const disableSkill = defineTool({
+  name: "disable_skill",
+  toolset: "bot",
+  description:
+    "Drop a skill you no longer need (no approval needed), or ask the owner to take one from a teammate (approval card).",
+  params: p.params({
+    name: p.text("The skill's name."),
+    bot: p.optional(p.text("A teammate to take it from (name or id). Omit for yourself.")),
+  }),
+  annotations: { title: "Turn off a skill", destructiveHint: true, openWorldHint: false },
+  handler: (args, ctx) =>
+    Effect.gen(function*() {
+      const { skill, target, self } = yield* skillTarget(ctx, args.name, args.bot)
+      if (!target.skills.includes(skill.name)) return textResult(`${self ? "You do not have" : `@${target.name} does not have`} ${skill.name}.`)
+      if (!self) {
+        yield* approve(ctx, {
+          kind: "mcp-approval",
+          toolName: "disable_skill",
+          server: "openbot",
+          surface: "skills",
+          title: `Take the skill “${skill.name}” from @${target.name}`,
+          detail: skill.description,
+          input: { name: skill.name, bot: target.name },
+        }, `taking ${skill.name} from @${target.name}`)
+      }
+      const fresh = yield* (yield* BotService).get(target.id)
+      yield* (yield* BotService).update(target.id, { skills: fresh.skills.filter((n) => n !== skill.name) })
+      return textResult(`${self ? "You no longer have" : `@${target.name} no longer has`} ${skill.name}.`)
     }),
 })
 
@@ -975,5 +1063,7 @@ export const BotToolkit: ReadonlyArray<AnyTool<BotToolkitServices>> = [
   listRoutines,
   saveSkill,
   listSkills,
+  enableSkill,
+  disableSkill,
   listNodes,
 ]

@@ -124,11 +124,14 @@ export const sessionRules = (input: {
   readonly disableBuiltinTools: boolean
   readonly mcpServerNames: ReadonlyArray<string>
   readonly grants?: ReadonlyArray<PermissionRule> | undefined
+  /** The Bot's skills (D5.5): every other skill is hidden (`skill` permission, by skill id = folder name). */
+  readonly skills?: ReadonlyArray<string> | undefined
 }): ReadonlyArray<PermissionRule> => [
   rule("shell", "ask"),
   rule("edit", "ask"),
   rule("external_directory", "ask"),
   rule("subagent", "deny"),
+  ...(input.skills === undefined ? [] : [rule("skill", "deny"), ...input.skills.map((name) => rule("skill", "allow", name))]),
   ...(input.grants ?? []),
   ...(input.disableBuiltinTools
     ? [...BUILTIN_TOOL_ACTIONS, ...B1_EXTRA_DENIED_ACTIONS].map((action) => rule(action, "deny"))

@@ -150,6 +150,7 @@ describe("roster projection", () => {
     notify: "all",
     autonomy: "workspace",
     projectFolders: [],
+    skills: [],
     createdAt: 0,
     updatedAt: 0,
   })

@@ -7,8 +7,8 @@
  */
 import type { HarnessCapabilities, HarnessStatus, ModelInfo } from "@openbot/contracts"
 import { type DataDirShape, HarnessError, type HarnessDriver, HarnessRegistry, joinPath, ProcessLedger } from "@openbot/core"
+import { botSkillsPlugin } from "./skillsPlugin.ts"
 import { DataDir } from "@openbot/core"
-import { existsSync } from "node:fs"
 import { mkdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { Effect, Layer, Option, Ref } from "effect"
@@ -50,7 +50,7 @@ export interface ClaudeHarnessConfig {
    * "native": `autoMemoryDirectory` = the bot's memory directory (same on-disk format, D2.1).
    */
   readonly memory?: "native" | "off" | undefined
-  /** Mount `<data>/skills-lib` as a local plugin when it has `.claude-plugin/plugin.json` (default true). */
+  /** Mount the Bot's skills from `<data>/skills-lib` as its own local plugin (default true; D5.5). */
   readonly skills?: boolean | undefined
   /** "process-group" (default on POSIX): detached CLI, group-killed on close. "sdk": SDK spawns. */
   readonly spawn?: "process-group" | "sdk" | undefined
@@ -65,7 +65,6 @@ export interface ClaudeHarnessConfig {
   /** Native ids (session ids, message uuids). Default `crypto.randomUUID`. */
   readonly newUuid?: (() => string) | undefined
   readonly readFile?: ReadFile | undefined
-  readonly pathExists?: ((path: string) => boolean) | undefined
   readonly ensureDirectory?: ((path: string) => Promise<void>) | undefined
   /**
    * The account (profile) this driver instance runs with: its CLI (sessions and probe) gets
@@ -104,7 +103,6 @@ export const makeClaudeDriver = (config: ClaudeHarnessConfig, deps: DriverDeps):
         ...(profile.label !== undefined ? { profileLabel: profile.label } : {}),
         configDir: profile.configDir,
       }
-    const pathExists = config.pathExists ?? existsSync
     const ensureDirectory = config.ensureDirectory ?? (async (path: string) => {
       await mkdir(path, { recursive: true })
     })
@@ -139,10 +137,19 @@ export const makeClaudeDriver = (config: ClaudeHarnessConfig, deps: DriverDeps):
         )
       }),
       openSession: (input) => {
-        const skillsLib = deps.dataDir.skillsLib
-        const skillsLibrary = (config.skills ?? true) && pathExists(joinPath(skillsLib, ".claude-plugin", "plugin.json"))
-          ? skillsLib
-          : undefined
+        let skillsLibrary: string | undefined
+        try {
+          skillsLibrary = (config.skills ?? true)
+            ? botSkillsPlugin({
+              root: joinPath(deps.dataDir.botDir(input.bot.id), "skills-plugin"),
+              library: deps.dataDir.skillsLib,
+              skills: input.bot.skills,
+            })
+            : undefined
+        } catch {
+          // without its skills the Bot still works; the next session open retries
+          skillsLibrary = undefined
+        }
         const sessionDeps: SessionDeps = {
           query,
           env,

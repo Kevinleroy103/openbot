@@ -63,6 +63,7 @@ import {
   RoutineSchedulerLive,
   SendFileLimits,
   SettingsServiceLive,
+  type SkillDirectory,
   SkillServiceLive,
   UsageServiceLive,
 } from "@openbot/core"
@@ -90,6 +91,7 @@ import { HarnessProfilesLayer, type ProfileOptions } from "./profiles.ts"
 import { InternalRoutes, PublicRoutes } from "./routes.ts"
 import { RpcHandlersLive } from "./rpc.ts"
 import { setShutdownPhase } from "./shutdown.ts"
+import { SkillsShLive } from "./skillsSh.ts"
 
 // ============================================================================ startup errors
 
@@ -315,6 +317,8 @@ export interface ServerOptions {
   readonly drivers?: Layer.Layer<never, never, HarnessRegistry | DataDir> | undefined
   /** Harness accounts: discovery home/env, test drivers, first-boot seeding (profiles.ts). */
   readonly profiles?: ProfileOptions | undefined
+  /** Replaces skills.sh (tests). */
+  readonly skillDirectory?: Layer.Layer<SkillDirectory> | undefined
   readonly quiet?: boolean | undefined
 }
 
@@ -350,7 +354,10 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     Layer.provideMerge(base),
   )
   // steps 6-10: core services, recovery, drivers, local node
-  const services = BotServiceLive.pipe(
+  const services = SkillServiceLive.pipe(
+    Layer.provide(options?.skillDirectory ?? SkillsShLive(config.skillsShUrl === undefined ? undefined : { baseUrl: config.skillsShUrl })), // skills.sh import (D5.5)
+    Layer.provideMerge(BotServiceLive),
+  ).pipe(
     Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive)), // 10
     Layer.provideMerge(TasksRecoveredLive), // 9b: interrupted background tasks are reported
     Layer.provideMerge(LocalNodeDaemonLive(options?.localNode)), // 9
@@ -361,7 +368,7 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     Layer.provideMerge(BackgroundTasksLive), // 5b (D5.7)
     Layer.provideMerge(InstructionRendererLive),
     Layer.provideMerge(ApprovalServiceLive),
-    Layer.provideMerge(Layer.mergeAll(MemoryServiceLive, SkillServiceLive)),
+    Layer.provideMerge(MemoryServiceLive),
     Layer.provideMerge(level2),
     Layer.provideMerge(LiveHubLive),
     Layer.provideMerge(foundation),

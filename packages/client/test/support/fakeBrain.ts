@@ -70,6 +70,7 @@ export const botFixture = (id: string, name: string, conversationId: string): Bo
   notify: "all",
   autonomy: "workspace",
   projectFolders: [],
+  skills: [],
   createdAt: 0,
   updatedAt: 0,
 })

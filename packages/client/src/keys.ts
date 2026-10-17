@@ -59,7 +59,8 @@ export const keysForRosterChange = (change: RosterChange): ReadonlyArray<Reactiv
   switch (change.type) {
     case "bot.upserted":
     case "bot.removed":
-      return [Keys.botContext, Keys.session]
+      // a Bot saving a skill (save_skill) changes the library too
+      return [Keys.botContext, Keys.session, Keys.skills]
     case "node.upserted":
     case "node.removed":
       return [Keys.nodes, Keys.computer]

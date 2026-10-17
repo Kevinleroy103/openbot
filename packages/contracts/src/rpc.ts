@@ -76,6 +76,8 @@ export const BotCreateInput = Schema.Struct({
   autonomy: Schema.optionalKey(BotAutonomy),
   /** Idempotency key: a retried create with the same nonce returns the same bot. */
   clientNonce: NonEmptyString,
+  /** Absent/true = the new Bot greets the owner and asks what they need first (its hidden first turn). */
+  introduce: Schema.optionalKey(Schema.Boolean),
 })
 export type BotCreateInput = typeof BotCreateInput.Type
 

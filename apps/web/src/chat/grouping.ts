@@ -5,7 +5,8 @@
 //   - bubble groups: consecutive messages of the same author (user, or one bot),
 //   - cards, event lines, notices and unknown-entry placeholders as their own rows,
 //   - tool calls and reasoning never render as rows; they feed the "N steps" disclosure placed
-//     under the last visible row of each finished turn (when steps are shown),
+//     under the last visible row of each finished turn (when steps are shown) — except successful
+//     `ask_user` / `request_approval` calls, whose card already shows them,
 //   - "auto-decided" events that ALLOWED something (a rule or the bot's autonomy) are folded into
 //     their turn's steps as well (a badge on the gated tool call, else a row of their own): they never
 //     render as lines, open no timestamp and never split a bubble group. Denials stay visible lines,
@@ -15,6 +16,11 @@ import type { ConversationState, EntryId, RuntimeRequest, TranscriptEntry, Trans
 
 export type MessageEntry = TranscriptEntryOf<"message">
 export type ToolCallEntry = TranscriptEntryOf<"tool-call">
+
+/** OpenBot tools whose card in the chat is their visible step (not repeated in "N steps"). */
+const CARD_TOOLS = new Set(["ask_user", "request_approval"])
+const shownAsCard = (entry: ToolCallEntry): boolean =>
+  entry.mcp?.server === "openbot" && CARD_TOOLS.has(entry.mcp.tool) && entry.status !== "failed" && entry.status !== "declined"
 export type ReasoningEntry = TranscriptEntryOf<"reasoning">
 export type CardEntry = TranscriptEntryOf<"card">
 export type EventEntry = TranscriptEntryOf<"event">
@@ -196,7 +202,7 @@ export const layoutTranscript = (input: LayoutInput): ReadonlyArray<Row> => {
     switch (entry.kind) {
       case "tool-call":
       case "reasoning": {
-        if (entry.turnId === undefined) break
+        if (entry.turnId === undefined || (entry.kind === "tool-call" && shownAsCard(entry))) break
         const list = steps.get(entry.turnId) ?? []
         list.push(entry)
         steps.set(entry.turnId, list)

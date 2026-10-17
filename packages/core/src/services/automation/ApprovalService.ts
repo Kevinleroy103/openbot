@@ -962,7 +962,10 @@ export const makeApprovalService = Effect.gen(function*() {
     readonly conversationId?: ConversationId | undefined
     readonly turnId?: TurnId | undefined
     readonly taskId?: TaskId | undefined
+    readonly kinds?: ReadonlyArray<RuntimeRequest["kind"]> | undefined
+    readonly asyncOnly?: boolean | undefined
     readonly reason: string
+    readonly cardDetail?: string | undefined
   }) =>
     Effect.gen(function*() {
       const matching = (yield* requests.list({
@@ -970,12 +973,16 @@ export const makeApprovalService = Effect.gen(function*() {
         ...(input.botId === undefined ? {} : { botId: input.botId }),
         ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
         ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
-      }).pipe(Effect.orDie)).filter((r) => input.taskId === undefined || r.taskId === input.taskId)
+      }).pipe(Effect.orDie)).filter((r) =>
+        (input.taskId === undefined || r.taskId === input.taskId) &&
+        (input.kinds === undefined || input.kinds.includes(r.kind)) &&
+        (input.asyncOnly !== true || !r.blocking)
+      )
       let count = 0
       for (const request of matching) {
         const claimed = yield* takePending(request.id)
         yield* FiberMap.remove(timers, request.id)
-        yield* finish(request, { status: "cancelled", statusReason: input.reason })
+        yield* finish(request, { status: "cancelled", statusReason: input.reason, cardDetail: input.cardDetail })
         if (Option.isSome(claimed) && claimed.value.deferred !== undefined) {
           yield* Deferred.succeed(claimed.value.deferred, { by: "cancelled", resolution: cancelResolution })
         }

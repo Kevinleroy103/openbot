@@ -354,6 +354,38 @@ describe("ApprovalService.evaluate", () => {
   })
 })
 
+describe("ApprovalService.cancelPending filters", () => {
+  test("kinds + asyncOnly close only the open ask_user question, with its reason and card detail", async () => {
+    const claims = makeClaims({ botId: BOT_A.id, conversationId: DM_A.id })
+    const out = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const approvals = yield* ApprovalService
+        const asked = yield* approvals.askUser({ claims, callId: "call-q" }, { questions: question.questions })
+        const blocking = yield* approvals.evaluate(ctx(), question).pipe(Effect.forkChild({ startImmediately: true }))
+        yield* eventually(hasPending(2))
+        const count = yield* approvals.cancelPending({
+          conversationId: DM_A.id,
+          kinds: ["question"],
+          asyncOnly: true,
+          reason: "answered-in-chat",
+          cardDetail: "Answered in chat",
+        })
+        const closed = Option.getOrThrow(yield* Effect.flatMap(RequestRepo, (repo) => repo.get(asked.requestId)))
+        const pending = yield* pendingRequests
+        yield* approvals.cancelPending({ turnId: turnId("trn_1"), reason: "turn-ended" })
+        yield* Fiber.join(blocking)
+        return { count, closed, card: cardState(yield* entry(closed.cardEntryId)), pending }
+      }),
+      layer(),
+    )
+    expect(out.count).toBe(1)
+    expect(out.closed).toMatchObject({ status: "cancelled", statusReason: "answered-in-chat" })
+    expect(out.card).toMatchObject({ status: "cancelled", detail: "Answered in chat" })
+    expect(out.pending.map((r) => r.blocking)).toEqual([true])
+  })
+})
+
 describe("ApprovalService.evaluate with the bot's autonomy", () => {
   const W = "/data/bots/bot_a/workspace"
   const workspace = { nodeId: "node_local" as NodeId, path: W }

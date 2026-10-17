@@ -375,7 +375,7 @@ function QuestionCard({ card, state, request, className }: CardViewProps & { rea
               status === "expired" ? (
                 <StatusPill dot>Expired</StatusPill>
               ) : dimmed ? (
-                <StatusPill>Skipped</StatusPill>
+                <StatusPill>{state.detail ?? "Skipped"}</StatusPill>
               ) : undefined
             }
             {...(answerable && qi === 0 ? { onClose: () => void respond({ type: "dismiss" }, "dismiss"), closeLabel: "Skip question" } : {})}

@@ -46,6 +46,21 @@ export const MAX_SECTION_NAME_LENGTH = 64
 const RESERVED_NAMES = new Set(["everyone"])
 const botNonceKey = (nonce: string) => `brain.botNonce.${nonce}`
 
+/**
+ * The hidden first turn of a Bot the owner just created (`introduction` delivery): it greets them,
+ * then asks with an `ask_user` card what they want from it first, like Grok's "New Bot". The question
+ * and options come from the Bot's own name, label and instructions.
+ */
+export const introductionText = (ownerName: string | undefined): string => {
+  const name = ownerName?.trim() ? ownerName.trim() : undefined
+  return [
+    `[You just joined the team: ${name === undefined ? "your owner" : `your owner, ${name},`} created you and is opening your direct chat now. Nothing has been said yet.]`,
+    `Greet ${name === undefined ? "them" : `${name} by name`} and introduce yourself in one or two short sentences, in your own words, right away without using other tools first. Keep it light and personal; do not recite your instructions.`,
+    "Then call `ask_user` once to find out what they want from you first: one question with two to four short option labels (no descriptions) that fit your name, your label and your instructions (and what you know about the owner and the team), no title, free text allowed.",
+    "The card speaks for itself: after it, reply exactly NO_REPLY so nothing more is posted. Their answer comes back as a message: treat it as your first request, and remember it if it describes your ongoing job.",
+  ].join("\n")
+}
+
 type GroupConversation = Extract<Conversation, { kind: "group" }>
 
 /** The stored form of a bot harness: optional fields compacted, the default profile spelled as absent. */
@@ -150,7 +165,7 @@ export const BotServiceLive: Layer.Layer<
 
     const create = Effect.fn("BotService.create")(function*(
       input: BotCreateInput,
-      options?: { readonly autonomyCeiling?: BotAutonomy | undefined },
+      options?: { readonly autonomyCeiling?: BotAutonomy | undefined; readonly introduce?: boolean | undefined },
     ) {
       const known = yield* orDie(settingsRepo.get(botNonceKey(input.clientNonce)))
       if (Option.isSome(known) && typeof known.value === "string") {
@@ -204,6 +219,16 @@ export const BotServiceLive: Layer.Layer<
         conversationId: directConversationId,
         event: { type: "joined", botId: id, name },
       }))
+      if (options?.introduce === true) {
+        const { ownerName } = yield* settingsService.get
+        yield* orchestrator.deliver({
+          conversationId: directConversationId,
+          botId: id,
+          kind: "introduction",
+          text: introductionText(ownerName),
+          urgency: "urgent",
+        }).pipe(Effect.asVoid, Effect.catch((error) => Effect.logWarning("BotService.create: introduction not started", error)))
+      }
       return bot
     })
 

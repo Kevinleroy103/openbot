@@ -37,6 +37,8 @@ import { cap, chunksOf, type Directive, estimateTokens, parseScript } from "./sc
 
 /** The `[Attachments: …]` line OpenBot appends to turns that carry files. */
 const ATTACHMENTS_LINE = /^\[Attachments: .*\]$/m
+/** The brief of a new Bot's hidden first turn (core `introductionText`). */
+const INTRODUCTION = /^\[You just joined the team/
 
 /** File names listed in the `[Attachments: inbox/…/name (mime, size), …]` line. */
 const receivedFileNames = (text: string): ReadonlyArray<string> => {
@@ -433,6 +435,8 @@ export const openFakeSession = (
         })
 
       const defaultReply = (text: string): string => {
+        // a new Bot's hidden first turn (`introduction`): greet instead of echoing the brief
+        if (INTRODUCTION.test(text)) return `Hi, I'm ${input.bot.name}, running on the offline Fake harness. What should I help with first?`
         // files arrive inline (images) and/or copied into the workspace (`[Attachments: …]` line)
         const listed = receivedFileNames(text)
         const names = [...new Set([...turn.attachments.map((a) => a.name), ...listed])]

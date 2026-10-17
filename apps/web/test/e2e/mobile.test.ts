@@ -53,7 +53,7 @@ describe.skipIf(!hasChromium)("e2e: phone layout", () => {
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
     for (const name of ["Ada", "Bea"]) {
-      bots[name] = await rpc.call((c) => c["bots.create"]({ name, harness: { kind: "fake" }, autonomy: "ask", clientNonce: `e2e-mobile-${name}` }))
+      bots[name] = await rpc.call((c) => c["bots.create"]({ name, harness: { kind: "fake" }, autonomy: "ask", clientNonce: `e2e-mobile-${name}`, introduce: false }))
     }
     context = await browser.newContext({ ...IPHONE, colorScheme: "dark" })
     page = await context.newPage()

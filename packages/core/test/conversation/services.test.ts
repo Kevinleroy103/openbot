@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { KnownConversationStreamItem, Notification } from "@openbot/contracts"
-import { defaultBotAvatar, LOCAL_NODE_ID, OWNER_USER_ID } from "@openbot/contracts"
+import { ANSWERED_IN_CHAT, defaultBotAvatar, LOCAL_NODE_ID, OWNER_USER_ID } from "@openbot/contracts"
 import { Effect, Layer, Option } from "effect"
 import {
   ApprovalService,
@@ -17,6 +17,7 @@ import {
   SettingsService,
   TurnRepo,
 } from "../../src/ports/index.ts"
+import { introductionText } from "../../src/services/conversation/BotService.ts"
 import { AttachmentServiceLive, LiveHubLive, NotifierLive } from "../../src/services/conversation/index.ts"
 import {
   ApprovalServiceFake,
@@ -84,6 +85,31 @@ describe("BotService", () => {
     expect(eventsOf(out.entries)).toEqual([{ type: "joined", botId: out.ada.id, name: "Ada" }])
     expect(out.resolved.id).toBe(out.ada.id)
     expect(out.list.map((b) => b.id)).toEqual([out.ada.id])
+  })
+
+  test("introduce: an owner-created Bot greets the owner in a hidden first turn; without it nothing runs", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const bots = yield* BotService
+        const testing = yield* bots.create({ name: "Testing Bot", label: "QA", harness: { kind: "fake" }, clientNonce: "n-intro" }, { introduce: true })
+        const quiet = yield* bots.create({ name: "Quiet", harness: { kind: "fake" }, clientNonce: "n-quiet" })
+        yield* settled(testing.directConversationId)
+        return {
+          inputs: (yield* (yield* TestDriver).turns).map((h) => h.input.text),
+          turns: yield* turnsOf(testing.directConversationId),
+          entries: yield* transcript(testing.directConversationId),
+          quietTurns: yield* turnsOf(quiet.directConversationId),
+        }
+      }),
+      appLayer({ settings: { ownerName: "Lekë" } }),
+    )
+    expect(out.inputs).toEqual([introductionText("Lekë")])
+    expect(out.inputs[0]).toContain("Greet Lekë by name")
+    expect(out.inputs[0]).toContain("`ask_user`")
+    expect(out.turns.map((t) => t.trigger)).toEqual(["system"])
+    expect(messagesOf(out.entries).filter((m) => m.role === "user")).toEqual([])
+    expect(out.quietTurns).toEqual([])
+    expect(introductionText(undefined)).toContain("Greet them")
   })
 
   test("readContext renders the instructions with a placement preview and the memory", async () => {
@@ -294,6 +320,26 @@ describe("Orchestrator extras", () => {
     )
     expect(out.handles.map((h) => h.input.text)).toEqual(["Answer: blue"])
     expect(out.turns[0]!.trigger).toBe("user")
+  })
+
+  test("writing in a DM settles the Bot's open questions there (answered in chat); a group message does not", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const ada = yield* createBot("Ada")
+        const bob = yield* createBot("Bob")
+        const group = yield* (yield* ConversationService).createGroup({ title: "Duo", memberBotIds: [ada.id, bob.id], leadBotId: ada.id })
+        yield* send(ada.directConversationId, "The first one")
+        yield* send(group.id, "Morning")
+        yield* settled(ada.directConversationId)
+        yield* settled(group.id)
+        return { ada, cancelled: yield* (yield* ApprovalServiceFake).cancelled }
+      }),
+      appLayer(),
+    )
+    // (every turn's end also cancels that turn's own requests)
+    expect(out.cancelled.filter((c) => c.reason !== "turn-ended")).toEqual([
+      { conversationId: out.ada.directConversationId, kinds: ["question"], asyncOnly: true, reason: ANSWERED_IN_CHAT, cardDetail: "Answered in chat" },
+    ])
   })
 
   test("react toggles the owner's reaction on a message", async () => {

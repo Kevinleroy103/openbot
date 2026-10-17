@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import {
   type Bot,
+  isTerminalTurnStatus,
   LOCAL_NODE_ID,
   pendingRequestsOf,
   type TranscriptEntry,
@@ -159,6 +160,15 @@ describe("rpc", () => {
       // a message: the reply streams in as entry upserts
       const convo = yield* watchConversation(client, bot.directConversationId)
       yield* eventually(Ref.get(convo.state), (s) => s.synchronized, { label: "conversation synchronized" })
+      // a Bot the owner creates first introduces itself in a hidden turn (no user bubble)
+      const introduced = yield* eventually(
+        Ref.get(convo.state),
+        (s) => s.turns.size === 1 && [...s.turns.values()].every((t) => isTerminalTurnStatus(t.status)),
+        { label: "introduction turn" },
+      )
+      expect([...introduced.turns.values()].map((t) => t.trigger)).toEqual(["system"])
+      expect(transcriptOf(introduced).some((e) => e.kind === "message" && e.role === "user")).toBe(false)
+      expect(botMessages(transcriptOf(introduced))).toEqual(["Hi, I'm Scout, running on the offline Fake harness. What should I help with first?"])
       const sent = yield* client["messages.send"]({
         conversationId: bot.directConversationId,
         text: "echo: hello from the test",
@@ -318,7 +328,7 @@ describe("rpc", () => {
       })
       const memory = botMessages(transcriptOf(recalled)).find((t) => t.startsWith("Session "))!
       expect(memory).toContain(`fake-${sessionKeyOf(ada.id, ada.directConversationId).replaceAll(":", "-")}-`)
-      expect(memory).toContain("turn 2")
+      expect(memory).toContain("turn 3") // its introduction, the group turn, this DM turn
       expect(memory).toContain('I last said: "renamed the repo to tick"')
       // The group's transcript holds the group turn only (nothing from the DM leaked in).
       expect(botMessages(transcriptOf(yield* Ref.get(groupView.state)))).toEqual(["renamed the repo to tick"])

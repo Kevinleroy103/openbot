@@ -153,7 +153,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "roster.subscribe": ({ after }) => edgeStream("roster.subscribe", hub.subscribeRoster({ after })),
 
     // ---------------------------------------------------------------- bots
-    "bots.create": (input) => edge("bots.create", bots.create(input)),
+    "bots.create": (input) => edge("bots.create", bots.create(input, { introduce: input.introduce !== false })),
     "bots.update": ({ botId, patch }) => edge("bots.update", bots.update(botId, patch)),
     "bots.delete": ({ botId }) => edge("bots.delete", bots.delete(botId)),
     "bots.get": ({ botId }) => edge("bots.get", bots.get(botId)),

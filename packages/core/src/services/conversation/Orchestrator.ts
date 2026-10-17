@@ -27,6 +27,7 @@ import type {
   TurnId,
 } from "@openbot/contracts"
 import {
+  ANSWERED_IN_CHAT,
   HarnessUnavailable,
   InvalidInput,
   isTerminalTurnStatus,
@@ -309,6 +310,18 @@ const makeOrchestrator = (options: RunnerOptions) =>
       if (accepted._tag === "duplicate") {
         const result: SendResult = { entryId: accepted.entryId, turnIds: [], disposition: "duplicate" }
         return result
+      }
+
+      // Writing in a DM instead of on an open question card answers it ("Or answer in the chat"):
+      // the card closes, and the Bot reads the message as the answer.
+      if (conversation.kind === "direct") {
+        yield* approvals.cancelPending({
+          conversationId: conversation.id,
+          kinds: ["question"],
+          asyncOnly: true,
+          reason: ANSWERED_IN_CHAT,
+          cardDetail: "Answered in chat",
+        })
       }
 
       const receipts: Array<DeliveryReceipt> = []

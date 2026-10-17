@@ -127,6 +127,21 @@ describe("layoutTranscript", () => {
     expect(layoutTranscript({ entries, turns: [turn("trn_1", "completed")], showSteps: false }).some((r) => r.type === "steps")).toBe(false)
   })
 
+  test("an ask_user / request_approval call is not a step: its card shows it (a failed one still is)", () => {
+    const t0 = 1_000_000
+    const ask = (at: number, status: "completed" | "failed"): KnownTranscriptEntry => ({
+      ...tool(at, "trn_1", status),
+      name: "mcp__openbot__ask_user",
+      toolKind: "mcp",
+      mcp: { server: "openbot", tool: "ask_user" },
+    } as KnownTranscriptEntry)
+    const greeting = msg(t0, bot(), "Hi! Glad to be on board.", "trn_1")
+    const only = layoutTranscript({ entries: [greeting, ask(t0 + 1, "completed")], turns: [turn("trn_1", "completed")], showSteps: true })
+    expect(only.some((r) => r.type === "steps")).toBe(false)
+    const failed = layoutTranscript({ entries: [greeting, ask(t0 + 1, "failed")], turns: [turn("trn_1", "completed")], showSteps: true })
+    expect(failed.filter((r) => r.type === "steps")).toHaveLength(1)
+  })
+
   test("auto-decided (allowed) events fold into their turn's steps: no line, no timestamp, groups stay whole", () => {
     const t0 = 3_500_000_000
     const decided = (at: number, turnId: string | undefined, decision: "allowed" | "denied", toolKey?: string): KnownTranscriptEntry => ({

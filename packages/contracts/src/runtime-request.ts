@@ -67,6 +67,9 @@ export const RuntimeRequestKind = Schema.Literals([
 ])
 export type RuntimeRequestKind = typeof RuntimeRequestKind.Type
 
+/** `statusReason` of a question the owner answered by writing in the chat instead of on the card. */
+export const ANSWERED_IN_CHAT = "answered-in-chat"
+
 export const RuntimeRequestStatus = Schema.Literals(["pending", "resolved", "expired", "cancelled"])
 export type RuntimeRequestStatus = typeof RuntimeRequestStatus.Type
 

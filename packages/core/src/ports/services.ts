@@ -155,8 +155,10 @@ export const botActor = (tool: ToolContext): Actor => ({ kind: "bot", tool })
 /**
  * Delivery kinds (§4.3.1). `task-result`: a background task ended (D5.7) — its result (or why it
  * stopped) comes back to the bot in the task's origin conversation; never steered, always its own turn.
+ * `introduction`: the hidden first turn of a Bot the owner just created (it greets them and asks what
+ * they need, like Grok's "New Bot"); nothing of it is shown but the Bot's own reply and question card.
  */
-export type DeliveryKind = "user-message" | "bot-message" | "routine" | "system-resume" | "task-result"
+export type DeliveryKind = "user-message" | "bot-message" | "routine" | "system-resume" | "task-result" | "introduction"
 export type DeliveryUrgency = "urgent" | "background"
 /** `messages.send` mode (`contracts.SendMode`): auto = steer when supported and busy, else queue. */
 export type DeliveryMode = SendMode
@@ -280,11 +282,12 @@ export class BotService extends Context.Service<BotService, {
    * avatar default (`contracts.defaultBotAvatar(id)`, FNV-1a), creates the direct conversation,
    * appends a `joined` event, publishes. Idempotent on `clientNonce`. Without `input.autonomy` the
    * bot gets Settings' `defaultAutonomy`; `options.autonomyCeiling` (a bot creating a bot:
-   * `create_bot`) caps the result at the creator's autonomy.
+   * `create_bot`) caps the result at the creator's autonomy. `options.introduce` (the owner created it)
+   * starts its hidden `introduction` turn in its DM; a bot-created Bot is briefed by its creator instead.
    */
   readonly create: (
     input: BotCreateInput,
-    options?: { readonly autonomyCeiling?: BotAutonomy | undefined },
+    options?: { readonly autonomyCeiling?: BotAutonomy | undefined; readonly introduce?: boolean | undefined },
   ) => Effect.Effect<Bot, NotFound | InvalidInput | Conflict | HarnessUnavailable>
   /**
    * `bots.update`. Changing `harness.kind` or `hostNodeId` stops the bot's runners and drops native
@@ -723,7 +726,13 @@ export class ApprovalService extends Context.Service<ApprovalService, {
     readonly conversationId?: ConversationId | undefined
     readonly turnId?: TurnId | undefined
     readonly taskId?: TaskId | undefined
+    /** Only requests of these kinds (default: all). */
+    readonly kinds?: ReadonlyArray<RuntimeRequest["kind"]> | undefined
+    /** Only non-blocking requests (async `ask_user` / `request_approval`), never a waiting turn's. */
+    readonly asyncOnly?: boolean | undefined
     readonly reason: string
+    /** Shown on the closed card instead of "Skipped" (e.g. "Answered in chat"). */
+    readonly cardDetail?: string | undefined
   }) => Effect.Effect<number>
 }>()("openbot/core/ApprovalService") {}
 

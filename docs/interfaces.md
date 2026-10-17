@@ -148,6 +148,7 @@ Each RPC maps to one method. Service methods are in §6; port methods are `NodeA
 | `sections.list/create/rename/delete/reorder` | … | `BotService.*Section(s)` |
 | `conversations.subscribe` (stream) | `{conversationId, after?, tailLimit?}` | `LiveHub.subscribeConversation` |
 | `conversations.history` | `{conversationId, beforeCursor, limit}` → `TranscriptPage` | `ConversationService.history` |
+| `conversations.exchange` | `{botId, peerBotId, at? \| before? \| after?, limit}` → `ExchangePage{entries, beforeCursor, afterCursor}`: the messages two bots sent each other (both DMs), paged around a time or from a cursor | `ConversationService.exchange` |
 | `conversations.createGroup/setMembers/rename/markRead/setHidden` | … | `ConversationService.*` |
 | `conversations.delete` | `{conversationId}` (groups only; `InvalidInput` for a DM / routine run) | `Orchestrator.deleteConversation` (stops the members' work there, cancels its requests, then `ConversationService.removeGroup`) |
 | `messages.send` | `SendInput` → `SendResult` | `Orchestrator.send` |
@@ -350,6 +351,7 @@ ConversationRepo get list(filter?{kind?,botId?,includeHidden?}) upsert delete me
 EntryRepo      get upsert(KnownTranscriptEntry): UpsertOutcome  // written iff new or revision strictly greater
                remove page({conversationId, before?, limit}): EntryPage listAfter(convId, afterEntryId?, limit)
                findByClientNonce(convId, nonce) findByNativeId(convId, nativeId) listByTurn(turnId)
+               listExchange({botIds, conversationIds, direction, from?, limit}): {entries, more}  // bot-to-bot messages between two bots
 RequestRepo    get upsert list(filter?{conversationId?,botId?,turnId?,statuses?}) findByNativeId(botId, nativeRequestId) deleteByConversation(convId)
 TurnRepo       get upsert listByConversation(convId, limit) listActive /* queued|running|waiting */ deleteByConversation(convId)
 TaskRepo       get upsert list({botId?, conversationId?, statuses?, limit?}) /* newest first */ delete(id) /* + its steps */

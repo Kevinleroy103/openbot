@@ -251,6 +251,7 @@ export class ConversationServiceFake extends Context.Service<ConversationService
         summaries: notImplemented("ConversationServiceFake", "summaries"),
         summary: () => notImplemented("ConversationServiceFake", "summary"),
         history: () => notImplemented("ConversationServiceFake", "history"),
+        exchange: () => notImplemented("ConversationServiceFake", "exchange"),
         createGroup: () => notImplemented("ConversationServiceFake", "createGroup"),
         setMembers: () => notImplemented("ConversationServiceFake", "setMembers"),
         rename: () => notImplemented("ConversationServiceFake", "rename"),

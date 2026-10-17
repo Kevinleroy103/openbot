@@ -43,6 +43,7 @@ import {
   ConversationRepo,
   type EntryPage,
   EntryRepo,
+  type ExchangeSlice,
   type BotSessionRecord,
   type NodeRecord,
   NodeRepo,
@@ -197,6 +198,23 @@ export const makeMemoryEntryRepo = () =>
             precedingTimestamp: preceding?.createdAt,
           }
           return result
+        }),
+      listExchange: ({ botIds: [a, b], conversationIds, direction, from, limit }) =>
+        Effect.sync((): ExchangeSlice => {
+          const all = [...entries.values()]
+            .filter((e) =>
+              conversationIds.includes(e.conversationId) && e.kind === "message" && e.author.kind === "bot" &&
+              ((e.author.botId === a && e.toBotId === b) || (e.author.botId === b && e.toBotId === a))
+            )
+            .sort(compareEntries)
+          const size = Math.max(0, Math.floor(limit))
+          if (direction === "older") {
+            const end = from === undefined ? all.length : all.filter((e) => compareEntries(e, from) < 0).length
+            const start = Math.max(0, end - size)
+            return { entries: all.slice(start, end), more: start > 0 }
+          }
+          const start = from === undefined ? 0 : all.filter((e) => compareEntries(e, from) <= 0).length
+          return { entries: all.slice(start, start + size), more: start + size < all.length }
         }),
       listAfter: (conversationId, afterEntryId, limit) =>
         Effect.sync(() => {

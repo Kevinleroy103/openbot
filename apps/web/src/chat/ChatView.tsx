@@ -29,6 +29,7 @@ import { type ChatStatus, chatStatuses, HANDLING } from "./busy.ts"
 import { Composer, type ComposerSubmit } from "./Composer.tsx"
 import { EventRow, ExchangeLine, NoticeRow, UnknownRow, type EventContext } from "./Events.tsx"
 import { ExchangeDialog } from "./ExchangeDialog.tsx"
+import type { ExchangeTarget } from "./exchange.ts"
 import { failedTurnOf, layoutTranscript, messageIndex, positionIn, requestForCard, unreadBoundaryOf, type MessageEntry, type PendingMessage, type Row } from "./grouping.ts"
 import { AddresseeChip, MessageBubble, PendingBubble } from "./Message.tsx"
 import { MessageSheet } from "./MessageSheet.tsx"
@@ -215,7 +216,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
     })
     setReplyTo(undefined)
   }
-  const [exchange, setExchange] = useState<{ readonly a: string; readonly b: string } | undefined>(undefined)
+  const [exchange, setExchange] = useState<{ readonly a: string; readonly b: string; readonly target: ExchangeTarget } | undefined>(undefined)
   const authorName = (e: MessageEntry) => (e.author.kind === "bot" ? (roster.botById(e.author.botId)?.name ?? "Bot") : "you")
 
   const ctx: EventContext = {
@@ -223,7 +224,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
     openConversation: select,
     openBot: (id) => selectBot(id as BotId),
     openRoutines: () => details.show("details"),
-    openExchange: (a, b) => setExchange({ a, b }),
+    openExchange: (a, b, target) => setExchange({ a, b, target }),
   }
   const exchangeBots = exchange ? ([roster.botById(exchange.a), roster.botById(exchange.b)] as const) : undefined
 
@@ -239,7 +240,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
       case "event":
         return <EventRow key={row.key} entry={row.entry} ctx={ctx} />
       case "exchange":
-        return <ExchangeLine key={row.key} ctx={ctx} peerBotId={row.peerBotId} ownerBotId={row.ownerBotId} count={row.entries.length} />
+        return <ExchangeLine key={row.key} ctx={ctx} peerBotId={row.peerBotId} ownerBotId={row.ownerBotId} entries={row.entries} />
       case "notice":
         return <NoticeRow key={row.key} entry={row.entry} />
       case "unknown":
@@ -470,8 +471,8 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
           onClose={() => setSheetEntry(undefined)}
         />
       )}
-      {exchangeBots?.[0] && exchangeBots[1] && (
-        <ExchangeDialog a={exchangeBots[0]} b={exchangeBots[1]} onClose={() => setExchange(undefined)} onOpenConversation={select} />
+      {exchange && exchangeBots?.[0] && exchangeBots[1] && (
+        <ExchangeDialog a={exchangeBots[0]} b={exchangeBots[1]} target={exchange.target} onClose={() => setExchange(undefined)} onOpenConversation={select} />
       )}
     </main>
   )

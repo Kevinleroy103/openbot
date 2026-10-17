@@ -172,6 +172,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "conversations.subscribe": ({ after, conversationId, tailLimit }) =>
       edgeStream("conversations.subscribe", hub.subscribeConversation({ conversationId, after, tailLimit })),
     "conversations.history": (input) => edge("conversations.history", conversations.history(input)),
+    "conversations.exchange": (input) => edge("conversations.exchange", conversations.exchange(input)),
     "conversations.createGroup": (input) => edge("conversations.createGroup", conversations.createGroup(input)),
     "conversations.setMembers": (input) => edge("conversations.setMembers", conversations.setMembers(input)),
     "conversations.rename": ({ conversationId, title }) =>

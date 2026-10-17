@@ -791,6 +791,39 @@ export class MockBrain {
     return conversation
   }
 
+  /** `conversations.exchange`: both directions from both DMs, paged by `"<createdAt>:<id>"` cursors. */
+  exchange(input: { readonly botId: string; readonly peerBotId: string; readonly at?: number; readonly before?: string; readonly after?: string; readonly limit: number }) {
+    const a = this.bot(input.botId)
+    const b = this.bot(input.peerBotId)
+    if (!a || !b) throw new NotFound({ entity: "bot", id: a ? input.peerBotId : input.botId })
+    const all = [a, b]
+      .flatMap((bot) => this.conv(bot.directConversationId).entries)
+      .filter((e) => e.kind === "message" && e.author.kind === "bot" && ((e.author.botId === a.id && e.toBotId === b.id) || (e.author.botId === b.id && e.toBotId === a.id)))
+      .sort(compareEntries)
+    const cursor = (e: { readonly createdAt: number; readonly id: string }) => `${e.createdAt}:${e.id}`
+    const position = (c: string) => ({ createdAt: Number(c.slice(0, c.indexOf(":"))), id: c.slice(c.indexOf(":") + 1) })
+    const countUpTo = (p: { readonly createdAt: number; readonly id: string }, inclusive: boolean) => all.filter((e) => compareEntries(e, p) < (inclusive ? 1 : 0)).length
+    let start: number
+    let end: number
+    if (input.before) {
+      end = countUpTo(position(input.before), false)
+      start = Math.max(0, end - input.limit)
+    } else if (input.after) {
+      start = countUpTo(position(input.after), true)
+      end = Math.min(all.length, start + input.limit)
+    } else {
+      const split = input.at === undefined ? all.length : all.filter((e) => e.createdAt <= input.at!).length
+      end = Math.min(all.length, Math.max(0, split - Math.ceil(input.limit / 2)) + input.limit)
+      start = Math.max(0, end - input.limit)
+    }
+    const entries = all.slice(start, end)
+    return {
+      entries,
+      beforeCursor: start > 0 && entries[0] ? cursor(entries[0]) : null,
+      afterCursor: end < all.length && entries.length > 0 ? cursor(entries[entries.length - 1]!) : null,
+    }
+  }
+
   markRead(conversationId: string, unread?: boolean, at?: number) {
     const r = this.conv(conversationId)
     if (unread) {
@@ -842,6 +875,7 @@ export class MockBrain {
         return subscribeTo<KnownConversationStreamItem>(r, after, () => r.snapshot())
       },
       "conversations.history": () => Effect.succeed({ entries: [], hasMoreBefore: false, beforeCursor: null }),
+      "conversations.exchange": (p) => sync(() => this.exchange(p))(),
       "bots.create": (p) => sync(() => this.createBot(p))(),
       "bots.update": ({ botId, patch }) =>
         sync(() => {

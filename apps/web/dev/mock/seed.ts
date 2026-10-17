@@ -253,6 +253,52 @@ export const seed = (brain: MockBrain, now = Date.now()) => {
     brain.put(brain.message(conv, botAuthor(bot), "1. **Acme** shipped team workspaces (paid tier only)\n2. **Initech** cut prices by 20%\n3. **Globex** opened a waitlist for an agent product; their changelog blocked me, so this is from their newsletter", at(40, 8), { turnId: t }))
   }
 
+  // ------------------------------------------------- Sales Outreach <-> Research Scout (bot-to-bot)
+  // A long exchange from yesterday (prospect research): Sales -> Scout lives in Scout's DM, Scout ->
+  // Sales in Sales's, and each sender's DM says "Messaged ...". Enough messages to page the exchange
+  // dialog (conversations.exchange).
+  {
+    const sales = { ...ids.sales!, name: "Sales Outreach" }
+    const scout = { ...ids.scout!, name: "Research Scout" }
+    let t = at(60 * 22)
+    const send = (from: typeof sales, to: typeof sales, text: string) => {
+      const sent = brain.put(brain.message(to.conv, botAuthor(from.bot), text, t, { toBotId: to.bot }))
+      brain.put(brain.event(from.conv, botAuthor(from.bot), { type: "messaged-bot", toBotId: to.bot, toName: to.name, conversationId: to.conv, entryId: sent.id }, t + 400))
+      t += 90_000
+    }
+    const prospects: ReadonlyArray<readonly [string, string, string]> = [
+      ["Globex", "Dana Park, VP Ops", "they just opened a waitlist for an agent product"],
+      ["Initech", "Sam Ortiz, Head of Finance", "their 20% price cut squeezes margins; pitch the cost savings"],
+      ["Umbrella", "Priya Nair, CTO", "a new compliance team, hiring 6 roles"],
+      ["Hooli", "Marcus Bell, Director of Sales", "missed Q3 targets per the earnings call"],
+      ["Stark Industries", "Pepper Lin, COO", "consolidating vendors this quarter"],
+      ["Wayne Enterprises", "Lucius Grant, VP Engineering", "migrating off their legacy CRM"],
+      ["Soylent", "Ines Duarte, Head of Growth", "launching in three new markets"],
+      ["Vandelay", "Art Kramer, Procurement Lead", "RFP for logistics tooling closes Friday"],
+      ["Wonka", "Charlie Bucket, Product Lead", "a new factory tour app in beta"],
+      ["Tyrell", "Rachel Tan, Chief of Staff", "reorganizing the ops team"],
+      ["Cyberdyne", "Miles Dyson, R&D Director", "posted about agent tooling on LinkedIn"],
+      ["Aperture", "Cave Johnson Jr., CEO", "a Series C last month"],
+      ["Massive Dynamic", "Nina Sharp, EVP", "expanding the Boston office"],
+      ["Oscorp", "Norman Ochs, Head of IT", "a security incident in May; lead with audit logs"],
+      ["Pied Piper", "Monica Hall, Partner", "board pushing for efficiency"],
+      ["Prestige Worldwide", "Brennan Huff, Founder", "just hired their first sales team"],
+      ["Gringotts", "Griphook Varga, Head of Risk", "new regulation deadline in January"],
+      ["Monarch", "Hank Venture, Ops Manager", "complained about manual reporting in a podcast"],
+      ["Dunder Mifflin", "Jan Levinson, VP Regional Sales", "branch consolidation this fall"],
+      ["Acme", "Wile Coyote, Procurement", "team workspaces launch: they need onboarding help"],
+    ]
+    prospects.forEach(([company, contact, hook], i) => {
+      send(sales, scout, `Who should I write to at **${company}**, and what's the hook?`)
+      if (i % 6 === 2) {
+        send(scout, sales, `**${company}**: ${contact}.`)
+        send(scout, sales, `Hook: ${hook}.`)
+        send(scout, sales, "Sources are in `research/prospects.md`. Want a draft opener too?")
+      } else send(scout, sales, `**${company}**: ${contact}. Hook: ${hook}.`)
+    })
+    send(sales, scout, "Perfect, that's the whole list. Drafting the openers now.")
+  }
+
   // ------------------------------------------------------------------------------- Expense Clerk
   {
     const { bot, conv } = direct("expense", 60 * 5)

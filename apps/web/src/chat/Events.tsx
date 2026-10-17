@@ -4,29 +4,31 @@ import { Archive, Ban, BookMarked, Brain, CircleAlert, Clock, Info, ShieldCheck,
 import type { ReactNode } from "react"
 import type { Bot, ConversationId } from "@openbot/contracts"
 import { Avatar, AvatarStack, EventChip, EventLine, Icon, cn } from "@openbot/ui"
-import type { EventEntry, NoticeEntry, UnknownEntry } from "./grouping.ts"
+import type { ExchangeTarget } from "./exchange.ts"
+import type { EventEntry, MessageEntry, NoticeEntry, UnknownEntry } from "./grouping.ts"
 
 export interface EventContext {
   readonly botById: (id: string | undefined) => Bot | undefined
   readonly openConversation: (id: ConversationId) => void
   readonly openBot: (botId: string) => void
   readonly openRoutines: () => void
-  /** Opens the bot-to-bot exchange between `a` and `b` (ExchangeDialog). */
-  readonly openExchange: (a: string, b: string) => void
+  /** Opens the bot-to-bot exchange between `a` and `b` (ExchangeDialog) at the line's message(s). */
+  readonly openExchange: (a: string, b: string, target: ExchangeTarget) => void
 }
 
 /**
  * "N messages with ‹avatar› ‹Bot›" (Grok): a run of bot-to-bot messages collapsed into one centered,
- * clickable line that opens the whole exchange.
+ * clickable line that opens the whole exchange at those messages.
  */
-export function ExchangeLine({ ctx, peerBotId, ownerBotId, count }: { readonly ctx: EventContext; readonly peerBotId: string; readonly ownerBotId: string; readonly count: number }): ReactNode {
+export function ExchangeLine({ ctx, peerBotId, ownerBotId, entries }: { readonly ctx: EventContext; readonly peerBotId: string; readonly ownerBotId: string; readonly entries: ReadonlyArray<MessageEntry> }): ReactNode {
   const peer = ctx.botById(peerBotId)
+  const count = entries.length
   return (
     <EventLine>
       <button
         type="button"
         data-exchange={peerBotId}
-        onClick={() => ctx.openExchange(ownerBotId, peerBotId)}
+        onClick={() => ctx.openExchange(ownerBotId, peerBotId, { at: entries[0]?.createdAt ?? 0, entryIds: entries.map((e) => e.id) })}
         className="inline-flex h-6 min-w-0 items-center gap-1 rounded-full px-1.5 text-fg-secondary transition-colors duration-[120ms] hover:bg-secondary hover:text-fg"
       >
         {count} {count === 1 ? "message" : "messages"} with
@@ -86,7 +88,10 @@ export function EventRow({ entry, ctx }: { readonly entry: EventEntry; readonly 
           <EventChip
             leading={<Avatar shape={ctx.botById(ev.toBotId)?.avatar.shape} color={ctx.botById(ev.toBotId)?.avatar.color} size={16} />}
             data-exchange={ev.toBotId}
-            onClick={() => (from ? ctx.openExchange(from, ev.toBotId) : ctx.openConversation(ev.conversationId))}
+            onClick={() =>
+              from
+                ? ctx.openExchange(from, ev.toBotId, { at: entry.createdAt, entryIds: ev.entryId ? [ev.entryId] : [], fromBotId: from, toBotId: ev.toBotId })
+                : ctx.openConversation(ev.conversationId)}
           >
             {ctx.botById(ev.toBotId)?.name ?? ev.toName}
           </EventChip>
@@ -110,7 +115,7 @@ export function EventRow({ entry, ctx }: { readonly entry: EventEntry; readonly 
           <EventChip
             leading={<Avatar shape={ctx.botById(ev.toBotId)?.avatar.shape} color={ctx.botById(ev.toBotId)?.avatar.color} size={16} />}
             data-exchange={ev.toBotId}
-            onClick={() => ctx.openExchange(ev.fromBotId, ev.toBotId)}
+            onClick={() => ctx.openExchange(ev.fromBotId, ev.toBotId, { at: entry.createdAt, entryIds: [], fromBotId: ev.fromBotId, toBotId: ev.toBotId })}
           >
             {ctx.botById(ev.toBotId)?.name ?? ev.toName}
           </EventChip>

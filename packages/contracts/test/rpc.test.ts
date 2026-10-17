@@ -44,6 +44,7 @@ const V1_RPCS = [
   "sections.reorder",
   "conversations.subscribe",
   "conversations.history",
+  "conversations.exchange",
   "conversations.createGroup",
   "conversations.setMembers",
   "conversations.rename",

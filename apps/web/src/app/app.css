@@ -70,6 +70,16 @@
 .ob-send-progress { animation: ob-reveal 120ms ease-out 2s both; }
 .ob-send-progress > span { animation: ob-send-progress 1s ease-in-out infinite; }
 
+/* Exchange dialog (chat/ExchangeDialog.tsx): the clicked line's message(s) light up once. */
+@keyframes ob-exchange-target {
+  0%, 55% { background-color: var(--ob-accent-soft-hover); box-shadow: 0 0 0 6px var(--ob-accent-soft-hover); }
+  100% { background-color: transparent; box-shadow: 0 0 0 6px transparent; }
+}
+[data-exchange-item][data-target] { border-radius: 18px; animation: ob-exchange-target 2.6s var(--ease-out-soft) both; }
+@media (prefers-reduced-motion: reduce) {
+  [data-exchange-item][data-target] { animation: none; background-color: var(--ob-accent-soft); box-shadow: 0 0 0 6px var(--ob-accent-soft); }
+}
+
 /* Hover actions next to a bubble. */
 .ob-msg .ob-msg-actions { opacity: 0; transition: opacity 100ms; }
 .ob-msg:has([data-side]:hover) .ob-msg-actions, .ob-msg .ob-msg-actions:hover, .ob-msg:focus-within .ob-msg-actions { opacity: 1; }

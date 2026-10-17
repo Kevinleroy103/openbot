@@ -31,7 +31,7 @@ import { ApprovalRule, ApprovalRuleInput, BotAutonomy, ProjectFolders } from "./
 import { RuntimeRequest, RuntimeResponseInput } from "./runtime-request.ts"
 import { Settings, SettingsPatch } from "./settings.ts"
 import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
-import { ConversationStreamItem, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
+import { ConversationStreamItem, ExchangePage, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
 import { Task, TaskDetail } from "./task.ts"
 import { Attachment, MessageDelivery, Turn } from "./transcript.ts"
 
@@ -230,6 +230,23 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("conversations.history", {
     payload: { conversationId: ConversationId, beforeCursor: Schema.String, limit: NonNegativeInt },
     success: TranscriptPage,
+    error: errors(NotFound, InvalidInput),
+  }),
+  /**
+   * The messages two Bots sent each other (message_bot / handoff_task, both directions; they live
+   * in their direct conversations): the newest `limit`, the `limit` before / after a cursor, or a
+   * page around `at` (up to half at or before it).
+   */
+  Rpc.make("conversations.exchange", {
+    payload: {
+      botId: BotId,
+      peerBotId: BotId,
+      at: Schema.optionalKey(Millis),
+      before: Schema.optionalKey(Schema.String),
+      after: Schema.optionalKey(Schema.String),
+      limit: NonNegativeInt,
+    },
+    success: ExchangePage,
     error: errors(NotFound, InvalidInput),
   }),
   Rpc.make("conversations.createGroup", {

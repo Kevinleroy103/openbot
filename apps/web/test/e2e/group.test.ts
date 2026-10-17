@@ -3,9 +3,24 @@
 // bot-to-bot `message_bot` from DMs (the recipient's DM gets the message and replies; the sender
 // shows a "Messaged X" event line). Real brain, fake harness only.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import type { Browser } from "playwright-core"
+import type { Browser, Locator } from "playwright-core"
 import type { Bot, BotId, ConversationId, TranscriptEntry } from "@openbot/contracts"
 import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, startBrain, waitIdle } from "./brain.ts"
+
+/** The exchange dialog's highlighted message(s), and whether the first is inside the scrolled view. */
+const exchangeTarget = (dialog: Locator) =>
+  dialog.getByTestId("exchange").evaluate((list) => {
+    const view = list.parentElement!
+    const box = view.getBoundingClientRect()
+    const marked = [...list.querySelectorAll<HTMLElement>("[data-exchange-item][data-target]")]
+    const first = marked[0]?.getBoundingClientRect()
+    return {
+      texts: marked.map((m) => m.innerText),
+      inView: first !== undefined && first.top >= box.top && first.bottom <= box.bottom,
+      scrollTop: view.scrollTop,
+      scrollable: view.scrollHeight > view.clientHeight,
+    }
+  })
 
 const botReplies = (entries: Iterable<TranscriptEntry>, after: string) => {
   const list = [...entries]
@@ -181,6 +196,9 @@ describe.skipIf(!hasChromium)("e2e: group chat and bot-to-bot", () => {
     expect(await items.nth(0).innerText()).toContain("Alpha")
     expect(await items.nth(0).innerText()).toContain("tool: message_bot")
     expect(await items.nth(1).innerText()).toContain("echo: Thanks back, Alpha")
+    // it opens at the clicked line's message (Bravo's), lit up
+    await dialog.locator("[data-exchange-item][data-target]").waitFor()
+    expect((await exchangeTarget(dialog)).texts).toEqual([expect.stringContaining("echo: Thanks back, Alpha")])
     await app.shot("e2e-25-b2b-exchange-light")
     await dialog.getByRole("button", { name: "Open Bravo's chat" }).click()
     await dialog.waitFor({ state: "detached" })
@@ -191,9 +209,37 @@ describe.skipIf(!hasChromium)("e2e: group chat and bot-to-bot", () => {
     const fromAlpha = bravoTranscript.locator(`button[data-exchange="${alpha.id}"]`).filter({ hasText: "message with" })
     await fromAlpha.waitFor()
     await bravoTranscript.locator(`[data-exchange="${alpha.id}"]`).filter({ hasText: "Alpha" }).last().click()
-    await page.getByRole("dialog", { name: "Bravo and Alpha" }).locator("[data-exchange-item]").nth(1).waitFor()
+    const fromBravo = page.getByRole("dialog", { name: "Bravo and Alpha" })
+    await fromBravo.locator("[data-exchange-item][data-target]").waitFor()
+    // "Messaged Alpha" stands for the message it delivered
+    expect((await exchangeTarget(fromBravo)).texts).toEqual([expect.stringContaining("echo: Thanks back, Alpha")])
     await page.keyboard.press("Escape")
     await app.shot("e2e-26-b2b-recipient-light")
+
+    // a longer exchange: the dialog opens scrolled to the clicked line's message, not at the top
+    await page.locator(`[data-row="${alpha.id}"]`).click()
+    await box.waitFor()
+    const NOTES = 14
+    const notes = Array.from({ length: NOTES }, (_, i) =>
+      `tool: message_bot ${JSON.stringify({ to: "Bravo", text: `Note ${i + 1} of ${NOTES} for the exchange view`, urgency: "background" })}`)
+    await box.fill(notes.join("\n"))
+    await box.press("Enter")
+    const messaged = transcript.locator(`[data-exchange="${bravo.id}"]`).filter({ hasNotText: "message with" })
+    await eventually(() => messaged.count(), (n) => n === NOTES + 1, { label: "a Messaged line per note", timeout: 30_000 })
+    await waitIdle(page, 30_000)
+    for (const note of [NOTES, 3]) {
+      await messaged.nth(note).click()
+      const long = page.getByRole("dialog", { name: "Alpha and Bravo" })
+      await long.locator("[data-exchange-item][data-target]").waitFor()
+      const opened = await exchangeTarget(long)
+      expect(opened.texts).toEqual([expect.stringContaining(`Note ${note} of ${NOTES}`)])
+      expect(opened.scrollable).toBe(true)
+      expect(opened.inView).toBe(true)
+      expect(opened.scrollTop).toBeGreaterThan(0)
+      if (note === NOTES) await app.shot("e2e-26b-b2b-exchange-long-light")
+      await page.keyboard.press("Escape")
+      await long.waitFor({ state: "detached" })
+    }
 
     // dark theme: a second page on the same brain
     const dark = await openApp(browser, brain, { theme: "dark", route: `#/c/${alpha.directConversationId}` })
@@ -206,7 +252,7 @@ describe.skipIf(!hasChromium)("e2e: group chat and bot-to-bot", () => {
     expect(dark.errors).toEqual([])
     await dark.context.close()
     expect(app.errors).toEqual([])
-  }, 90_000)
+  }, 150_000)
 
   test("bot-to-bot (background): wakes an idle recipient, which replies in its DM", async () => {
     const { page } = app

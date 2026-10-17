@@ -233,6 +233,47 @@ export const repoContractCases: ReadonlyArray<RepoContractCase> = [
     yield* equal((yield* some(yield* repo.get(entryId("ent_a")), "get")).createdAt, 5, "createdAt kept")
   })),
 
+  contractCase("EntryRepo: listExchange (the messages two bots sent each other, both directions)", Effect.gen(function*() {
+    const repo = yield* EntryRepo
+    const [a, b, c] = [botId("bot_xa"), botId("bot_xb"), botId("bot_xc")]
+    const [dmA, dmB] = [conversationId("cnv_xa"), conversationId("cnv_xb")]
+    const message = (id: string, conversation: typeof dmA, createdAt: number, from: typeof a, to?: typeof a) =>
+      repo.upsert(makeMessageEntry({
+        id: entryId(id),
+        conversationId: conversation,
+        createdAt,
+        role: "bot",
+        author: { kind: "bot", botId: from },
+        ...(to === undefined ? {} : { toBotId: to }),
+      }))
+    // b → a lives in a's DM, a → b in b's
+    yield* message("ent_x1", dmA, 10, b, a)
+    yield* message("ent_x2", dmB, 20, a, b)
+    yield* message("ent_x4", dmB, 30, a, b)
+    yield* message("ent_x3", dmA, 30, b, a)
+    yield* message("ent_x5", dmB, 40, a, b)
+    // not part of it: a's reply to the owner, c → a, a → b elsewhere, a tool call
+    yield* message("ent_n1", dmA, 15, a)
+    yield* message("ent_n2", dmA, 25, c, a)
+    yield* message("ent_n3", conversationId("cnv_xg"), 35, a, b)
+    yield* repo.upsert(makeToolCallEntry({ id: entryId("ent_n4"), conversationId: dmA, createdAt: 12, author: { kind: "bot", botId: a } }))
+    const query = { botIds: [a, b] as const, conversationIds: [dmA, dmB] }
+    const newest = yield* repo.listExchange({ ...query, direction: "older", limit: 2 })
+    yield* equal(ids(newest.entries), ["ent_x4", "ent_x5"], "the newest, oldest first")
+    yield* ok(newest.more, "more older")
+    const older = yield* repo.listExchange({ ...query, direction: "older", from: { createdAt: 30, id: "ent_x4" }, limit: 5 })
+    yield* equal(ids(older.entries), ["ent_x1", "ent_x2", "ent_x3"], "before a position (ties by id)")
+    yield* ok(!older.more, "nothing older")
+    const newer = yield* repo.listExchange({ ...query, direction: "newer", from: { createdAt: 20, id: "ent_x2" }, limit: 2 })
+    yield* equal(ids(newer.entries), ["ent_x3", "ent_x4"], "after a position")
+    yield* ok(newer.more, "more newer")
+    const all = yield* repo.listExchange({ ...query, direction: "newer", limit: 10 })
+    yield* equal(ids(all.entries), ["ent_x1", "ent_x2", "ent_x3", "ent_x4", "ent_x5"], "from the oldest")
+    yield* ok(!all.more, "nothing newer")
+    const swapped = yield* repo.listExchange({ botIds: [b, a], conversationIds: [dmB, dmA], direction: "older", limit: 10 })
+    yield* equal(ids(swapped.entries), ids(all.entries), "either bot first")
+  })),
+
   contractCase("EntryRepo: lookups (listAfter, clientNonce, nativeId, turn) and remove", Effect.gen(function*() {
     const repo = yield* EntryRepo
     const cnv = conversationId("cnv_find")

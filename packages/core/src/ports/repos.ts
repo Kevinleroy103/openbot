@@ -77,6 +77,32 @@ export interface EntryPage {
   readonly precedingTimestamp?: Millis | undefined
 }
 
+/** A position in the `(createdAt, id)` entry order. */
+export interface EntryPosition {
+  readonly createdAt: number
+  readonly id: string
+}
+
+/**
+ * The messages two Bots sent each other (`EntryRepo.listExchange`): messages authored by one of
+ * `botIds` and addressed (`toBotId`) to the other, in `conversationIds` (their direct conversations).
+ */
+export interface ExchangeQuery {
+  readonly botIds: readonly [BotId, BotId]
+  readonly conversationIds: ReadonlyArray<ConversationId>
+  /** "older": the newest `limit` before `from`; "newer": the oldest `limit` after it. */
+  readonly direction: "older" | "newer"
+  /** Exclusive bound; absent = from the newest ("older") / the oldest ("newer") message. */
+  readonly from?: EntryPosition | undefined
+  readonly limit: number
+}
+
+/** Messages oldest first; `more` when the scan has more beyond them in its direction. */
+export interface ExchangeSlice {
+  readonly entries: ReadonlyArray<TranscriptEntry>
+  readonly more: boolean
+}
+
 // ============================================================================ bots & sections
 
 /**
@@ -169,6 +195,8 @@ export class EntryRepo extends Context.Service<EntryRepo, {
   readonly remove: (id: EntryId) => Effect.Effect<boolean, RepoError>
   /** The `limit` entries before `before` (or the newest `limit`), returned oldest first. */
   readonly page: (query: EntryPageQuery) => Effect.Effect<EntryPage, RepoError>
+  /** Bot-to-bot messages between two Bots, next to a position (`conversations.exchange`). */
+  readonly listExchange: (query: ExchangeQuery) => Effect.Effect<ExchangeSlice, RepoError>
   /**
    * Entries strictly after `afterEntryId` in `(createdAt, id)` order, oldest first, at most `limit`.
    * `afterEntryId` undefined or unknown → from the start. Used for "messages a bot has not seen".

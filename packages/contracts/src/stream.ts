@@ -75,6 +75,16 @@ export const TranscriptPage = Schema.Struct({
 })
 export type TranscriptPage = typeof TranscriptPage.Type
 
+/** A window of the messages two Bots sent each other (`conversations.exchange`), oldest first. */
+export const ExchangePage = Schema.Struct({
+  entries: Schema.Array(TranscriptEntry),
+  /** Opaque; pass as `before` for older messages. Null when nothing is older. */
+  beforeCursor: Schema.NullOr(Schema.String),
+  /** Opaque; pass as `after` for newer messages. Null when the page reaches the newest. */
+  afterCursor: Schema.NullOr(Schema.String),
+})
+export type ExchangePage = typeof ExchangePage.Type
+
 // ---------------------------------------------------------------------------- roster replica (sidebar)
 export const RosterChangeMembers = [
   Schema.Struct({ type: Schema.Literal("bot.upserted"), bot: Bot }),

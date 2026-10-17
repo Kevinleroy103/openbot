@@ -7,6 +7,7 @@ import type {
   BotId,
   Conversation,
   ConversationId,
+  ExchangePage,
   KnownConversationEvent,
   KnownTranscriptEntry,
   TranscriptEntry,
@@ -15,13 +16,13 @@ import type {
 import { Conflict, InvalidInput, MAX_GROUP_BOTS, MIN_GROUP_BOTS, NotFound } from "@openbot/contracts"
 import { Clock, Effect, Layer, Option } from "effect"
 import { IdGen } from "../../ports/IdGen.ts"
-import { BotRepo, ConversationRepo, EntryRepo, ReplicaLog, RequestRepo, SettingsRepo, TurnRepo } from "../../ports/repos.ts"
+import { BotRepo, ConversationRepo, EntryRepo, type EntryPosition, ReplicaLog, RequestRepo, SettingsRepo, TurnRepo } from "../../ports/repos.ts"
 import { ConversationService, type EntryDraft, LiveHub } from "../../ports/services.ts"
 import { ConversationStore, ConversationStoreLive } from "./internal/ConversationStore.ts"
 import { summarize } from "./internal/summary.ts"
 import { compact, orDie, required } from "./internal/util.ts"
 
-/** Upper bound for `conversations.history` pages. */
+/** Upper bound for `conversations.history` and `conversations.exchange` pages. */
 export const MAX_HISTORY_LIMIT = 500
 const MAX_TITLE_LENGTH = 200
 const groupNonceKey = (nonce: string) => `brain.groupNonce.${nonce}`
@@ -50,6 +51,15 @@ export const bumpForEntry = (conversation: Conversation, entry: KnownTranscriptE
     unreadCount: conversation.unreadCount + 1,
     unreadBoundaryAt: conversation.unreadCount === 0 ? entry.createdAt : (conversation.unreadBoundaryAt ?? entry.createdAt),
   }
+}
+
+/** `conversations.exchange` cursor `"<createdAt>:<id>"` (ids never contain ':'); opaque to clients. */
+const exchangeCursor = (entry: EntryPosition): string => `${entry.createdAt}:${entry.id}`
+const parseExchangeCursor = (cursor: string): EntryPosition | undefined => {
+  const index = cursor.indexOf(":")
+  const createdAt = Number(cursor.slice(0, index))
+  const id = cursor.slice(index + 1)
+  return index > 0 && Number.isInteger(createdAt) && id.length > 0 ? { createdAt, id } : undefined
 }
 
 /** "Scout, Writer & Reviewer". */
@@ -295,6 +305,72 @@ export const ConversationServiceLive: Layer.Layer<
       })
     })
 
+    const exchange = Effect.fn("ConversationService.exchange")(function*(input: {
+      readonly botId: BotId
+      readonly peerBotId: BotId
+      readonly at?: number | undefined
+      readonly before?: string | undefined
+      readonly after?: string | undefined
+      readonly limit: number
+    }) {
+      const { limit } = input
+      if (!Number.isInteger(limit) || limit < 1 || limit > MAX_HISTORY_LIMIT) {
+        return yield* new InvalidInput({ message: `limit must be between 1 and ${MAX_HISTORY_LIMIT}.` })
+      }
+      if ([input.at, input.before, input.after].filter((x) => x !== undefined).length > 1) {
+        return yield* new InvalidInput({ message: "Pass at most one of at, before and after." })
+      }
+      if (input.botId === input.peerBotId) return yield* new InvalidInput({ message: "An exchange needs two different bots." })
+      const a = yield* required(bots.get(input.botId), "bot", input.botId)
+      const b = yield* required(bots.get(input.peerBotId), "bot", input.peerBotId)
+      const scan = (direction: "older" | "newer", from: EntryPosition | undefined, size: number) =>
+        orDie(entries.listExchange({
+          botIds: [a.id, b.id],
+          conversationIds: [a.directConversationId, b.directConversationId],
+          direction,
+          from,
+          limit: size,
+        }))
+      const positionOf = (cursor: string) => {
+        const position = parseExchangeCursor(cursor)
+        return position === undefined ? Effect.fail(new InvalidInput({ message: `Invalid cursor: ${cursor}` })) : Effect.succeed(position)
+      }
+      const page = (list: ReadonlyArray<TranscriptEntry>, moreBefore: boolean, moreAfter: boolean, edge?: EntryPosition): ExchangePage => {
+        const first = list[0] ?? edge
+        const last = list[list.length - 1] ?? edge
+        return {
+          entries: list,
+          beforeCursor: moreBefore && first !== undefined ? exchangeCursor(first) : null,
+          afterCursor: moreAfter && last !== undefined ? exchangeCursor(last) : null,
+        }
+      }
+      if (input.before !== undefined) {
+        const from = yield* positionOf(input.before)
+        const older = yield* scan("older", from, limit)
+        return page(older.entries, older.more, true, from)
+      }
+      if (input.after !== undefined) {
+        const from = yield* positionOf(input.after)
+        const newer = yield* scan("newer", from, limit)
+        return page(newer.entries, true, newer.more, from)
+      }
+      if (input.at === undefined) {
+        const newest = yield* scan("older", undefined, limit)
+        return page(newest.entries, newest.more, false)
+      }
+      // Around `at`: up to half at or before it, the rest after; a short side leaves its room to the other.
+      const bound: EntryPosition = { createdAt: input.at + 1, id: "" }
+      const older = yield* scan("older", bound, limit)
+      const newer = yield* scan("newer", bound, limit)
+      const takeNewer = Math.min(newer.entries.length, Math.max(Math.floor(limit / 2), limit - older.entries.length))
+      const takeOlder = Math.min(older.entries.length, limit - takeNewer)
+      return page(
+        [...older.entries.slice(older.entries.length - takeOlder), ...newer.entries.slice(0, takeNewer)],
+        older.more || takeOlder < older.entries.length,
+        newer.more || takeNewer < newer.entries.length,
+      )
+    })
+
     return ConversationService.of({
       get: (conversationId) => store.get(conversationId),
       summaries: Effect.gen(function*() {
@@ -304,6 +380,7 @@ export const ConversationServiceLive: Layer.Layer<
       summary: (conversationId) =>
         Effect.flatMap(store.get(conversationId), (c) => Effect.provide(summarize(c), repos)),
       history,
+      exchange,
       createGroup,
       setMembers,
       rename: Effect.fn("ConversationService.rename")(function*(conversationId: ConversationId, title: string) {

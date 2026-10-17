@@ -5,6 +5,7 @@ import {
   type ReactNode,
   type Ref,
   type RefObject,
+  type UIEventHandler,
   createContext,
   useCallback,
   useContext,
@@ -506,8 +507,20 @@ export function DialogHeader({ title, description, onClose, className }: { reado
   )
 }
 
-export function DialogBody({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
-  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4 text-base scrollbar-thin", className)}>{children}</div>
+export interface DialogBodyProps {
+  readonly children: ReactNode
+  readonly className?: string
+  /** The scroll container (scroll positioning, paging). */
+  readonly ref?: Ref<HTMLDivElement>
+  readonly onScroll?: UIEventHandler<HTMLDivElement>
+}
+
+export function DialogBody({ children, className, ref, onScroll }: DialogBodyProps): ReactNode {
+  return (
+    <div ref={ref} onScroll={onScroll} className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4 text-base scrollbar-thin", className)}>
+      {children}
+    </div>
+  )
 }
 
 export function DialogFooter({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {

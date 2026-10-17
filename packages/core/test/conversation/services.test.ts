@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import type { KnownConversationStreamItem, Notification } from "@openbot/contracts"
+import type { Bot, ExchangePage, KnownConversationStreamItem, Notification } from "@openbot/contracts"
 import { ANSWERED_IN_CHAT, defaultBotAvatar, LOCAL_NODE_ID, OWNER_USER_ID } from "@openbot/contracts"
 import { Effect, Layer, Option } from "effect"
+import { TestClock } from "effect/testing"
 import {
   ApprovalService,
   AttachmentService,
@@ -297,6 +298,68 @@ describe("ConversationService bookkeeping", () => {
     expect(out.badLimit._tag).toBe("InvalidInput")
     expect(out.renamed.title).toBe("Ada's desk")
     expect(out.summary).toMatchObject({ kind: "direct", hiddenFromSidebar: true, preview: "Reply from Ada", unreadCount: out.unread.unreadCount })
+  })
+
+  test("exchange: two bots' messages from both DMs, a page around a time, older and newer pages", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const conversations = yield* ConversationService
+        const [ada, bob, cy] = [yield* createBot("Ada"), yield* createBot("Bob"), yield* createBot("Cy")]
+        // what message_bot writes: the message in the recipient's DM, addressed to it
+        const say = (from: Bot, to: Bot, text: string) =>
+          Effect.andThen(
+            TestClock.adjust("1 second"),
+            conversations.appendEntry({
+              kind: "message",
+              conversationId: to.directConversationId,
+              author: { kind: "bot", botId: from.id },
+              role: "bot",
+              text,
+              attachments: [],
+              streaming: false,
+              toBotId: to.id,
+            }),
+          )
+        const sent = []
+        for (let i = 1; i <= 9; i++) sent.push(yield* (i % 2 === 1 ? say(ada, bob, `m${i}`) : say(bob, ada, `m${i}`)))
+        yield* say(cy, ada, "from Cy")
+        const view = (page: ExchangePage) => ({
+          texts: page.entries.map((e) => (e.kind === "message" ? e.text : e.kind)),
+          older: page.beforeCursor !== null,
+          newer: page.afterCursor !== null,
+        })
+        const pair = { botId: ada.id, peerBotId: bob.id, limit: 4 }
+        const around = yield* conversations.exchange({ ...pair, botId: bob.id, peerBotId: ada.id, at: sent[4]!.createdAt })
+        return {
+          newest: view(yield* conversations.exchange(pair)),
+          around: view(around),
+          older: view(yield* conversations.exchange({ ...pair, before: around.beforeCursor! })),
+          newer: view(yield* conversations.exchange({ ...pair, after: around.afterCursor! })),
+          atNewest: view(yield* conversations.exchange({ ...pair, at: sent[8]!.createdAt })),
+          atOldest: view(yield* conversations.exchange({ ...pair, at: sent[0]!.createdAt })),
+          refused: yield* Effect.forEach(
+            [
+              conversations.exchange({ ...pair, limit: 0 }),
+              conversations.exchange({ ...pair, at: 1, before: around.beforeCursor! }),
+              conversations.exchange({ ...pair, before: "nope" }),
+              conversations.exchange({ ...pair, peerBotId: ada.id }),
+              conversations.exchange({ ...pair, peerBotId: "bot_gone" as Bot["id"] }),
+            ],
+            (call) => Effect.map(Effect.flip(call), (e) => e._tag),
+          ),
+        }
+      }),
+      appLayer(),
+    )
+    expect(out.newest).toEqual({ texts: ["m6", "m7", "m8", "m9"], older: true, newer: false })
+    // half at or before m5 (the target), half after
+    expect(out.around).toEqual({ texts: ["m4", "m5", "m6", "m7"], older: true, newer: true })
+    expect(out.older).toEqual({ texts: ["m1", "m2", "m3"], older: false, newer: true })
+    expect(out.newer).toEqual({ texts: ["m8", "m9"], older: true, newer: false })
+    // a short side leaves its room to the other
+    expect(out.atNewest).toEqual({ texts: ["m6", "m7", "m8", "m9"], older: true, newer: false })
+    expect(out.atOldest).toEqual({ texts: ["m1", "m2", "m3", "m4"], older: false, newer: true })
+    expect(out.refused).toEqual(["InvalidInput", "InvalidInput", "InvalidInput", "InvalidInput", "NotFound"])
   })
 })
 

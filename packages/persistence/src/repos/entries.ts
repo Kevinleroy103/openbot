@@ -5,7 +5,7 @@
  */
 import type { KnownTranscriptEntry, Millis, TranscriptEntry } from "@openbot/contracts"
 import { KnownTranscriptEntry as KnownTranscriptEntrySchema, TranscriptEntry as TranscriptEntrySchema } from "@openbot/contracts"
-import { type EntryPage, EntryRepo, RepoError, type UpsertOutcome } from "@openbot/core"
+import { type EntryPage, EntryRepo, type ExchangeSlice, RepoError, type UpsertOutcome } from "@openbot/core"
 import { Effect, Option } from "effect"
 import { SqlClient } from "effect/sql"
 import { jsonCodec, repoOp } from "../codec.ts"
@@ -112,6 +112,32 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
         }
         return page
       }).pipe(repoOp("EntryRepo.page")),
+
+    listExchange: ({ botIds: [a, b], conversationIds, direction, from, limit }) =>
+      Effect.gen(function*() {
+        const size = Math.max(0, Math.floor(limit))
+        if (conversationIds.length === 0) return { entries: [], more: false } satisfies ExchangeSlice
+        const older = direction === "older"
+        const clauses = [
+          sql.in("conversation_id", conversationIds),
+          sql`kind = 'message'`,
+          sql`((json_extract(payload_json, '$.author.botId') = ${a} AND json_extract(payload_json, '$.toBotId') = ${b})
+            OR (json_extract(payload_json, '$.author.botId') = ${b} AND json_extract(payload_json, '$.toBotId') = ${a}))`,
+          ...(from === undefined ? [] : [
+            older
+              ? sql`(created_at < ${from.createdAt} OR (created_at = ${from.createdAt} AND id < ${from.id}))`
+              : sql`(created_at > ${from.createdAt} OR (created_at = ${from.createdAt} AND id > ${from.id}))`,
+          ]),
+        ]
+        const rows = older
+          ? yield* sql<EntryRow>`SELECT id, created_at, payload_json FROM entries WHERE ${sql.and(clauses)}
+              ORDER BY created_at DESC, id DESC LIMIT ${size + 1}`
+          : yield* sql<EntryRow>`SELECT id, created_at, payload_json FROM entries WHERE ${sql.and(clauses)}
+              ORDER BY created_at, id LIMIT ${size + 1}`
+        const kept = rows.slice(0, size)
+        const entries = yield* decodeRows("EntryRepo.listExchange", older ? kept.reverse() : kept)
+        return { entries, more: rows.length > size } satisfies ExchangeSlice
+      }).pipe(repoOp("EntryRepo.listExchange")),
 
     listAfter: (conversationId, afterEntryId, limit) =>
       Effect.gen(function*() {

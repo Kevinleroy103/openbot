@@ -63,6 +63,7 @@ import type {
   ConversationId,
   ConversationSummary,
   EntryId,
+  ExchangePage,
   HarnessApprovalRequest,
   HarnessKindName,
   HarnessRequest,
@@ -348,6 +349,18 @@ export class ConversationService extends Context.Service<ConversationService, {
     readonly beforeCursor: string
     readonly limit: number
   }) => Effect.Effect<TranscriptPage, NotFound | InvalidInput>
+  /**
+   * `conversations.exchange`: the messages two Bots sent each other, from both direct
+   * conversations: the newest `limit`, the `limit` before / after a cursor, or a page around `at`.
+   */
+  readonly exchange: (input: {
+    readonly botId: BotId
+    readonly peerBotId: BotId
+    readonly at?: Millis | undefined
+    readonly before?: string | undefined
+    readonly after?: string | undefined
+    readonly limit: number
+  }) => Effect.Effect<ExchangePage, NotFound | InvalidInput>
   /** `conversations.createGroup`: 2–6 bots; idempotent on `clientNonce` when given. */
   readonly createGroup: (input: {
     readonly title: string

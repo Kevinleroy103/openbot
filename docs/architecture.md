@@ -284,7 +284,7 @@ Start from the seed `rpc.ts`. **Cut for v1:** connectors.*, tasks.*, messages.fe
 | roster | `roster.subscribe {after?}` stream |
 | bots | `bots.create {name, label?, avatar?, harness, hostNodeId?, instructions?, clientNonce}`, `bots.update {botId, patch}`, `bots.delete`, `bots.get`, `bots.readContext` → `{instructions, memory: BotMemory}`, `bots.newSession {botId}` (drop the native session, same conversation), `bots.compact {botId}` |
 | sections | `sections.list/create/rename/delete/reorder`, `bots.setSection` (via patch) |
-| conversations | `conversations.subscribe {conversationId, after?}` stream, `conversations.history`, `conversations.createGroup {title, memberBotIds, leadBotId?}`, `conversations.setMembers`, `conversations.rename`, `conversations.markRead`, `conversations.setHidden` |
+| conversations | `conversations.subscribe {conversationId, after?}` stream, `conversations.history`, `conversations.exchange {botId, peerBotId, at?|before?|after?, limit}`, `conversations.createGroup {title, memberBotIds, leadBotId?}`, `conversations.setMembers`, `conversations.rename`, `conversations.markRead`, `conversations.setHidden` |
 | messages | `messages.send {conversationId, text, attachmentIds?, replyToId?, addressedBotIds?, clientNonce, mode?: auto\|queue\|steer}`, `messages.lookupSend`, `messages.react`, `turns.interrupt`, `attachments.upload` |
 | requests | `requests.respond {requestId, response}`, `requests.listPending` |
 | routines | `routines.list/create/update/setEnabled/delete/runNow`, `routines.runs {routineId}` |

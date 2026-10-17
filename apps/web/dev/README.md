@@ -18,7 +18,8 @@ directory's `bunfig.toml`, and only `apps/web` declares `bun-plugin-tailwind`.
 - Seed data like the Grok Bot reference renders: eight Bots (pinned tiles, Revenue / Engineering
   sections, Unassigned, one hidden), a Chief of Staff chat with a question card, an approval card
   and event lines, an expired approval, a failed turn (error tray), forms and secrets, a group chat,
-  routines, memory, skills, rules, nodes and harness statuses.
+  routines, memory, skills, rules, nodes and harness statuses, and a long Sales Outreach ↔ Research
+  Scout bot-to-bot exchange (`conversations.exchange` pages it in the exchange dialog).
 - `messages.send` starts a scripted turn: thinking, tool steps, then a streamed reply. Keywords pick
   other scripts:
   - `run`, `approve`, `deploy`, `delete`, `push`, `archive`: an approval card that blocks the turn

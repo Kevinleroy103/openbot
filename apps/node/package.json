@@ -1,0 +1,23 @@
+{
+  "name": "@openbot/node",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests",
+    "build": "bun build --compile src/main.ts --outfile dist/openbot-node"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@openbot/node-daemon": "workspace:*",
+    "@openbot/node-protocol": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@openbot/tsconfig": "workspace:*"
+  }
+}

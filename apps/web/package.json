@@ -1,0 +1,35 @@
+{
+  "name": "@openbot/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./index.html": "./index.html"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests"
+  },
+  "dependencies": {
+    "@effect/atom-react": "catalog:",
+    "@openbot/client": "workspace:*",
+    "@openbot/contracts": "workspace:*",
+    "@openbot/ui": "workspace:*",
+    "@xterm/addon-fit": "catalog:",
+    "@xterm/xterm": "catalog:",
+    "effect": "catalog:",
+    "lucide-react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@openbot/tsconfig": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "bun-plugin-tailwind": "catalog:",
+    "playwright-core": "catalog:",
+    "tailwindcss": "catalog:"
+  }
+}

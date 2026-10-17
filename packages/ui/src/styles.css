@@ -1,0 +1,9 @@
+/* @openbot/ui stylesheet entry: Tailwind v4 + OpenBot tokens + fonts + the ui component sources.
+ * apps/web imports this once (`@import "@openbot/ui/styles.css"`) and adds its own `@source`. */
+@import "tailwindcss";
+@import "@fontsource-variable/inter/opsz.css";
+@import "@fontsource-variable/geist-mono";
+@import "./tokens.css";
+
+/* Scan this package's components for class names (workspace packages live outside the app root). */
+@source "./";

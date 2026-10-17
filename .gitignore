@@ -1,0 +1,43 @@
+# dependencies
+node_modules
+
+# output
+out
+dist
+*.tgz
+.turbo
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+*.log
+
+# env
+.env
+.env.*.local
+.env.local
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# editors / OS
+.idea
+.DS_Store
+
+# local runtime data
+.openbot/
+*.sqlite
+*.sqlite-*
+
+# research material (cloned repos, SDK scratch, design references)
+vendor/
+
+# generated screenshots (bun apps/web/test/shoot*.ts, packages/ui/scripts/screenshot.ts)
+apps/web/test/screenshots/
+apps/web/test/e2e/screenshots/
+packages/ui/test/screenshots/

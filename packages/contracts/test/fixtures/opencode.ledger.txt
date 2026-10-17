@@ -1,0 +1,48 @@
+state       1  openbot:session.create
+mapped      7  openbot:send
+no-home     2  mcp.status.changed  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  integration.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  provider.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  model.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  vcs.branch.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  agent.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     2  command.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  skill.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  websearch.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  reference.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  mcp.resources.changed  -- host/catalog change; proposal: roster/host status, not the conversation
+no-home     1  plugin.updated  -- host/catalog change; proposal: roster/host status, not the conversation
+mapped      7  session.inbox.enqueued  -- delivery ack for the OpenBot-created user message
+mapped      7  session.execution.started
+no-home     1  session.instructions.updated  -- hashes of injected prompt fragments (debug only)
+mapped      7  session.inbox.delivered  -- delivery ack for the OpenBot-created user message
+state      12  session.step.started  -- assistantMessageID + agent/model of this step
+mapped      1  session.reasoning.started
+mapped      7  session.text.started
+mapped      1  session.reasoning.delta
+mapped      1  session.reasoning.ended
+mapped      7  session.text.delta
+mapped      7  session.text.ended
+no-home    12  session.step.streamed  -- stream-progress marker without payload of interest
+state      11  session.step.ended  -- per-step usage folded into Turn.usage
+state      11  session.usage.updated  -- session totals; per-turn usage comes from step.ended
+mapped      6  session.execution.succeeded
+mapped      5  session.tool.input.started
+state       5  session.tool.input.ended  -- raw streamed tool-call JSON; parsed input arrives on tool.called
+mapped      5  session.tool.called
+mapped      4  session.tool.success
+mapped      2  permission.asked
+state       2  openbot:permission.reply
+mapped      2  permission.replied
+state       1  shell.created  -- process lifecycle of the shell tool (live terminal view); exit code also on tool.success
+state       1  session.tool.progress  -- ephemeral metadata (e.g. shellID for a live PTY view)
+state       1  shell.exited  -- process lifecycle of the shell tool (live terminal view); exit code also on tool.success
+mapped      1  session.tool.failed
+mapped      1  form.created
+state       1  openbot:form.reply
+mapped      1  form.replied
+state       1  openbot:interrupt
+state       1  openbot:interrupt.ack
+mapped      1  session.step.failed  -- aborted step -> bot message aborted; execution.* terminal sets Turn.status
+mapped      1  session.execution.interrupted
+state       1  openbot:message.list

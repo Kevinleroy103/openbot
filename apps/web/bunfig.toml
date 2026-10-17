@@ -1,0 +1,3 @@
+# Lets `bun dev/mock-server.ts` (run from apps/web) bundle the HTML import with Tailwind.
+[serve.static]
+plugins = ["bun-plugin-tailwind"]

@@ -1,0 +1,21 @@
+/**
+ * Core ports (architecture §3): every seam between core and adapters/infrastructure, plus the
+ * domain service shapes (§4.3) that wave-1 packages depend on.
+ */
+export * from "./errors.ts"
+export * from "./Harness.ts"
+export * from "./Placement.ts"
+export * from "./Mcp.ts"
+export * from "./NodeDirectory.ts"
+export * from "./NodeFiles.ts"
+export * from "./Computer.ts"
+export * from "./Notifier.ts"
+export * from "./HostPaths.ts"
+export * from "./IdGen.ts"
+export * from "./DataDir.ts"
+export * from "./InternalAddress.ts"
+export * from "./ProcessLedger.ts"
+export * from "./repos.ts"
+export * from "./stores.ts"
+export * from "./Persistence.ts"
+export * from "./services.ts"

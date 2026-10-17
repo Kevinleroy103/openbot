@@ -1,0 +1,28 @@
+mapped      6  openbot:send
+mapped      6  system/init  -- session id -> Turn.harnessRef; tools/mcp_servers -> bot runtime status (not in conversation)
+elsewhere   9  system/status  -- BotActivity (requesting=thinking, compacting)
+state       9  stream_event:message_start
+mapped      1  stream_event:content_block_start:thinking
+no-home     1  system/thinking_tokens
+mapped      1  stream_event:content_block_delta:thinking_delta
+no-home     1  stream_event:content_block_delta:signature_delta  -- opaque thinking signature (harness-internal)
+mapped      1  assistant:thinking
+state      11  stream_event:content_block_stop  -- block/message boundaries + per-call usage
+mapped      7  stream_event:content_block_start:text
+mapped      7  stream_event:content_block_delta:text_delta
+mapped      7  assistant:text
+state       9  stream_event:message_delta  -- block/message boundaries + per-call usage
+state       9  stream_event:message_stop  -- block/message boundaries + per-call usage
+no-home     1  rate_limit_event  -- subscription rate-limit meter; proposal: host.status harness limits
+mapped      5  result/success
+mapped      3  stream_event:content_block_start:tool_use
+state       3  stream_event:content_block_delta:input_json_delta  -- partial tool input; final input taken from the assistant frame
+mapped      3  assistant:tool_use
+mapped      2  canUseTool:tool
+mapped      3  canUseTool.response
+mapped      3  user:tool_result
+mapped      1  canUseTool:AskUserQuestion
+state       1  openbot:interrupt
+state       1  openbot:interrupt.ack
+no-home     1  user:text[Request interrupted by user]  -- synthetic echo of the interrupt; represented by Turn.status=interrupted + notice
+mapped      1  result/error_during_execution

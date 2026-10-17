@@ -1,0 +1,5 @@
+[serve.static]
+plugins = ["bun-plugin-tailwind"]
+
+[test]
+pathIgnorePatterns = ["vendor/**", "**/node_modules/**"]

@@ -1,0 +1,14 @@
+{
+  "extends": "@openbot/tsconfig/dom.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx"
+  ],
+  "compilerOptions": {
+    "types": [
+      "bun"
+    ]
+  }
+}

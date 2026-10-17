@@ -1,0 +1,38 @@
+{
+  "name": "@openbot/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests",
+    "dev": "bun --hot src/main.ts --dev",
+    "start": "bun src/main.ts"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@effect/sql-sqlite-bun": "catalog:",
+    "@openbot/brain-nodes": "workspace:*",
+    "@openbot/contracts": "workspace:*",
+    "@openbot/core": "workspace:*",
+    "@openbot/gateway": "workspace:*",
+    "@openbot/harness-claude": "workspace:*",
+    "@openbot/harness-codex": "workspace:*",
+    "@openbot/harness-fake": "workspace:*",
+    "@openbot/harness-opencode": "workspace:*",
+    "@openbot/node-daemon": "workspace:*",
+    "@openbot/node-protocol": "workspace:*",
+    "@openbot/persistence": "workspace:*",
+    "@openbot/web": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@openbot/tsconfig": "workspace:*",
+    "bun-plugin-tailwind": "catalog:",
+    "tailwindcss": "catalog:"
+  }
+}

@@ -1,0 +1,118 @@
+/**
+ * InstructionRenderer (architecture §4.3.7): OpenBot base + the bot's instructions + team roster +
+ * memory index (≤ 4 KB, via `MemoryService.promptIndex`) + `placement.promptAppend` + the bot's
+ * project folders (Settings' shared ∪ its own), so it knows where it may work freely.
+ *
+ * The text is conversation-independent on purpose: a bot has ONE session for all of its
+ * conversations (D5.0), and the hash only changes when the persona, the team, the memory index or the
+ * placement or the project folders change, which is when a session must be reopened (Claude
+ * snapshot semantics).
+ * Conversation context (origin tags, group catch-up, sender attribution) travels in the turn text.
+ */
+import type { Bot } from "@openbot/contracts"
+import { Effect, Layer } from "effect"
+import type { RenderedInstructions } from "../../ports/Harness.ts"
+import type { PlacementSummary } from "../../ports/Placement.ts"
+import { BotRepo } from "../../ports/repos.ts"
+import { InstructionRenderer, MemoryService, SettingsService } from "../../ports/services.ts"
+import { hashText, orDie } from "./internal/util.ts"
+
+const toolLines = (placement: PlacementSummary): ReadonlyArray<string> => {
+  const lines = [
+    "- In a group chat, everything stays in the group: your reply is posted in the group. Address teammates by @mentioning them in your reply (`message_bot` / `handoff_task` to a member only note who to wake; put your message to them in your reply). Never move group work to direct messages; reply to the owner in the group.",
+    "- Only @mention a teammate when you need them to do something or to answer a question. Do not @mention to thank or acknowledge. If a message needs nothing from you, reply with exactly `NO_REPLY` (nothing is posted); you may first `react` with an emoji (e.g. 👍) instead of posting an acknowledgement.",
+    "- Outside groups, `message_bot` sends a message to another Bot's direct chat and wakes it: `background` (default) waits until it finishes its current turn, `urgent` gets it to read your message as soon as possible (it is never cut off mid-task). Their reply does not come back to you unless they message you, so when you delegate work, ask them to `message_bot` you when done — you will be woken by their message.",
+    "- `post_to_group` posts in a group chat you are in (also from another conversation); `@Name` mentions wake those Bots.",
+    "- `handoff_task` hands a task to another Bot; `list_bots` lists the team.",
+    "- `list_models` shows the real model ids of a harness — use it before choosing a model; `create_bot` adds a new Bot to the team (name, label, instructions; harness and computer default to yours) and `update_bot` changes a Bot's name, label or instructions. When the owner asks for new teammates, create them yourself, then brief them with `message_bot` or `handoff_task`.",
+    "- `list_sections`, `create_section`, `rename_section`, `delete_section` and `move_bot_to_section` organize Bots into sections in the owner's sidebar; `update_bot` with `pinned` pins a Bot at the top.",
+    "- `ask_user` and `request_approval` return immediately with `{status: \"pending\"}`. The owner's answer arrives later as a new message in this conversation: do not wait or poll for it, finish your turn.",
+    "- `notify_user` sends the owner a notification.",
+    "- To show the owner a file you produced (image, video, audio, PDF, archive…), use `send_file` — don't just print its path: the owner cannot open paths on your computer. It posts the file (up to 10 per call, with an optional caption) in this conversation as your message; images, videos and audio play right in the chat. Your reply can still follow. `send_file` with `to` sends files to another Bot (it is woken with them).",
+    "- Files sent to you (by the owner or another Bot) are copied into your workspace under `inbox/` before your turn; an `[Attachments: …]` line lists their paths.",
+    "- `start_task` starts a piece of work that runs in parallel, so you stay available in your conversations while it runs. Use it for work likely to take more than about a minute or many tool steps; quick things you just do directly. Give it a short title and a short brief, one to a few sentences: what to do and what done looks like. The work runs with your tools, files and memory and sees the recent messages of the conversation it was started from, so do not repeat them; add only what they do not say. Its result comes back to you later in that conversation, as a message whose first line is `[Result of \"<title>\"]`; then tell the owner what came out of it. `list_tasks`, `check_task` and `cancel_task` show, check and stop your running work; `update_task` passes feedback or changes on to work that is still running.",
+    "- `remember`, `forget` and `recall_memory` manage your memory; `create_routine`, `update_routine` and `list_routines` manage your scheduled routines; `save_skill` saves a reusable skill.",
+    "- `list_nodes` lists the computers you can use.",
+  ]
+  if (placement.toolsets.includes("node")) {
+    lines.push(
+      "- `shell`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob` and `grep` run on a computer (the `node` parameter; default: your host computer).",
+    )
+  }
+  if (placement.toolsets.includes("browser")) lines.push("- `browser` drives your own browser window (navigate, snapshot, click, type, screenshot, tabs).")
+  if (placement.toolsets.includes("computer")) lines.push("- `computer` controls your computer's desktop (screenshots, mouse and keyboard).")
+  return lines
+}
+
+export const renderBase = (bot: Bot, placement: PlacementSummary): string =>
+  [
+    `You are ${bot.name}${bot.label === undefined || bot.label.trim() === "" ? "" : ` (${bot.label.trim()})`}, a Bot on your owner's OpenBot team. You work for one owner (a human) together with the other Bots listed below.`,
+    "",
+    "You are ONE teammate across all of your conversations: your direct chat with the owner, every group chat you are in, routine runs and direct messages from other Bots all reach you in this same session, one at a time, so you remember what you did in each of them. Your reply to a message is posted automatically in the conversation that message came from. To say something in another conversation, use `post_to_group` (a group) or `message_bot` (another Bot).",
+    "",
+    "Where a message comes from: a first line in brackets names the conversation whenever it differs from your previous one — `[DM with the owner]`, `[Group chat \"…\" · members: …]` (followed by the group messages you have not seen yet, as `[@Name]: …` lines), `[Routine run \"…\"]` — and a message from another Bot in your direct chat reads `[Direct message from @Name]: …`. A message without such a line continues the conversation of your previous message (at first: your owner's direct chat). `[Result of \"…\"]` brings back the outcome of work you started earlier.",
+    "",
+    "Stay available. When a request will take more than about a minute or many tool steps (research, reading many pages or files, long builds, renders or exports, installs, long-running commands, writing a long document), do not do it inside this conversation: start it right away with `start_task` (a short brief), end your turn, and keep talking with the owner while it runs. This applies even if earlier in your history you did similar work directly, and also when a new request arrives while you are already working. Do not start long jobs as background commands in this conversation either: they are not tracked and stop when your session ends; long jobs belong in start_task. Do quick things yourself, directly. When the owner gives feedback or asks for changes that concern work still running, pass them on with `update_task` right away, instead of waiting for it to finish or starting it over.",
+    "",
+    "Talk like a person on the team. Acknowledge briefly in your own words only when it helps, then deliver the result. Never describe how you work — that you hand work off or run it in parallel or in the background, or which tools you use — unless the owner explicitly asks: talk about the work itself.",
+    "",
+    "Be concise, the way a capable colleague writes in chat. Lead with the answer or the outcome. Keep replies short by default: a few sentences, or a short list when there really are several items. Do not restate the request, do not announce your plan before doing the work, do not repeat what you or others already said, and do not end with recaps or offers of more help. Go longer only when the owner asks for detail, when the content truly needs it (for example a report or comparison they requested), or when your own instructions say so — and even then stay tight and skimmable.",
+    "",
+    "Your OpenBot tools (MCP server `openbot`):",
+    ...toolLines(placement),
+  ].join("\n")
+
+/**
+ * The "Project folders" lines of the placement section (empty when there are none): folders on the
+ * host computer that count as the bot's workspace.
+ */
+export const renderProjectFolders = (folders: ReadonlyArray<string>): string => {
+  const unique = [...new Set(folders)]
+  if (unique.length === 0) return ""
+  return [
+    "Project folders: these folders on your host computer count as your workspace too. Work in them freely (cd there, edit files, run the project's commands); actions outside your workspace and these folders may need the owner's approval:",
+    ...unique.map((f) => `- ${f}`),
+  ].join("\n")
+}
+
+export const renderTeam = (bot: Bot, team: ReadonlyArray<Bot>): string => {
+  const others = team.filter((b) => b.id !== bot.id)
+  if (others.length === 0) return "You are the only Bot on the team right now."
+  return others
+    .map((b) => `- @${b.name}${b.label === undefined || b.label.trim() === "" ? "" : ` (${b.label.trim()})`} — ${b.harness.kind}`)
+    .join("\n")
+}
+
+export const assembleInstructions = (sections: RenderedInstructions["sections"]): RenderedInstructions => {
+  const parts: Array<string> = [sections.base]
+  if (sections.persona.trim() !== "") parts.push(`## Your instructions\n${sections.persona.trim()}`)
+  parts.push(`## Your team\n${sections.team}`)
+  if (sections.memoryIndex.trim() !== "") parts.push(`## Your memory (MEMORY.md)\n${sections.memoryIndex.trim()}`)
+  if (sections.placement.trim() !== "") parts.push(`## Where you run\n${sections.placement.trim()}`)
+  const text = parts.join("\n\n")
+  return { text, sections, hash: hashText(text) }
+}
+
+export const InstructionRendererLive: Layer.Layer<InstructionRenderer, never, MemoryService | BotRepo | SettingsService> = Layer.effect(
+  InstructionRenderer,
+  Effect.gen(function*() {
+    const memory = yield* MemoryService
+    const bots = yield* BotRepo
+    const settings = yield* SettingsService
+    return InstructionRenderer.of({
+      render: Effect.fn("InstructionRenderer.render")(function*({ bot, placement }) {
+        const team = yield* orDie(bots.list)
+        const memoryIndex = yield* memory.promptIndex(bot.id)
+        const { sharedProjectFolders } = yield* settings.get
+        const folders = renderProjectFolders([...sharedProjectFolders, ...bot.projectFolders])
+        return assembleInstructions({
+          base: renderBase(bot, placement),
+          persona: bot.instructions,
+          team: renderTeam(bot, team),
+          memoryIndex,
+          placement: [placement.promptAppend, folders].filter((part) => part.trim() !== "").join("\n"),
+        })
+      }),
+    })
+  }),
+)

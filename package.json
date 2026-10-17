@@ -1,0 +1,63 @@
+{
+  "name": "openbot",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "effect": "4.0.4",
+      "@effect/platform-bun": "4.0.4",
+      "@effect/platform-browser": "4.0.4",
+      "@effect/platform-node-shared": "4.0.4",
+      "@effect/sql-sqlite-bun": "4.0.4",
+      "@effect/atom-react": "4.0.4",
+      "react": "19.3.1",
+      "react-dom": "19.3.1",
+      "@types/react": "19.3.0",
+      "@types/react-dom": "19.3.0",
+      "@modelcontextprotocol/sdk": "1.32.1",
+      "@anthropic-ai/claude-agent-sdk": "0.3.300",
+      "@anthropic-ai/sdk": "0.134.0",
+      "@openai/codex": "0.162.1",
+      "@opencode/client": "2.0.29",
+      "zod": "4.6.7",
+      "lucide-react": "1.57.0",
+      "@fontsource-variable/inter": "5.3.0",
+      "@fontsource-variable/geist-mono": "5.3.0",
+      "tailwindcss": "4.3.3",
+      "bun-plugin-tailwind": "0.1.2",
+      "marked": "18.1.1",
+      "dompurify": "3.4.17",
+      "@xterm/xterm": "6.0.0",
+      "@xterm/addon-fit": "0.11.0",
+      "@novnc/novnc": "1.7.0",
+      "playwright-core": "1.64.1"
+    }
+  },
+  "overrides": {
+    "effect": "4.0.4",
+    "@effect/platform-node-shared": "4.0.4"
+  },
+  "scripts": {
+    "dev": "bun run --filter @openbot/server dev",
+    "start": "bun run --filter @openbot/server start",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "check": "bun run typecheck && bun run lint && bun run test"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "oxfmt": "0.73.0",
+    "oxlint": "1.88.0",
+    "turbo": "2.11.8",
+    "typescript": "7.0.2"
+  },
+  "packageManager": "bun@1.4.2"
+}

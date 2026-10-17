@@ -1,0 +1,4 @@
+# `bun run dev` runs the brain from this directory: Bun's dev server (HTML import of
+# @openbot/web/index.html with HMR) reads its bundler plugins from here.
+[serve.static]
+plugins = ["bun-plugin-tailwind"]

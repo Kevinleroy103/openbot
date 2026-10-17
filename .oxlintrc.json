@@ -1,0 +1,12 @@
+{
+  "plugins": ["typescript", "react", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/rules-of-hooks": "error"
+  },
+  "ignorePatterns": ["vendor/**", "**/dist/**", "**/node_modules/**"]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@openbot/harness-opencode",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@openbot/contracts": "workspace:*",
+    "@openbot/core": "workspace:*",
+    "@opencode/client": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@openbot/tsconfig": "workspace:*"
+  }
+}

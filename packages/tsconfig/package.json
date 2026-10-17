@@ -1,0 +1,10 @@
+{
+  "name": "@openbot/tsconfig",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./base.json": "./base.json",
+    "./bun.json": "./bun.json",
+    "./dom.json": "./dom.json"
+  }
+}

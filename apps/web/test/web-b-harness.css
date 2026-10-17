@@ -1,0 +1,9 @@
+/* W2.3 screenshot harness stylesheet: the design system + a scan of the app sources and this folder. */
+@import "@openbot/ui/styles.css";
+@source "../src";
+@source "./";
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body { overflow: hidden; }
+}

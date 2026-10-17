@@ -1,0 +1,478 @@
+// The chat column (grok-bot-ui.md §3, §4.3–4.6): floating header pill (→ details pane), the
+// transcript (grouping, timestamps, NEW divider, event lines, cards, notices, steps), the activity
+// row, the error tray and the composer. The user bubble takes the bot's color when
+// settings.accent = "bot" (botTintStyle). On a phone the header becomes Grok iOS's floating glass
+// row (back · name pill · computer), a long-press on a bubble opens its action sheet, and the
+// transcript / composer respect the safe areas.
+import { ArrowDown, ChevronLeft, type LucideIcon, Monitor, X } from "lucide-react"
+import { Fragment, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import {
+  DEFAULT_SETTINGS,
+  emptyConversationState,
+  transcriptOf,
+  type Bot,
+  type BotId,
+  type ConversationId,
+  type Turn,
+} from "@openbot/contracts"
+import { commands, conversationAtom, discardOutboxItemAtom, loadOlderAtom, outboxAtom, retrySendAtom, sendMessageAtom, interruptTurnAtom } from "@openbot/client"
+import { ActivityRow, Avatar, AvatarStack, HeaderPill, Icon, IconButton, NewDivider, PillButton, Spinner, Timestamp, botTintStyle, cn } from "@openbot/ui"
+import { useRoster, valueOr } from "../app/data.ts"
+import { formatTimestamp } from "../app/format.ts"
+import { useLayoutMode } from "../app/layout.ts"
+import { useLongPressWithin } from "../app/longPress.ts"
+import { useComputerView, useDetailsPane, usePhoneNav, useSelection } from "../app/uiState.ts"
+import { CardView, WarnIcon } from "../cards/index.ts"
+import { activityPhrase } from "./activity.ts"
+import { type ChatStatus, chatStatuses, HANDLING } from "./busy.ts"
+import { Composer, type ComposerSubmit } from "./Composer.tsx"
+import { EventRow, ExchangeLine, NoticeRow, UnknownRow, type EventContext } from "./Events.tsx"
+import { ExchangeDialog } from "./ExchangeDialog.tsx"
+import { failedTurnOf, layoutTranscript, messageIndex, positionIn, requestForCard, unreadBoundaryOf, type MessageEntry, type PendingMessage, type Row } from "./grouping.ts"
+import { AddresseeChip, MessageBubble, PendingBubble } from "./Message.tsx"
+import { MessageSheet } from "./MessageSheet.tsx"
+import { StepsDisclosure } from "./Steps.tsx"
+
+const ACTIVE = new Set<Turn["status"]>(["queued", "running", "waiting"])
+
+/** Grok iOS's round "liquid glass" header button (back, computer). */
+function GlassButton({ icon, label, onClick, testId }: { readonly icon: LucideIcon; readonly label: string; readonly onClick: () => void; readonly testId?: string }): ReactNode {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      data-testid={testId}
+      className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-elevated/90 text-icon backdrop-blur-xl hairline border-line-secondary shadow-inline transition-colors duration-[120ms] hover:bg-elevated-hover active:bg-elevated-hover"
+    >
+      <Icon icon={icon} size="xl" />
+    </button>
+  )
+}
+
+
+export function ChatView({ conversationId }: { readonly conversationId: ConversationId }): ReactNode {
+  const roster = useRoster()
+  const result = useAtomValue(conversationAtom(conversationId))
+  const state = valueOr(result, emptyConversationState)
+  const outbox = useAtomValue(outboxAtom(conversationId))
+  const send = useAtomSet(sendMessageAtom)
+  const retry = useAtomSet(retrySendAtom)
+  const discard = useAtomSet(discardOutboxItemAtom)
+  const interrupt = useAtomSet(interruptTurnAtom)
+  const markRead = useAtomSet(commands["conversations.markRead"])
+  const loadOlder = useAtomSet(loadOlderAtom, { mode: "promiseExit" })
+  const details = useDetailsPane()
+  const { select, selectBot } = useSelection()
+  const mode = useLayoutMode()
+  const phone = mode === "phone"
+  const nav = usePhoneNav()
+  const computerView = useComputerView()
+  const settings = roster.state.settings ?? DEFAULT_SETTINGS
+  const summary = roster.state.conversations.get(conversationId)
+  const conversation = state.conversation
+
+  const botIds: ReadonlyArray<BotId> = conversation
+    ? conversation.kind === "group"
+      ? conversation.memberBotIds
+      : [conversation.botId]
+    : ((summary?.botIds ?? []) as ReadonlyArray<BotId>)
+  const members = botIds.map((id) => roster.botById(id)).filter((b): b is Bot => b !== undefined)
+  const isGroup = (conversation?.kind ?? summary?.kind) === "group"
+  const primary = members[0]
+  const title = isGroup ? (conversation?.title || summary?.title || members.map((m) => m.name).join(", ")) : (primary?.name ?? summary?.title ?? "")
+  const tint = settings.accent === "bot" && !isGroup && primary ? botTintStyle(primary.avatar.color) : {}
+  // Phone / tablet header: the monitor button when the Bot's computer has a screen or a terminal.
+  const host = !isGroup && primary ? roster.state.nodes.get(primary.hostNodeId) : undefined
+  const hasComputer = host !== undefined && host.capabilities.some((c) => /^(browser|pty)@/.test(c))
+
+  // ----------------------------------------------------------------------------- unread boundary
+  // Captured once per opened conversation so the NEW divider stays put after we mark it read.
+  // (Derived state set during render, guarded by the conversation id: React's documented pattern.)
+  // Only from a synchronized replica: a cached one (remount) renders at once with its old
+  // `conversation` while it catches up, and its boundary may be long gone. Marking read waits for the
+  // capture so the divider is never lost.
+  const [captured, setCaptured] = useState<{ readonly id: ConversationId; readonly at: number | undefined } | undefined>(undefined)
+  if (captured?.id !== conversationId) {
+    const at = unreadBoundaryOf(state)
+    if (at !== null) setCaptured({ id: conversationId, at })
+  }
+  const boundary = captured?.id === conversationId ? captured.at : undefined
+  const capturedHere = captured?.id === conversationId
+  const unread = summary?.unreadCount ?? conversation?.unreadCount ?? 0
+  useEffect(() => {
+    if (capturedHere && unread > 0 && document.visibilityState === "visible") {
+      const t = setTimeout(() => markRead({ conversationId }), 400)
+      return () => clearTimeout(t)
+    }
+    return undefined
+  }, [capturedHere, unread, conversationId, markRead])
+
+  // ----------------------------------------------------------------------------------- rows
+  const stateEntries = state.entries
+  const stateTurns = state.turns
+  const entries = useMemo(() => transcriptOf({ entries: stateEntries }), [stateEntries])
+  const nonces = useMemo(() => new Set(entries.flatMap((e) => (e.kind === "message" && e.clientNonce ? [e.clientNonce] : []))), [entries])
+  const pending: ReadonlyArray<PendingMessage> = useMemo(
+    () =>
+      outbox
+        .filter((o) => !nonces.has(o.clientNonce))
+        .map((o) => ({ clientNonce: o.clientNonce, text: o.input.text, createdAt: o.createdAt, status: o.status, error: o.error })),
+    [outbox, nonces],
+  )
+  const turns = useMemo(() => [...stateTurns.values()], [stateTurns])
+  const showSteps = settings.showSteps
+  const rows = useMemo(
+    () => layoutTranscript({ entries, turns: stateTurns, pending, unreadBoundaryAt: boundary, showSteps, direct: !isGroup }),
+    [entries, stateTurns, pending, boundary, showSteps, isGroup],
+  )
+  const byId = useMemo(() => messageIndex(entries), [entries])
+
+  // Touch: long-press a bubble → its action sheet (the hover toolbar's React / Reply / Copy).
+  const [sheetEntry, setSheetEntry] = useState<MessageEntry | undefined>(undefined)
+  const longPress = useLongPressWithin(
+    (target) => {
+      const id = target.closest(".ob-msg [data-side]")?.closest<HTMLElement>(".ob-msg[data-entry]")?.dataset.entry
+      const entry = id ? byId.get(id as MessageEntry["id"]) : undefined
+      return entry && !entry.streaming ? entry : undefined
+    },
+    (entry) => setSheetEntry(entry),
+  )
+
+  // ------------------------------------------------------------------------------- activity
+  const activeTurns = turns.filter((t) => ACTIVE.has(t.status)).sort((a, b) => a.startedAt - b.startedAt)
+  // ONE status line per bot, in the activity row's look (busy.ts): its turn here, else "Busy in …"
+  // (one mind per bot, D5.0) or "Handling…" (background work started here, D5.7).
+  const statuses = chatStatuses({
+    conversationId,
+    botIds,
+    activities: roster.state.activities,
+    turns: activeTurns,
+    conversations: roster.state.conversations,
+    tasks: roster.state.tasks,
+  })
+  const workingBots: ReadonlyArray<string> = statuses.flatMap((st) => (st.kind === "turn" ? [st.botId] : []))
+  const streamingBots = new Set(entries.filter((e) => e.kind === "message" && e.streaming && e.author.kind === "bot").map((e) => (e.author as { botId: string }).botId))
+  const lastRow = rows[rows.length - 1]
+  const lastGroupBot = lastRow?.type === "group" && lastRow.side === "bot" ? lastRow.botId : undefined
+
+  // ----------------------------------------------------------------------------- error tray
+  const failed = failedTurnOf(turns)
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set())
+  const showTray = failed !== undefined && !dismissed.has(failed.id) && activeTurns.length === 0
+  const lastUserText = useMemo(() => [...entries].reverse().find((e): e is MessageEntry => e.kind === "message" && e.role === "user")?.text, [entries])
+
+  // --------------------------------------------------------------------------------- scroll
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const stick = useRef(true)
+  const [atBottom, setAtBottom] = useState(true)
+  const loadingOlder = useRef(false)
+  const prevHeight = useRef<number | null>(null)
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    stick.current = bottom
+    setAtBottom(bottom)
+    if (el.scrollTop < 160 && state.hasMoreBefore && !loadingOlder.current) {
+      loadingOlder.current = true
+      prevHeight.current = el.scrollHeight
+      void loadOlder(conversationId).finally(() => {
+        loadingOlder.current = false
+      })
+    }
+  }, [state.hasMoreBefore, loadOlder, conversationId])
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (prevHeight.current !== null && !stick.current) {
+      el.scrollTop += el.scrollHeight - prevHeight.current
+      prevHeight.current = null
+      return
+    }
+    prevHeight.current = null
+    if (stick.current) el.scrollTop = el.scrollHeight
+  }, [rows, statuses.length, showTray])
+  // (ChatView is keyed by conversation id in the shell, so per-conversation state starts fresh.)
+  const scrollToBottom = () => {
+    const el = scrollRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
+  }
+
+  // ---------------------------------------------------------------------------------- send
+  const [replyTo, setReplyTo] = useState<MessageEntry | undefined>()
+  const onSubmit = (d: ComposerSubmit) => {
+    stick.current = true
+    send({
+      conversationId,
+      text: d.text,
+      ...(d.attachmentIds.length > 0 ? { attachmentIds: d.attachmentIds } : {}),
+      ...(d.replyToId ? { replyToId: d.replyToId } : {}),
+      ...(isGroup && d.addressedBotIds.length > 0 ? { addressedBotIds: d.addressedBotIds } : {}),
+      ...(isGroup && d.addressEveryone ? { addressEveryone: true } : {}),
+    })
+    setReplyTo(undefined)
+  }
+  const [exchange, setExchange] = useState<{ readonly a: string; readonly b: string } | undefined>(undefined)
+  const authorName = (e: MessageEntry) => (e.author.kind === "bot" ? (roster.botById(e.author.botId)?.name ?? "Bot") : "you")
+
+  const ctx: EventContext = {
+    botById: roster.botById,
+    openConversation: select,
+    openBot: (id) => selectBot(id as BotId),
+    openRoutines: () => details.show("details"),
+    openExchange: (a, b) => setExchange({ a, b }),
+  }
+  const exchangeBots = exchange ? ([roster.botById(exchange.a), roster.botById(exchange.b)] as const) : undefined
+
+  const session = primary ? conversation?.sessions?.find((s) => s.botId === primary.id && s.active) : undefined
+  const contextUsage = !isGroup && primary && session?.contextUsage ? { botId: primary.id, botName: primary.name, usage: session.contextUsage } : undefined
+
+  const renderRow = (row: Row, index: number): ReactNode => {
+    switch (row.type) {
+      case "timestamp":
+        return <Timestamp key={row.key}>{formatTimestamp(row.at)}</Timestamp>
+      case "new-divider":
+        return <NewDivider key={row.key} className="my-1" />
+      case "event":
+        return <EventRow key={row.key} entry={row.entry} ctx={ctx} />
+      case "exchange":
+        return <ExchangeLine key={row.key} ctx={ctx} peerBotId={row.peerBotId} ownerBotId={row.ownerBotId} count={row.entries.length} />
+      case "notice":
+        return <NoticeRow key={row.key} entry={row.entry} />
+      case "unknown":
+        return <UnknownRow key={row.key} entry={row.entry} />
+      case "steps":
+        return (
+          <div key={row.key} className={isGroup ? "ps-8" : undefined}>
+            <StepsDisclosure steps={row.steps} decisions={row.decisions} failed={row.failed} />
+          </div>
+        )
+      case "card": {
+        const author = row.entry.author.kind === "bot" ? roster.botById(row.entry.author.botId) : undefined
+        return (
+          <div key={row.key} className="flex flex-col items-start py-1" data-entry={row.entry.id}>
+            {isGroup && author && <span className="mb-0.5 ps-3 text-xs text-fg-secondary">{author.name}</span>}
+            <CardView card={row.entry.card} state={row.entry.state} request={requestForCard(row.entry, state.requests)} bot={author ?? primary} />
+          </div>
+        )
+      }
+      case "group": {
+        const continued = index === rows.length - 1 && row.side === "bot" && row.botId !== undefined && workingBots.includes(row.botId)
+        const speaker = row.side === "bot" ? roster.botById(row.botId) : undefined
+        const bubbles = row.items.map((it, i) => {
+          const position = positionIn(i, row.items.length, continued)
+          if (it.kind === "pending") {
+            return (
+              <PendingBubble
+                key={it.pending.clientNonce}
+                pending={it.pending}
+                position={position}
+                onResend={() => retry({ conversationId, clientNonce: it.pending.clientNonce })}
+                onDelete={() => discard({ conversationId, clientNonce: it.pending.clientNonce })}
+              />
+            )
+          }
+          const e = it.entry
+          return <MessageBubble key={e.id} entry={e} position={position} conversationId={conversationId} quoted={e.replyToId ? byId.get(e.replyToId) : undefined} onReply={setReplyTo} />
+        })
+        // Groups attribute every bot; a DM attributes messages from OTHER bots (message_bot, D5.2).
+        const foreign = !isGroup && row.side === "bot" && row.botId !== undefined && primary !== undefined && row.botId !== primary.id
+        if ((isGroup || foreign) && row.side === "bot") {
+          return (
+            <div key={row.key} className="flex flex-col py-1">
+              <span className="mb-0.5 ps-[44px] text-xs text-fg-secondary">{speaker?.name ?? "Bot"}</span>
+              <div className="flex items-end gap-2">
+                <Avatar shape={speaker?.avatar.shape} color={speaker?.avatar.color} size={24} className="mb-1.5" />
+                <div className="flex min-w-0 flex-1 flex-col gap-1" style={speaker && settings.accent === "bot" ? botTintStyle(speaker.avatar.color) : undefined}>
+                  {bubbles}
+                </div>
+              </div>
+            </div>
+          )
+        }
+        return (
+          <div key={row.key} className={cn("flex flex-col gap-1 py-1", row.side === "user" ? "items-end" : "items-start")}>
+            {row.addressee !== undefined && <AddresseeChip bot={roster.botById(row.addressee)} onOpen={() => selectBot(row.addressee as BotId)} />}
+            {bubbles}
+          </div>
+        )
+      }
+    }
+  }
+
+  /** One bot's status line: the activity row's look (avatar + shimmering phrase), one per bot. */
+  const renderStatus = (status: ChatStatus): ReactNode => {
+    const bot = roster.botById(status.botId)
+    const named = (phrase: string) => (isGroup && bot ? `${phrase} · ${bot.name}` : phrase)
+    const common = {
+      className: cn(lastGroupBot === status.botId ? "mt-1" : "mt-2", isGroup && "ps-0"),
+      avatar: <Avatar shape={bot?.avatar.shape} color={bot?.avatar.color} size={28} working expression="inspecting" eyeColor="var(--ob-chrome)" />,
+      "data-bot": status.botId,
+      "data-status": status.kind,
+    }
+    switch (status.kind) {
+      case "turn": {
+        const turn = activeTurns.find((t) => t.botId === status.botId)
+        const phrase = activityPhrase({ activity: roster.state.activities.get(status.botId), turn, streaming: streamingBots.has(status.botId) })
+        return <ActivityRow key={`status:${status.botId}`} {...common} label={named(phrase)} data-testid="activity" />
+      }
+      case "elsewhere": {
+        const queued = status.queued ? " · your message is queued" : ""
+        return (
+          <ActivityRow
+            key={`status:${status.botId}`}
+            {...common}
+            label={isGroup && bot ? `${bot.name} is busy in ${status.where}${queued}` : `Busy in ${status.where}${queued}`}
+            onClick={() => select(status.conversationId)}
+            title="Open that conversation"
+            data-testid="busy-elsewhere"
+          />
+        )
+      }
+      case "handling":
+        return (
+          <ActivityRow
+            key={`status:${status.botId}`}
+            {...common}
+            label={named(HANDLING)}
+            onClick={() => details.show("tasks", status.botId)}
+            title={bot ? `What ${bot.name} is working on` : "What's in progress"}
+            data-testid="handling"
+          />
+        )
+    }
+  }
+
+  const loading = result._tag === "Initial" || (!conversation && result._tag !== "Failure")
+  const notFound = result._tag === "Failure"
+
+  return (
+    <main className="relative flex h-full min-w-0 flex-col bg-chrome" style={tint} aria-label={title || "Chat"} data-conversation={conversationId}>
+      {mode === "desktop" ? (
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center px-16 pt-2.5">
+        {title && (
+          <HeaderPill
+            className="pointer-events-auto"
+            aria-label="View conversation details"
+            aria-expanded={details.open}
+            onClick={() => details.toggle()}
+            avatar={
+              isGroup ? (
+                <AvatarStack size={24} outlineColor="var(--ob-elevated)" avatars={members.map((m) => ({ key: m.id, shape: m.avatar.shape, color: m.avatar.color }))} />
+              ) : (
+                <Avatar shape={primary?.avatar.shape} color={primary?.avatar.color} size={24} working={workingBots.length > 0} />
+              )
+            }
+          >
+            {title}
+          </HeaderPill>
+        )}
+      </div>
+      ) : (
+        <div className="ob-chat-header pointer-events-none absolute inset-x-0 top-0 z-10 pt-[env(safe-area-inset-top)]" data-testid="chat-header">
+          <div className="flex items-center gap-2 px-3 pt-2">
+            <div className="flex w-11 shrink-0">{phone && <GlassButton icon={ChevronLeft} label="Back" onClick={nav.back} testId="chat-back" />}</div>
+            <div className="flex min-w-0 flex-1 justify-center">
+              {title && (
+                <HeaderPill
+                  className="pointer-events-auto h-11! bg-elevated/90! backdrop-blur-xl"
+                  aria-label="View conversation details"
+                  aria-expanded={details.open}
+                  onClick={() => details.toggle()}
+                  avatar={
+                    isGroup ? (
+                      <AvatarStack size={28} outlineColor="var(--ob-elevated)" avatars={members.map((m) => ({ key: m.id, shape: m.avatar.shape, color: m.avatar.color }))} />
+                    ) : (
+                      <Avatar shape={primary?.avatar.shape} color={primary?.avatar.color} size={28} working={workingBots.length > 0} />
+                    )
+                  }
+                >
+                  {title}
+                </HeaderPill>
+              )}
+            </div>
+            <div className="flex w-11 shrink-0 justify-end">
+              {hasComputer && primary && <GlassButton icon={Monitor} label={`Open ${primary.name}'s computer`} onClick={() => computerView.open(primary.id)} testId="chat-computer" />}
+            </div>
+          </div>
+        </div>
+      )}
+      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin" data-testid="transcript" {...longPress}>
+        <div
+          className={cn(
+            "mx-auto flex w-full max-w-[992px] flex-col pb-4",
+            phone ? "px-3 pt-[calc(64px+env(safe-area-inset-top))]" : mode === "tablet" ? "px-4 pt-[calc(72px+env(safe-area-inset-top))]" : "px-4 pt-[72px]",
+          )}
+        >
+          {state.hasMoreBefore && (
+            <div className="flex justify-center py-2 text-fg-tertiary">
+              <Spinner size={14} />
+            </div>
+          )}
+          {loading && (
+            <div className="flex justify-center py-16 text-fg-tertiary">
+              <Spinner size={18} label="Loading conversation" />
+            </div>
+          )}
+          {notFound && <div className="py-16 text-center text-sm text-fg-secondary">This conversation is no longer available.</div>}
+          {rows.map((row, i) => (
+            <Fragment key={row.key}>{renderRow(row, i)}</Fragment>
+          ))}
+          {statuses.map((status) => renderStatus(status))}
+        </div>
+      </div>
+      {!atBottom && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[84px] z-10 flex justify-center">
+          <IconButton icon={ArrowDown} label="Scroll to bottom" variant="elevated" className="pointer-events-auto" onClick={scrollToBottom} />
+        </div>
+      )}
+      <div className={cn("mx-auto flex w-full max-w-[992px] flex-col gap-2", mode === "desktop" ? "px-4 pb-4" : "ob-composer-dock px-4 pb-[max(16px,env(safe-area-inset-bottom))]")}>
+        {showTray && failed && (
+          <div role="alert" className="ob-tray flex animate-rise-in items-start gap-2.5 rounded-4xl px-3 py-2.5" data-testid="error-tray">
+            <WarnIcon className="mt-0.5" />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-xs font-medium text-fg">{members.length === 1 ? "Bot failed to respond" : `${roster.botById(failed.botId)?.name ?? "A Bot"} failed to respond`}</span>
+              <span className="text-sm text-fg-secondary">{failed.failure?.message ?? "Something went wrong while replying."}</span>
+              {lastUserText && (
+                <PillButton variant="primary" size="sm" className="mt-1.5 w-fit" onClick={() => onSubmit({ text: lastUserText, attachmentIds: [], addressedBotIds: [], addressEveryone: false })}>
+                  Retry
+                </PillButton>
+              )}
+            </div>
+            <IconButton icon={X} label="Dismiss" size={24} onClick={() => setDismissed((s) => new Set(s).add(failed.id))} />
+          </div>
+        )}
+        <Composer
+          draftKey={conversationId}
+          placeholder={isGroup ? `Message ${title || "group"}` : `Message ${primary?.name ?? "Bot"}`}
+          mentionable={isGroup ? members : roster.bots.filter((b) => !botIds.includes(b.id) && !b.hidden)}
+          members={isGroup ? members : []}
+          allowEveryone={isGroup}
+          working={activeTurns.length > 0}
+          onStop={() => interrupt({ conversationId })}
+          onSubmit={onSubmit}
+          replyTo={replyTo}
+          replyAuthor={replyTo ? authorName(replyTo) : undefined}
+          onCancelReply={() => setReplyTo(undefined)}
+          context={contextUsage}
+          autoFocus
+        />
+      </div>
+      {sheetEntry && (
+        <MessageSheet
+          entry={sheetEntry}
+          conversationId={conversationId}
+          authorName={authorName(sheetEntry) === "you" ? "You" : authorName(sheetEntry)}
+          onReply={setReplyTo}
+          onClose={() => setSheetEntry(undefined)}
+        />
+      )}
+      {exchangeBots?.[0] && exchangeBots[1] && (
+        <ExchangeDialog a={exchangeBots[0]} b={exchangeBots[1]} onClose={() => setExchange(undefined)} onOpenConversation={select} />
+      )}
+    </main>
+  )
+}

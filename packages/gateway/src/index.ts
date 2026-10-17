@@ -1,0 +1,27 @@
+/**
+ * @openbot/gateway — the OpenBot MCP gateway (architecture §4.6, D3).
+ *
+ * - `McpGateway` / `McpGatewayLive`: HTTP handler for `/mcp/:botId` on the internal listener.
+ * - `McpBindingIssuerLive`: per-run bearer tokens (hashed in `McpTokenRepo`) → `McpBinding`.
+ * - Toolkits: `BotToolkit`, `NodeToolkit`, `BrowserToolkit` and the result/param helpers they use.
+ */
+export * from "./McpGateway.ts"
+export * from "./McpBindingIssuer.ts"
+export * from "./results.ts"
+export * from "./tool.ts"
+export * as Params from "./params.ts"
+export { findUnsafeSchemaKeywords } from "./params.ts"
+export { BotToolkit, type BotToolkitServices, describeNode } from "./toolkits/bot.ts"
+export { describeTask, formatSpan, notInTask, TaskToolkit, type TaskToolkitServices } from "./toolkits/tasks.ts"
+export {
+  allowedNodeIds,
+  approve,
+  fitToResult,
+  NodeToolkit,
+  type NodeTarget,
+  type NodeToolkitServices,
+  resolveNodePath,
+  resolveTarget,
+  spillToNode,
+} from "./toolkits/node.ts"
+export { BrowserToolkit, type BrowserToolkitServices, toBrowserAction } from "./toolkits/browser.ts"

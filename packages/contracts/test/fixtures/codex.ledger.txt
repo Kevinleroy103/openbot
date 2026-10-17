@@ -1,0 +1,37 @@
+state       1  >> initialize
+state       9  << response  -- initialize/thread/start/turn/start results (native ids)
+state       1  >> initialized
+state       1  >> thread/start
+no-home     1  remoteControl/status/changed  -- Codex remote-control feature; leaks host name
+mapped      6  openbot:send
+state       6  >> turn/start
+state       1  thread/started  -- native thread id -> bot session binding
+no-home     2  mcpServer/startupStatus/updated  -- per-bot tool health; proposal: Bot runtime status / connectors.list status
+state      20  thread/status/changed  -- authoritative 'needs approval' flag; mirrored into Turn.status + BotActivity
+mapped      6  turn/started
+mapped      6  item/started:userMessage  -- delivery ack for the OpenBot-created user message
+state       6  item/completed:userMessage  -- delivery ack for the OpenBot-created user message
+mapped      1  item/started:reasoning
+state       1  item/reasoning/summaryPartAdded
+mapped      3  item/reasoning/summaryTextDelta
+mapped      1  item/completed:reasoning
+mapped      6  item/started:agentMessage
+mapped      8  item/agentMessage/delta
+mapped      5  item/completed:agentMessage
+state      10  thread/tokenUsage/updated  -- folded into Turn.usage at turn end
+no-home    10  account/rateLimits/updated  -- account plan limits; proposal: host.status harness limits
+mapped      6  turn/completed
+mapped      2  item/started:commandExecution
+mapped      2  << request item/commandExecution/requestApproval
+mapped      2  >> response(command)
+state       4  serverRequest/resolved  -- confirms our answer; cancels a still-pending card on interrupt/turn end
+mapped      2  item/completed:commandExecution
+mapped      2  item/started:mcpToolCall
+mapped      2  item/completed:mcpToolCall
+mapped      1  << request mcpServer/elicitation/request
+mapped      1  >> response(elicitation)
+state       1  openbot:interrupt
+state       1  >> turn/interrupt
+no-home     1  thread/settings/updated  -- thread settings echo (model/collaboration mode); proposal: bot runtime status
+mapped      1  << request item/tool/requestUserInput
+mapped      1  >> response(userInput)

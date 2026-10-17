@@ -6,21 +6,25 @@
  *   GET  /node              signed control socket          (NodeGateway.control)
  *   POST /node/pair         pairing                        (NodeGateway.pair)
  *   GET  /node/stream/:id   one-time data streams          (NodeGateway.stream)
- *   GET  /ws/computer/:botId?mode=view|control             (ComputerService.viewer, after `authorize`)
+ *   GET  /node/install.sh, /node/download/:target          (NodeInstall, when the brain can build the node)
+ *   GET  /ws/computer/:botId?mode=view|control[&passive=1] (ComputerService.viewer, after `authorize`)
  *   GET  /ws/terminal/:botId?cols=&rows=                   (ComputerService.terminal, after `authorize`)
  * INTERNAL listener (loopback):
  *   GET  /relay/:nodeId/:kind                              (RelayService.handle)
  *
  * Every WebSocket route goes through `HttpServerRequest.upgrade`, so the server must use
- * `BunHttpServer` (not `toWebHandler`), ideally with `websocket: { idleTimeout: 0 }` so quiet data
- * streams are not dropped (RPC pings keep control sockets alive anyway).
+ * `BunHttpServer` (not `toWebHandler`), with WebSocket pings on (`sendPings`) or `idleTimeout: 0`,
+ * so quiet data streams are not dropped (RPC pings keep control sockets alive anyway).
  */
+import type { DataDir } from "@openbot/core"
 import { Routes } from "@openbot/node-protocol"
 import { Effect, Layer } from "effect"
 import type { Scope } from "effect"
 import { HttpRouter, HttpServerRequest, type HttpServerResponse } from "effect/http"
 import { ComputerService } from "./Computer.ts"
+import type { BrainNodesConfig } from "./config.ts"
 import { NodeGateway } from "./NodeGateway.ts"
+import { addInstallRoutes } from "./NodeInstall.ts"
 import { RelayService } from "./Relay.ts"
 
 /**
@@ -33,7 +37,7 @@ const routes = <E, R>(
   Layer.effectDiscard(Effect.flatMap(HttpRouter.HttpRouter, add))
 
 /** `/node`, `/node/pair`, `/node/stream/:id` (public listener). */
-export const NodePublicRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter | NodeGateway> = routes(
+export const NodePublicRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter | NodeGateway | BrainNodesConfig | DataDir> = routes(
   Effect.fnUntraced(function*(router) {
     const gateway = yield* NodeGateway
     yield* router.add("GET", Routes.control, gateway.control)
@@ -43,6 +47,7 @@ export const NodePublicRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter |
       Routes.streamPattern as `/${string}`,
       Effect.flatMap(HttpRouter.params, (params) => gateway.stream(params["id"] ?? "")),
     )
+    yield* addInstallRoutes(router)
   }),
 )
 
@@ -110,7 +115,11 @@ export const ViewerRoutes = <R>(
         guard(
           (request) => (queryOf(request).get("mode") === "control" ? "computer-control" : "computer-view"),
           (request, botId) =>
-            computer.viewer({ botId, mode: queryOf(request).get("mode") === "control" ? "control" : "view" }),
+            computer.viewer({
+              botId,
+              mode: queryOf(request).get("mode") === "control" ? "control" : "view",
+              passive: queryOf(request).get("passive") === "1",
+            }),
         ),
       )
       yield* router.add(

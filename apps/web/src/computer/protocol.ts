@@ -187,8 +187,9 @@ const wsOrigin = (): string => {
 }
 
 /** `/ws/computer/:botId?mode=…` on the page's origin (`viewPath` from `computer.status` wins when present). */
-export const computerSocketUrl = (botId: string, mode: "view" | "control", viewPath?: string): string =>
-  `${wsOrigin()}${viewPath ?? `/ws/computer/${encodeURIComponent(botId)}`}?mode=${mode}`
+/** `passive`: a preview (the side thumbnail), which does not keep the screen awake. */
+export const computerSocketUrl = (botId: string, mode: "view" | "control", viewPath?: string, passive = false): string =>
+  `${wsOrigin()}${viewPath ?? `/ws/computer/${encodeURIComponent(botId)}`}?mode=${mode}${passive ? "&passive=1" : ""}`
 
 export const terminalSocketUrl = (botId: string, cols: number, rows: number): string =>
   `${wsOrigin()}/ws/terminal/${encodeURIComponent(botId)}?cols=${cols}&rows=${rows}`

@@ -21,7 +21,7 @@
  * Shutdown: call `NodeRegistry.closeAll()` before stopping the public listener (Bun waits for open
  * WebSockets); `NodeGatewayLive` also does it when its scope closes.
  */
-import type { BotRepo, DataDir, IdGen, InternalAddress, NodeRepo } from "@openbot/core"
+import type { BotRepo, DataDir, IdGen, InternalAddress, NodeRepo, RequestRepo, TaskRepo, TurnRepo } from "@openbot/core"
 import { Layer } from "effect"
 import { ComputerServiceLive } from "./Computer.ts"
 import type { BrainIdentity, BrainNodesConfig } from "./config.ts"
@@ -38,6 +38,7 @@ export * from "./HostPaths.ts"
 export * from "./http.ts"
 export * from "./LocalNode.ts"
 export * from "./NodeGateway.ts"
+export * from "./NodeInstall.ts"
 export * from "./NodeRegistry.ts"
 export * from "./Placement.ts"
 export * from "./Relay.ts"
@@ -60,6 +61,9 @@ export const BrainNodesLive = Layer.mergeAll(PlacementServiceLive, ComputerServi
 export type BrainNodesRequirements =
   | NodeRepo
   | BotRepo
+  | TurnRepo
+  | TaskRepo
+  | RequestRepo
   | IdGen
   | DataDir
   | InternalAddress

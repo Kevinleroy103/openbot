@@ -84,6 +84,9 @@ describe("parseCommand", () => {
     expect(run([], env).maxFileBytes).toBeUndefined()
     expect(run([], { ...env, OPENBOT_MAX_FILE_MB: "50" }).maxFileBytes).toBe(50_000_000)
     expect(run(["--max-file-mb", "1024"], { ...env, OPENBOT_MAX_FILE_MB: "50" }).maxFileBytes).toBe(1_024_000_000)
+    expect(run(["--desktop-idle", "0"], { ...env, OPENBOT_DESKTOP_IDLE_MINUTES: "5" }).desktopIdleMs).toBe(0)
+    expect(run([], { ...env, OPENBOT_DESKTOP_IDLE_MINUTES: "2.5" }).desktopIdleMs).toBe(150_000)
+    expect(run([], env).desktopIdleMs).toBeUndefined()
     // skills.sh base URL (env only; tests point it at a fake)
     expect(run([], env).skillsShUrl).toBeUndefined()
     expect(run([], { OPENBOT_SKILLS_SH_URL: "http://127.0.0.1:4000/" }).skillsShUrl).toBe("http://127.0.0.1:4000")
@@ -101,6 +104,8 @@ describe("parseCommand", () => {
     expect(() => parseCommand(["--public-origin", "ftp://x"], {}, system)).toThrow("http(s)")
     expect(() => parseCommand(["--max-file-mb", "0"], {}, system)).toThrow("not a size in MB")
     expect(() => parseCommand(["--max-file-mb", "lots"], {}, system)).toThrow("not a size in MB")
+    expect(() => parseCommand(["--desktop-idle", "-1"], {}, system)).toThrow("not a number of minutes")
+    expect(() => parseCommand(["--desktop-idle", "soon"], {}, system)).toThrow("not a number of minutes")
   })
 })
 

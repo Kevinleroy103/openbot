@@ -13,6 +13,7 @@
  * | `--harness <list>` (repeatable, comma separated) | `OPENBOT_HARNESSES` | `fake,claude,codex,opencode` |
  * | `--claude-path <path>` | `OPENBOT_CLAUDE_PATH` | the Agent SDK's bundled CLI (version-matched) |
  * | `--max-file-mb <n>` | `OPENBOT_MAX_FILE_MB` | `200` (largest file a bot may send with `send_file`) |
+ * | `--desktop-idle <minutes>` | `OPENBOT_DESKTOP_IDLE_MINUTES` | `10` (an unused bot desktop goes to sleep; `0` = never) |
  * | (env only) | `OPENBOT_SKILLS_SH_URL` | `https://skills.sh` (the skills catalog; tests point it at a fake) |
  */
 import { KnownHarnessKinds } from "@openbot/contracts"
@@ -49,6 +50,8 @@ export interface ServerConfigShape {
   readonly maxFileBytes?: number | undefined
   /** skills.sh base URL (D5.5 import); absent = https://skills.sh. */
   readonly skillsShUrl?: string | undefined
+  /** An unused bot desktop sleeps after this long, ms (0 = never); absent = 10 min. */
+  readonly desktopIdleMs?: number | undefined
 }
 
 export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShape>()("openbot/server/ServerConfig") {
@@ -71,11 +74,13 @@ Options:
   --harness <list>        Harnesses to enable, comma separated (default: ${DEFAULT_HARNESSES.join(",")}; fake is always on)
   --claude-path <path>    Claude Code CLI to use (default: the Agent SDK's bundled CLI)
   --max-file-mb <n>       Largest file a bot may send to you with send_file, in MB (default: 200)
+  --desktop-idle <min>    Put an unused bot desktop to sleep after this many minutes (default: 10; 0 = never)
   -h, --help              Show this help
   -v, --version           Show the version
 
 Every option also reads an OPENBOT_* environment variable (OPENBOT_DATA_DIR, OPENBOT_PORT, OPENBOT_HOST,
-OPENBOT_PUBLIC_ORIGIN, OPENBOT_LOCAL_NODE=0, OPENBOT_DEV=1, OPENBOT_HARNESSES, OPENBOT_CLAUDE_PATH, OPENBOT_MAX_FILE_MB).`
+OPENBOT_PUBLIC_ORIGIN, OPENBOT_LOCAL_NODE=0, OPENBOT_DEV=1, OPENBOT_HARNESSES, OPENBOT_CLAUDE_PATH, OPENBOT_MAX_FILE_MB,
+OPENBOT_DESKTOP_IDLE_MINUTES).`
 
 export type Env = Readonly<Record<string, string | undefined>>
 
@@ -155,7 +160,7 @@ const parseHarnesses = (values: ReadonlyArray<string>, from: string): ReadonlyAr
   return out
 }
 
-const VALUE_FLAGS = ["--data-dir", "--port", "--host", "--public-origin", "--harness", "--claude-path", "--max-file-mb"] as const
+const VALUE_FLAGS = ["--data-dir", "--port", "--host", "--public-origin", "--harness", "--claude-path", "--max-file-mb", "--desktop-idle"] as const
 type ValueFlag = (typeof VALUE_FLAGS)[number]
 
 /**
@@ -175,6 +180,7 @@ export const parseCommand = (
     "--harness": [],
     "--claude-path": [],
     "--max-file-mb": [],
+    "--desktop-idle": [],
   }
   let dev: boolean | undefined
   let localNode: boolean | undefined
@@ -262,6 +268,16 @@ export const parseCommand = (
     maxFileBytes = Math.round(mb * 1_000_000)
   }
 
+  const idleInput = last("--desktop-idle", "OPENBOT_DESKTOP_IDLE_MINUTES")
+  let desktopIdleMs: number | undefined
+  if (idleInput !== undefined) {
+    const minutes = Number(idleInput.value.trim())
+    if (idleInput.value.trim() === "" || !Number.isFinite(minutes) || minutes < 0 || minutes > 7 * 24 * 60) {
+      throw new ConfigError(`${idleInput.from}: "${idleInput.value}" is not a number of minutes (0 = never)`)
+    }
+    desktopIdleMs = Math.round(minutes * 60_000)
+  }
+
   const skillsShInput = env["OPENBOT_SKILLS_SH_URL"]?.trim()
   let skillsShUrl: string | undefined
   if (skillsShInput !== undefined && skillsShInput !== "") {
@@ -281,6 +297,7 @@ export const parseCommand = (
       harnesses,
       claudePath,
       ...(maxFileBytes === undefined ? {} : { maxFileBytes }),
+      ...(desktopIdleMs === undefined ? {} : { desktopIdleMs }),
       ...(skillsShUrl === undefined ? {} : { skillsShUrl }),
     },
   }

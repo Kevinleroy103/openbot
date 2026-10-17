@@ -1,7 +1,8 @@
 // A bot's whole desktop over `/ws/computer/:botId?mode=view|control` (raw RFB, see ./desktop.ts) drawn
 // by noVNC's RFB client into a caller-owned element. Watching = `mode=view` + `viewOnly`; control =
 // `mode=control` (the brain refuses it without the lease) with input and keyboard focus. Reconnects
-// with backoff; React state changes only on phase changes, never per frame.
+// with backoff; React state changes only on phase changes, never per frame. A page in the background
+// for a minute stops watching (an unwatched screen can go to sleep) and reconnects when it shows.
 //
 // noVNC is loaded on first use (dynamic import) so the app shell never pays for it.
 import type RFB from "@novnc/novnc"
@@ -40,6 +41,33 @@ export const loadRfb = (): Promise<RfbClass> => {
   return rfbModule
 }
 
+/** How long a hidden page keeps watching before it lets go of the screen. */
+const HIDDEN_GRACE_MS = 60_000
+
+/** False once the page has been hidden for `graceMs`; true again as soon as it shows. */
+const usePageShown = (graceMs: number): boolean => {
+  const [shown, setShown] = useState(true)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const hideLater = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => setShown(false), graceMs)
+    }
+    const onChange = () => {
+      if (document.visibilityState === "hidden") return hideLater()
+      clearTimeout(timer)
+      setShown(true)
+    }
+    if (document.visibilityState === "hidden") hideLater()
+    document.addEventListener("visibilitychange", onChange)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onChange)
+    }
+  }, [graceMs])
+  return shown
+}
+
 export interface UseDesktopOptions {
   readonly botId: string
   /** Connect at all (false: idle, the last state is kept for display). */
@@ -50,6 +78,8 @@ export interface UseDesktopOptions {
   readonly targetRef: RefObject<HTMLElement | null>
   /** JPEG quality 0–9 (Grok starts at 6). Thumbnails use less. */
   readonly quality?: number
+  /** A preview (the side thumbnail): it does not keep the screen awake, and lets it sleep. */
+  readonly passive?: boolean
   /** Something went wrong: refetch `computer.status`. */
   readonly onTrouble?: () => void
   /** The brain ended this control socket (handed back elsewhere, or no lease): watch again. */
@@ -67,19 +97,22 @@ export interface DesktopHandle {
   readonly pressKey: (key: keyof typeof KEYSYM) => void
 }
 
-export function useDesktop({ botId, enabled, mode, viewPath, targetRef, quality = 6, onTrouble, onLeaseLost }: UseDesktopOptions): DesktopHandle {
+export function useDesktop({ botId, enabled, mode, viewPath, targetRef, quality = 6, passive = false, onTrouble, onLeaseLost }: UseDesktopOptions): DesktopHandle {
   const [state, dispatch] = useReducer(desktopReducer, initialDesktopConn)
   const [generation, setGeneration] = useState(0)
   const rfbRef = useRef<RFB | undefined>(undefined)
   const troubleRef = useRef(onTrouble)
   const leaseLostRef = useRef(onLeaseLost)
+  const shown = usePageShown(HIDDEN_GRACE_MS)
+  // in control the owner holds the screen anyway: keep the socket
+  const live = enabled && (shown || mode === "control")
   useLayoutEffect(() => {
     troubleRef.current = onTrouble
     leaseLostRef.current = onLeaseLost
   })
 
   useEffect(() => {
-    if (!enabled) {
+    if (!live) {
       dispatch({ type: "disable" })
       return
     }
@@ -115,7 +148,7 @@ export function useDesktop({ botId, enabled, mode, viewPath, targetRef, quality 
         schedule()
         return
       }
-      const socket = new WebSocket(computerSocketUrl(botId, mode, viewPath))
+      const socket = new WebSocket(computerSocketUrl(botId, mode, viewPath, passive))
       socket.binaryType = "arraybuffer"
       let opened = false
       let connected = false
@@ -192,7 +225,7 @@ export function useDesktop({ botId, enabled, mode, viewPath, targetRef, quality 
         // already disconnected
       }
     }
-  }, [botId, enabled, mode, viewPath, targetRef, quality, generation])
+  }, [botId, live, mode, viewPath, targetRef, quality, passive, generation])
 
   const retry = useCallback(() => setGeneration((g) => g + 1), [])
   const focus = useCallback(() => rfbRef.current?.focus({ preventScroll: true }), [])

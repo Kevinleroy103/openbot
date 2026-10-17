@@ -5,7 +5,15 @@ import * as BunHttpServer from "@effect/platform-bun/BunHttpServer"
 import * as BunSocket from "@effect/platform-bun/BunSocket"
 import type { Bot, NodeId } from "@openbot/contracts"
 import { BotRepo, DataDir, InternalAddress } from "@openbot/core"
-import { ApprovalServiceFake, MemoryBotRepo, MemoryNodeRepo, SequentialIdGen } from "@openbot/core/testing"
+import {
+  ApprovalServiceFake,
+  MemoryBotRepo,
+  MemoryNodeRepo,
+  MemoryRequestRepo,
+  MemoryTaskRepo,
+  MemoryTurnRepo,
+  SequentialIdGen,
+} from "@openbot/core/testing"
 import {
   BrainRpcs,
   type ComputerAction,
@@ -74,6 +82,10 @@ export interface StackOptions {
   readonly brainKeys?: KeyPair
   /** Brain-side half-open detection (default: the production 20 s). */
   readonly livenessTimeoutMs?: number
+  /** Idle desktops sleep after this long (default: the production 10 min). */
+  readonly desktopIdleMs?: number
+  /** The brain builds the node from this entry (`/node/install.sh`, `/node/download/:target`). */
+  readonly nodeInstall?: { readonly entry: string }
   /** Extra port layers (e.g. a LiveHub mock feeding the local node's project folders). */
   readonly extra?: Layer.Layer<any>
 }
@@ -88,6 +100,9 @@ export const brainStack = (options: StackOptions) => {
   const ports = Layer.mergeAll(
     MemoryNodeRepo,
     MemoryBotRepo,
+    MemoryTurnRepo,
+    MemoryTaskRepo,
+    MemoryRequestRepo,
     DataDir.layer(options.dataRoot),
     BrainNodesConfig.layer({
       brainOrigin: BRAIN_ORIGIN,
@@ -96,6 +111,8 @@ export const brainStack = (options: StackOptions) => {
       streamTokenTtlMs: options.streamTokenTtlMs,
       helloTimeoutMs: 5_000,
       livenessTimeoutMs: options.livenessTimeoutMs,
+      desktopIdleMs: options.desktopIdleMs,
+      nodeInstall: options.nodeInstall,
     }),
     options.brainKeys === undefined ? BrainIdentity.layerEphemeral : BrainIdentity.layer(options.brainKeys),
     ApprovalServiceFake.layer(),

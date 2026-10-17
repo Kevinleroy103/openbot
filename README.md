@@ -52,6 +52,7 @@ Data lives in `~/.local/share/openbot` (or `$XDG_DATA_HOME/openbot`). Bot worksp
 --public-origin <url>   Extra origin OpenBot is reached at, e.g. https://box.tailnet.ts.net (repeatable)
 --harness <list>        Coding agents to enable, comma separated (default: claude,codex,opencode)
 --no-local-node         Don't let bots use this machine
+--desktop-idle <min>    Put an unused bot desktop to sleep after this many minutes (default 10; 0 = never)
 --dev                   Hot reload for development
 ```
 
@@ -93,21 +94,23 @@ bots still get a browser, a terminal and files on the machine.
 The machine running OpenBot is a computer your bots can use. You can add more, such as a server or
 another laptop:
 
-1. In the web app, open Settings › Computers and click **Pair a computer**. You get a one-time
-   code.
-2. On the other machine, with Bun installed and this repository cloned (run `bun install` first):
+1. In the web app, open Settings › Computers and click **Pair a computer**.
+2. Run the command it shows on the other machine (Linux or macOS):
 
    ```sh
-   bun apps/node/src/main.ts pair <openbot-url> <code>
-   bun apps/node/src/main.ts run
+   curl -fsSL https://<your-openbot>/node/install.sh | sh -s -- <code>
    ```
 
-   The other machine must be able to reach OpenBot, for example over the address you set up in
-   [Use it from your phone](#use-it-from-your-phone).
+   It downloads the node from your OpenBot (built from the same source, so they always match), puts
+   it in `~/.local/bin`, pairs it with the one-time code, and keeps it running as a user service
+   (systemd on Linux, launchd on macOS).
 
-Run `bun apps/node/src/main.ts --help` for the options: workspace folders, read-only folders, how
-much the computer allows without asking, and the browser. `bun run --filter @openbot/node build`
-compiles the node into a single `apps/node/dist/openbot-node` binary.
+The other machine must be able to reach OpenBot, for example over the address you set up in
+[Use it from your phone](#use-it-from-your-phone). Run `openbot-node --help` there for the options:
+workspace folders, read-only folders, how much the computer allows without asking, and the browser.
+
+Without the installer, from a clone of this repository: `bun apps/node/src/main.ts pair <openbot-url> <code>`,
+then `bun apps/node/src/main.ts run`.
 
 ## Development
 

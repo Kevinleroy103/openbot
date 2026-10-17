@@ -273,7 +273,7 @@ const loadIdentity = (dataDir: string) =>
 
 const notPaired = (dataDir: string) =>
   new CliError({
-    message: `This node is not paired yet (no identity in ${dataDir}).\nIn the brain, open Settings › Computers › Add computer, then run:\n  openbot-node pair <brain-url> <code>`,
+    message: `This node is not paired yet (no identity in ${dataDir}).\nIn OpenBot, open Settings › Computers › Pair a computer, then run:\n  openbot-node pair <brain-url> <code>`,
     exitCode: 1,
   })
 

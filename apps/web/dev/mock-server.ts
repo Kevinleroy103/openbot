@@ -66,7 +66,14 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
       return HttpServerResponse.empty()
     }),
   )
-  const DesktopInput = HttpRouter.add("GET", "/api/mock/desktop", Effect.sync(() => HttpServerResponse.text(JSON.stringify(brain.desktopInput), { contentType: "application/json" })))
+  const DesktopInput = HttpRouter.add(
+    "GET",
+    "/api/mock/desktop",
+    Effect.sync(() => {
+      const viewers = [...brain.desktopViewers.values()].reduce((n, set) => n + set.size, 0)
+      return HttpServerResponse.text(JSON.stringify({ ...brain.desktopInput, viewers }), { contentType: "application/json" })
+    }),
+  )
   // dev helper: the Bot asks for a hand-off again (`request_takeover`) in its direct chat
   const Takeover = HttpRouter.add(
     "POST",

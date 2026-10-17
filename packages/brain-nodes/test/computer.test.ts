@@ -3,8 +3,8 @@
 // the last frame), the control lease mirrored with lease.set, and input only from the lease holder.
 import { afterAll, describe, expect, test } from "bun:test"
 import type { BotId, NodeId } from "@openbot/contracts"
-import { ComputerPort, NodeAdmin } from "@openbot/core"
-import { makeBot } from "@openbot/core/testing"
+import { ComputerPort, NodeAdmin, RequestRepo, TurnRepo } from "@openbot/core"
+import { makeBot, makeRequest, makeTurn } from "@openbot/core/testing"
 import { decodeScreencastFrame, DesktopUnavailable } from "@openbot/node-protocol"
 import { Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
 import { ComputerService, type Duplex, type Frame, NodeRegistry, open } from "../src/index.ts"
@@ -466,5 +466,55 @@ describe("computer: desktop", () => {
         yield* registry.publishEvent({ nodeId, type: "desktop.stopped", data: { botId } })
         expect((yield* stateOf("absent")).state).toBe("absent")
       }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path })))),
+    ), 20_000)
+
+  test("an idle desktop sleeps (closing its previews); work, a pending hand-off, the owner's control or a viewer keep it awake; its next use wakes it", () =>
+    run(
+      Effect.gen(function*() {
+        const server = yield* startServer
+        const computer = yield* ComputerPort
+        const turns = yield* TurnRepo
+        const requests = yield* RequestRepo
+        const { node, nodeId } = yield* connectDesktopNode(server.ws, server.http, ["fs@1", "desktop@1"])
+        const [idle, working, handingOff, held, watched] = (["bot_idle", "bot_working", "bot_handoff", "bot_held", "bot_watched"] as const).map(
+          (id) => id as BotId,
+        ) as [BotId, BotId, BotId, BotId, BotId]
+        for (const botId of [idle, working, handingOff, held, watched]) {
+          yield* putBot(makeBot({ id: botId, name: botId, hostNodeId: nodeId }))
+          yield* computer.ensure(botId)
+        }
+        yield* turns.upsert(makeTurn({ botId: working, status: "running" }))
+        yield* requests.upsert(makeRequest({ botId: handingOff, kind: "handoff", status: "pending" }))
+        yield* computer.lease(held, true)
+        const viewerScope = yield* Scope.fork(yield* Effect.scope)
+        const viewer = yield* open(yield* dialWebSocket(`${server.ws}/ws/computer/${watched}?mode=view`)).pipe(Scope.provide(viewerScope))
+        yield* collect(viewer, (fs) => bytes(fs).length >= 1)
+        // the side preview of the idle one does not keep it awake
+        const preview = yield* open(yield* dialWebSocket(`${server.ws}/ws/computer/${idle}?mode=view&passive=1`))
+        yield* collect(preview, (fs) => bytes(fs).length >= 1)
+
+        // idle time is 200 ms, checked every 50 ms
+        yield* Effect.sleep("700 millis")
+        expect(node.state.stopped).toEqual([idle])
+        expect(yield* closeCodeOf(preview)).toBe(1012)
+        expect(yield* computer.status(idle)).toMatchObject({ state: "absent", surface: "desktop", controller: "bot" })
+        // a preview never wakes it
+        const late = yield* open(yield* dialWebSocket(`${server.ws}/ws/computer/${idle}?mode=view&passive=1`))
+        expect(yield* closeCodeOf(late)).toBe(1012)
+        expect((yield* computer.status(idle)).state).toBe("absent")
+        for (const botId of [working, handingOff, held, watched]) expect((yield* computer.status(botId)).state).toBe("ready")
+
+        // the work ends, control is handed back, the watcher leaves: they sleep one idle time later
+        yield* turns.upsert(makeTurn({ botId: working, status: "completed" }))
+        yield* requests.upsert(makeRequest({ botId: handingOff, kind: "handoff", status: "resolved" }))
+        yield* computer.lease(held, false)
+        yield* Scope.close(viewerScope, Exit.void)
+        yield* Effect.sleep("700 millis")
+        expect([...node.state.stopped].sort()).toEqual([idle, working, handingOff, held, watched].sort())
+
+        // its next use starts it again
+        expect(yield* computer.ensure(idle)).toMatchObject({ state: "ready", surface: "desktop" })
+        expect(node.state.desktops.filter((id) => id === idle)).toHaveLength(2)
+      }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path, desktopIdleMs: 200 })))),
     ), 20_000)
 })

@@ -13,6 +13,11 @@
  *   `browser.action` with `LeaseHeld`. Handing it back closes the control viewers. `reset` stops a
  *   desktop (`desktop.stop`, which also ends the user's control) and closes its viewers. Every change
  *   of holder is published on `leaseChanges` (core answers pending hand-offs from it).
+ * - Idle desktops sleep: a ready desktop goes to `desktop.stop` after `desktopIdleMs` (10 min) with
+ *   nothing keeping it awake: nobody watching (passive viewers, the side preview with `passive=1`,
+ *   do not count and are closed with 1012), the bot in control, and no work for the bot (an active
+ *   turn, a queued or running task, a pending hand-off). Its next use starts it again (a viewer, a
+ *   bot action, `computer.ensure`); the browser profile, so every login, stays.
  * - Viewer socket (`/ws/computer/:botId?mode=view|control`, public listener; the server checks the
  *   cookie, Origin and bot ACL first; `control` answers 403 unless the user holds the lease):
  *   - desktop: raw RFB both ways between the viewer (noVNC, binary frames) and ONE node data stream
@@ -41,6 +46,9 @@ import {
   DataDir,
   IdGen,
   NodeDirectory,
+  RequestRepo,
+  TaskRepo,
+  TurnRepo,
   workspacePathFor,
 } from "@openbot/core"
 import {
@@ -52,10 +60,11 @@ import {
   NodeEventTypes,
   PtyResize,
 } from "@openbot/node-protocol"
-import { Context, Effect, Exit, Fiber, Layer, Option, PubSub, Result, Schema, Semaphore, Stream } from "effect"
+import { Clock, Context, Effect, Exit, Fiber, Layer, Option, PubSub, Result, Schema, Semaphore, Stream } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import type * as Socket from "effect/socket/Socket"
 import { mkdir } from "node:fs/promises"
+import { BrainNodesConfig } from "./config.ts"
 import { NodeRegistry } from "./NodeRegistry.ts"
 import { closeWriter, type Duplex, type Frame, open, splice } from "./splice.ts"
 import { openNodeStream, StreamBroker } from "./StreamBroker.ts"
@@ -86,7 +95,7 @@ export interface ComputerServiceShape {
   readonly reset: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable>
   readonly leaseChanges: Stream.Stream<ComputerLeaseChange>
   /** `GET /ws/computer/:botId?mode=view|control` — call AFTER the server authorized the request. */
-  readonly viewer: (input: { readonly botId: string; readonly mode: ViewerMode }) => Handler
+  readonly viewer: (input: { readonly botId: string; readonly mode: ViewerMode; readonly passive?: boolean | undefined }) => Handler
   /** `GET /ws/terminal/:botId?cols=&rows=` — call AFTER the server authorized the request. */
   readonly terminal: (input: { readonly botId: string; readonly cols?: number | undefined; readonly rows?: number | undefined }) => Handler
   /** Viewers currently attached to a bot's screen (screencast or desktop relays; tests, diagnostics). */
@@ -117,6 +126,8 @@ interface DesktopViewer {
   readonly id: number
   readonly mode: ViewerMode
   readonly writer: Socket.Writer
+  /** a preview (the side thumbnail): it does not keep the screen awake */
+  readonly passive: boolean
 }
 
 interface Viewer {
@@ -202,6 +213,10 @@ export const makeComputerService = Effect.gen(function*() {
   const broker = yield* StreamBroker
   const dataDir = yield* DataDir
   const ids = yield* IdGen
+  const turns = yield* TurnRepo
+  const tasks = yield* TaskRepo
+  const requests = yield* RequestRepo
+  const config = yield* BrainNodesConfig
   const layerScope = yield* Effect.scope
 
   const computers = new Map<BotId, BotComputer>()
@@ -210,6 +225,8 @@ export const makeComputerService = Effect.gen(function*() {
   const hubLock = yield* Semaphore.make(1)
   const ensureLocks = new Map<BotId, Semaphore.Semaphore>()
   const desktopViewers = new Map<BotId, Map<number, DesktopViewer>>()
+  /** When each ready desktop last had something keeping it awake (cleared when it starts). */
+  const lastAwake = new Map<BotId, number>()
   const leaseChanges = yield* PubSub.unbounded<ComputerLeaseChange>()
   yield* Effect.addFinalizer(() => PubSub.shutdown(leaseChanges))
   let viewerSeq = 0
@@ -365,6 +382,7 @@ export const makeComputerService = Effect.gen(function*() {
                 missing: missingOf(ensured.failure),
               })
             } else {
+              lastAwake.delete(botId)
               yield* setComputer(botId, s.nodeId, surface, {
                 state: "ready",
                 message: undefined,
@@ -563,9 +581,9 @@ export const makeComputerService = Effect.gen(function*() {
     ).pipe(Effect.ignore)
 
   // ---------------------------------------------------------------- desktop relay (VNC)
-  const joinDesktop = (botId: BotId, mode: ViewerMode, writer: Socket.Writer) =>
+  const joinDesktop = (botId: BotId, mode: ViewerMode, writer: Socket.Writer, passive: boolean) =>
     Effect.sync(() => {
-      const viewer: DesktopViewer = { id: ++viewerSeq, mode, writer }
+      const viewer: DesktopViewer = { id: ++viewerSeq, mode, writer, passive }
       const forBot = desktopViewers.get(botId) ?? new Map<number, DesktopViewer>()
       forBot.set(viewer.id, viewer)
       desktopViewers.set(botId, forBot)
@@ -584,13 +602,17 @@ export const makeComputerService = Effect.gen(function*() {
    * One viewer ↔ its own node VNC stream, raw RFB both ways, until either side closes. The desktop
    * is ensured first (a reset in progress finishes before: same lock).
    */
-  const runDesktopViewer = (socket: Socket.Socket, botId: BotId, nodeId: NodeId, mode: ViewerMode) =>
+  const runDesktopViewer = (socket: Socket.Socket, botId: BotId, nodeId: NodeId, mode: ViewerMode, passive: boolean) =>
     Effect.scoped(
       Effect.gen(function*() {
         const io = yield* open(socket)
         // registered at once, so a release or reset during the start-up closes this viewer too
-        yield* Effect.acquireRelease(joinDesktop(botId, mode, io.writer), (v) => leaveDesktop(botId, v))
+        yield* Effect.acquireRelease(joinDesktop(botId, mode, io.writer, passive && mode === "view"), (v) => leaveDesktop(botId, v))
         const fail = (code: number, reason: string) => closeWriter(io.writer, code, reason)
+        // a preview never wakes a sleeping screen
+        if (passive && (yield* Effect.map(Effect.option(statusOf(botId)), (s) => Option.isSome(s) && s.value.state === "absent"))) {
+          return yield* fail(DesktopCloseCodes.reset, "screen asleep")
+        }
         const ensured = yield* Effect.result(ensure(botId))
         if (Result.isFailure(ensured)) {
           return yield* fail(
@@ -634,7 +656,7 @@ export const makeComputerService = Effect.gen(function*() {
       }),
     ).pipe(Effect.catchCause((cause) => Effect.logDebug("desktop viewer ended", { botId, mode, cause })))
 
-  const viewer: ComputerServiceShape["viewer"] = ({ botId, mode }) =>
+  const viewer: ComputerServiceShape["viewer"] = ({ botId, mode, passive }) =>
     Effect.gen(function*() {
       const request = yield* HttpServerRequest.HttpServerRequest
       const s = yield* Effect.result(statusOf(botId as BotId))
@@ -654,7 +676,7 @@ export const makeComputerService = Effect.gen(function*() {
       if (st.surface === "desktop") {
         // detached: the route fiber is interrupted when the viewer closes (G2); the relay closes the
         // node stream itself
-        const fiber = yield* Effect.forkDetach(runDesktopViewer(upgraded.success, botId as BotId, st.nodeId, mode))
+        const fiber = yield* Effect.forkDetach(runDesktopViewer(upgraded.success, botId as BotId, st.nodeId, mode, passive === true))
         yield* Fiber.await(fiber)
         return HttpServerResponse.empty()
       }
@@ -718,6 +740,86 @@ export const makeComputerService = Effect.gen(function*() {
       return HttpServerResponse.empty()
     })
 
+  // ---------------------------------------------------------------- idle desktops sleep
+  /** Bots with work under way: an active turn, a queued or running task, or a pending hand-off. */
+  const busyBots = Effect.gen(function*() {
+    const [active, running, pending] = yield* Effect.all([
+      turns.listActive,
+      tasks.list({ statuses: ["queued", "running"] }),
+      requests.list({ statuses: ["pending"] }),
+    ])
+    return new Set<BotId>([
+      ...active.map((t) => t.botId),
+      ...running.map((t) => t.botId),
+      // the owner is about to use the screen the bot set up for them
+      ...pending.filter((r) => r.kind === "handoff").map((r) => r.botId),
+    ])
+  })
+
+  /** Viewers that keep a screen awake: not the passive previews. */
+  const watching = (botId: BotId) => [...(desktopViewers.get(botId)?.values() ?? [])].filter((v) => !v.passive).length
+  const watchedOrHeld = (botId: BotId) => watching(botId) > 0 || controllerOf(botId) === "user"
+
+  const sleepDesktop = (botId: BotId, nodeId: NodeId) =>
+    Effect.gen(function*() {
+      const lock = yield* lockFor(botId)
+      yield* lock.withPermits(1)(
+        Effect.gen(function*() {
+          const c = computers.get(botId)
+          // woken elsewhere, moved, or someone came to watch meanwhile
+          if (c === undefined || c.nodeId !== nodeId || c.surface !== "desktop" || c.state !== "ready" || watchedOrHeld(botId)) return
+          const client = yield* directory.client(nodeId)
+          // the previews show it asleep (1012: they do not reconnect on their own)
+          yield* closeDesktopViewers(botId, DesktopCloseCodes.reset, "screen asleep")
+          yield* client["desktop.stop"]({ botId })
+          yield* setComputer(botId, nodeId, "desktop", { state: "absent", message: undefined })
+          lastAwake.delete(botId)
+          awakeSince.delete(botId)
+          yield* Effect.logInfo("bot screen asleep after idle", { botId })
+        }),
+      )
+    }).pipe(Effect.catchCause((cause) => Effect.logWarning("bot screen could not sleep", { botId, cause })))
+
+  /** When each ready desktop was first seen by the idle check, and whether its keep-awake was logged. */
+  const awakeSince = new Map<BotId, { readonly at: number; logged: boolean }>()
+
+  const sleepIdleDesktops = Effect.gen(function*() {
+    const awake = [...computers].filter(([, c]) => c.surface === "desktop" && c.state === "ready")
+    for (const botId of [...lastAwake.keys()]) if (!awake.some(([id]) => id === botId)) lastAwake.delete(botId)
+    for (const botId of [...awakeSince.keys()]) if (!awake.some(([id]) => id === botId)) awakeSince.delete(botId)
+    if (awake.length === 0) return
+    const busy = yield* busyBots
+    const now = yield* Clock.currentTimeMillis
+    for (const [botId, c] of awake) {
+      const since = lastAwake.get(botId)
+      const first = awakeSince.get(botId) ?? { at: now, logged: false }
+      awakeSince.set(botId, first)
+      const reasons = [
+        ...(busy.has(botId) ? ["working"] : []),
+        ...(watching(botId) > 0 ? [`${watching(botId)} watching`] : []),
+        ...(controllerOf(botId) === "user" ? ["owner in control"] : []),
+      ]
+      if (since === undefined || reasons.length > 0) {
+        lastAwake.set(botId, now)
+        // once per awake stretch: why a screen is still up past the idle time
+        if (reasons.length > 0 && !first.logged && now - first.at >= config.desktopIdleMs) {
+          first.logged = true
+          yield* Effect.logInfo("bot screen kept awake", { botId, reasons })
+        }
+      } else if (now - since >= config.desktopIdleMs) yield* sleepDesktop(botId, c.nodeId)
+    }
+  })
+
+  if (config.desktopIdleMs > 0) {
+    const every = Math.min(60_000, Math.max(20, Math.floor(config.desktopIdleMs / 4)))
+    yield* Effect.forever(
+      Effect.andThen(
+        Effect.sleep(every),
+        sleepIdleDesktops.pipe(Effect.catchCause((cause) => Effect.logWarning("idle screen check failed", { cause }))),
+      ),
+    ).pipe(Effect.forkIn(layerScope, { startImmediately: true }))
+  }
+
   // ---------------------------------------------------------------- node lifecycle
   // a node that comes back online gets the user's leases again; one that goes away loses its windows
   yield* directory.changes.pipe(
@@ -752,6 +854,7 @@ export const makeComputerService = Effect.gen(function*() {
         const c = computers.get(botId)
         // a bot action (gateway `computer` tool) started the screen, or it stopped: watchable or not
         if (event.type === NodeEventTypes.desktopStarted) {
+          lastAwake.delete(botId)
           if (c === undefined || c.nodeId !== event.nodeId || c.state !== "starting") {
             computers.set(botId, { nodeId: event.nodeId, surface: "desktop", state: "ready", message: undefined, windowTargetId: undefined })
           }
@@ -795,7 +898,7 @@ export const makeComputerService = Effect.gen(function*() {
 export const ComputerServiceLive: Layer.Layer<
   ComputerPort | ComputerService,
   never,
-  BotRepo | NodeDirectory | NodeRegistry | StreamBroker | DataDir | IdGen
+  BotRepo | TurnRepo | TaskRepo | RequestRepo | NodeDirectory | NodeRegistry | StreamBroker | DataDir | IdGen | BrainNodesConfig
 > = Layer.effectContext(
   Effect.map(makeComputerService, (service) =>
     Context.make(ComputerService, service).pipe(

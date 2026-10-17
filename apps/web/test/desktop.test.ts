@@ -193,6 +193,8 @@ describe("socket URL and hand-offs", () => {
     expect(computerSocketUrl("bot_a", "view")).toBe("ws://127.0.0.1:7420/ws/computer/bot_a?mode=view")
     expect(computerSocketUrl("bot a", "control")).toBe("ws://127.0.0.1:7420/ws/computer/bot%20a?mode=control")
     expect(computerSocketUrl("bot_a", "control", "/ws/computer/bot_a")).toBe("ws://127.0.0.1:7420/ws/computer/bot_a?mode=control")
+    // the side preview: it does not keep the screen awake
+    expect(computerSocketUrl("bot_a", "view", undefined, true)).toBe("ws://127.0.0.1:7420/ws/computer/bot_a?mode=view&passive=1")
   })
   test("the bot's pending hand-off", () => {
     const req = (patch: Partial<RuntimeRequest>) => ({ id: "req_1", botId: "bot_a", kind: "handoff", status: "pending", ...patch }) as RuntimeRequest

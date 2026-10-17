@@ -75,7 +75,9 @@ import { OpenCodeHarnessLive } from "@openbot/harness-opencode"
 import { PersistenceLive } from "@openbot/persistence"
 import { Context, Effect, Layer, Schema } from "effect"
 import { HttpRouter } from "effect/http"
+import { existsSync } from "node:fs"
 import { chmod, mkdir, unlink } from "node:fs/promises"
+import { fileURLToPath } from "node:url"
 import { WebAuth, WebAuthLayer } from "./auth.ts"
 import { OPENBOT_VERSION, ServerConfig, type ServerConfigShape } from "./config.ts"
 import {
@@ -201,6 +203,9 @@ export const TasksRecoveredLive: Layer.Layer<never, never, BootReport | Backgrou
 
 // ============================================================================ step 5: ports
 
+/** The node daemon's entry in this repository (apps/node), built for other computers on request. */
+const NODE_ENTRY = fileURLToPath(new URL("../../node/src/main.ts", import.meta.url))
+
 export const BrainNodesConfigLive: Layer.Layer<BrainNodesConfig, never, ServerConfig | PublicListener> = Layer.effect(
   BrainNodesConfig,
   Effect.gen(function*() {
@@ -211,6 +216,9 @@ export const BrainNodesConfigLive: Layer.Layer<BrainNodesConfig, never, ServerCo
       extraOrigins: listener.allowedOrigins.filter((origin) => origin !== listener.brainOrigin),
       brainVersion: OPENBOT_VERSION,
       localNode: { enabled: config.localNode },
+      desktopIdleMs: config.desktopIdleMs,
+      // run from source: other computers get the node built from it (`curl …/node/install.sh | sh`)
+      ...(existsSync(NODE_ENTRY) ? { nodeInstall: { entry: NODE_ENTRY } } : {}),
     })
   }),
 )

@@ -1,15 +1,16 @@
 // E2E (W3.1): computers. (1) The browser computer view on the local node: computer.ensure → the
 // bot's browser (navigated through the gateway's `browser` tool) streams screencast frames into
 // ComputerView → Take control → I'm done; the Terminal tab echoes. (2) Settings › Computers: create a
-// pairing code, pair + run a REAL second node daemon (apps/node CLI, own data dir and root) → it
-// shows online → approve its capabilities → a bot runs a shell command there. Fake harness only.
+// pairing code, run the dialog's installer one-liner (the brain builds the node binary; own HOME, no
+// service) and the installed binary → it shows online → approve its capabilities → a bot runs a
+// shell command there. Fake harness only.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import type { Browser } from "playwright-core"
 import type { Bot } from "@openbot/contracts"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { type AppPage, type Brain, childEnv, connectRpc, eventually, hasChromium, launchBrowser, nodeMain, openApp, type Rpc, send, startBrain, waitIdle } from "./brain.ts"
+import { type AppPage, type Brain, childEnv, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, send, startBrain, waitIdle } from "./brain.ts"
 
 const PAGE = "data:text/html,<body style='background:%23d43f3a;color:white;font:48px sans-serif'><h1>OpenBot e2e</h1></body>"
 
@@ -19,7 +20,7 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
   let rpc: Rpc
   let app: AppPage
   let bot: Bot
-  const nodeDir = mkdtempSync(join(tmpdir(), "openbot-e2e-node-"))
+  const nodeHome = mkdtempSync(join(tmpdir(), "openbot-e2e-node-"))
   const nodeRoot = mkdtempSync(join(tmpdir(), "openbot-e2e-node-root-"))
   let daemon: ReturnType<typeof Bun.spawn> | undefined
   let daemonLog = ""
@@ -43,7 +44,7 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     await rpc?.close()
     await browser?.close()
     await brain?.stop()
-    rmSync(nodeDir, { recursive: true, force: true })
+    rmSync(nodeHome, { recursive: true, force: true })
     rmSync(nodeRoot, { recursive: true, force: true })
   }, 60_000)
 
@@ -137,7 +138,7 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     expect(app.errors).toEqual([])
   }, 60_000)
 
-  test("Settings › Computers: pair and run a second node daemon, approve it, run a command there", async () => {
+  test("Settings › Computers: install, pair and run a second node with the dialog's one-liner, approve it, run a command there", async () => {
     const { page } = app
     await page.getByRole("button", { name: "Computers", exact: true }).click()
     const settings = page.getByTestId("settings-dialog")
@@ -146,12 +147,22 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     const codeBox = page.getByTestId("pairing-code")
     await eventually(() => codeBox.innerText(), (t) => /\S{4,}/.test(t.trim()), { label: "a pairing code" })
     const code = (await codeBox.innerText()).trim()
+    const command = (await page.getByRole("dialog", { name: "Pair a computer" }).locator("code").first().innerText()).trim()
+    expect(command).toBe(`curl -fsSL ${brain.base}/node/install.sh | sh -s -- ${code}`)
     await app.shot("e2e-44-pairing-code")
 
-    const env = childEnv()
-    const pair = Bun.spawnSync([process.execPath, nodeMain, "pair", brain.base, code, "--data-dir", nodeDir], { env, stdout: "pipe", stderr: "pipe" })
-    expect(pair.exitCode, `${pair.stdout.toString()}\n${pair.stderr.toString()}`).toBe(0)
-    daemon = Bun.spawn([process.execPath, nodeMain, "run", "--data-dir", nodeDir, "--root", nodeRoot, "--no-browser"], { env, stdout: "pipe", stderr: "pipe" })
+    // the one-liner, as the owner would paste it on the other computer (no service: the test runs it)
+    const env = childEnv({
+      HOME: nodeHome,
+      XDG_DATA_HOME: join(nodeHome, "data"),
+      OPENBOT_NODE_BIN_DIR: join(nodeHome, "bin"),
+      OPENBOT_NODE_SERVICE: "0",
+    })
+    const install = Bun.spawnSync(["sh", "-c", command], { env, stdout: "pipe", stderr: "pipe" })
+    expect(install.exitCode, `${install.stdout.toString()}\n${install.stderr.toString()}`).toBe(0)
+    expect(install.stdout.toString()).toContain("Paired")
+    const installed = join(nodeHome, "bin", "openbot-node")
+    daemon = Bun.spawn([installed, "run", "--root", nodeRoot, "--no-browser"], { env, stdout: "pipe", stderr: "pipe" })
     void (async () => {
       const d = new TextDecoder()
       for await (const c of daemon!.stderr as ReadableStream<Uint8Array>) daemonLog += d.decode(c)

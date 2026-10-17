@@ -47,6 +47,16 @@ export interface BrainNodesConfigShape {
    * close), so the node goes offline. Default `BRAIN_LIVENESS_TIMEOUT_MS` (20 s); 0 disables.
    */
   readonly livenessTimeoutMs: number
+  /**
+   * A bot's desktop goes to sleep (`desktop.stop`) after this long with nothing keeping it awake
+   * (`ComputerService`). Default `DESKTOP_IDLE_MS` (10 min); 0 keeps desktops up.
+   */
+  readonly desktopIdleMs: number
+  /**
+   * The brain can build the node daemon for other computers (`NodeInstall`): `entry` is apps/node's
+   * `src/main.ts`. Pairing codes then come with the installer one-liner.
+   */
+  readonly nodeInstall: { readonly entry: string } | undefined
 }
 
 export interface BrainNodesConfigInput {
@@ -59,7 +69,12 @@ export interface BrainNodesConfigInput {
   readonly streamTokenTtlMs?: number | undefined
   readonly helloTimeoutMs?: number | undefined
   readonly livenessTimeoutMs?: number | undefined
+  readonly desktopIdleMs?: number | undefined
+  readonly nodeInstall?: { readonly entry: string } | undefined
 }
+
+/** How long a bot's desktop stays up with nothing keeping it awake. */
+export const DESKTOP_IDLE_MS = 10 * 60_000
 
 export const makeBrainNodesConfig = (input: BrainNodesConfigInput): BrainNodesConfigShape => ({
   brainOrigin: typeof input.brainOrigin === "string"
@@ -73,6 +88,8 @@ export const makeBrainNodesConfig = (input: BrainNodesConfigInput): BrainNodesCo
   streamTokenTtlMs: input.streamTokenTtlMs ?? STREAM_TOKEN_TTL_MS,
   helloTimeoutMs: input.helloTimeoutMs ?? 10_000,
   livenessTimeoutMs: input.livenessTimeoutMs ?? BRAIN_LIVENESS_TIMEOUT_MS,
+  desktopIdleMs: input.desktopIdleMs ?? DESKTOP_IDLE_MS,
+  nodeInstall: input.nodeInstall,
 })
 
 export class BrainNodesConfig extends Context.Service<BrainNodesConfig, BrainNodesConfigShape>()(

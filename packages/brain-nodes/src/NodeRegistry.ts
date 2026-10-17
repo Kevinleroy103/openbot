@@ -34,6 +34,7 @@ import { Clock, Context, Effect, Layer, Option, PubSub, Result, Schema, Semaphor
 import type { Scope } from "effect"
 import { hostname as osHostname } from "node:os"
 import { BrainIdentity, BrainNodesConfig } from "./config.ts"
+import { installCommand } from "./NodeInstall.ts"
 
 // ============================================================================ types
 
@@ -254,7 +255,9 @@ export const makeNodeRegistry = Effect.gen(function*() {
       return PairingCode.make({
         code: display,
         expiresAt: expiresAt as NodeRecord["createdAt"],
-        command: `${config.nodeCommand} pair ${origin} ${display}`,
+        command: config.nodeInstall === undefined
+          ? `${config.nodeCommand} pair ${origin} ${display}`
+          : installCommand(origin, display),
       })
     }),
     rename: (nodeId, label) =>

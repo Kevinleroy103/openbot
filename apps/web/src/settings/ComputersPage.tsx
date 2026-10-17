@@ -348,6 +348,8 @@ function PairDialog({ knownIds, onClose }: { readonly knownIds: ReadonlyArray<st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const left = useCountdown(code?.expiresAt)
+  // the server serves the installer: the command downloads, pairs and starts the node
+  const installs = code?.command.startsWith("curl ") ?? false
   const expired = code !== undefined && code.expiresAt <= Date.now() && left === "0:00"
   const arrived = useMemo(() => nodes.find((n) => !known.current.has(n.id)), [nodes])
 
@@ -388,11 +390,13 @@ function PairDialog({ knownIds, onClose }: { readonly knownIds: ReadonlyArray<st
               <span className="text-sm text-fg">1. On that computer, run</span>
               {code ? <CommandBlock command={code.command} /> : <div className="h-9 animate-pulse rounded-lg bg-quaternary" />}
               <span className="text-xs text-fg-tertiary">
-                It needs the OpenBot node daemon (<code className="font-mono">openbot-node</code>) and network access to this server.
+                {installs
+                  ? "Linux or macOS. It installs the OpenBot node, pairs it and keeps it running. That computer needs to reach this server."
+                  : <>It needs the OpenBot node daemon (<code className="font-mono">openbot-node</code>) and network access to this server.</>}
               </span>
             </div>
             <div className="flex flex-col gap-2">
-              <span className="text-sm text-fg">2. Or enter this code when it asks</span>
+              <span className="text-sm text-fg">{installs ? "2. The code it pairs with" : "2. Or enter this code when it asks"}</span>
               <div className="flex h-16 items-center justify-center rounded-2xl bg-secondary" data-testid="pairing-code">
                 {code ? (
                   <span className={cn("text-3xl font-medium tracking-[.12em] tabular-nums", expired ? "text-fg-quaternary line-through" : "text-fg")}>{code.code}</span>

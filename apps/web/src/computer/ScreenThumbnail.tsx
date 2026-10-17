@@ -5,7 +5,7 @@
 import type { BotId } from "@openbot/contracts"
 import { Avatar, Icon, PillButton, ShimmerText, Spinner, cn } from "@openbot/ui"
 import { Maximize2, Moon, Unplug } from "lucide-react"
-import { type ReactNode, useRef } from "react"
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react"
 import { useComputerView } from "../contracts.ts"
 import { desktopAspect } from "./desktop.ts"
 import { DesktopStage } from "./DesktopStage.tsx"
@@ -24,6 +24,9 @@ export interface ScreenThumbnailProps {
   readonly className?: string
 }
 
+/** How often a preview of an asleep screen checks whether the bot woke it. */
+const ASLEEP_RECHECK_MS = 15_000
+
 /** The live picture (or a notice) of a bot's screen, view-only. Paused while the full view of the same bot is open. */
 function useLivePicture(botId: BotId, botName: string, quality: number) {
   const { status, availability, ensure } = useComputer(botId)
@@ -33,7 +36,24 @@ function useLivePicture(botId: BotId, botName: string, quality: number) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const targetRef = useRef<HTMLDivElement>(null)
   const screencast = useScreencast({ botId, enabled: streaming && !desktop, mode: "view", viewPath: status.value?.viewPath, canvasRef, onTrouble: status.refresh })
-  const desk = useDesktop({ botId, enabled: streaming && desktop, mode: "view", viewPath: status.value?.viewPath, targetRef, quality, onTrouble: status.refresh })
+  const desk = useDesktop({ botId, enabled: streaming && desktop, mode: "view", viewPath: status.value?.viewPath, targetRef, quality, passive: true, onTrouble: status.refresh })
+  // an asleep screen wakes when the bot needs it: look again now and then, so the picture comes back
+  const asleep = availability.kind === "absent" || (desktop && desk.state.phase === "asleep")
+  const latest = useRef({ phase: desk.state.phase, state: status.value?.state })
+  useLayoutEffect(() => {
+    latest.current = { phase: desk.state.phase, state: status.value?.state }
+  })
+  const refresh = status.refresh
+  const retry = desk.retry
+  useEffect(() => {
+    if (!asleep) return
+    const timer = setInterval(() => {
+      // the picture went to sleep but the screen runs again (woken meanwhile): watch it
+      if (latest.current.phase === "asleep" && latest.current.state === "ready") retry()
+      else refresh()
+    }, ASLEEP_RECHECK_MS)
+    return () => clearInterval(timer)
+  }, [asleep, refresh, retry])
   const phase = desktop ? desk.state.phase : screencast.state.phase
   const live = phase === "live"
   const notice = screenNotice({

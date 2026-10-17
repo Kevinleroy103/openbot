@@ -41,7 +41,7 @@ directory's `bunfig.toml`, and only `apps/web` declares `bun-plugin-tailwind`.
   Expense Clerk runs on `vps-1`, which lacks the desktop programs (`missing`).
 - Research Scout has a pending **Action needed** hand-off card (`request_takeover`); handing control back
   answers it "done", like the brain. `POST /api/mock/takeover/:botId` asks again;
-  `GET /api/mock/desktop` counts the input the fake desktops received.
+  `GET /api/mock/desktop` counts the input the fake desktops received and the open viewers.
 - The mock counts only blocking requests in `pendingRequestCount`; browser-only nodes have no screencast.
 
 ## Screenshots and smoke test

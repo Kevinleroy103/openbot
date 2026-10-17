@@ -8,8 +8,10 @@
  *
  * Both sockets are bound at the bottom of the layer graph so their addresses (origins for node
  * signatures, the gateway URL) are known to every layer; until the routes are attached at the end
- * of boot (`HttpRouter.serve`) they answer 404. HTTP `idleTimeout: 0` (long MCP calls, streams) and
- * WebSocket `idleTimeout: 0` (quiet data streams). Preemptive shutdown is off: on shutdown the route
+ * of boot (`HttpRouter.serve`) they answer 404. HTTP `idleTimeout: 0` (long MCP calls, streams).
+ * Public WebSockets are pinged and closed after `PUBLIC_WS_IDLE_SECONDS` without an answer (a
+ * frozen tab or a phone that went away holds no screen awake; a live peer answers every ping, so
+ * quiet streams stay); internal ones never time out. Preemptive shutdown is off: on shutdown the route
  * fibers are interrupted first (closing every WebSocket), so Bun's `server.stop()` never waits on
  * an open socket.
  */
@@ -22,6 +24,8 @@ import { planWeb, type WebPlan } from "./web.ts"
 
 /** Max WebSocket frame: `attachments.upload` sends up to 25 MiB as base64 in one RPC frame. */
 export const PUBLIC_MAX_PAYLOAD_BYTES = 48 * 1024 * 1024
+/** Public WebSockets: pinged by Bun, closed after this long without any answer. */
+const PUBLIC_WS_IDLE_SECONDS = 120
 export const INTERNAL_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024
 
 export interface PublicListenerShape {
@@ -100,7 +104,7 @@ export const PublicListenerLive: Layer.Layer<PublicListener, HttpServerError.Ser
       development: web.development,
       ...(web.bunRoutes === undefined ? {} : { routes: web.bunRoutes }),
       disablePreemptiveShutdown: true,
-      websocket: { idleTimeout: 0, maxPayloadLength: PUBLIC_MAX_PAYLOAD_BYTES },
+      websocket: { idleTimeout: PUBLIC_WS_IDLE_SECONDS, sendPings: true, maxPayloadLength: PUBLIC_MAX_PAYLOAD_BYTES },
     })
     const port = portOf(server)
     if (web.note !== undefined) yield* Effect.logWarning(`Web app: ${web.note}`)

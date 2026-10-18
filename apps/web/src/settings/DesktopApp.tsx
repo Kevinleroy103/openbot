@@ -2,7 +2,7 @@
 // `/desktop/download/<target>`, or installed from a terminal with `/desktop/install.sh`) and
 // notifications on this device.
 import { PillButton, Switch } from "@openbot/ui"
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 import { type DesktopUpdateState, updateReady, useDesktopUpdate } from "../app/desktopUpdate.ts"
 import { desktopApp, notificationsSupported, setNotificationsEnabled, useNotificationsEnabled } from "../app/notifications.ts"
 import { CommandBlock } from "../details/kit.tsx"
@@ -119,6 +119,85 @@ function DownloadApp(): ReactNode {
             Open Anyway next to OpenBot.
           </span>
         )}
+      </div>
+    </SettingsRow>
+  )
+}
+
+/** A bookmark that opens quick send for the page it is clicked on (`#/quick-send?url=…` in a popup). */
+export const bookmarkletCode = (origin: string): string =>
+  `javascript:(()=>{const q=new URLSearchParams({url:location.href,title:document.title});const s=String(getSelection()||'').trim();if(s)q.set('text',s);open(${JSON.stringify(`${origin}/#/quick-send?`)}+q,'openbot-quick-send','popup,width=660,height=460')})()`
+
+const MANUAL_SHORTCUT = [
+  "Open Shortcuts and make a new Shortcut named Send to OpenBot.",
+  "In its details (ⓘ), turn on Show in Share Sheet and Use as Quick Action › Services Menu; receive Text and URLs.",
+  "Add URL Encode (input: Shortcut Input), then Open URLs with openbot://send?text= followed by the URL Encoded Text.",
+]
+
+/** Quick send: the shortcut and the Share menu in the desktop app, the bookmarklet everywhere. */
+export function QuickSendRow(): ReactNode {
+  const bridge = desktopApp()?.quickSend
+  const [info, setInfo] = useState<{ readonly shortcut: string; readonly registered: boolean; readonly platform: string } | undefined>()
+  const [shortcut, setShortcut] = useState<{ readonly state: "idle" | "busy" | "done" } | { readonly state: "error"; readonly message: string }>({ state: "idle" })
+  const bookmarklet = useRef<HTMLAnchorElement>(null)
+  useEffect(() => {
+    void bridge?.info().then((i) => setInfo(i as typeof info))
+  }, [bridge])
+  useEffect(() => {
+    // set here: React refuses `javascript:` links in JSX
+    bookmarklet.current?.setAttribute("href", bookmarkletCode(location.origin))
+  }, [])
+  const addToShareMenu = async () => {
+    setShortcut({ state: "busy" })
+    const result = (await bridge?.installShortcut()) as { ok?: boolean; error?: string } | undefined
+    setShortcut(result?.ok ? { state: "done" } : { state: "error", message: result?.error ?? "Shortcuts did not take it." })
+  }
+  const mac = info?.platform === "darwin"
+  return (
+    <SettingsRow
+      title="Quick send"
+      description={bridge === undefined
+        ? "Send the page you're on to a Bot from any browser: drag the button below to your bookmarks bar, then click it on a page (select text first to send that too)."
+        : `Press ${info?.shortcut ?? "the shortcut"} anywhere to send what you're looking at to a Bot: the page open in your browser, something you just copied, or a screenshot.${mac ? " OpenBot asks once to read each browser's page." : ""}`}
+      wide
+      control={mac
+        ? (
+          <PillButton variant="secondary" size="md" loading={shortcut.state === "busy"} onClick={() => void addToShareMenu()} data-testid="quick-send-share-menu">
+            Add to the Share menu
+          </PillButton>
+        )
+        : undefined}
+    >
+      <div className="flex flex-col gap-2 pt-2 text-sm text-fg-secondary">
+        {shortcut.state === "done" && (
+          <span>Click Add Shortcut in the window that opened. Then use Share › Send to OpenBot, or select text and right-click › Services › Send to OpenBot.</span>
+        )}
+        {shortcut.state === "error" && (
+          <span className="flex flex-col gap-1">
+            <span>Shortcuts didn't take it ({shortcut.message}). It takes a minute by hand:</span>
+            {MANUAL_SHORTCUT.map((step, i) => <span key={step}>{i + 1}. {step}</span>)}
+          </span>
+        )}
+        {bridge !== undefined && info !== undefined && (info.platform === "linux" || !info.registered) && (
+          <span>
+            {info.registered ? "Or bind" : "Your desktop didn't let OpenBot add the shortcut: bind"} a key to <code className="font-mono text-fg">openbot-desktop --quick-send</code>
+            {info.platform === "linux" ? <> (Hyprland: <code className="font-mono text-fg">bind = SUPER ALT, O, exec, openbot-desktop --quick-send</code>)</> : null}.
+          </span>
+        )}
+        {bridge !== undefined && <span>Raycast, Alfred and other tools can open <code className="font-mono text-fg">openbot://send?text=…</code> (also <code className="font-mono text-fg">url</code>, <code className="font-mono text-fg">to</code>).</span>}
+        <span className="flex flex-wrap items-center gap-2">
+          {bridge !== undefined && <span>In any browser:</span>}
+          <a
+            ref={bookmarklet}
+            className="inline-flex items-center rounded-full bg-elevated-hover px-3 py-1 font-medium text-fg"
+            onClick={(e) => e.preventDefault()}
+            draggable
+            data-testid="quick-send-bookmarklet"
+          >
+            Send to OpenBot
+          </a>
+          <span>drag it to your bookmarks bar.</span>
+        </span>
       </div>
     </SettingsRow>
   )

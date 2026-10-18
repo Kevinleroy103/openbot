@@ -1075,13 +1075,16 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           // background command finished) is news too.
           const reported = active.deliveries.some((d) => d.kind === "task-result") ||
             (active.nativeTurnId !== undefined && finalized.lastBotMessage !== undefined)
-          if (terminal._tag === "completed" && (turn.trigger === "user" || turn.trigger === "routine" || reported)) {
+          // Only with something to read: a turn that ended quietly (NO_REPLY, a reaction, only steps)
+          // is not news.
+          const said = finalized.lastBotMessage?.trim()
+          if (terminal._tag === "completed" && said && (turn.trigger === "user" || turn.trigger === "routine" || reported)) {
             yield* deps.notifier.notify({
               kind: "finished",
               botId,
               conversationId,
               title: bot.value.name,
-              body: previewOf(finalized.lastBotMessage ?? "Finished."),
+              body: previewOf(said),
             })
           } else if (terminal._tag === "failed") {
             yield* deps.notifier.notify({ kind: "error", botId, conversationId, title: bot.value.name, body: previewOf(terminal.message) })

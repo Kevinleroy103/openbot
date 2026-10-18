@@ -26,4 +26,18 @@ contextBridge.exposeInMainWorld("openbotDesktop", {
   },
   checkForUpdates: () => ipcRenderer.invoke("openbot:check-updates"),
   installUpdate: () => ipcRenderer.send("openbot:install-update"),
+  // quick send (quickSend.ts): what the panel was opened with, and its controls
+  quickSend: {
+    prefill: () => ipcRenderer.invoke("openbot:qs-prefill"),
+    onPrefill: (listener: (prefill: unknown) => void) => {
+      const handler = (_event: unknown, prefill: unknown) => listener(prefill)
+      ipcRenderer.on("openbot:qs-prefill", handler)
+      return () => void ipcRenderer.removeListener("openbot:qs-prefill", handler)
+    },
+    resize: (height: number) => ipcRenderer.send("openbot:qs-resize", height),
+    close: () => ipcRenderer.send("openbot:qs-close"),
+    screenshot: () => ipcRenderer.invoke("openbot:qs-screenshot"),
+    info: () => ipcRenderer.invoke("openbot:qs-info"),
+    installShortcut: () => ipcRenderer.invoke("openbot:qs-install-shortcut"),
+  },
 })

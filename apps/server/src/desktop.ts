@@ -163,6 +163,14 @@ const buildTarget = async (cacheDir: string, origin: string, target: DesktopTarg
       plist = setPlistString(plist, "CFBundleDisplayName", "OpenBot")
       plist = setPlistString(plist, "CFBundleIdentifier", BUNDLE_ID)
       plist = setPlistString(plist, "CFBundleShortVersionString", pkg.version)
+      // quick send: the page in the browser in front (AppleScript), and `openbot://send` links
+      plist = setPlistString(plist, "NSAppleEventsUsageDescription", "OpenBot reads the page open in your browser when you send it to a Bot.")
+      if (!plist.includes("CFBundleURLSchemes")) {
+        plist = plist.replace(
+          /<dict>/,
+          "<dict>\n\t<key>CFBundleURLTypes</key>\n\t<array><dict><key>CFBundleURLName</key><string>OpenBot</string><key>CFBundleURLSchemes</key><array><string>openbot</string></array></dict></array>",
+        )
+      }
       await writeFile(plistPath, plist)
       const app = path.join(stage, "OpenBot.app")
       await rename(bundle, app)
@@ -262,10 +270,13 @@ Icon=openbot
 Type=Application
 Categories=Network;Chat;
 StartupWMClass=OpenBot
+MimeType=x-scheme-handler/openbot;
 DESKTOP
     update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
+    xdg-mime default openbot.desktop x-scheme-handler/openbot >/dev/null 2>&1 || true
     nohup "$HOME/.local/bin/openbot-desktop" >/dev/null 2>&1 &
     echo "OpenBot is installed (in your app launcher, or run openbot-desktop) and open."
+    echo "Quick send: Ctrl+Alt+O, or bind a key to: openbot-desktop --quick-send"
     ;;
 esac
 `

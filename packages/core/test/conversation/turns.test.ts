@@ -135,6 +135,26 @@ describe("DM turn end to end", () => {
   })
 })
 
+describe("finished notifications", () => {
+  test("a turn that ends without a message (NO_REPLY, a reaction, only steps) notifies nobody", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const driver = yield* TestDriver
+        const bot = yield* createBot("Ada")
+        yield* driver.setBehavior(bot.id, (turn) => turn.complete())
+        yield* send(bot.directConversationId, "thanks!")
+        yield* settled(bot.directConversationId)
+        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "Here it is.").pipe(Effect.andThen(turn.complete())))
+        yield* send(bot.directConversationId, "and the report?")
+        yield* settled(bot.directConversationId, 2)
+        return (yield* (yield* NotifierFake).sent).filter((n) => n.kind === "finished")
+      }),
+      appLayer(),
+    )
+    expect(out.map((n) => n.body)).toEqual(["Here it is."])
+  })
+})
+
 describe("queue vs steer", () => {
   test("auto steers into a running turn when the harness can; queue mode always queues", async () => {
     const out = await runTest(

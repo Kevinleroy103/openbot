@@ -6,6 +6,7 @@ import { RegistryProvider } from "@effect/atom-react"
 import { Toaster } from "@openbot/ui"
 import { App } from "./app/App.tsx"
 import { desktopApp } from "./app/notifications.ts"
+import { QuickSend } from "./quick/QuickSend.tsx"
 
 const root = document.getElementById("root")
 if (!root) throw new Error("#root missing from index.html")
@@ -16,12 +17,23 @@ if (!root) throw new Error("#root missing from index.html")
 const desktop = desktopApp()
 if (desktop !== undefined) document.documentElement.dataset.desktop = desktop.platform
 
+// `#/quick-send`: only the quick send card (the desktop app's floating panel, or the bookmarklet's
+// popup), not the app; in the panel the page around the card is transparent.
+const quickSend = location.hash.startsWith("#/quick-send")
+if (quickSend) document.documentElement.dataset.quickSend = desktop?.quickSend !== undefined ? "panel" : "page"
+
 createRoot(root).render(
   <StrictMode>
     <RegistryProvider>
       <Toaster>
-        {desktop?.platform === "darwin" && <div aria-hidden className="ob-titlebar" />}
-        <App />
+        {quickSend ? (
+          <QuickSend />
+        ) : (
+          <>
+            {desktop?.platform === "darwin" && <div aria-hidden className="ob-titlebar" />}
+            <App />
+          </>
+        )}
       </Toaster>
     </RegistryProvider>
   </StrictMode>,

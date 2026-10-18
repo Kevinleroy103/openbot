@@ -108,6 +108,12 @@ html[data-desktop="darwin"] .ob-overlay-top {
 html[data-desktop="darwin"] .ob-compact-top {
   margin-top: 28px;
 }
+/* Quick send in the desktop app's floating panel: only the card shows. */
+html[data-quick-send="panel"],
+html[data-quick-send="panel"] body,
+html[data-quick-send="panel"] #root {
+  background: transparent !important;
+}
 
 /* ===================================================================== responsive / mobile ======
  * Layout modes (layout.ts): phone < 768 ≤ tablet < 1024 ≤ desktop. Desktop is untouched by

@@ -8,7 +8,7 @@ import { type Settings, type SettingsPatch, applySettingsPatch } from "@openbot/
 import { Select, Switch, TextField } from "@openbot/ui"
 import { type ReactNode, useState } from "react"
 import { ErrorLine, harnessName, harnessReady, useCommand, useQuery } from "../details/kit.tsx"
-import { DesktopAppRow, NotificationsRow } from "./DesktopApp.tsx"
+import { DesktopAppRow, NotificationsRow, QuickSendRow } from "./DesktopApp.tsx"
 import { IphoneAppRow } from "./IphoneApp.tsx"
 import { GroupLabel, PageHeader, SettingsCard, SettingsRow } from "./layout.tsx"
 
@@ -165,6 +165,7 @@ export function GeneralPage(): ReactNode {
       <GroupLabel>Apps</GroupLabel>
       <SettingsCard>
         <DesktopAppRow />
+        <QuickSendRow />
         <IphoneAppRow />
         <NotificationsRow />
       </SettingsCard>

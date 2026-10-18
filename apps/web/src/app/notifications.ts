@@ -3,9 +3,11 @@
 //
 // In the desktop app (apps/desktop) they are on unless turned off and become the computer's own
 // notifications; in a browser they are opt-in (Settings › General) and need the browser's permission.
-// A notification for the chat you are looking at is not shown; clicking one opens its chat.
+// A notification for the chat you are looking at is not shown; clicking one opens its chat. It carries
+// the Bot's avatar as its icon (botIcon.ts).
 import type { ConversationId } from "@openbot/contracts"
 import { useEffect, useRef, useSyncExternalStore } from "react"
+import { botIconUrl } from "./botIcon.ts"
 import { useRoster } from "./data.ts"
 import { useSelection } from "./uiState.ts"
 
@@ -22,6 +24,25 @@ export interface DesktopBridge {
   readonly onUpdate?: (listener: (state: unknown) => void) => () => void
   readonly checkForUpdates?: () => Promise<unknown>
   readonly installUpdate?: () => void
+  /** The quick send panel's controls (apps/desktop/src/quickSend.ts); absent in older copies. */
+  readonly quickSend?: {
+    readonly prefill: () => Promise<unknown>
+    readonly onPrefill: (listener: (prefill: unknown) => void) => () => void
+    readonly resize: (height: number) => void
+    readonly close: () => void
+    readonly screenshot: () => Promise<unknown>
+    readonly info: () => Promise<unknown>
+    readonly installShortcut: () => Promise<unknown>
+  }
+}
+
+/** What the desktop app's quick send panel opens with (apps/desktop/src/quickSend.ts). */
+export interface QuickSendPrefill {
+  readonly id: number
+  readonly link?: { readonly url: string; readonly title?: string; readonly from?: string }
+  readonly text?: string
+  readonly clipboard?: { readonly text?: string; readonly image?: string }
+  readonly to?: string
 }
 
 export const desktopApp = (): DesktopBridge | undefined => (globalThis as { openbotDesktop?: DesktopBridge }).openbotDesktop
@@ -80,15 +101,18 @@ export function useSystemNotifications(): void {
       const looking = document.visibilityState === "visible" && document.hasFocus() && n.conversationId !== undefined &&
         n.conversationId === view.current.conversationId
       if (looking) continue
-      const shown = new Notification(n.title, { body: n.body, tag: n.conversationId ?? n.id })
-      shown.onclick = () => {
-        desktopApp()?.focus()
-        window.focus()
-        if (n.conversationId !== undefined) view.current.select(n.conversationId)
-        shown.close()
-      }
+      const bot = n.botId === undefined ? undefined : roster.botById(n.botId)
+      void (bot === undefined ? Promise.resolve(undefined) : botIconUrl(bot.avatar)).then((icon) => {
+        const shown = new Notification(n.title, { body: n.body, tag: n.conversationId ?? n.id, ...(icon === undefined ? {} : { icon }) })
+        shown.onclick = () => {
+          desktopApp()?.focus()
+          window.focus()
+          if (n.conversationId !== undefined) view.current.select(n.conversationId)
+          shown.close()
+        }
+      })
     }
-  }, [notifications, roster.loaded])
+  }, [notifications, roster])
 
   const unread = [...roster.state.conversations.values()].filter((c) => !c.hiddenFromSidebar && c.unreadCount > 0).length
   useEffect(() => {

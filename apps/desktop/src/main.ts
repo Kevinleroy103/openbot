@@ -15,10 +15,13 @@
  *   in the browser.
  * - The app itself updates from the brain (update.ts): checked at start, every few hours and on
  *   wake; a new build downloads in the background and the web app offers "Restart to update".
+ * - Quick send (quickSend.ts): ⌥⌘O / Ctrl+Alt+O, `openbot://send?…` links and `--quick-send` open a
+ *   small panel to send the page in the browser, a copy or a screenshot to a Bot.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, safeStorage, shell, Tray } from "electron"
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, safeStorage, shell, Tray } from "electron"
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { makeQuickSend, prefillOfLink } from "./quickSend.ts"
 import { makeUpdater, type UpdateState } from "./update.ts"
 
 interface Baked {
@@ -43,6 +46,8 @@ if (!app.requestSingleInstanceLock()) app.quit()
 let win: BrowserWindow | undefined
 let tray: Tray | undefined
 let quitting = false
+/** The window shows the signed-in web app (quick send needs its session). */
+let signedIn = false
 
 // ---------------------------------------------------------------------------- the app's session
 
@@ -80,6 +85,8 @@ const openApp = async (token: string, page = "#/"): Promise<boolean> => {
   if (minted.status === 401 || minted.status === 403) return false
   if (typeof minted.body.code !== "string") throw new Error(`OpenBot answered ${minted.status}`)
   await win?.loadURL(`${origin}/api/auth/login?code=${encodeURIComponent(minted.body.code)}&next=${encodeURIComponent(page)}`)
+  signedIn = true
+  quick?.warm()
   return true
 }
 
@@ -260,14 +267,50 @@ ipcMain.on("openbot:open-approval", (_event, url: unknown) => {
   if (typeof url === "string" && url.startsWith(`${origin}/`)) void shell.openExternal(url)
 })
 ipcMain.on("openbot:sign-out", () => {
+  signedIn = false
   forgetSession()
   void win?.webContents.session.clearStorageData({ storages: ["cookies"] }).then(() => connect())
 })
 
+// ---------------------------------------------------------------------------- quick send (quickSend.ts)
+
+let quick: ReturnType<typeof makeQuickSend> | undefined
+/** Links and flags that arrive before the app is ready. */
+const early: Array<ReadonlyArray<string>> = []
+
+/** `--quick-send` or an `openbot://send?…` link among the arguments: true when one was handled. */
+const handleArgs = (argv: ReadonlyArray<string>): boolean => {
+  if (quick === undefined) {
+    early.push(argv)
+    return true
+  }
+  const link = argv.find((a) => a.startsWith("openbot://"))
+  const prefill = link === undefined ? undefined : prefillOfLink(link)
+  if (prefill !== undefined) {
+    void quick.open(prefill)
+    return true
+  }
+  if (argv.includes("--quick-send")) {
+    void quick.open()
+    return true
+  }
+  return link !== undefined
+}
+
+if (process.defaultApp) app.setAsDefaultProtocolClient("openbot", process.execPath, [process.argv[1] ?? "."])
+else app.setAsDefaultProtocolClient("openbot")
+
 // ---------------------------------------------------------------------------- lifecycle
 
-app.on("second-instance", show)
+app.on("second-instance", (_event, argv) => {
+  if (!handleArgs(argv)) show()
+})
+app.on("open-url", (event, url) => {
+  event.preventDefault()
+  if (!handleArgs([url])) show()
+})
 app.on("activate", show)
+app.on("will-quit", () => globalShortcut.unregisterAll())
 app.on("before-quit", () => {
   quitting = true
 })
@@ -297,7 +340,11 @@ void app.whenReady().then(() => {
   )
   createWindow()
   createTray()
-  void start()
+  quick = makeQuickSend({ origin, preload: join(appDir, "preload.js"), canOpen: () => signedIn, fallback: show })
+  quick.registerShortcut()
+  void start().then(() => {
+    for (const argv of [process.argv, ...early.splice(0)]) handleArgs(argv)
+  })
   setTimeout(() => void updater.check(), 15_000)
   setInterval(() => void updater.check(), UPDATE_EVERY_MS)
   powerMonitor.on("resume", () => void updater.check())

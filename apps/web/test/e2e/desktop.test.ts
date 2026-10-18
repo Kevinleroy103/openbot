@@ -9,13 +9,13 @@ import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBr
 
 const recordNotifications = () => {
   if (!location.protocol.startsWith("http")) return
-  const shown: Array<{ title: string; body?: string; tag?: string }> = []
+  const shown: Array<{ title: string; body?: string; tag?: string; icon?: string }> = []
   ;(window as unknown as { __shown: typeof shown }).__shown = shown
   class Recorded {
     static permission = "granted"
     static requestPermission = async () => "granted"
     onclick: (() => void) | null = null
-    constructor(title: string, options?: { body?: string; tag?: string }) {
+    constructor(title: string, options?: { body?: string; tag?: string; icon?: string }) {
       shown.push({ title, ...options })
     }
     close() {}
@@ -75,11 +75,15 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     const { page } = app
     await page.goto(`${brain.base}/#/c/${encodeURIComponent(adaDm)}`)
     await page.getByRole("textbox", { name: "Message Ada" }).waitFor()
-    const shown = () => page.evaluate(() => (window as unknown as { __shown: Array<{ title: string; body?: string }> }).__shown)
+    const shown = () => page.evaluate(() => (window as unknown as { __shown: Array<{ title: string; body?: string; icon?: string }> }).__shown)
     const focused = await page.evaluate(() => document.hasFocus())
     await rpc.call((c) => c["messages.send"]({ conversationId: bobDm, text: "echo: the report is ready", clientNonce: "e2e-desktop-1" }))
     const notes = await eventually(shown, (n) => n.some((x) => x.title === "Bob"), { label: "Bob's notification" })
-    expect(notes.find((x) => x.title === "Bob")?.body).toContain("the report is ready")
+    const bob = notes.find((x) => x.title === "Bob")
+    expect(bob?.body).toContain("the report is ready")
+    // the Bot's avatar as the icon
+    expect(bob?.icon).toStartWith("data:image/png;base64,")
+    await Bun.write(new URL("./screenshots/e2e-76-notification-icon.png", import.meta.url).pathname, Buffer.from(bob!.icon!.split(",")[1]!, "base64"))
     await rpc.call((c) => c["messages.send"]({ conversationId: adaDm, text: "echo: on screen", clientNonce: "e2e-desktop-2" }))
     await page.getByTestId("transcript").getByText("on screen").first().waitFor()
     await page.waitForTimeout(500)
@@ -161,6 +165,79 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     await context.close()
   }, 60_000)
 
+  test("quick send from a browser (the bookmarklet's popup): the page and selection go to the Bot picked", async () => {
+    const page = await app.context.newPage()
+    const q = new URLSearchParams({ url: "https://x.com/someone/status/42", title: "A post about agents", text: "the part I liked" })
+    await page.goto(`${brain.base}/#/quick-send?${q}`)
+    const card = page.getByTestId("quick-send")
+    await card.waitFor()
+    await card.getByText("A post about agents").waitFor()
+    await card.getByText("the part I liked").waitFor()
+    await card.getByTestId("quick-send-to").click()
+    await card.getByRole("option", { name: "Bob" }).click()
+    await card.getByLabel("Note").fill("echo: worth a look?")
+    await page.screenshot({ path: new URL("./screenshots/e2e-74-quick-send-browser.png", import.meta.url).pathname })
+    await card.getByLabel("Note").press("Enter")
+    await card.getByText("Sent to Bob").waitFor()
+    const state = await eventually(() => rpc.conversation(bobDm), (s) =>
+      [...s.entries.values()].some((e) => e.kind === "message" && e.role === "user" && e.text.includes("x.com/someone/status/42")), { label: "the quick send message" })
+    const sent = [...state.entries.values()].find((e) => e.kind === "message" && e.role === "user" && e.text.includes("x.com/someone/status/42"))
+    expect(sent?.kind === "message" ? sent.text : "").toBe("echo: worth a look?\n\nA post about agents\nhttps://x.com/someone/status/42\n\n> the part I liked")
+    await page.close()
+  }, 60_000)
+
+  test("quick send in the desktop app's panel: what it opened with (page, copy, image), sent with the image attached", async () => {
+    const context = await browser.newContext({ viewport: { width: 700, height: 500 }, colorScheme: "dark" })
+    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=="
+    await context.addInitScript((image) => {
+      const w = window as unknown as { openbotDesktop: unknown; __closed: number }
+      w.__closed = 0
+      const prefill = {
+        id: 1,
+        link: { url: "https://news.ycombinator.com/item?id=1", title: "Show HN: OpenBot", from: "Safari" },
+        clipboard: { text: "copied from Slack: ship it friday" },
+      }
+      w.openbotDesktop = {
+        version: "0.1.0",
+        platform: "darwin",
+        setBadgeCount: () => {},
+        focus: () => {},
+        signOut: () => {},
+        quickSend: {
+          prefill: async () => prefill,
+          onPrefill: () => () => {},
+          resize: () => {},
+          close: () => void w.__closed++,
+          screenshot: async () => image,
+          info: async () => ({ shortcut: "⌥⌘O", registered: true, canScreenshot: true, platform: "darwin" }),
+          installShortcut: async () => ({ ok: true }),
+        },
+      }
+    }, png)
+    const page = await context.newPage()
+    await page.goto(brain.loginUrl)
+    await page.goto(`${brain.base}/#/quick-send`)
+    await page.reload()
+    const card = page.getByTestId("quick-send")
+    await card.getByText("Show HN: OpenBot").waitFor()
+    await card.getByText("copied from Slack: ship it friday").waitFor()
+    expect(await page.evaluate(() => document.documentElement.dataset.quickSend)).toBe("panel")
+    await card.getByRole("button", { name: "Add a screenshot" }).click()
+    await card.getByRole("img", { name: "Screenshot" }).waitFor()
+    await card.getByTestId("quick-send-to").click()
+    await card.getByRole("option", { name: "Ada" }).click()
+    await page.screenshot({ path: new URL("./screenshots/e2e-75-quick-send-panel.png", import.meta.url).pathname })
+    await card.getByTestId("quick-send-send").click()
+    await card.getByText("Sent to Ada").waitFor()
+    await eventually(() => page.evaluate(() => (window as unknown as { __closed: number }).__closed), (n) => n === 1, { label: "the panel closed" })
+    const state = await eventually(() => rpc.conversation(adaDm), (s) =>
+      [...s.entries.values()].some((e) => e.kind === "message" && e.role === "user" && e.text.includes("Show HN: OpenBot")), { label: "the panel's message" })
+    const sent = [...state.entries.values()].find((e) => e.kind === "message" && e.role === "user" && e.text.includes("Show HN: OpenBot"))
+    expect(sent?.kind === "message" ? sent.text : "").toBe("Show HN: OpenBot\nhttps://news.ycombinator.com/item?id=1\n\n> copied from Slack: ship it friday")
+    expect(sent?.kind === "message" ? sent.attachments.map((a) => a.mime) : []).toEqual(["image/png"])
+    await context.close()
+  }, 60_000)
+
   test("Settings › General › Apps: the desktop app, the iPhone app and notifications on this device", async () => {
     const { page } = app
     await page.keyboard.press("Control+,")
@@ -170,6 +247,9 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     expect(await download.textContent()).toContain("Download for")
     await page.getByText("Notifications on this device").waitFor()
     await page.getByText("iPhone app").waitFor()
+    const bookmarklet = await page.getByTestId("quick-send-bookmarklet").getAttribute("href")
+    expect(bookmarklet).toStartWith("javascript:")
+    expect(bookmarklet).toContain(`${brain.base}/#/quick-send?`)
     await download.scrollIntoViewIfNeeded()
     await app.shot("e2e-71-settings-apps")
     expect(app.errors).toEqual([])

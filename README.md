@@ -154,7 +154,15 @@ curl -fsSL https://<your-openbot>/desktop/install.sh | sh
 On first start the app shows a code and opens OpenBot in your browser: click **Allow** there and
 the app signs in. It updates itself from your OpenBot: when there is a new version it downloads it
 in the background and shows **Restart to update** in the sidebar (Settings › General › Apps and the
-app menu can also check right away). Notifications also work in the browser itself (turn on **Notifications on this
+app menu can also check right away).
+
+**Quick send:** press ⌥⌘O (Ctrl+Alt+O on Linux and Windows) anywhere to send what you're looking at
+to a Bot: the page open in your browser, something you just copied, or a screenshot, plus a note.
+On a Mac, **Add to the Share menu** (Settings › General › Apps) adds "Send to OpenBot" to the Share
+menu and to right-click › Services. Raycast, Alfred and Shortcuts can open
+`openbot://send?text=…&url=…&to=…`, and the **Send to OpenBot** bookmarklet on the same page works
+in any browser. Nothing is sent until you press Enter. On Linux you can also bind a key to
+`openbot-desktop --quick-send`. Notifications also work in the browser itself (turn on **Notifications on this
 device** in the same section), but only while OpenBot is open there.
 
 ## iPhone app

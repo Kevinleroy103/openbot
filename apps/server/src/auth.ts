@@ -10,6 +10,11 @@
  *   browser sends one; `Sec-Fetch-Site: cross-site` is refused too (cross-site WebSocket hijacking).
  * - **wsTicket.** Single use, 60 s, minted over an authenticated POST, for clients that cannot attach
  *   cookies to a WebSocket.
+ * - **App codes.** Single use, 5 min, minted by the signed-in web app (its "Connect the iPhone app" QR
+ *   code); the app trades one (or the owner token) for a session token it keeps and sends as
+ *   `Authorization: Bearer` (`POST /api/auth/app-login`).
+ * - **Web codes.** Single use, 60 s, minted by the app for its in-app web pages: `GET /api/auth/login?code=`
+ *   sets the app's own session as the web view's cookie (no new session).
  * - Logging out revokes the session and closes the sockets opened with it.
  *
  * The MCP gateway never accepts these cookies (bearer only, internal listener).
@@ -22,6 +27,8 @@ import { chmod, mkdir, rename } from "node:fs/promises"
 export const SESSION_COOKIE = "openbot_session"
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const TICKET_TTL_MS = 60 * 1000
+export const APP_CODE_TTL_MS = 5 * 60 * 1000
+export const WEB_CODE_TTL_MS = 60 * 1000
 const MAX_SESSIONS = 64
 
 export interface Session {
@@ -45,6 +52,14 @@ export interface WebAuthShape {
   /** The live session of a session token. */
   readonly session: (sessionToken: string | undefined) => Effect.Effect<Session | undefined>
   readonly mintTicket: (session: Session) => Effect.Effect<{ readonly ticket: string; readonly expiresInSeconds: number }>
+  /** A one-time code the iPhone app trades for a session of its own (`loginWithAppCode`). */
+  readonly mintAppCode: (session: Session) => Effect.Effect<{ readonly code: string; readonly expiresInSeconds: number }>
+  /** Redeems (and burns) an app code: a new session, while the session that minted it is alive. */
+  readonly loginWithAppCode: (code: string) => Effect.Effect<{ readonly sessionToken: string; readonly session: Session } | undefined>
+  /** A one-time code for the session token itself (the app's in-app web pages). */
+  readonly mintWebCode: (sessionToken: string) => Effect.Effect<{ readonly code: string; readonly expiresInSeconds: number }>
+  /** Redeems (and burns) a web code: its session token, while that session is alive. */
+  readonly redeemWebCode: (code: string) => Effect.Effect<string | undefined>
   /** Redeems (and burns) a ticket. */
   readonly redeemTicket: (ticket: string) => Effect.Effect<Session | undefined>
   /** Completes when the session is revoked (logout). */
@@ -70,13 +85,15 @@ export class WebAuth extends Context.Service<WebAuth, WebAuthShape>()("openbot/s
 // ============================================================================ pure helpers
 
 /** The session token from the `openbot_session` cookie. */
+/** The session token of a request: the `openbot_session` cookie, or `Authorization: Bearer` (the iPhone app). */
 export const sessionTokenOf = (request: HttpServerRequest.HttpServerRequest): string | undefined => {
   const fromParsed = request.cookies[SESSION_COOKIE]
   if (fromParsed !== undefined && fromParsed !== "") return fromParsed
   const header = request.headers["cookie"]
-  if (header === undefined) return undefined
-  const match = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`).exec(header)
-  return match?.[1]
+  const match = header === undefined ? null : new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`).exec(header)
+  if (match?.[1] !== undefined) return match[1]
+  const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers["authorization"] ?? "")
+  return bearer?.[1]
 }
 
 /** Query parameters of a request URL (relative or absolute). */
@@ -172,6 +189,8 @@ export const makeWebAuth = (options: WebAuthOptions) =>
     let file: AuthFile = loaded.file
     const lock = yield* Semaphore.make(1)
     const tickets = new Map<string, { readonly session: Session; readonly expiresAt: number }>()
+    const appCodes = new Map<string, { readonly session: Session; readonly expiresAt: number }>()
+    const webCodes = new Map<string, { readonly sessionToken: string; readonly expiresAt: number }>()
     const revocations = new Map<string, Deferred.Deferred<void>>()
 
     const persist = (next: AuthFile) =>
@@ -190,15 +209,55 @@ export const makeWebAuth = (options: WebAuthOptions) =>
         return file.sessions.find((s) => s.id === id && s.expiresAt > now)
       })
 
+    const newSession = Effect.gen(function*() {
+      const now = yield* Clock.currentTimeMillis
+      const sessionToken = randomToken(32)
+      const created: Session = { id: yield* sha256Hex(sessionToken), createdAt: now, expiresAt: now + SESSION_TTL_MS }
+      const kept = live(now).slice(-(MAX_SESSIONS - 1))
+      yield* persist({ ...file, sessions: [...kept, created] })
+      return { sessionToken, session: created }
+    })
+
     const login: WebAuthShape["login"] = (token) =>
+      safeEqual(token.trim(), file.ownerToken) ? newSession : Effect.succeed(undefined)
+
+    const mintAppCode: WebAuthShape["mintAppCode"] = (owner) =>
       Effect.gen(function*() {
-        if (!safeEqual(token.trim(), file.ownerToken)) return undefined
         const now = yield* Clock.currentTimeMillis
-        const sessionToken = randomToken(32)
-        const created: Session = { id: yield* sha256Hex(sessionToken), createdAt: now, expiresAt: now + SESSION_TTL_MS }
-        const kept = live(now).slice(-(MAX_SESSIONS - 1))
-        yield* persist({ ...file, sessions: [...kept, created] })
-        return { sessionToken, session: created }
+        for (const [c, entry] of appCodes) if (entry.expiresAt <= now) appCodes.delete(c)
+        const code = randomToken(16)
+        appCodes.set(code, { session: owner, expiresAt: now + APP_CODE_TTL_MS })
+        return { code, expiresInSeconds: APP_CODE_TTL_MS / 1000 }
+      })
+
+    const loginWithAppCode: WebAuthShape["loginWithAppCode"] = (code) =>
+      Effect.gen(function*() {
+        const entry = appCodes.get(code)
+        appCodes.delete(code)
+        if (entry === undefined) return undefined
+        const now = yield* Clock.currentTimeMillis
+        if (entry.expiresAt <= now) return undefined
+        // the web session that showed the code must still be signed in
+        if (!file.sessions.some((s) => s.id === entry.session.id && s.expiresAt > now)) return undefined
+        return yield* newSession
+      })
+
+    const mintWebCode: WebAuthShape["mintWebCode"] = (sessionToken) =>
+      Effect.gen(function*() {
+        const now = yield* Clock.currentTimeMillis
+        for (const [c, entry] of webCodes) if (entry.expiresAt <= now) webCodes.delete(c)
+        const code = randomToken(16)
+        webCodes.set(code, { sessionToken, expiresAt: now + WEB_CODE_TTL_MS })
+        return { code, expiresInSeconds: WEB_CODE_TTL_MS / 1000 }
+      })
+
+    const redeemWebCode: WebAuthShape["redeemWebCode"] = (code) =>
+      Effect.gen(function*() {
+        const entry = webCodes.get(code)
+        webCodes.delete(code)
+        if (entry === undefined) return undefined
+        if (entry.expiresAt <= (yield* Clock.currentTimeMillis)) return undefined
+        return (yield* session(entry.sessionToken)) === undefined ? undefined : entry.sessionToken
       })
 
     const revoke = (id: string) =>
@@ -209,6 +268,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
           yield* Deferred.succeed(deferred, undefined)
         }
         for (const [ticket, entry] of tickets) if (entry.session.id === id) tickets.delete(ticket)
+        for (const [code, entry] of appCodes) if (entry.session.id === id) appCodes.delete(code)
       })
 
     const logout: WebAuthShape["logout"] = (token) =>
@@ -283,6 +343,10 @@ export const makeWebAuth = (options: WebAuthOptions) =>
         logout,
         session,
         mintTicket,
+        mintAppCode,
+        loginWithAppCode,
+        mintWebCode,
+        redeemWebCode,
         redeemTicket,
         revoked,
         authenticate,

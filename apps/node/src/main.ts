@@ -6,7 +6,14 @@ import * as BunRuntime from "@effect/platform-bun/BunRuntime"
 import * as Cause from "effect/Cause"
 import * as Exit from "effect/Exit"
 import * as Runtime from "effect/Runtime"
+import { runScreenHelper } from "@openbot/node-daemon"
 import { runCli } from "./cli.ts"
+
+// the Mac screen helper (a child of the node: CoreGraphics events over stdin/stdout)
+if (process.argv[2] === "screen-helper") {
+  await runScreenHelper()
+  process.exit(0)
+}
 
 BunRuntime.runMain({
   teardown: (exit, onExit) => {

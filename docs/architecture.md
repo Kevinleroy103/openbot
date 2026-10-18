@@ -285,7 +285,7 @@ Start from the seed `rpc.ts`. **Cut for v1:** connectors.*, tasks.*, messages.fe
 | bots | `bots.create {name, label?, avatar?, harness, hostNodeId?, instructions?, clientNonce}`, `bots.update {botId, patch}`, `bots.delete`, `bots.get`, `bots.readContext` → `{instructions, memory: BotMemory}`, `bots.newSession {botId}` (drop the native session, same conversation), `bots.compact {botId}` |
 | sections | `sections.list/create/rename/delete/reorder`, `bots.setSection` (via patch) |
 | conversations | `conversations.subscribe {conversationId, after?}` stream, `conversations.history`, `conversations.exchange {botId, peerBotId, at?|before?|after?, limit}`, `conversations.createGroup {title, memberBotIds, leadBotId?}`, `conversations.setMembers`, `conversations.rename`, `conversations.markRead`, `conversations.setHidden` |
-| messages | `messages.send {conversationId, text, attachmentIds?, replyToId?, addressedBotIds?, clientNonce, mode?: auto\|queue\|steer}`, `messages.lookupSend`, `messages.react`, `turns.interrupt`, `attachments.upload` |
+| messages | `messages.send {conversationId, text, attachmentIds?, replyToId?, addressedBotIds?, clientNonce, mode?: auto\|queue\|steer}`, `messages.lookupSend`, `messages.react`, `turns.interrupt`, `turns.retry`, `attachments.upload` |
 | requests | `requests.respond {requestId, response}`, `requests.listPending` |
 | routines | `routines.list/create/update/setEnabled/delete/runNow`, `routines.runs {routineId}` |
 | memory | `memory.get {botId}`, `memory.putFact`, `memory.deleteFact`, `memory.setIndex` |
@@ -333,7 +333,7 @@ core/src/
     BotService.ts         CRUD, avatar defaults (FNV-1a of id), direct conversation creation, sections, newSession, compact
     ConversationService.ts groups, membership, read state, history paging, rename/hide
     Orchestrator.ts       messages.send; routing; one runner per BOT; interrupts; group deletion; boot recovery hooks
-    BotRunner.ts          one fiber per bot (D5.0); owns the bot's single scoped HarnessSession (opened lazily, idle-evicted after 15 min, reopened with resume); FIFO of Deliveries from all its conversations; each turn belongs to one conversation; steer (same conversation only) vs queue
+    BotRunner.ts          one fiber per bot (D5.0); owns the bot's single scoped HarnessSession (opened lazily, compacted after 10 idle min when its context is large, idle-evicted after 15 min, reopened with resume); FIFO of Deliveries from all its conversations; each turn belongs to one conversation; steer (same conversation only) vs queue
     TurnIngest.ts         HarnessEvent → TranscriptEntry upserts (EntryId allocation by native key, revisions, finalize on turn end, aborted marking), Turn records, activity, usage
     GroupRouter.ts        decides target bots for a group message (D5.1)
     Messaging.ts          bot→bot (message_bot), bot→group (post_to_group), handoff_task; hop limits; event entries
@@ -459,7 +459,7 @@ main session, origin conversation (DM if the bot left it): the bot reports in it
 - **Layer 5b**, below the Orchestrator: it never calls it. The Orchestrator drains `results` (like `asyncAnswers`) and routes gateway approvals with `ToolContext.taskId` to `BackgroundTasks.approve`; it stops a deleted group's tasks; `BotService.delete` calls `removeBot`.
 - **Gateway:** a token with `claims.taskId` keeps the origin conversation (no `activeTurn` lookup) and hides `start_task` / `list_tasks` / `check_task` / `cancel_task` / `update_task` / `ask_user` / `request_approval`.
 - **Stops:** the owner (`tasks.cancel`, reported to the bot), the bot (`cancel_task`, not reported), the system (bot or group deleted, not reported). A turn's Stop never touches tasks.
-- **Restart:** the queue is in memory. Boot recovery fails queued/running tasks (`interruptedTasks`, "interrupted by a restart"); after the drivers are registered `BackgroundTasks.recover(report)` publishes them and tells each bot.
+- **Restart:** the queue is in memory. Boot recovery fails queued/running tasks (`interruptedTasks`, "interrupted by a restart"); once the routes serve, `BackgroundTasks.recover(report)` runs them again under their ids (resuming their own session, `Task.nativeSessionId`), at most `MAX_TASK_RESTARTS` times; after that the bot is told it could not be finished.
 - **UI:** roster tasks drive "Handling…" (the bot's one status line above the composer of the origin conversation when no turn of it runs there, `chat/busy.ts` `chatStatuses`; the sidebar preview) and the details pane's Tasks tab (`tasks.list` / `tasks.get`, refetched on roster task changes; Stop = `tasks.cancel`; updates are "Update" rows among the steps).
 
 ### 4.4 persistence
@@ -476,12 +476,14 @@ main session, origin conversation (DM if the bot left it): the bot reports in it
   - `mcp_tokens(hash, claims_json, expires_at, revoked)`, `process_ledger(pid, pgid, kind, started_at)`.
 - Payloads are Schema-encoded JSON and decoded on read. Corrupt rows fail loudly.
 - **File stores:** `MemoryStore`, `SkillStore`, `AttachmentStore` under the data dir, using `Bun.file`/`Bun.write` with atomic writes (temp file + rename).
+- **File store `CarryoverStore`:** `<data>/carryover.json`, the work a stopping brain hands to the next boot (D7.4).
 - **Boot recovery** (`Persistence.boot`):
   - kill the pgids in `process_ledger`;
-  - mark running turns `interrupted`;
+  - mark queued/running/waiting turns `interrupted` (the running/waiting ones are reported as `cutOffTurns`);
   - mark pending requests `expired` (`not_resumable`);
   - fail queued/running background tasks ("interrupted by a restart") and finalize their steps;
   - bump nothing else.
+- **Resume** (after the routes serve, D7.4): `Orchestrator.resume` delivers the carried deliveries (queued turns keep their ids), the owner messages of turns a crash left queued, then a `system-resume` to every bot cut off mid-reply; `BackgroundTasks.recover` runs cut-off tasks again under their ids, resuming `Task.nativeSessionId` when it can (at most `MAX_TASK_RESTARTS` times, then the bot is told).
 
 ### 4.5 Harness adapters
 
@@ -580,6 +582,10 @@ Per-adapter specifics:
   - `ensure` (once per bot, concurrent calls share it): Xvfb `:N` (first free display from `:100`; stale lock files of dead servers are reclaimed; `-auth` cookie, `-nolisten tcp`, `-noreset`), a private `dbus-daemon`, a gradient background, xfwm4 (`--compositor=off`; openbox with a maximize-all rule and an app menu when xfwm4 fails or there is no dock), plank with launchers for the bot's browser, xfce4-terminal / xterm, thunar and mousepad, then two loopback x11vnc servers (`-localhost -shared -forever -nopw -noxdamage`, one `-viewonly`) whose ports come from `PORT=` on stdout.
   - Children run detached (own process groups) with an environment built from scratch: `DISPLAY=:N`, the cookie, per-bot XDG dirs under `<nodeData>/desktops/<botId>/home`, no `WAYLAND_DISPLAY` (x11vnc exits on it) and never the owner's session bus (apps would open on the owner's screen). Each carries `OPENBOT_DESKTOP=<node key>/<botId>/`, so `stop`, the node's shutdown (scope finalizer) and the next start after a SIGKILL find and kill everything that ran on the screen via /proc.
   - `act`: xdotool (`mousemove --sync`, `click --repeat`, buttons 4–7 for scroll, `type --delay 12` in 50-character chunks, `key`, `keydown`/`keyup` for held modifiers, always released) and ImageMagick `import -window root -resize 1280x800!` → JPEG q80, after a 400 ms settle. External programs only: no FFI in the node process (the local node runs inside the brain).
+- **`MacScreen`** (`screen@1`, macOS; `src/screen/`): the Mac's own screen, shared by its bots and the owner (offered only without `desktop@1`).
+  - `act`: the desktop's planner with Mac key names (cmd stays Command), replayed by a helper child process (`openbot-node screen-helper`, or Bun running `screen/helper.ts`): CoreGraphics events through bun:ffi (a native crash stays in the helper). Screenshots: `screencapture -x -m` + `sips -z` to the 1280-wide space; the pointer comes from `osascript` (AppKit). Held keys and buttons are released after each action and on every lease change.
+  - Sharing: refused (`LeaseHeld` with the reason) while the owner holds the lease for any bot, used the Mac in the last 20 s, or another bot acted in the last minute. Permissions (Screen Recording, Accessibility) are checked per use; macOS is asked once per run.
+  - `screen.stream`: screenshot frames about every 0.7 s; `screen.input`: the owner's mouse and keys (lease holder only).
 - **`BrowserManager`** (vendor/scratch/browser):
   - without desktops: one Chromium or Chrome (detected from PATH), **headless by default** (`--headful` puts windows on the node's own display), persistent profile `<nodeData>/browser-profile`, one window per bot (`Target.createTarget {newWindow:true}`);
   - with desktops: one Chromium **per bot**, headful on the bot's display (`--ozone-platform=x11`, maximized) with the profile `<nodeData>/desktops/<botId>/browser-profile`; every page in it is the bot's, and a browser opened from the dock (same command line and DevTools port) is adopted rather than replaced. A desktop reset closes it gracefully first;
@@ -749,7 +755,7 @@ Browser only (`browser@1`, no desktop):
   - `SessionClosed` or a stream failure → the runner marks the turn failed (error tray in the UI) and drops the session.
   - The next delivery reopens it with `resume`.
   - After 3 consecutive open failures the bot status becomes `error` with the reason.
-- **Brain restart:** boot recovery (§4.4). Clients reconnect and resume via cursor (§4.3.6).
+- **Brain restart:** shutdown hands off queued and cut-off work (`Orchestrator.handOff`); boot recovery (§4.4) and resume continue it. Clients reconnect and resume via cursor (§4.3.6). Deploys drain first (`bun run deploy`, SIGUSR2, D7.4).
 - **Node disconnect:**
   - node tools return `ERROR: Node ‹label› is offline`;
   - placement-dependent sessions (codex-environment) are closed and reopened later;

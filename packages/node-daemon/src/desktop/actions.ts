@@ -67,8 +67,12 @@ const CLICKS = {
 
 const SCROLL_BUTTONS = { up: 4, down: 5, left: 6, right: 7 } as const
 
-/** Builds the plan for one action, or returns an error message for the model. */
-export const planAction = (g: ScreenGeometry, a: ComputerAction): ActionPlan | string => {
+/**
+ * Builds the plan for one action, or returns an error message for the model. `mac`: key names for a
+ * Mac (Command stays Command; the steps are then replayed by `macSteps`).
+ */
+export const planAction = (g: ScreenGeometry, a: ComputerAction, options?: { readonly mac?: boolean }): ActionPlan | string => {
+  const mac = options?.mac ?? false
   const optionalPoint = (name: "coordinate"): Point | undefined | string =>
     a[name] === undefined ? undefined : apiPoint(g, a[name], name)
   switch (a.action) {
@@ -94,7 +98,7 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction): ActionPlan | s
       const c = CLICKS[a.action]
       const p = optionalPoint("coordinate")
       if (typeof p === "string") return p
-      const mods = heldModifiers(a.text)
+      const mods = heldModifiers(a.text, mac)
       if (mods === undefined) return `text must name modifier keys to hold (e.g. "shift" or "ctrl+shift"), got ${JSON.stringify(a.text)}`
       const click = c.count === 1 ? xdo("click", c.button) : xdo("click", "--repeat", c.count, "--delay", CLICK_DELAY_MS, c.button)
       return {
@@ -143,7 +147,7 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction): ActionPlan | s
       if (direction === undefined) return "scroll_direction (up, down, left or right) is required"
       const amount = Math.round(a.scroll_amount ?? 3)
       if (!Number.isFinite(amount) || amount < 1 || amount > MAX_SCROLL) return `scroll_amount must be between 1 and ${MAX_SCROLL}`
-      const mods = heldModifiers(a.text)
+      const mods = heldModifiers(a.text, mac)
       if (mods === undefined) return `text must name modifier keys to hold (e.g. "shift"), got ${JSON.stringify(a.text)}`
       return {
         hold: mods,
@@ -164,12 +168,12 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction): ActionPlan | s
       }
     }
     case "key": {
-      const keys = xdoKeySequence(a.text)
+      const keys = xdoKeySequence(a.text, mac)
       if (keys === undefined) return `text must name a key or combination for key (e.g. "Return" or "ctrl+l"), got ${JSON.stringify(a.text)}`
       return { hold: [], steps: [xdo("key", "--delay", 50, "--", ...keys)], image: "after", cursor: false, text: `Pressed ${keys.join(" ")}.` }
     }
     case "hold_key": {
-      const keys = holdKeys(a.text)
+      const keys = holdKeys(a.text, mac)
       if (keys === undefined) return `text must name the key to hold (e.g. "shift"), got ${JSON.stringify(a.text)}`
       const d = seconds(a.duration, 1)
       if (typeof d === "string") return d

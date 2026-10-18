@@ -80,6 +80,17 @@ export interface DesktopConfig {
   readonly imageQuality: number
 }
 
+/** The computer's own screen (capability `screen@1`, macOS): shared by its bots and the owner. */
+export interface ScreenConfig {
+  /** Offer it on macOS (default: true unless `detectBinaries: false`). */
+  readonly enabled: boolean
+  /**
+   * The helper process that posts mouse and keyboard events (default: this program's
+   * `screen-helper` command when compiled, else Bun running ./screen/helper.ts).
+   */
+  readonly helper?: ReadonlyArray<string> | undefined
+}
+
 export interface NodeLimits {
   /** `fs.read` default/max bytes per call. */
   readonly readBytes: number
@@ -128,6 +139,8 @@ export interface NodeConfigShape {
   }
   readonly browser: BrowserConfig
   readonly desktop: DesktopConfig
+  /** absent: on (macOS only) */
+  readonly screen?: ScreenConfig | undefined
   readonly hostname: string
   readonly platform: string
   readonly arch: string
@@ -170,6 +183,7 @@ export interface NodeConfigInput {
   readonly detectBinaries?: boolean | undefined
   readonly browser?: Partial<BrowserConfig> | undefined
   readonly desktop?: Partial<DesktopConfig> | undefined
+  readonly screen?: Partial<ScreenConfig> | undefined
   readonly hostname?: string | undefined
   readonly forwardAudit?: boolean | undefined
 }
@@ -305,6 +319,7 @@ export const makeNodeConfig = (input: NodeConfigInput): NodeConfigShape => {
         imageQuality: input.desktop?.imageQuality ?? 80,
       }
     })(),
+    screen: { enabled: input.screen?.enabled ?? detect, helper: input.screen?.helper },
     hostname: input.hostname ?? osHostname(),
     platform: process.platform,
     arch: osArch(),

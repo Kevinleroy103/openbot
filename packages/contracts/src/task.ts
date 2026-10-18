@@ -39,6 +39,10 @@ export const Task = Schema.Struct({
   stepCount: Schema.optionalKey(NonNegativeInt),
   /** An approval card of this task waits for the owner. */
   waiting: Schema.optionalKey(Schema.Boolean),
+  /** Its harness session, resumed when a restart cut the task off. */
+  nativeSessionId: Schema.optionalKey(Schema.String),
+  /** Times a restart cut it off and it ran again (at most `MAX_TASK_RESTARTS`). */
+  restarts: Schema.optionalKey(NonNegativeInt),
 })
 export type Task = typeof Task.Type
 
@@ -60,5 +64,7 @@ export const TASK_BRIEF_MAX_CHARS = 16_000
 export const TASK_RESULT_MAX_CHARS = 16_000
 /** Tasks of one bot that run at the same time; more wait in line. */
 export const DEFAULT_TASKS_PER_BOT = 3
+/** A task cut off by more restarts than this is reported to its bot as unfinished. */
+export const MAX_TASK_RESTARTS = 3
 /** Finished tasks per bot kept in the roster snapshot (the Tasks tab lists more with `tasks.list`). */
 export const ROSTER_FINISHED_TASKS = 5

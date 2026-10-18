@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test"
 import type { ConversationId, KnownRosterStreamItem, Task, TaskId } from "@openbot/contracts"
+import { MAX_TASK_RESTARTS } from "@openbot/contracts"
 import { Deferred, Effect, Option } from "effect"
 import {
   ApprovalService,
@@ -333,8 +334,9 @@ describe("background tasks", () => {
     expect(out.steps.some((s) => s.kind === "event" && s.event.type === "auto-decided")).toBe(true)
   })
 
-  test("boot recovery fails queued/running tasks and tells each bot once the brain is up", async () => {
-    const out = await runTest(
+  /** A task left running by the previous run, then boot recovery and `recover`. */
+  const afterRestart = (extra: Partial<Task>) =>
+    runTest(
       Effect.gen(function*() {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
@@ -350,17 +352,36 @@ describe("background tasks", () => {
           createdAt: 0,
           updatedAt: 0,
           startedAt: 0,
+          ...extra,
         }))
         const report = yield* Effect.orDie((yield* BootRecovery).run)
         yield* (yield* BackgroundTasks).recover(report)
         yield* settled(ada.directConversationId, 1)
-        return { report, task: yield* taskById("tsk_old" as TaskId), handles: yield* driver.turns }
+        return { report, task: yield* taskById("tsk_old" as TaskId), handles: yield* driver.turns, opened: yield* driver.opened }
       }),
       appLayer(),
     )
+
+  test("a task a restart cut off runs again under its id, back in its own session", async () => {
+    const out = await afterRestart({ nativeSessionId: "native-task-old" })
     expect(out.report.interruptedTasks.map((t) => t.id)).toEqual(["tsk_old" as TaskId])
-    expect(out.task).toMatchObject({ status: "failed", error: "interrupted by a restart" })
-    expect(out.handles.at(-1)!.input.text).toBe('[Result of "Nightly audit"]\nIt could not be finished: interrupted by a restart.')
+    expect(out.task).toMatchObject({ status: "succeeded", restarts: 1 })
+    expect(out.opened.find((o) => o.purpose === "task")?.nativeSessionId).toBe("native-task-old")
+    const taskTurn = out.handles.find((h) => h.taskId === ("tsk_old" as TaskId))!
+    expect(taskTurn.input.text).toStartWith("[This work was cut off before you finished")
+    expect(out.handles.at(-1)!.input.text).toStartWith('[Result of "Nightly audit"]')
+  })
+
+  test("without a session to resume it starts over knowing that; too many restarts → reported unfinished", async () => {
+    const fresh = await afterRestart({})
+    const taskTurn = fresh.handles.find((h) => h.taskId === ("tsk_old" as TaskId))!
+    expect(briefOf(taskTurn.input.text)).toStartWith("audit")
+    expect(taskTurn.input.text).toContain("cut off by a restart. Some of it may already be done")
+    expect(fresh.task.status).toBe("succeeded")
+
+    const tooMany = await afterRestart({ restarts: MAX_TASK_RESTARTS })
+    expect(tooMany.task).toMatchObject({ status: "failed", error: "interrupted by a restart" })
+    expect(tooMany.handles.at(-1)!.input.text).toBe('[Result of "Nightly audit"]\nIt could not be finished: interrupted by a restart.')
   })
 
   test("deleting a group stops the work started there (untold); deleting the bot stops and removes its tasks", async () => {

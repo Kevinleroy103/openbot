@@ -5,7 +5,8 @@
  *   group, routine runs, bot-to-bot DMs): opened lazily on the first turn (placement → MCP binding →
  *   instructions → `driver.openSession`, resuming the bot's stored native session when the driver
  *   can), reopened when the bot's harness settings or rendered instructions change, dropped on
- *   `SessionClosed`, and closed after 15 idle minutes (the runner is then evicted).
+ *   `SessionClosed`, compacted after 10 idle minutes when its context is large (setting
+ *   `compactIdleBots`), and closed after 15 idle minutes (the runner is then evicted).
  * - Every turn belongs to exactly ONE conversation (its delivery's): its replies, tool calls, cards
  *   and activity land there, and its text says where it comes from (origin tags, see
  *   `renderTurnText`).
@@ -57,6 +58,7 @@ import type { BotRepo, BotSessionRecord, ConversationRepo, EntryRepo, TurnRepo }
 import type {
   ApprovalService,
   ApprovalWorkspace,
+  Carryover,
   CausalChain,
   ConversationService,
   Delivery,
@@ -89,6 +91,13 @@ type Service<T extends { readonly Service: unknown }> = T["Service"]
 export interface RunnerOptions {
   /** Close the session and evict the runner after this much idle time (architecture: 15 min). */
   readonly idleTimeout: Duration.Input
+  /**
+   * Idle this long with at least `idleCompactMinTokens` of context: compact while the prompt cache
+   * is still warm (setting `compactIdleBots`), so the next turn does not re-read the whole history
+   * uncached. Before `idleTimeout`, which closes the session.
+   */
+  readonly idleCompactAfter: Duration.Input
+  readonly idleCompactMinTokens: number
   /** After `session.interrupt`, force the turn to end after this long without `TurnInterrupted`. */
   readonly interruptGrace: Duration.Input
   /** Consecutive open failures before the bot's activity becomes `error` (§6: 3). */
@@ -97,6 +106,8 @@ export interface RunnerOptions {
 
 export const DEFAULT_RUNNER_OPTIONS: RunnerOptions = {
   idleTimeout: Duration.minutes(15),
+  idleCompactAfter: Duration.minutes(10),
+  idleCompactMinTokens: 100_000,
   interruptGrace: Duration.seconds(10),
   maxOpenFailures: 3,
 }
@@ -145,6 +156,8 @@ export interface RunnerDeps {
   readonly followUp: (input: DeliveryInput) => Effect.Effect<void>
   /** Removes the runner from the Orchestrator's registry. */
   readonly onEvicted: (runner: Runner) => Effect.Effect<void>
+  /** Deploys (`Orchestrator.drain`): no turn starts while true; deliveries queue. */
+  readonly held: () => boolean
   /** The Orchestrator layer's scope: runner fibers and session scopes live under it. */
   readonly scope: Scope.Scope
   readonly options: RunnerOptions
@@ -168,6 +181,14 @@ export interface Runner {
   readonly cancelConversation: (conversationId: ConversationId) => Effect.Effect<void>
   /** Stops for good: interrupts the active turn, drops queued deliveries, closes the session. */
   readonly stop: (reason: string) => Effect.Effect<void>
+  /** A turn (or a compaction) is running. */
+  readonly isWorking: Effect.Effect<boolean>
+  /**
+   * The first half of a hand-off (`Orchestrator.handOff`): closes the runner to new work and returns
+   * what it held — its queued deliveries (with their turn ids), the deliveries of a turn its harness
+   * has not accepted yet, and the accepted turn it will cut off. `stop` then ends that turn.
+   */
+  readonly takeOver: Effect.Effect<Carryover>
   /**
    * Closes the session (New session) and runs `afterDrop` (forget the native session, new epoch,
    * event) under the runner's lock, so no turn can start in between. `Conflict` while busy.
@@ -274,6 +295,12 @@ const signatureOf = (bot: Bot): string =>
   ])
 
 const isWaking = (delivery: Delivery): boolean => delivery.kind !== "bot-message" || delivery.urgency === "urgent"
+
+/** The messages a turn answers, in order (a failed turn's `sourceEntryIds`, for Retry). */
+const sourcesOf = (deliveries: ReadonlyArray<Delivery>): ReadonlyArray<EntryId> | undefined => {
+  const ids = [...new Set(deliveries.flatMap((d) => (d.sourceEntryId === undefined ? [] : [d.sourceEntryId])))]
+  return ids.length > 0 ? ids : undefined
+}
 
 /** Images harnesses can be shown inline (TurnInput.attachments). */
 const INLINE_IMAGE = /^image\/(png|jpeg|gif|webp)$/i
@@ -1004,6 +1031,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           failure: terminal._tag === "failed"
             ? { code: terminal.code, message: terminal.message, retryable: terminal.retryable }
             : undefined,
+          sourceEntryIds: terminal._tag === "failed" ? sourcesOf(active.deliveries) : undefined,
           usage: usage ?? base.usage,
         })
         active.turn = turn
@@ -1217,7 +1245,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
      */
     const takeNext = locked(Effect.gen(function*() {
       if (state.closed) return "exit" as const
-      if (state.active !== undefined || state.control) return undefined
+      if (state.active !== undefined || state.control || deps.held()) return undefined
       const head = state.queue[0]
       if (head === undefined) return undefined
       const conversationId = head.delivery.conversationId
@@ -1251,6 +1279,29 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
 
     let self: Runner | undefined
 
+    /** Going idle with a large context: compact now, while the harness's prompt cache is warm. */
+    const compactBeforeSleep = Effect.gen(function*() {
+      const open = state.session
+      if (open === undefined || deps.held() || !open.driver.capabilities.compact || (yield* Deferred.isDone(open.closed))) return
+      if (!(yield* Effect.map(deps.settings.get, (s) => s.compactIdleBots))) return
+      const usage = yield* open.session.contextUsage
+      if (usage === undefined || usage.usedTokens < deps.options.idleCompactMinTokens) return
+      yield* Effect.logInfo("compacting an idle bot's context", { botId, usedTokens: usage.usedTokens })
+      // Defined below; a delivery arriving meanwhile waits for it (or makes it a Conflict: skipped).
+      const compacted = yield* Effect.result(Effect.suspend(() => compactSession))
+      if (compacted._tag === "Failure") return yield* Effect.logWarning(`BotRunner ${botId}: idle compaction skipped`, compacted.failure)
+      const bot = yield* orDie(deps.bots.get(botId))
+      if (Option.isNone(bot)) return
+      yield* Effect.ignore(deps.conversationService.appendEvent({
+        conversationId: bot.value.directConversationId,
+        event: { type: "session-changed", botId, action: "compacted" },
+      }))
+    })
+
+    const idleMs = Duration.toMillis(Duration.fromInputUnsafe(deps.options.idleTimeout))
+    const compactMs = Math.min(Duration.toMillis(Duration.fromInputUnsafe(deps.options.idleCompactAfter)), idleMs)
+    const waitForWork = (ms: number) => Effect.timeoutOption(Queue.take(signal), Duration.millis(ms))
+
     const loop: Effect.Effect<void> = Effect.gen(function*() {
       for (;;) {
         const next = yield* takeNext
@@ -1259,8 +1310,9 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           yield* runTurn(next)
           continue
         }
-        const woke = yield* Effect.timeoutOption(Queue.take(signal), deps.options.idleTimeout)
-        if (Option.isSome(woke)) continue
+        if (Option.isSome(yield* waitForWork(compactMs))) continue
+        yield* compactBeforeSleep
+        if (Option.isSome(yield* waitForWork(idleMs - compactMs))) continue
         const decision = yield* tryEvict
         if (decision === "busy") continue
         yield* dropSession("idle")
@@ -1277,7 +1329,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       locked(Effect.gen(function*() {
         if (state.closed) return "closed" as const
         const arrival = ++state.arrivals
-        const idle = state.active === undefined && !state.control && state.queue.length === 0
+        const idle = state.active === undefined && !state.control && state.queue.length === 0 && !deps.held()
         // `background` only means "don't interrupt a busy bot": an idle recipient wakes immediately.
         if (!isWaking(delivery) && !idle) {
           state.queue.push({ arrival, delivery, turnId: undefined })
@@ -1312,7 +1364,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           }
           yield* Effect.logWarning(`BotRunner ${botId}: steer failed; queueing`, steered.failure)
         }
-        const turnId = yield* deps.ids.turnId
+        const turnId = delivery.turnId ?? (yield* deps.ids.turnId)
         state.queue.push({ arrival, delivery, turnId })
         yield* deps.outcomes.register(delivery.id)
         if (!idle) {
@@ -1464,6 +1516,34 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         if (self !== undefined) yield* deps.onEvicted(self)
       })
 
+    const isWorking = locked(Effect.sync(() => state.active !== undefined || state.control))
+
+    const takeOver = Effect.gen(function*() {
+      const taken = yield* locked(Effect.sync(() => {
+        state.closed = true
+        const active = state.active
+        const queued = state.queue.splice(0)
+        // A turn its harness has not accepted yet is still queued work: it runs again under its id.
+        const unaccepted = active !== undefined && !active.accepted
+          ? active.deliveries.map((delivery, i) => (i === 0 ? { ...delivery, turnId: active.turnId } : delivery))
+          : []
+        const cutOff = active !== undefined && active.accepted && !active.ending
+          ? [{ botId, conversationId: active.conversationId, turnId: active.turnId }]
+          : []
+        return { queued, unaccepted, cutOff }
+      }))
+      // Nobody waits on these any more in this process; the next boot delivers them afresh.
+      for (const work of taken.queued) yield* deps.outcomes.resolve(work.delivery.id, { status: "dropped" })
+      const carried: Carryover = {
+        deliveries: [
+          ...taken.unaccepted,
+          ...taken.queued.map((work) => (work.turnId === undefined ? work.delivery : { ...work.delivery, turnId: work.turnId })),
+        ],
+        cutOff: taken.cutOff,
+      }
+      return carried
+    })
+
     const noteAddress = (input: NotedAddress & { readonly conversationId: ConversationId }) =>
       locked(Effect.sync(() => {
         const active = state.active
@@ -1530,6 +1610,8 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       interruptConversation,
       cancelConversation,
       stop,
+      isWorking,
+      takeOver,
       resetSession,
       compact: compactSession,
       noteAddress,

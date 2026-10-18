@@ -159,18 +159,24 @@ export const ComputerStatus = Schema.Struct({
   /** The bot's host node, where its browser/desktop runs. */
   nodeId: NodeId,
   state: ComputerState,
-  /** Which live view the node offers (D1.7). */
-  surface: Schema.Literals(["browser", "desktop", "none"]),
+  /**
+   * Which live view the node offers (D1.7): a desktop of the bot's own, the computer's own screen
+   * (macOS, shared with the owner and its other bots), or the bot's browser window.
+   */
+  surface: Schema.Literals(["browser", "desktop", "screen", "none"]),
   /** Who holds the control lease (D1.7 takeover). */
   controller: Schema.Literals(["bot", "user"]),
   /** Path of the viewer socket, e.g. `/ws/computer/<botId>`. */
   viewPath: Schema.optionalKey(Schema.String),
   /** Human message for `error`/`unsupported` ("Can't reach Scout's screen"). */
   message: Schema.optionalKey(Schema.String),
-  /** Desktop screen size (surface `desktop`), for the viewer's aspect ratio. */
+  /** Screen size (surfaces `desktop` and `screen`), for the viewer's aspect ratio. */
   width: Schema.optionalKey(Schema.Number),
   height: Schema.optionalKey(Schema.Number),
-  /** Programs the host node lacks for desktops (`unsupported`), to show what to install. */
+  /**
+   * What the host node lacks: programs for desktops (`unsupported`), or the permissions a Mac needs
+   * for its screen (surface `screen`), to show what to install or allow.
+   */
   missing: Schema.optionalKey(Schema.Array(Schema.String)),
 })
 export type ComputerStatus = typeof ComputerStatus.Type
@@ -278,6 +284,8 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("messages.react", { payload: { conversationId: ConversationId, entryId: EntryId, emoji: NonEmptyString }, error: Missing }),
   /** Interrupt the running turn (all bots' turns in a group when `turnId` is absent). */
   Rpc.make("turns.interrupt", { payload: { conversationId: ConversationId, turnId: Schema.optionalKey(TurnId) }, success: Schema.Array(Turn), error: Missing }),
+  /** A failed turn's Bot tries again on the messages it was answering (no new message is posted). */
+  Rpc.make("turns.retry", { payload: { conversationId: ConversationId, turnId: TurnId }, error: errors(NotFound, InvalidInput, HarnessUnavailable) }),
   Rpc.make("attachments.upload", { payload: { name: Schema.String, mime: Schema.String, bytesBase64: Schema.String }, success: Attachment, error: errors(InvalidInput) }),
 
   // runtime requests

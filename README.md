@@ -12,8 +12,9 @@ computers. Each bot runs on the coding agent of your choice: **Claude Code**, **
   to sign off on.
 - **Skills:** a shared library you assign to bots, with imports from [skills.sh](https://skills.sh).
 - **Computer use:** on Linux, every bot gets its own virtual desktop with a browser, terminal,
-  editor and file manager. Watch it live, take over with your own mouse and keyboard, and hand it
-  back. Bots also get a shell and files on any computer you connect.
+  editor and file manager; on a Mac, bots use the Mac's own screen while you're away from it.
+  Watch it live, take over with your own mouse and keyboard, and hand it back. Bots also get a
+  shell and files on any computer you connect.
 - A web app that works on desktop and phone.
 
 ## Requirements
@@ -71,6 +72,24 @@ bun run start -- --public-origin https://<machine>.<tailnet>.ts.net:8444
 
 Then open the printed login link on your phone.
 
+## Updating a running OpenBot
+
+`bun run deploy` ships the working tree to the OpenBot that is running, without losing your Bots'
+work:
+
+```sh
+bun run deploy              # bots get up to 3 minutes to finish, then the rest is saved and resumed
+bun run deploy --grace 10m  # wait longer for running work
+bun run deploy --now        # restart right away (work is still saved and resumed)
+```
+
+It copies the repo into a new release under `~/.local/share/openbot-releases` (unchanged files are
+hard links, so it is quick), checks that it loads, and asks the running OpenBot to drain: no new
+reply or task starts (your messages wait, shown as queued), running ones get the grace period. Then
+it backs up the database, starts the new release with the same arguments and switches over in about
+a second. Messages that waited are answered, and Bots that were cut off mid-reply or mid-task pick
+up where they were. If the new release does not start, the previous one is started again.
+
 ## Bot desktops (Linux)
 
 On Linux, each bot can have its own virtual screen, 1920×1200 by default. Bots see it through
@@ -86,8 +105,12 @@ Install the required programs, plus the optional ones for a complete desktop:
 | Optional | `plank dbus xfce4-terminal thunar mousepad xorg-xsetroot` | `plank dbus xfce4-terminal thunar mousepad x11-xserver-utils` |
 
 `openbox` works in place of `xfwm4`, and `xterm` in place of `xfce4-terminal`. Settings ›
-Computers shows anything that is still missing. Without these programs (on macOS, for example),
-bots still get a browser, a terminal and files on the machine.
+Computers shows anything that is still missing.
+
+On macOS, bots use the Mac's own screen instead, with its apps and your logins: one bot at a time,
+and only while you are away from it (no keyboard or mouse use for 20 seconds). Turn on **This
+Mac's screen** for the computer in Settings › Computers, then allow Screen Recording and
+Accessibility for `openbot-node` in System Settings › Privacy & Security.
 
 ## Connect other computers
 
@@ -105,12 +128,32 @@ another laptop:
    it in `~/.local/bin`, pairs it with the one-time code, and keeps it running as a user service
    (systemd on Linux, launchd on macOS).
 
+To update the node later, run the same command without the code: it replaces the program and
+restarts it, and the pairing stays.
+
 The other machine must be able to reach OpenBot, for example over the address you set up in
 [Use it from your phone](#use-it-from-your-phone). Run `openbot-node --help` there for the options:
 workspace folders, read-only folders, how much the computer allows without asking, and the browser.
 
 Without the installer, from a clone of this repository: `bun apps/node/src/main.ts pair <openbot-url> <code>`,
 then `bun apps/node/src/main.ts run`.
+
+## iPhone app
+
+`apps/mobile` is a native iPhone app (Expo) with the same chats, cards and live updates, in iOS's
+liquid glass look. To try it without building anything, install **Expo Go** from the App Store and
+start the dev server where your iPhone can reach it, for example over Tailscale. Expo Go on an
+iPhone only opens projects from a dev server signed in to the same (free) Expo account as Expo Go,
+so sign in once with `expo login` (or set `EXPO_TOKEN` to an access token from expo.dev):
+
+```sh
+tailscale serve --bg --https=8445 http://127.0.0.1:8081
+cd apps/mobile && bunx expo login
+EXPO_PACKAGER_PROXY_URL=https://<machine>.<tailnet>.ts.net:8445 bunx expo start
+```
+
+Open `exps://<machine>.<tailnet>.ts.net:8445` on the iPhone (or scan the QR code Expo prints), then
+connect with the code under Settings › iPhone app in OpenBot.
 
 ## Development
 

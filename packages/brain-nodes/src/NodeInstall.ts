@@ -128,6 +128,8 @@ PLIST
   launchctl unload "$plist" >/dev/null 2>&1 || true
   launchctl load -w "$plist"
   echo "Running in the background (log: ~/Library/Logs/openbot-node.log)"
+  echo "For your Bots to use this Mac's screen, macOS now asks to let openbot-node record the screen"
+  echo "and control the computer: allow both (or later in System Settings > Privacy & Security)."
 else
   log="\${XDG_STATE_HOME:-$HOME/.local/state}/openbot-node.log"
   mkdir -p "$(dirname "$log")"

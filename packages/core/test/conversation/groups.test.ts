@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Bot, BotId, ConversationId } from "@openbot/contracts"
 import { Effect } from "effect"
-import { ConversationService } from "../../src/ports/index.ts"
+import { ConversationService, Orchestrator } from "../../src/ports/index.ts"
 import { botId, conversationId, makeGroupConversation, runTest } from "../../src/testing/index.ts"
 import { leadOf, routeBotMessage, routeOwnerMessage } from "../../src/services/conversation/GroupRouter.ts"
 import {
@@ -175,6 +175,33 @@ describe("group routing (D5.1)", () => {
     const bots: ReadonlyArray<BotId> = out.turns.map((t) => t.botId)
     expect(bots).toEqual(Array.from({ length: 9 }, (_, i) => (i % 2 === 0 ? out.team.ada.id : out.team.bob.id)))
     expect(eventsOf(out.entries).filter((e) => e.type === "hop-limit")).toEqual([{ type: "hop-limit", hops: 8 }])
+  })
+
+  test("retry: a bot that failed on a teammate's message answers it again; nobody else wakes", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const orchestrator = yield* Orchestrator
+        const driver = yield* TestDriver
+        const team = yield* makeTeam
+        yield* driver.setBehavior(team.ada.id, replyBehavior(() => "@Bob take the CPU side"))
+        yield* driver.setBehavior(team.bob.id, (turn) => turn.crash("Codex went away"))
+        yield* send(team.group, "@Ada plan it")
+        yield* settled(team.group, 2)
+        const failed = (yield* turnsOf(team.group)).find((t) => t.status === "failed")!
+        yield* driver.setBehavior(team.bob.id, replyBehavior(() => "on it"))
+        yield* orchestrator.retry({ conversationId: team.group, turnId: failed.id })
+        yield* settled(team.group, 3)
+        return { team, failed, turns: yield* turnsOf(team.group), handles: yield* driver.turns }
+      }),
+      appLayer(),
+    )
+    expect(out.failed.botId).toBe(out.team.bob.id)
+    expect(out.turns.map((t) => [t.botId, t.status])).toEqual([
+      [out.team.ada.id, "completed"],
+      [out.team.bob.id, "failed"],
+      [out.team.bob.id, "completed"],
+    ])
+    expect(out.handles.at(-1)!.input.text).toContain("[@Ada]: @Bob take the CPU side")
   })
 
   test("createGroup validates 2–6 members and setMembers emits member events", async () => {

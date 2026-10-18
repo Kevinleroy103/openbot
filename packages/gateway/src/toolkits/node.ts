@@ -73,7 +73,7 @@ export const allowedNodeIds = (claims: McpClaims): ReadonlyArray<NodeId> => [
 export const resolveTarget = (
   ctx: ToolCallContext,
   nodeArg: string | undefined,
-  capability: string,
+  capability: string | ReadonlyArray<string>,
 ): Effect.Effect<NodeTarget, unknown, NodeDirectory | IdGen | DataDir> =>
   Effect.gen(function*() {
     const choice = yield* chooseNode(ctx, nodeArg, capability)
@@ -81,11 +81,11 @@ export const resolveTarget = (
     return { ...choice, client }
   })
 
-/** `resolveTarget` without the RPC client: the node (allowed, offering `capability`), workspace and invocation. */
+/** `resolveTarget` without the RPC client: the node (allowed, offering `capability` or one of several), workspace and invocation. */
 export const chooseNode = (
   ctx: ToolCallContext,
   nodeArg: string | undefined,
-  capability: string,
+  capability: string | ReadonlyArray<string>,
 ): Effect.Effect<NodeChoice, unknown, NodeDirectory | IdGen | DataDir> =>
   Effect.gen(function*() {
     const claims = ctx.claims
@@ -109,9 +109,10 @@ export const chooseNode = (
     }
     const node = yield* directory.get(nodeId)
     const capabilities = yield* directory.capabilities(nodeId)
-    if (!hasCapability(capabilities, capability)) {
+    const wanted = typeof capability === "string" ? [capability] : capability
+    if (!wanted.some((c) => hasCapability(capabilities, c))) {
       return yield* new ToolRefusal({
-        message: `Node ${node.label} does not offer ${capability} (capabilities: ${capabilities.join(", ") || "none"}).`,
+        message: `Node ${node.label} does not offer ${wanted.join(" or ")} (capabilities: ${capabilities.join(", ") || "none"}).`,
       })
     }
     const workspace = nodeId === claims.hostNodeId

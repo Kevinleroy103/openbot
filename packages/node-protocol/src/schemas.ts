@@ -48,6 +48,18 @@ export const DesktopSupport = Schema.Struct({
 })
 export type DesktopSupport = typeof DesktopSupport.Type
 
+/**
+ * The computer's own screen (`screen@1`, macOS): its bots and the owner share it, one at a time.
+ * `missing` names what the node still needs (the Screen Recording and Accessibility permissions).
+ */
+export const ScreenSupport = Schema.Struct({
+  missing: Schema.Array(Schema.String),
+  /** main display size, in points */
+  width: Schema.Number,
+  height: Schema.Number,
+})
+export type ScreenSupport = typeof ScreenSupport.Type
+
 export const NodeHello = Schema.Struct({
   nodeId: Schema.String,
   /** node software version */
@@ -67,6 +79,8 @@ export const NodeHello = Schema.Struct({
   brainVerified: Schema.Boolean,
   /** Per-bot desktops (D1.7): what this node offers or lacks; absent on older nodes. */
   desktop: Schema.optional(DesktopSupport),
+  /** The computer's own screen (`screen@1`); absent when it offers none. */
+  screen: Schema.optional(ScreenSupport),
 })
 export type NodeHello = typeof NodeHello.Type
 
@@ -207,6 +221,7 @@ export const StreamKind = Schema.Literals([
   "cdp-screencast",
   "vnc-view",
   "vnc-control",
+  "screen",
   "transfer",
 ])
 export type StreamKind = typeof StreamKind.Type
@@ -371,6 +386,10 @@ export const DesktopInfo = Schema.Struct({
   height: Schema.Number,
 })
 export type DesktopInfo = typeof DesktopInfo.Type
+
+/** The computer's own screen, ready for a bot (`screen.ensure`). */
+export const ScreenInfo = Schema.Struct({ width: Schema.Number, height: Schema.Number })
+export type ScreenInfo = typeof ScreenInfo.Type
 
 /**
  * Anthropic computer-use action names. Coordinates are in the API space: screenshots are scaled to

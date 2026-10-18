@@ -4,7 +4,8 @@
  * - `connectAppServer`: the JSON-RPC peer plus the `initialize`/`initialized` handshake and the
  *   **per-thread router**. Notifications and server requests carry `threadId`; each OpenBot session
  *   registers a mailbox for its thread. Messages that arrive before the session registered (the
- *   `thread/started` that races the `thread/start` response) wait in a small orphan buffer.
+ *   `thread/started` that races the `thread/start` response) wait in a small orphan buffer; a
+ *   `thread/closed` for a thread no session holds is about an earlier load and is never replayed.
  * - `makeChildProcessLauncher`: spawns the binary detached (own process group, killed as a group on
  *   scope close) with `CODEX_HOME` and the bundled `codex-path` on PATH.
  * - `makeCodexRuntime`: ONE shared app-server per OpenBot `CODEX_HOME`, started lazily, recorded in
@@ -143,6 +144,9 @@ export const connectAppServer = Effect.fnUntraced(function*(options: ConnectOpti
       const message: ThreadMessage = { _tag: "Notification", method: notification.method, params }
       const mailbox = mailboxes.get(threadId)
       if (mailbox) Queue.offerUnsafe(mailbox, message)
+      // Codex unloading a thread no session holds (it unloads unsubscribed threads after a delay)
+      // ends an earlier load: replayed into the next session it would close that session at once.
+      else if (notification.method === "thread/closed") orphans.delete(threadId)
       else buffer(threadId, message)
       return Effect.void
     })

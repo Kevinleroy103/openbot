@@ -429,6 +429,7 @@ export const CAPABILITY_INFO: Record<string, { readonly title: string; readonly 
   tunnel: { title: "Network tunnels", description: "Forward ports between the brain and this computer" },
   browser: { title: "Browser", description: "A Chromium window per Bot, with live view and take-over" },
   desktop: { title: "Full desktop", description: "Each Bot gets its own screen to work on; watch it live and take over" },
+  screen: { title: "This Mac's screen", description: "Bots use the Mac's own screen, one at a time and only while you're away from it; watch and take over" },
   "codex.exec-server": { title: "Codex tools", description: "Run Codex's native tools here" },
   "claude.cli": { title: "Claude CLI", description: "Run the claude CLI here with this computer's own login" },
   "opencode.serve": { title: "OpenCode server", description: "Run OpenCode here" },

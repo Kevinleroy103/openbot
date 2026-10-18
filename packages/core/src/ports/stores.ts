@@ -6,6 +6,7 @@ import type { BotId, MemoryFact, MemoryFactId, Skill, SkillName } from "@openbot
 import { AttachmentId, Millis } from "@openbot/contracts"
 import { Context, Effect, Option, Schema, type Stream } from "effect"
 import type { RepoError } from "./errors.ts"
+import type { Carryover } from "./services.ts"
 
 /**
  * Per-bot memory in Claude auto-memory format: `<data>/bots/<id>/memory/MEMORY.md` (the index)
@@ -111,3 +112,21 @@ export class AttachmentStore extends Context.Service<AttachmentStore, {
   readonly stream: (id: AttachmentId) => Stream.Stream<Uint8Array, RepoError>
   readonly delete: (id: AttachmentId) => Effect.Effect<boolean, RepoError>
 }>()("openbot/core/AttachmentStore") {}
+
+/**
+ * What a stopping brain hands to the next boot (`Orchestrator.handOff` / `resume`):
+ * `<data>/carryover.json`.
+ */
+export class CarryoverStore extends Context.Service<CarryoverStore, {
+  /** Adds to what is saved (a boot that never got to `take` keeps its part). */
+  readonly save: (carryover: Carryover) => Effect.Effect<void, RepoError>
+  /** What is saved, cleared on read (empty when nothing is). */
+  readonly take: Effect.Effect<Carryover, RepoError>
+}>()("openbot/core/CarryoverStore") {}
+
+export const EMPTY_CARRYOVER: Carryover = { deliveries: [], cutOff: [] }
+
+export const mergeCarryover = (a: Carryover, b: Carryover): Carryover => ({
+  deliveries: [...a.deliveries, ...b.deliveries],
+  cutOff: [...a.cutOff, ...b.cutOff],
+})

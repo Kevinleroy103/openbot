@@ -55,6 +55,7 @@ const V1_RPCS = [
   "messages.lookupSend",
   "messages.react",
   "turns.interrupt",
+  "turns.retry",
   "attachments.upload",
   "requests.respond",
   "requests.listPending",

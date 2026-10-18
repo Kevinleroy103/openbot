@@ -14,16 +14,17 @@
  *  7. `Orchestrator.recover(report)` publishes what boot recovery changed
  *  8. harness drivers (fake always; claude/codex/opencode probe their install/auth lazily), then
  *     the drivers of the owner's added harness accounts (profiles.ts; first boot adds discovered ones)
- *  9. the local node (`node_local`, unless `--no-local-node`); then the background tasks the restart
- *     cut off are reported to their bots (`BackgroundTasks.recover`)
+ *  9. the local node (`node_local`, unless `--no-local-node`)
  * 10. messaging + routine scheduler (its fiber starts here) → bot service
  * 11. MCP gateway
  * 12. node gateway
  * 13. RPC handlers; the internal routes (`/mcp`, `/relay`) and the public routes are mounted
  * 14. ready: print the login URL
+ * 15. resume what the previous run handed off or a crash cut off (`ResumeLive`); SIGUSR2 drains the
+ *     brain for a deploy (`DrainOnSignalLive`, drain.ts)
  *
- * Shutdown runs the same graph backwards; the ready layer first interrupts every runner (harness
- * sessions) and closes node control sockets (`NodeRegistry.closeAll`) before the public routes are
+ * Shutdown runs the same graph backwards; the ready layer first hands off what runs or waits to the
+ * next boot (`Orchestrator.handOff`: saved, then every runner and its harness session stops) and closes node control sockets (`NodeRegistry.closeAll`) before the public routes are
  * detached, so Bun's `server.stop()` never waits on an open WebSocket. Harness processes close with
  * their driver/runner scopes and SQLite closes last.
  */
@@ -46,7 +47,6 @@ import {
   BackgroundTasksLive,
   BootRecovery,
   type BootRecoveryReport,
-  BotService,
   BotServiceLive,
   ConversationServiceLive,
   DataDir,
@@ -79,6 +79,7 @@ import { existsSync } from "node:fs"
 import { chmod, mkdir, unlink } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { WebAuth, WebAuthLayer } from "./auth.ts"
+import { DrainOnSignalLive } from "./drain.ts"
 import { OPENBOT_VERSION, ServerConfig, type ServerConfigShape } from "./config.ts"
 import {
   InternalAddressLive,
@@ -191,12 +192,14 @@ export const RecoveredLive: Layer.Layer<never, never, BootReport | Orchestrator>
 )
 
 /**
- * Step 9b: background tasks the restart cut off (D5.7) — published, and each bot is told, once the
- * harness drivers are registered (its `task-result` turn needs its driver).
+ * Step 15, once the routes serve (a resumed turn calls `/mcp` at once): the work the previous run
+ * handed off or a crash cut off continues — queued messages are delivered, cut-off bots continue
+ * where they were (`Orchestrator.resume`), cut-off background tasks run again (`BackgroundTasks.recover`).
  */
-export const TasksRecoveredLive: Layer.Layer<never, never, BootReport | BackgroundTasks> = Layer.effectDiscard(
+export const ResumeLive: Layer.Layer<never, never, BootReport | Orchestrator | BackgroundTasks> = Layer.effectDiscard(
   Effect.gen(function*() {
     const report = yield* BootReport
+    yield* (yield* Orchestrator).resume(report)
     yield* (yield* BackgroundTasks).recover(report)
   }),
 )
@@ -264,14 +267,13 @@ export interface ReadyOptions {
   readonly quiet?: boolean | undefined
 }
 
-/** Prints the login URL; on shutdown interrupts runners and disconnects nodes before the listeners go. */
+/** Prints the login URL; on shutdown hands work off, stops runners and disconnects nodes before the listeners go. */
 export const ReadyLive = (options?: ReadyOptions) =>
   Layer.effectDiscard(Effect.gen(function*() {
     const config = yield* ServerConfig
     const listener = yield* PublicListener
     const internal = yield* InternalListener
     const auth = yield* WebAuth
-    const bots = yield* BotService
     const orchestrator = yield* Orchestrator
     const registry = yield* NodeRegistry
 
@@ -279,10 +281,10 @@ export const ReadyLive = (options?: ReadyOptions) =>
       Effect.gen(function*() {
         yield* Effect.logInfo("OpenBot is shutting down")
         setShutdownPhase("stopping harness sessions")
-        const all = yield* bots.list
-        // budgeted: the whole shutdown has OPENBOT_SHUTDOWN_TIMEOUT_MS (default 5 s) before the
-        // watchdog kills every child process group (main.ts, shutdown.ts)
-        yield* Effect.forEach(all, (bot) => orchestrator.stopBot(bot.id), { concurrency: "unbounded", discard: true }).pipe(
+        // What runs or waits is saved for the next boot first, then the sessions stop. Budgeted: the
+        // whole shutdown has OPENBOT_SHUTDOWN_TIMEOUT_MS (default 5 s) before the watchdog kills
+        // every child process group (main.ts, shutdown.ts)
+        yield* orchestrator.handOff.pipe(
           Effect.timeoutOrElse({
             duration: "3 seconds",
             orElse: () => Effect.logWarning("Some harness sessions did not stop within 3 s"),
@@ -367,7 +369,6 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     Layer.provideMerge(BotServiceLive),
   ).pipe(
     Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive)), // 10
-    Layer.provideMerge(TasksRecoveredLive), // 9b: interrupted background tasks are reported
     Layer.provideMerge(LocalNodeDaemonLive(options?.localNode)), // 9
     Layer.provideMerge(HarnessProfilesLayer(options?.profiles)), // 8b: added accounts (profiles.ts)
     Layer.provideMerge(options?.drivers ?? harnessDrivers(config)), // 8
@@ -384,7 +385,8 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
   // steps 11-14: gateways, both listeners' routes, ready. The two `HttpRouter.serve` layers are
   // SIBLINGS: a serve layer's output context carries its router (and memo map), so stacking one on
   // the other would mount every route on both listeners.
-  return ReadyLive({ quiet: options?.quiet }).pipe(
+  return Layer.mergeAll(ResumeLive, DrainOnSignalLive).pipe( // 15
+    Layer.provideMerge(ReadyLive({ quiet: options?.quiet })), // 14
     Layer.provideMerge(Layer.mergeAll(internalServed, publicServed)), // 13
     Layer.provideMerge(RpcHandlersLive),
     Layer.provideMerge(NodeGatewayLive), // 12

@@ -7,6 +7,7 @@
 import { ArrowDown, ChevronLeft, type LucideIcon, Monitor, X } from "lucide-react"
 import { Fragment, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { Exit } from "effect"
 import {
   DEFAULT_SETTINGS,
   emptyConversationState,
@@ -16,14 +17,15 @@ import {
   type ConversationId,
   type Turn,
 } from "@openbot/contracts"
-import { commands, conversationAtom, discardOutboxItemAtom, loadOlderAtom, outboxAtom, retrySendAtom, sendMessageAtom, interruptTurnAtom } from "@openbot/client"
-import { ActivityRow, Avatar, AvatarStack, HeaderPill, Icon, IconButton, NewDivider, PillButton, Spinner, Timestamp, botTintStyle, cn } from "@openbot/ui"
+import { commands, conversationAtom, discardOutboxItemAtom, loadOlderAtom, outboxAtom, retrySendAtom, retryTurnAtom, sendMessageAtom, interruptTurnAtom } from "@openbot/client"
+import { ActivityRow, Avatar, AvatarStack, HeaderPill, Icon, IconButton, NewDivider, PillButton, Spinner, Timestamp, botTintStyle, cn, useToast } from "@openbot/ui"
 import { useRoster, valueOr } from "../app/data.ts"
 import { formatTimestamp } from "../app/format.ts"
 import { useLayoutMode } from "../app/layout.ts"
 import { useLongPressWithin } from "../app/longPress.ts"
 import { useComputerView, useDetailsPane, usePhoneNav, useSelection } from "../app/uiState.ts"
 import { CardView, WarnIcon } from "../cards/index.ts"
+import { describeFailure } from "../cards/useRespond.ts"
 import { activityPhrase } from "./activity.ts"
 import { type ChatStatus, chatStatuses, HANDLING } from "./busy.ts"
 import { Composer, type ComposerSubmit } from "./Composer.tsx"
@@ -87,7 +89,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
   const tint = settings.accent === "bot" && !isGroup && primary ? botTintStyle(primary.avatar.color) : {}
   // Phone / tablet header: the monitor button when the Bot's computer has a screen or a terminal.
   const host = !isGroup && primary ? roster.state.nodes.get(primary.hostNodeId) : undefined
-  const hasComputer = host !== undefined && host.capabilities.some((c) => /^(desktop|browser|pty)@/.test(c))
+  const hasComputer = host !== undefined && host.capabilities.some((c) => /^(desktop|screen|browser|pty)@/.test(c))
 
   // ----------------------------------------------------------------------------- unread boundary
   // Captured once per opened conversation so the NEW divider stays put after we mark it read.
@@ -163,7 +165,17 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
   const failed = failedTurnOf(turns)
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set())
   const showTray = failed !== undefined && !dismissed.has(failed.id) && activeTurns.length === 0
-  const lastUserText = useMemo(() => [...entries].reverse().find((e): e is MessageEntry => e.kind === "message" && e.role === "user")?.text, [entries])
+  // Retry: the failed Bot tries again on what it was answering; nothing new is posted.
+  const retryTurn = useAtomSet(retryTurnAtom, { mode: "promiseExit" })
+  const { toast } = useToast()
+  const retryFailed = async (turn: NonNullable<typeof failed>) => {
+    setDismissed((s) => new Set(s).add(turn.id))
+    const exit = await retryTurn({ conversationId, turnId: turn.id })
+    if (Exit.isFailure(exit)) {
+      setDismissed((s) => new Set([...s].filter((id) => id !== turn.id)))
+      toast({ title: describeFailure(exit), tone: "danger" })
+    }
+  }
 
   // --------------------------------------------------------------------------------- scroll
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -437,11 +449,9 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-xs font-medium text-fg">{members.length === 1 ? "Bot failed to respond" : `${roster.botById(failed.botId)?.name ?? "A Bot"} failed to respond`}</span>
               <span className="text-sm text-fg-secondary">{failed.failure?.message ?? "Something went wrong while replying."}</span>
-              {lastUserText && (
-                <PillButton variant="primary" size="sm" className="mt-1.5 w-fit" onClick={() => onSubmit({ text: lastUserText, attachmentIds: [], addressedBotIds: [], addressEveryone: false })}>
-                  Retry
-                </PillButton>
-              )}
+              <PillButton variant="primary" size="sm" className="mt-1.5 w-fit" onClick={() => void retryFailed(failed)}>
+                Retry
+              </PillButton>
             </div>
             <IconButton icon={X} label="Dismiss" size={24} onClick={() => setDismissed((s) => new Set(s).add(failed.id))} />
           </div>

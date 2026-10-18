@@ -1,5 +1,5 @@
 // Settings › General: appearance (theme, accent, show steps), Bots (bot messaging kill switch, default
-// harness, approval expiry) and the owner's name. Values ride on the roster (`settingsAtom`); edits are
+// harness, approval expiry), the owner's name and connecting the iPhone app. Values ride on the roster (`settingsAtom`); edits are
 // applied optimistically until the roster echoes them.
 import { useAtomValue } from "@effect/atom-react"
 import { harnessStatusAtom, settingsAtom } from "@openbot/client"
@@ -7,6 +7,7 @@ import { type Settings, type SettingsPatch, applySettingsPatch } from "@openbot/
 import { Select, Switch, TextField } from "@openbot/ui"
 import { type ReactNode, useState } from "react"
 import { ErrorLine, harnessName, harnessReady, useCommand, useQuery } from "../details/kit.tsx"
+import { IphoneAppRow } from "./IphoneApp.tsx"
 import { GroupLabel, PageHeader, SettingsCard, SettingsRow } from "./layout.tsx"
 
 const NO_DEFAULT = "__none__"
@@ -98,6 +99,11 @@ export function GeneralPage(): ReactNode {
           control={<Switch checked={settings.botMessaging} onCheckedChange={(botMessaging) => void patch({ botMessaging })} label="Bot messaging" />}
         />
         <SettingsRow
+          title="Compact idle Bots"
+          description="When a Bot with a long conversation has been idle for 10 minutes, compact its context so its next reply starts faster and uses less of your plan."
+          control={<Switch checked={settings.compactIdleBots} onCheckedChange={(compactIdleBots) => void patch({ compactIdleBots })} label="Compact idle Bots" />}
+        />
+        <SettingsRow
           title="Default harness"
           description="Preselected when you create a Bot."
           control={
@@ -152,6 +158,7 @@ export function GeneralPage(): ReactNode {
             />
           }
         />
+        <IphoneAppRow />
       </SettingsCard>
     </div>
   )

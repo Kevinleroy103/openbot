@@ -42,7 +42,11 @@ const toolLines = (placement: PlacementSummary): ReadonlyArray<string> => {
   }
   const screen = placement.toolsets.includes("computer")
   if (placement.toolsets.includes("browser")) lines.push("- `browser` drives your own browser window (navigate, snapshot, click, type, screenshot, tabs).")
-  if (screen) {
+  if (screen && placement.sharedScreen) {
+    lines.push(
+      "- Your screen is your owner's own Mac screen: they use it too and can watch it from OpenBot. `computer` looks at it and works it with the mouse and keyboard: take a screenshot first to see it, and use that screenshot's coordinates. Use it only for what needs the Mac's apps, and leave the owner's windows and work as they are. When it says the owner or another Bot is using it, wait or ask the owner in the chat. Prefer `browser` for web pages.",
+    )
+  } else if (screen) {
     lines.push(
       "- You have your own screen, with a browser, a terminal, files and an editor; the owner can watch it. `computer` looks at it and works it with the mouse and keyboard: take a screenshot first to see it, and use that screenshot's coordinates. Prefer `browser` for web pages; use `computer` for everything else (desktop apps, file dialogs, windows).",
     )

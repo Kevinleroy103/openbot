@@ -1,7 +1,8 @@
 /**
  * ComputerToolkit (D1.7, architecture §4.6; remote-computer-control.md §7): the bot's own screen.
  *
- * - `computer` (toolset `computer`, offered when the host node has `desktop@1`): one tool with
+ * - `computer` (toolset `computer`, offered when the host node has `desktop@1`, or `screen@1`: a Mac's
+ *   own screen, shared with the owner, whose refusals keep the node's words): one tool with
  *   Anthropic's computer-use action names, mapped 1:1 to the node's `computer.act`. The schema is flat
  *   (an `action` enum plus optional fields; `coordinate` / `start_coordinate` / `region` are arrays of
  *   numbers, never tuples: R5). Coordinates are in the screenshot's 1280-wide API space; the node
@@ -12,7 +13,7 @@
  *   returns pending at once and the owner's "done" / "skip" arrives later as a message.
  */
 import { ApprovalService } from "@openbot/core"
-import { type ComputerAction, ComputerActionName } from "@openbot/node-protocol"
+import { type ComputerAction, ComputerActionName, hasCapability } from "@openbot/node-protocol"
 import { Effect } from "effect"
 import * as p from "../params.ts"
 import { errorResult, imageResult, textResult, ToolRefusal } from "../results.ts"
@@ -94,14 +95,22 @@ export const toComputerAction = (args: Args): Effect.Effect<ComputerAction, Tool
     }
   })
 
-/** The node's refusals in the bot's terms; anything else goes to the generic renderer. */
-const explain = (error: unknown): Effect.Effect<never, unknown> => {
+/**
+ * The node's refusals in the bot's terms; anything else goes to the generic renderer. On a shared
+ * screen (a Mac) the node says why it waits (the owner at the Mac, another Bot) and what to allow.
+ */
+const explain = (error: unknown, shared: boolean): Effect.Effect<never, unknown> => {
   if (typeof error === "object" && error !== null && "_tag" in error) {
-    const e = error as { readonly _tag: string; readonly message?: unknown; readonly missing?: ReadonlyArray<string> | undefined }
-    if (e._tag === "LeaseHeld") return refuse(OWNER_HAS_SCREEN)
+    const e = error as {
+      readonly _tag: string
+      readonly message?: unknown
+      readonly reason?: unknown
+      readonly missing?: ReadonlyArray<string> | undefined
+    }
+    if (e._tag === "LeaseHeld") return refuse(shared && typeof e.reason === "string" && e.reason !== "" ? e.reason : OWNER_HAS_SCREEN)
     if (e._tag === "DesktopUnavailable") {
       const message = typeof e.message === "string" && e.message.trim() !== "" ? e.message.trim() : "Your screen is not available"
-      const missing = e.missing !== undefined && e.missing.length > 0 ? ` This computer lacks: ${e.missing.join(", ")}.` : ""
+      const missing = !shared && e.missing !== undefined && e.missing.length > 0 ? ` This computer lacks: ${e.missing.join(", ")}.` : ""
       return refuse(`${message.replace(/[.!?]?$/, ".")}${missing}`)
     }
   }
@@ -114,7 +123,7 @@ const computer = defineTool({
   name: "computer",
   toolset: "computer",
   description: [
-    "Look at and work your own screen: a whole desktop with a browser, a terminal, files and an editor (the owner can watch it live).",
+    "Look at and work your screen with the mouse and keyboard (the owner can watch it live).",
     "Screenshots are 1280 pixels wide and every coordinate is in that screenshot's pixels.",
     "Take a screenshot first, and again whenever you need to see what happened.",
     "Prefer the `browser` tool for web pages; use `computer` for everything else (desktop apps, file dialogs, windows, terminal GUIs).",
@@ -138,10 +147,11 @@ const computer = defineTool({
   handler: (args, ctx) =>
     Effect.gen(function*() {
       // the screen is always the host node's (architecture §4.6)
-      const target = yield* resolveTarget(ctx, undefined, "desktop")
+      const target = yield* resolveTarget(ctx, undefined, ["desktop", "screen"])
+      const shared = !hasCapability(target.node.capabilities, "desktop") && hasCapability(target.node.capabilities, "screen")
       const action = yield* toComputerAction(args)
       yield* ctx.progress(`Computer: ${args.action}`)
-      const result = yield* target.client["computer.act"]({ inv: target.inv, action }).pipe(Effect.catch(explain))
+      const result = yield* target.client["computer.act"]({ inv: target.inv, action }).pipe(Effect.catch((e) => explain(e, shared)))
       const text = result.text === "" ? `Done: ${args.action}.` : result.text
       // the node answers bad arguments as text ("ERROR: coordinate [x, y] is required")
       if (result.image === undefined && text.startsWith("ERROR:")) return errorResult(text)

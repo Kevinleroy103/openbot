@@ -290,6 +290,7 @@ export const NodeCapabilities = {
   tunnel: "tunnel@1",
   browser: "browser@1",
   desktop: "desktop@1",
+  screen: "screen@1",
   codexExecServer: "codex.exec-server@1",
   claudeCli: "claude.cli@1",
   opencodeServe: "opencode.serve@1",
@@ -316,6 +317,8 @@ export const NodeSummary = Schema.Struct({
   version: Schema.optionalKey(Schema.String),
   /** Programs the node lacks for per-bot desktops (D1.7), while online; absent when it has them all. */
   desktopMissing: Schema.optionalKey(Schema.Array(Schema.String)),
+  /** Permissions a Mac still needs before its Bots can use its screen (`screen@1`), while online. */
+  screenMissing: Schema.optionalKey(Schema.Array(Schema.String)),
   lastSeenAt: Schema.optionalKey(Millis),
   createdAt: Millis,
 })

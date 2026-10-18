@@ -137,6 +137,7 @@ export const makePlacementService = Effect.gen(function*() {
           disableBuiltinTools: plan.disableBuiltinTools,
           codexEnvironment,
           toolsets: plan.toolsets,
+          ...(plan.sharedScreen ? { sharedScreen: true } : {}),
           promptAppend: placementPrompt(plan, host, workspacePath, others),
           release,
         }

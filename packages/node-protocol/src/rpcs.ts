@@ -27,6 +27,7 @@ import {
   ComputerAction,
   ComputerResult,
   DesktopInfo,
+  ScreenInfo,
   ExecEvent,
   FileStat,
   FsDownloadResult,
@@ -329,6 +330,23 @@ export class NodeRpcs extends RpcGroup.make(
       streamToken: Schema.String,
     },
     error: Schema.Union([TunnelFailed, LeaseHeld, DesktopUnavailable, NotAuthenticated]),
+  }),
+  // ------------------------------------------------------------ screen@1: the computer's own screen (macOS)
+  // checks it can be used (permissions); asks macOS for them the first time
+  Rpc.make("screen.ensure", {
+    payload: { botId: Schema.String },
+    success: ScreenInfo,
+    error: Schema.Union([DesktopUnavailable, NotAuthenticated]),
+  }),
+  // opens a `screen` data stream: screencast frames of the screen (framing as cdp-screencast)
+  Rpc.make("screen.stream", {
+    payload: { botId: Schema.String, streamId: Schema.String, streamToken: Schema.String },
+    error: Schema.Union([DesktopUnavailable, TunnelFailed, NotAuthenticated]),
+  }),
+  // the owner's input from the web viewer; refused with LeaseHeld unless they hold the lease
+  Rpc.make("screen.input", {
+    payload: { botId: Schema.String, event: BrowserInputEvent },
+    error: Schema.Union([DesktopUnavailable, LeaseHeld, NotAuthenticated]),
   }),
 ) {}
 

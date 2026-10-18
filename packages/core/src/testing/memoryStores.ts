@@ -6,7 +6,7 @@ import { Clock, Effect, Layer, Option, Stream } from "effect"
 import { joinPath } from "../ports/DataDir.ts"
 import { RepoError } from "../ports/errors.ts"
 import { IdGen } from "../ports/IdGen.ts"
-import { type AttachmentRecord, AttachmentStore, MemoryStore, type ParsedSkillFile, SkillStore } from "../ports/stores.ts"
+import { type AttachmentRecord, AttachmentStore, CarryoverStore, EMPTY_CARRYOVER, MemoryStore, mergeCarryover, type ParsedSkillFile, SkillStore } from "../ports/stores.ts"
 
 const byKey = <A>(key: (a: A) => string) => (a: A, b: A) => {
   const x = key(a)
@@ -152,3 +152,16 @@ export const MemoryMemoryStore = Layer.effect(MemoryStore, makeMemoryMemoryStore
 export const MemorySkillStore = (root?: string) => Layer.effect(SkillStore, makeMemorySkillStore(root))
 export const MemoryAttachmentStore = (root?: string): Layer.Layer<AttachmentStore, never, IdGen> =>
   Layer.effect(AttachmentStore, makeMemoryAttachmentStore(root))
+
+/** `CarryoverStore` in memory. */
+export const MemoryCarryoverStore = Layer.sync(CarryoverStore, () => {
+  let saved = EMPTY_CARRYOVER
+  return CarryoverStore.of({
+    save: (carryover) => Effect.sync(() => void (saved = mergeCarryover(saved, carryover))),
+    take: Effect.sync(() => {
+      const taken = saved
+      saved = EMPTY_CARRYOVER
+      return taken
+    }),
+  })
+})

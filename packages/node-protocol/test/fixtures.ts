@@ -106,6 +106,9 @@ export const NodeHandlers = (state: NodeState) =>
     "desktop.stop": () => Effect.void,
     "computer.act": () => Effect.fail(new DesktopUnavailable({ message: "no desktop in tests" })),
     "computer.stream": () => Effect.fail(new DesktopUnavailable({ message: "no desktop in tests" })),
+    "screen.ensure": () => Effect.fail(new DesktopUnavailable({ message: "no screen in tests", missing: ["Screen Recording"] })),
+    "screen.stream": () => Effect.fail(new DesktopUnavailable({ message: "no screen in tests" })),
+    "screen.input": () => Effect.fail(new DesktopUnavailable({ message: "no screen in tests" })),
   })
 
 export interface BrainState {

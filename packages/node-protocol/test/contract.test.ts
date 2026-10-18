@@ -76,6 +76,9 @@ describe("contract", () => {
         "desktop.stop",
         "computer.act",
         "computer.stream",
+        "screen.ensure",
+        "screen.stream",
+        "screen.input",
       ].sort(),
     )
     expect([...BrainRpcs.requests.keys()].sort()).toEqual(["node.event", "node.heartbeat", "node.openStream", "node.requestApproval"])
@@ -85,6 +88,7 @@ describe("contract", () => {
       "desktop.ensure",
       "desktop.stop",
     ])
+    expect([...NodeRpcs.requests.keys()].filter((k) => k.startsWith("screen.")).sort()).toEqual(["screen.ensure", "screen.input", "screen.stream"])
     expect(PROTOCOL_VERSION).toBe(1)
   })
 

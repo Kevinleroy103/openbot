@@ -49,7 +49,7 @@ import {
   MemoryTurnRepo,
   MemoryUsageRepo,
 } from "./memoryRepos.ts"
-import { MemoryAttachmentStore, MemoryMemoryStore, MemorySkillStore } from "./memoryStores.ts"
+import { MemoryAttachmentStore, MemoryCarryoverStore, MemoryMemoryStore, MemorySkillStore } from "./memoryStores.ts"
 
 /** Every repository and store port (what `PersistenceLive` provides). Defined in ports. */
 export type { RepositoryPorts }
@@ -78,6 +78,7 @@ export const MemoryPersistence: Layer.Layer<RepositoryPorts, never, IdGen> = Lay
   MemoryMemoryStore,
   MemorySkillStore(`${TEST_DATA_ROOT}/skills-lib`),
   MemoryAttachmentStore(`${TEST_DATA_ROOT}/attachments`),
+  MemoryCarryoverStore,
 )
 
 /**

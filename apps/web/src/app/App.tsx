@@ -104,6 +104,19 @@ export function App(): ReactNode {
 
   // First load: open the most recent conversation unless the URL picked one. A phone starts on Home;
   // a deep link to a chat gets a Home entry under it so Back / swipe-back land on Home.
+  // The iPhone app opens pages of this app in a web view: `#/settings/<page>` and
+  // `#/computer/<botId>[?control=1]` (read before the boot below resets the hash on a phone).
+  const embedHash = useRef(typeof location === "undefined" ? "" : location.hash)
+  useEffect(() => {
+    if (!roster.loaded || embedHash.current === "") return
+    const hash = embedHash.current
+    embedHash.current = ""
+    const page = /^#\/settings(?:\/([a-z]+))?/.exec(hash)
+    if (page) return settings.show((page[1] ?? "general") as Parameters<typeof settings.show>[0])
+    const screen = /^#\/computer\/([^/?#]+)(\?control=1)?/.exec(hash)
+    if (screen) computer.open(decodeURIComponent(screen[1]!) as BotId, { takeControl: screen[2] !== undefined })
+  }, [roster.loaded, settings, computer])
+
   const booted = useRef(false)
   useEffect(() => {
     if (booted.current || !roster.loaded) return

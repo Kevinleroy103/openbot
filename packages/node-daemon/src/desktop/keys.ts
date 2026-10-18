@@ -109,11 +109,21 @@ const PUNCTUATION: Record<string, string> = {
   "|": "bar",
 }
 
+/**
+ * A modifier name → keysym. On a Mac (`mac`) Command is a key of its own: cmd / command stay
+ * `super` (the Command key) instead of becoming Ctrl.
+ */
+const modifierOf = (lower: string, mac: boolean): string | undefined => {
+  const base = lower.replace(/_[lr]$/, "")
+  if (mac && (base === "cmd" || base === "command")) return "super"
+  return MODIFIERS[lower] ?? MODIFIERS[base]
+}
+
 /** One key name → xdotool keysym (modifiers, named keys, F-keys, punctuation; others unchanged). */
-export const xdoKeyName = (name: string): string => {
+export const xdoKeyName = (name: string, mac = false): string => {
   if (name.length === 1) return PUNCTUATION[name] ?? name
   const lower = name.toLowerCase()
-  const mod = MODIFIERS[lower] ?? MODIFIERS[lower.replace(/_[lr]$/, "")]
+  const mod = modifierOf(lower, mac)
   if (mod) return mod
   const named = NAMED[lower]
   if (named) return named
@@ -123,27 +133,27 @@ export const xdoKeyName = (name: string): string => {
 }
 
 /** `"ctrl+shift+t"` → `"ctrl+shift+t"`, `"cmd+c"` → `"ctrl+c"`, `"ctrl++"` → `"ctrl+plus"`. Undefined when empty. */
-export const xdoCombo = (combo: string): string | undefined => {
+export const xdoCombo = (combo: string, mac = false): string | undefined => {
   const trimmed = combo.trim()
   if (trimmed === "") return undefined
   // split on "+" that is followed by something, so a trailing "+" is the plus key ("ctrl++")
   const parts = trimmed.split(/\+(?=.)/).map((p) => p.trim())
   // "ctrl+" (a modifier with nothing after it) is malformed; a lone "+" is the plus key
   if (parts.some((p) => p === "" || (p.length > 1 && p.endsWith("+")))) return undefined
-  return parts.map(xdoKeyName).join("+")
+  return parts.map((p) => xdoKeyName(p, mac)).join("+")
 }
 
 /**
  * The `key` action's text: one combo, or several separated by spaces (xdotool presses them in
  * order: `"ctrl+a Delete"`). Returns the xdotool arguments, or undefined when there is no key.
  */
-export const xdoKeySequence = (text: string | undefined): ReadonlyArray<string> | undefined => {
+export const xdoKeySequence = (text: string | undefined, mac = false): ReadonlyArray<string> | undefined => {
   if (text === undefined) return undefined
   const trimmed = text.trim()
   if (trimmed === "") return text.length > 0 && text.trim() === "" ? ["space"] : undefined
   const combos: Array<string> = []
   for (const token of trimmed.split(/\s+/)) {
-    const c = xdoCombo(token)
+    const c = xdoCombo(token, mac)
     if (c === undefined) return undefined
     combos.push(c)
   }
@@ -154,7 +164,7 @@ export const xdoKeySequence = (text: string | undefined): ReadonlyArray<string> 
  * Modifier keys held during a click or scroll (`text: "shift"` or `"ctrl+shift"`), as keysyms for
  * `xdotool keydown`. Undefined when the text names something other than modifier keys.
  */
-export const heldModifiers = (text: string | undefined): ReadonlyArray<string> | undefined => {
+export const heldModifiers = (text: string | undefined, mac = false): ReadonlyArray<string> | undefined => {
   if (text === undefined || text.trim() === "") return []
   const parts = text
     .trim()
@@ -162,8 +172,7 @@ export const heldModifiers = (text: string | undefined): ReadonlyArray<string> |
     .filter((p) => p !== "")
   const out: Array<string> = []
   for (const p of parts) {
-    const lower = p.toLowerCase()
-    const mod = MODIFIERS[lower] ?? MODIFIERS[lower.replace(/_[lr]$/, "")]
+    const mod = modifierOf(p.toLowerCase(), mac)
     if (!mod) return undefined
     if (!out.includes(mod)) out.push(mod)
   }
@@ -171,7 +180,7 @@ export const heldModifiers = (text: string | undefined): ReadonlyArray<string> |
 }
 
 /** Keys pressed for `hold_key` (`"shift"`, `"ctrl+alt"`, `"a"`), released in reverse order. */
-export const holdKeys = (text: string | undefined): ReadonlyArray<string> | undefined => {
-  const c = text === undefined ? undefined : xdoCombo(text)
+export const holdKeys = (text: string | undefined, mac = false): ReadonlyArray<string> | undefined => {
+  const c = text === undefined ? undefined : xdoCombo(text, mac)
   return c === undefined ? undefined : c.split(/\+(?=.)/)
 }

@@ -50,6 +50,7 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "messages.send": [],
   "messages.react": [],
   "turns.interrupt": [Keys.requests],
+  "turns.retry": [],
   "attachments.upload": [],
   "requests.respond": [Keys.requests, Keys.rules],
   "routines.create": [Keys.routines],
@@ -139,6 +140,7 @@ export const compactAtom = commands["bots.compact"]
 export const createGroupAtom = commands["conversations.createGroup"]
 export const markReadAtom = commands["conversations.markRead"]
 export const interruptTurnAtom = commands["turns.interrupt"]
+export const retryTurnAtom = commands["turns.retry"]
 export const updateSettingsAtom = commands["settings.update"]
 export const createPairingCodeAtom = commands["nodes.createPairingCode"]
 /** Answer a runtime request; keyed per request so answering two cards never interrupts one. */

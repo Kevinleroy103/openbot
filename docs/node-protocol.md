@@ -168,6 +168,9 @@ Every **bot-originated, side-effecting** call carries `inv: {invocationId, botId
 | `desktop.stop` | `{botId}` | `null` (closes the bot's browser gracefully, then kills everything on the screen; the next use starts a fresh one) | |
 | `computer.act` | `{inv, action: ComputerAction}` (starts the desktop when needed) | `{text, image?: {mimeType, data(base64), width, height}}` | `LeaseHeld` (holder `user`), `PolicyRefused` (`computer` ceiling), `DesktopUnavailable` |
 | `computer.stream` | `{botId, mode: view\|control, streamId, streamToken}` (starts the desktop when needed) | `null`, answered once the `vnc-view` / `vnc-control` stream is dialed | `LeaseHeld` (`control` while the holder is not `user`), `DesktopUnavailable`, `TunnelFailed` |
+| `screen.ensure` | `{botId}` (`screen@1`: a Mac's own screen; asks macOS for the permissions the first time) | `{width, height}` (points) | `DesktopUnavailable` (`missing`: `Screen Recording`, `Accessibility`) |
+| `screen.stream` | `{botId, streamId, streamToken}` | `null`, answered once the `screen` stream is dialed: screenshot frames framed like `cdp-screencast`, viewport = the 1280-wide API space | `DesktopUnavailable`, `TunnelFailed` |
+| `screen.input` | `{botId, event: BrowserInputEvent}` (coordinates in the frame viewport) | `null` | `LeaseHeld` (holder not `user`), `DesktopUnavailable` |
 
 Every RPC may also fail with `NotAuthenticated` (before `node.hello`).
 
@@ -180,6 +183,8 @@ Every RPC may also fail with `NotAuthenticated` (before `node.hello`).
 **Lease.** The brain's `ComputerService` owns the control lease and mirrors it with `lease.set`; the node keeps ONE lease per bot for its browser and its desktop. While `holder = "user"`, `browser.action` and `computer.act` fail with `LeaseHeld` (a long `type` stops between chunks), and `browser.input` and `computer.stream {mode: "control"}` are accepted; while `holder = "bot"` (the default), those two fail with `LeaseHeld`. When the lease returns to `bot`, the node closes every open `vnc-control` stream of that bot (1000); `vnc-view` streams stay.
 
 **Desktops** (capability `desktop@1`, D1.7). Each bot that uses the node's computer gets its own virtual X display (Xvfb 1920×1200 on the first free display from `:100`, cookie auth, no TCP), a window manager (xfwm4, or openbox), a dock (plank) with the bot's browser, a terminal, a file manager and an editor, and two loopback x11vnc servers (control and `-viewonly`). On such a node the bot's Chromium (`browser.*`) runs on that display with the bot's own profile, so `browser` and `computer` act on the same windows.
+
+**A Mac's own screen** (capability `screen@1`, macOS; never with `desktop@1`). The bots and the owner share the main display. `computer.act` works it through a helper child process (`openbot-node screen-helper`: CoreGraphics events via bun:ffi, JSON lines on stdin/stdout) and `screencapture` + `sips` screenshots. It answers `LeaseHeld` (with a reason for the bot) while the owner holds the lease for any bot, while someone used the Mac in the last 20 s (HID idle time, the helper's own events excluded), and while another bot acted in the last minute. `node.hello.screen = {missing, width, height}` lists the permissions still needed (Screen Recording, Accessibility for openbot-node).
 
 **`ComputerAction`**: Anthropic's computer-use actions `{action, coordinate?, start_coordinate?, region?, text?, scroll_direction?, scroll_amount?, duration?}`, with `action` one of `screenshot`, `zoom`, `left_click`, `right_click`, `middle_click`, `double_click`, `triple_click`, `mouse_move`, `left_click_drag`, `left_mouse_down`, `left_mouse_up`, `scroll`, `type`, `key`, `hold_key`, `wait`, `cursor_position`.
 - Coordinates are in the screenshot space: 1280 px wide, `apiH = round(1280 · H / W)` (1280×800 for 1920×1200). `zoom.region` is `[x0, y0, x1, y1]` in that space; the crop is taken at screen resolution and fitted into 1280×800.
@@ -219,7 +224,7 @@ All errors are tagged objects (`_tag`) inside `Fail` reasons:
 
 ## 6. Capabilities and versions
 
-- Capability names are versioned: `fs@1`, `shell@1`, `pty@1`, `tunnel@1`, `browser@1`, `desktop@1`, `codex.exec-server@1`, `claude.cli@1`, `opencode.serve@1`. A bare name means `@1`.
+- Capability names are versioned: `fs@1`, `shell@1`, `pty@1`, `tunnel@1`, `browser@1`, `desktop@1`, `screen@1`, `codex.exec-server@1`, `claude.cli@1`, `opencode.serve@1`. A bare name means `@1`.
 - The brain uses **effective = declared ∩ approved**. A newly declared capability stays disabled until the owner approves it in Settings › Computers; declaring fewer never needs approval.
 - The protocol version is one integer for the envelope and contract. The brain supports N and N−1.
 

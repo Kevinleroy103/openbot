@@ -18,6 +18,7 @@ import {
   BrainRpcs,
   type ComputerAction,
   type DesktopSupport,
+  type ScreenSupport,
   DesktopUnavailable,
   encodeScreencastFrame,
   type ExecEvent,
@@ -167,6 +168,12 @@ export interface TestNodeState {
   readonly vncReceived: Array<Uint8Array>
   /** `desktop.ensure` fails with this when set (programs missing) */
   desktopFailure?: DesktopUnavailable | undefined
+  /** screen@1: `screen.ensure` / `screen.stream` calls (bot ids), owner input */
+  readonly screenEnsured: Array<string>
+  readonly screenStreams: Array<string>
+  readonly screenInputs: Array<unknown>
+  /** `screen.ensure` fails with this when set (permissions missing) */
+  screenFailure?: DesktopUnavailable | undefined
 }
 
 /** What the fake node's VNC server sends first (an RFB ProtocolVersion). */
@@ -204,6 +211,7 @@ export const testNodeHandlers = (input: {
   readonly capabilities: ReadonlyArray<string>
   readonly state: TestNodeState
   readonly desktop?: DesktopSupport | undefined
+  readonly screen?: ScreenSupport | undefined
 }) => {
   const { state } = input
   const leaseOf = (botId: string) => state.leases.filter((l) => l.botId === botId).at(-1)?.holder ?? "bot"
@@ -252,6 +260,7 @@ export const testNodeHandlers = (input: {
           policy: { ceiling: "ask" as const, remoteManaged: false },
           brainVerified: true,
           ...(input.desktop === undefined ? {} : { desktop: input.desktop }),
+          ...(input.screen === undefined ? {} : { screen: input.screen }),
         } satisfies NodeHello
       }),
     "fs.read": ({ path }) =>
@@ -389,6 +398,42 @@ export const testNodeHandlers = (input: {
             )
           }),
       ),
+    "screen.ensure": ({ botId }) =>
+      gate(
+        state.screenFailure !== undefined
+          ? Effect.fail(state.screenFailure)
+          : Effect.sync(() => {
+            state.screenEnsured.push(botId)
+            return { width: 1440, height: 900 }
+          }),
+      ),
+    "screen.stream": ({ botId, streamId, streamToken }) =>
+      gate(
+        Effect.gen(function*() {
+          state.screenStreams.push(botId)
+          // like a Mac: dial the stream, send a frame, keep it open
+          yield* Effect.forkDetach(
+            Effect.scoped(
+              Effect.gen(function*() {
+                const socket = yield* dialWebSocket(`${input.wsBase}${Routes.stream(streamId)}`, {
+                  authorization: formatStreamAuth(streamToken),
+                })
+                const writer = yield* socket.writer
+                const reader = yield* socket.reader
+                const meta = { seq: 1, mime: "image/jpeg", width: 1280, height: 800, viewportWidth: 1280, viewportHeight: 800, timestamp: 1 }
+                yield* writer.write(encodeScreencastFrame(meta, new Uint8Array([0xff, 0xd8, 0xff, 0xd9])))
+                yield* Effect.forever(reader.pull)
+              }),
+            ).pipe(Effect.ignore),
+          )
+        }),
+      ),
+    "screen.input": ({ botId, event }) =>
+      gate(
+        leaseOf(botId) !== "user"
+          ? Effect.fail(new LeaseHeld({ botId, holder: "bot", reason: "take control first" }))
+          : Effect.sync(() => void state.screenInputs.push(event)),
+      ),
   })
 }
 
@@ -413,6 +458,9 @@ export const newNodeState = (): TestNodeState => ({
   acts: [],
   vncStreams: [],
   vncReceived: [],
+  screenEnsured: [],
+  screenStreams: [],
+  screenInputs: [],
 })
 
 /** Dial `/node` with a signed upgrade and serve NodeRpcs. The connection lives in the caller's scope. */
@@ -432,6 +480,8 @@ export const connectTestNode = (input: {
   readonly pingInterval?: number
   /** What the node reports about desktops in `node.hello`. */
   readonly desktop?: DesktopSupport
+  /** What a Mac reports about its own screen in `node.hello`. */
+  readonly screen?: ScreenSupport
 }): Effect.Effect<TestNode, Socket.SocketError, Scope.Scope> =>
   Effect.gen(function*() {
     const brainOrigin = input.brainOrigin ?? BRAIN_ORIGIN
@@ -457,6 +507,7 @@ export const connectTestNode = (input: {
         capabilities: input.capabilities ?? ["fs@1", "shell@1", "pty@1", "codex.exec-server@1"],
         state,
         desktop: input.desktop,
+        screen: input.screen,
       }),
     )
     const peer = yield* makePeer({ socket, serve: NodeRpcs, call: BrainRpcs, pingInterval: input.pingInterval }).pipe(

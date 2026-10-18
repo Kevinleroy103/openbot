@@ -377,6 +377,11 @@ export class OrchestratorFake extends Context.Service<OrchestratorFake, {
           lookupSend: () => notImplemented("OrchestratorFake", "lookupSend"),
           react: () => notImplemented("OrchestratorFake", "react"),
           interrupt: () => notImplemented("OrchestratorFake", "interrupt"),
+          retry: () => notImplemented("OrchestratorFake", "retry"),
+          drain: () => notImplemented("OrchestratorFake", "drain"),
+          draining: Effect.succeed(false),
+          handOff: Effect.void,
+          resume: () => Effect.void,
           deleteConversation: (conversationId) => call(`deleteConversation:${conversationId}`),
           deliver: (input: DeliveryInput) =>
             Effect.gen(function*() {

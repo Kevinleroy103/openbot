@@ -79,7 +79,7 @@ describe("background tasks over RPC", () => {
     }
   }, 60_000)
 
-  test("restart: running work fails with 'interrupted by a restart' and the bot is told", async () => {
+  test("restart: running work runs again under its id, in its own resumed session, and the bot gets the result", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "openbot-tasks-boot-"))
     try {
       const first = await startServer({ dataDir })
@@ -97,11 +97,13 @@ describe("background tasks over RPC", () => {
       try {
         await second.run(Effect.gen(function*() {
           const client = yield* rpcClient(`${second.wsBase}/rpc`, { cookie, origin: second.base })
-          const [task] = yield* client["tasks.list"]({ botId })
-          expect(task).toMatchObject({ title: "audit", status: "failed", error: "interrupted by a restart" })
+          const done = yield* eventually(client["tasks.list"]({ botId }), (ts) => ts[0]?.status === "succeeded", { label: "ran again" })
+          expect(done).toHaveLength(1)
+          expect(done[0]).toMatchObject({ title: "audit", status: "succeeded", restarts: 1 })
+          expect(done[0]!.nativeSessionId).toBeString()
           const dm = yield* watchConversation(client, conversationId)
           yield* eventually(Effect.map(Ref.get(dm.state), (s) => botMessages(transcriptOf(s))), (r) =>
-            r.some((t) => t.startsWith("Update on audit: It could not be finished: interrupted by a restart.")), { label: "told" })
+            r.some((t) => t.startsWith("Update on audit:")), { label: "told" })
         }))
       } finally {
         await second.close({ keepData: true })

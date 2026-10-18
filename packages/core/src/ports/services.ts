@@ -162,6 +162,7 @@ export const botActor = (tool: ToolContext): Actor => ({ kind: "bot", tool })
  * stopped) comes back to the bot in the task's origin conversation; never steered, always its own turn.
  * `introduction`: the hidden first turn of a Bot the owner just created (it greets them and asks what
  * they need, like Grok's "New Bot"); nothing of it is shown but the Bot's own reply and question card.
+ * `system-resume`: after a restart cut a bot off mid-turn, it continues there (`Orchestrator.resume`).
  */
 export type DeliveryKind = "user-message" | "bot-message" | "routine" | "system-resume" | "task-result" | "introduction"
 export type DeliveryUrgency = "urgent" | "background"
@@ -202,6 +203,17 @@ export interface Delivery {
   readonly routineRunId?: RoutineRunId | undefined
   /** Set for `task-result` deliveries. */
   readonly taskId?: TaskId | undefined
+  /** Carried over a restart: the turn it was queued as keeps its id. */
+  readonly turnId?: TurnId | undefined
+}
+
+/**
+ * Work a stopping brain hands to the next boot (deploys, D7.4): deliveries that were queued but never
+ * started, and the turns it cut off mid-reply. Saved by `Orchestrator.handOff`, replayed by `resume`.
+ */
+export interface Carryover {
+  readonly deliveries: ReadonlyArray<Delivery>
+  readonly cutOff: ReadonlyArray<{ readonly botId: BotId; readonly conversationId: ConversationId; readonly turnId: TurnId }>
 }
 
 /** `Orchestrator.deliver` input; `id` is allocated when absent, `mode` defaults to "auto". */
@@ -460,6 +472,35 @@ export class Orchestrator extends Context.Service<Orchestrator, {
     readonly conversationId: ConversationId
     readonly turnId?: TurnId | undefined
   }) => Effect.Effect<ReadonlyArray<Turn>, NotFound>
+  /**
+   * `turns.retry`: delivers the messages a failed turn was answering (`sourceEntryIds`, else its
+   * input message, else the conversation's latest message from someone else) to that turn's bot
+   * again. Nothing is posted; other bots are not woken.
+   */
+  readonly retry: (input: {
+    readonly conversationId: ConversationId
+    readonly turnId: TurnId
+  }) => Effect.Effect<void, NotFound | InvalidInput | HarnessUnavailable>
+  /**
+   * Deploys: stops starting turns (deliveries are held, their turns `queued`) and tells
+   * `BackgroundTasks` to hold too; waits until no turn or task runs or `graceMs` passed; then
+   * `handOff`. The brain exits afterwards.
+   */
+  readonly drain: (input: { readonly graceMs: number }) => Effect.Effect<void>
+  /** True from `drain` on (the web shows that OpenBot is updating). */
+  readonly draining: Effect.Effect<boolean>
+  /**
+   * Stops every runner and saves what it held for the next boot (`CarryoverStore`): queued
+   * deliveries (a turn not yet accepted by its harness counts as queued) and the turns cut off.
+   * Shutdown runs it, so a plain restart loses no queued message either.
+   */
+  readonly handOff: Effect.Effect<void>
+  /**
+   * After boot, once the routes serve: replays the carried deliveries (queued turns keep their ids),
+   * then has every cut-off bot continue where it was (`system-resume`): the carried ones and, after a
+   * crash, the turns boot recovery found running. A crash's queued owner messages are delivered again.
+   */
+  readonly resume: (report: BootRecoveryReport) => Effect.Effect<void>
   /**
    * Enqueues a delivery for `(botId, conversationId)` in the bot's runner (Messaging,
    * RoutineScheduler, ApprovalService). Steers only into a running turn of the SAME conversation.
@@ -824,10 +865,15 @@ export class BackgroundTasks extends Context.Service<BackgroundTasks, {
   /** Finished tasks as `task-result` deliveries for their bots. Single consumer: the Orchestrator. */
   readonly results: Stream.Stream<DeliveryInput>
   /**
-   * After boot (drivers registered): publishes the tasks boot recovery failed and tells each bot
-   * (`task-result`).
+   * After boot (routes serving): the tasks boot recovery failed because a restart cut them off run
+   * again under their own ids, resuming their harness session (`Task.nativeSessionId`) when there is
+   * one. A task restarted `MAX_TASK_RESTARTS` times already is reported to its bot instead (`task-result`).
    */
   readonly recover: (report: BootRecoveryReport) => Effect.Effect<void>
+  /** Deploys (`Orchestrator.drain`): queued tasks stay queued from now on; running ones go on. */
+  readonly hold: Effect.Effect<void>
+  /** Tasks running now (not queued). */
+  readonly running: Effect.Effect<number>
 }>()("openbot/core/BackgroundTasks") {}
 
 // ============================================================================ RoutineScheduler (§4.3.5)

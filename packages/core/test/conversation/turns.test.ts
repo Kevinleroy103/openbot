@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { KnownConversationStreamItem, KnownRosterStreamItem } from "@openbot/contracts"
 import { Effect, Option } from "effect"
+import { TestClock } from "effect/testing"
 import { BotRepo, LiveHub, Orchestrator, sessionKeyOf } from "../../src/ports/index.ts"
 import { NotifierFake, runTest, UsageServiceFake } from "../../src/testing/index.ts"
 import {
@@ -250,6 +251,73 @@ describe("interrupts", () => {
     expect(out.affected.map((t) => t.status)).toEqual(["interrupted"])
     expect(out.turns.map((t) => t.status).sort()).toEqual(["completed", "interrupted"])
     expect(out.handles).toHaveLength(1)
+  })
+})
+
+describe("retry", () => {
+  test("a failed turn's bot answers the same message again; nothing new is posted", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const orchestrator = yield* Orchestrator
+        const driver = yield* TestDriver
+        const bot = yield* createBot("Ada")
+        const dm = bot.directConversationId
+        yield* driver.setBehavior(bot.id, (turn) => turn.crash("harness died"))
+        yield* send(dm, "fix the render")
+        yield* settled(dm)
+        const [failed] = yield* turnsOf(dm)
+        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "on it").pipe(Effect.andThen(turn.complete())))
+        yield* orchestrator.retry({ conversationId: dm, turnId: failed!.id })
+        yield* settled(dm, 2)
+        const completed = yield* Effect.flip(orchestrator.retry({ conversationId: dm, turnId: (yield* turnsOf(dm))[1]!.id }))
+        return { failed: failed!, turns: yield* turnsOf(dm), handles: yield* driver.turns, entries: yield* transcript(dm), completed }
+      }),
+      appLayer(),
+    )
+    const userMessages = messagesOf(out.entries).filter((m) => m.role === "user")
+    expect(userMessages.map((m) => m.text)).toEqual(["fix the render"])
+    expect(out.failed.sourceEntryIds).toEqual([userMessages[0]!.id])
+    expect(out.turns.map((t) => t.status)).toEqual(["failed", "completed"])
+    expect(out.handles.at(-1)!.input.text).toContain("fix the render")
+    expect(out.completed._tag).toBe("InvalidInput")
+  })
+})
+
+describe("idle compaction", () => {
+  /** One finished turn (context 1 100 tokens), then idle time passes. */
+  const idleFor = (minutes: number, options: { readonly minTokens: number; readonly enabled?: boolean }) =>
+    runTest(
+      Effect.gen(function*() {
+        const driver = yield* TestDriver
+        const bot = yield* createBot("Ada")
+        const dm = bot.directConversationId
+        yield* send(dm, "hi")
+        yield* settled(dm)
+        yield* TestClock.adjust(`${minutes} minutes`)
+        for (let i = 0; i < 200; i++) yield* Effect.yieldNow
+        return { compactions: yield* driver.compactions, entries: yield* transcript(dm), conv: yield* conversation(dm) }
+      }),
+      appLayer({
+        capabilities: { compact: true },
+        runner: { idleCompactMinTokens: options.minTokens },
+        ...(options.enabled === false ? { settings: { compactIdleBots: false } } : {}),
+      }),
+    )
+
+  test("a large context is compacted once after 10 idle minutes, before the session closes", async () => {
+    const early = await idleFor(9, { minTokens: 1_000 })
+    expect(early.compactions).toBe(0)
+    const out = await idleFor(11, { minTokens: 1_000 })
+    expect(out.compactions).toBe(1)
+    expect(eventsOf(out.entries).filter((e) => e.type === "session-changed" && e.action === "compacted")).toHaveLength(1)
+    expect(out.conv.sessions?.[0]?.contextUsage?.usedTokens).toBe(500)
+    const later = await idleFor(20, { minTokens: 1_000 })
+    expect(later.compactions).toBe(1)
+  })
+
+  test("a small context, or the setting off, is left alone", async () => {
+    expect((await idleFor(11, { minTokens: 5_000 })).compactions).toBe(0)
+    expect((await idleFor(11, { minTokens: 1_000, enabled: false })).compactions).toBe(0)
   })
 })
 

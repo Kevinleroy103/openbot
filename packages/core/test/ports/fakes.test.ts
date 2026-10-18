@@ -88,6 +88,11 @@ describe("planPlacement (§3.3 / D1.5 matrix)", () => {
     expect(Result.isSuccess(r) && r.success.toolsets).toEqual(["bot", "node", "browser", "computer"])
     const local = plan("claude", [], localNodeSummary())
     expect(Result.isSuccess(local) && local.success.toolsets).toEqual(["bot", "browser"])
+    expect(Result.isSuccess(r) && r.success.sharedScreen).toBeFalsy()
+    // a Mac's own screen: the computer toolset too, marked shared
+    const mac = plan("claude", ["brain-mcp-hands"], remoteNodeSummary("nod_mac", { capabilities: ["fs@1", "browser@1", "screen@1"] }))
+    expect(Result.isSuccess(mac) && mac.success.toolsets).toEqual(["bot", "node", "browser", "computer"])
+    expect(Result.isSuccess(mac) && mac.success.sharedScreen).toBe(true)
   })
 
   test("node toolset for local bots bound to other nodes", () => {

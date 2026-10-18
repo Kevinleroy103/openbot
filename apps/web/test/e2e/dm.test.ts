@@ -1,6 +1,6 @@
 // E2E (W3.1): onboarding → create a Demo bot → lands in its DM; streamed reply; approval card
 // (Allow once / Deny / Always allow → rule in Settings › Permissions); question card (A/B/C and
-// free text); failed turn → error tray → Retry; interrupt via Stop. Real brain, fake harness only.
+// free text); failed turn → error tray → Retry (the same message again); interrupt via Stop. Real brain, fake harness only.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import type { Browser } from "playwright-core"
 import type { BotId, ConversationId } from "@openbot/contracts"
@@ -325,8 +325,11 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     const userMessages = async () => (await rpc.conversation(convId)).entries
     const countFails = async () => [...(await userMessages()).values()].filter((e) => e.kind === "message" && e.role === "user" && e.text === "fail: the scripted failure").length
     expect(await countFails()).toBe(1)
+    const failedTurns = async () => [...(await rpc.conversation(convId)).turns.values()].filter((t) => t.status === "failed").length
     await tray.getByRole("button", { name: "Retry" }).click()
-    await eventually(countFails, (n) => n === 2, { label: "the retried message" })
+    // the Bot tries the same message again; nothing new is posted
+    await eventually(failedTurns, (n) => n === 2, { label: "the retried turn" })
+    expect(await countFails()).toBe(1)
     // the retry fails again (same script): the tray comes back for the new turn
     await tray.waitFor()
     expect(app.errors).toEqual([])

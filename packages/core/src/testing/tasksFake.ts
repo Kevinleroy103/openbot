@@ -92,6 +92,8 @@ export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
           approve: () => Effect.succeed({ decision: "allow-once" }),
           results: Stream.never,
           recover: () => Effect.void,
+          hold: Effect.void,
+          running: Effect.sync(() => [...tasks.values()].filter((t) => t.status === "running").length),
         })
         return Context.make(BackgroundTasks, service).pipe(
           Context.add(BackgroundTasksFake, BackgroundTasksFake.of({

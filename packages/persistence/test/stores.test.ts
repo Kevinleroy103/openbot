@@ -1,5 +1,5 @@
-import type { BotId, MemoryFactId, Millis, SkillName } from "@openbot/contracts"
-import { AttachmentStore, MemoryStore, SkillStore } from "@openbot/core"
+import type { BotId, ConversationId, MemoryFactId, Millis, SkillName, TurnId } from "@openbot/contracts"
+import { AttachmentStore, CarryoverStore, MemoryStore, SkillStore } from "@openbot/core"
 import { afterAll, describe, expect, test } from "bun:test"
 import { Effect, Exit, Option, Schema, Stream } from "effect"
 import { existsSync } from "node:fs"
@@ -252,5 +252,31 @@ describe("frontmatter", () => {
   test("text without a fence is all body", () => {
     expect(parseFrontmatter("# hi\n").body).toBe("# hi\n")
     expect(parseFrontmatter("---\nunterminated").body).toBe("---\nunterminated")
+  })
+})
+
+describe("CarryoverStore (carryover.json)", () => {
+  test("saves add up, take reads and clears, an unreadable file is ignored", async () => {
+    const dir = await tempDataDir()
+    const cut = (n: number) => ({ botId: `bot_${n}` as BotId, conversationId: `cnv_${n}` as ConversationId, turnId: `trn_${n}` as TurnId })
+    const out = await run(
+      Effect.gen(function*() {
+        const store = yield* CarryoverStore
+        yield* store.save({ deliveries: [], cutOff: [cut(1)] })
+        yield* store.save({ deliveries: [], cutOff: [cut(2)] })
+        const onDisk = existsSync(join(dir, "carryover.json"))
+        const first = yield* store.take
+        const second = yield* store.take
+        yield* Effect.promise(() => writeFile(join(dir, "carryover.json"), "{not json"))
+        const unreadable = yield* store.take
+        return { onDisk, first, second, unreadable, left: existsSync(join(dir, "carryover.json")) }
+      }),
+      testPersistence(dir),
+    )
+    expect(out.onDisk).toBe(true)
+    expect(out.first).toEqual({ deliveries: [], cutOff: [cut(1), cut(2)] })
+    expect(out.second).toEqual({ deliveries: [], cutOff: [] })
+    expect(out.unreadable).toEqual({ deliveries: [], cutOff: [] })
+    expect(out.left).toBe(false)
   })
 })

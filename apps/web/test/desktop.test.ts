@@ -17,6 +17,7 @@ import {
   keysymsOf,
   missingSentence,
   nodeDesktopState,
+  nodeScreenState,
   pendingHandoffOf,
 } from "../src/computer/desktop.ts"
 import { screenNotice } from "../src/computer/notice.ts"
@@ -141,6 +142,11 @@ describe("desktop setup hints", () => {
     expect(nodeDesktopState({ capabilities: ["fs@1"], declaredCapabilities: ["fs@1", "desktop@1"] })).toBe("unapproved")
     expect(nodeDesktopState({ capabilities: ["fs@1"], declaredCapabilities: ["fs@1"] })).toBe("off")
   })
+  test("a Mac's own screen from capabilities", () => {
+    expect(nodeScreenState({ capabilities: ["fs@1", "screen@1"], declaredCapabilities: ["fs@1", "screen@1"] })).toBe("on")
+    expect(nodeScreenState({ capabilities: ["fs@1"], declaredCapabilities: ["fs@1", "screen@1"] })).toBe("unapproved")
+    expect(nodeScreenState({ capabilities: ["fs@1", "desktop@1"], declaredCapabilities: ["fs@1", "desktop@1"] })).toBe("off")
+  })
 })
 
 const status = (patch: Partial<ComputerStatus>): ComputerStatus => ({ botId: "bot_a" as ComputerStatus["botId"], nodeId: "node_local" as NodeId, state: "ready", surface: "desktop", controller: "bot", ...patch })
@@ -156,6 +162,15 @@ describe("availability", () => {
     expect(availabilityOf(status({ state: "unsupported", surface: "none", missing: ["x11vnc"] }), undefined)).toEqual({ kind: "unsupported", message: "This computer has no screen to show", missing: ["x11vnc"] })
     expect(availabilityOf(undefined, undefined)).toEqual({ kind: "loading" })
     expect(availabilityOf(undefined, "Can't reach OpenBot.")).toEqual({ kind: "unreachable", message: "Can't reach OpenBot." })
+  })
+  test("a Mac's screen is always there: watching it checks it; a missing permission comes along", () => {
+    expect(availabilityOf(status({ state: "absent", surface: "screen" }), undefined)).toEqual({ kind: "stream", surface: "screen" })
+    expect(availabilityOf(status({ state: "error", surface: "screen", message: "Allow Accessibility…", missing: ["Accessibility"] }), undefined)).toEqual({
+      kind: "unreachable",
+      message: "Allow Accessibility…",
+      surface: "screen",
+      missing: ["Accessibility"],
+    })
   })
 })
 
@@ -181,6 +196,15 @@ describe("screen notices", () => {
     expect(screenNotice({ name, availability: { kind: "absent", surface: "desktop" }, phase: "idle" })).toMatchObject({ icon: "asleep", title: "Scout's computer is asleep", body: "It wakes up when Scout needs it.", action: "wake" })
     expect(screenNotice({ name, availability: stream, phase: "asleep" })).toMatchObject({ icon: "asleep", action: "wake" })
     expect(screenNotice({ name, availability: { kind: "absent", surface: "browser" }, phase: "idle" })).toMatchObject({ action: "open-browser" })
+  })
+  test("a Mac that still needs permissions says what to allow", () => {
+    const message = "Allow Screen Recording for openbot-node on the Mac (System Settings › Privacy & Security), then try again."
+    expect(screenNotice({ name, availability: { kind: "unreachable", message, surface: "screen", missing: ["Screen Recording"] }, phase: "idle" })).toEqual({
+      icon: "off",
+      title: "Scout can't use the Mac's screen yet",
+      body: message,
+      action: "retry",
+    })
   })
   test("unsupported: how to set it up only when the node said what it lacks", () => {
     expect(screenNotice({ name, availability: { kind: "unsupported", message: "No screen", missing: ["x11vnc"] }, phase: "idle" })).toMatchObject({ title: "No screen to show", action: "setup" })

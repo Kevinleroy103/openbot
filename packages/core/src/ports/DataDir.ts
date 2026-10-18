@@ -27,6 +27,8 @@ export interface DataDirShape {
   readonly localNode: string
   /** `<root>/logs` */
   readonly logs: string
+  /** `<root>/carryover.json`: what a stopping brain hands to the next boot (`CarryoverStore`). */
+  readonly carryover: string
   /** `<root>/brain-identity.json` (0600): the brain's Ed25519 keypair that nodes pin (brain-nodes). */
   readonly brainIdentity: string
 }
@@ -52,6 +54,7 @@ export const makeDataDir = (root: string): DataDirShape => {
     attachments: joinPath(base, "attachments"),
     localNode: joinPath(base, "local-node"),
     logs: joinPath(base, "logs"),
+    carryover: joinPath(base, "carryover.json"),
     brainIdentity: joinPath(base, "brain-identity.json"),
   }
 }

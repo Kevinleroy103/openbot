@@ -18,6 +18,8 @@ export const Settings = Schema.Struct({
   showSteps: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
   /** Global switch for bot-to-bot tools (D5.2 kill switch). */
   botMessaging: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
+  /** Compact a Bot's large context when it goes idle, while the prompt cache is still warm. */
+  compactIdleBots: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
   /** Preselected harness in New Bot. */
   defaultHarness: Schema.optionalKey(HarnessKindName),
   /** Unattended approvals expire after this many minutes (D5.6). */
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   accent: "bot",
   showSteps: true,
   botMessaging: true,
+  compactIdleBots: true,
   approvalExpiryMinutes: DEFAULT_APPROVAL_EXPIRY_MINUTES,
   sharedProjectFolders: [],
   defaultAutonomy: DEFAULT_BOT_AUTONOMY,
@@ -53,6 +56,7 @@ export const SettingsPatch = Schema.Struct({
   accent: Schema.optionalKey(AccentPreference),
   showSteps: Schema.optionalKey(Schema.Boolean),
   botMessaging: Schema.optionalKey(Schema.Boolean),
+  compactIdleBots: Schema.optionalKey(Schema.Boolean),
   /** `null` clears the default. */
   defaultHarness: Schema.optionalKey(Schema.NullOr(HarnessKindName)),
   approvalExpiryMinutes: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))),
@@ -69,6 +73,7 @@ export const applySettingsPatch = (settings: Settings, patch: SettingsPatch): Se
   if (patch.accent !== undefined) next.accent = patch.accent
   if (patch.showSteps !== undefined) next.showSteps = patch.showSteps
   if (patch.botMessaging !== undefined) next.botMessaging = patch.botMessaging
+  if (patch.compactIdleBots !== undefined) next.compactIdleBots = patch.compactIdleBots
   if (patch.approvalExpiryMinutes !== undefined) next.approvalExpiryMinutes = patch.approvalExpiryMinutes
   if (patch.sharedProjectFolders !== undefined) next.sharedProjectFolders = patch.sharedProjectFolders
   if (patch.defaultAutonomy !== undefined) next.defaultAutonomy = patch.defaultAutonomy

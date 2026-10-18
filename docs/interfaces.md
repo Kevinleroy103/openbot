@@ -154,6 +154,7 @@ Each RPC maps to one method. Service methods are in §6; port methods are `NodeA
 | `messages.send` | `SendInput` → `SendResult` | `Orchestrator.send` |
 | `messages.lookupSend` / `messages.react` | … | `Orchestrator.lookupSend` / `react` |
 | `turns.interrupt` | `{conversationId, turnId?}` → `Turn[]` | `Orchestrator.interrupt` |
+| `turns.retry` | `{conversationId, turnId}` → `void` (failed turns only; the turn's bot answers its newest source message again, nothing is posted) | `Orchestrator.retry` |
 | `attachments.upload` | `{name, mime, bytesBase64}` → `Attachment` | `AttachmentService.upload` |
 | `requests.respond` | `{requestId, response: RuntimeResponseInput}` → `RuntimeRequest` | `ApprovalService.respond` |
 | `requests.listPending` | `{conversationId?}` | `ApprovalService.listPending` |

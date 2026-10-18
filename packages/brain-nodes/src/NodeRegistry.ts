@@ -133,8 +133,12 @@ const summarize = (record: NodeRecord, connection: NodeConnection | undefined, l
     hostname: record.hostname,
     roots: record.roots,
     ...(record.version === undefined ? {} : { version: record.version }),
-    ...(connection?.hello.desktop !== undefined && connection.hello.desktop.missing.length > 0
+    // a Mac shares its own screen instead: what it needs are permissions, not desktop programs
+    ...(connection?.hello.screen === undefined && connection?.hello.desktop !== undefined && connection.hello.desktop.missing.length > 0
       ? { desktopMissing: connection.hello.desktop.missing }
+      : {}),
+    ...(connection?.hello.screen !== undefined && connection.hello.screen.missing.length > 0
+      ? { screenMissing: connection.hello.screen.missing }
       : {}),
     ...(seen === undefined ? {} : { lastSeenAt: seen as NodeSummary["createdAt"] }),
     createdAt: record.createdAt,

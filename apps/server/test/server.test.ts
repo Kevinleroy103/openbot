@@ -113,6 +113,39 @@ describe("auth negatives", () => {
     expect(await (await fetch(`${server.base}/api/auth/status`)).json()).toEqual({ authenticated: false })
   })
 
+  test("the iPhone app: a one-time code from the signed-in web app (or the owner token) buys a session it sends as the cookie header", async () => {
+    const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+      fetch(`${server.base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) })
+    // minting needs the web session
+    expect((await post("/api/auth/app-code", {})).status).toBe(401)
+    const minted = (await (await post("/api/auth/app-code", {}, { cookie, origin: server.base })).json()) as { code: string; expiresInSeconds: number }
+    expect(minted.expiresInSeconds).toBe(300)
+    const login = await post("/api/auth/app-login", { code: minted.code })
+    expect(login.status).toBe(200)
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+    // the app's session works as a bearer (or cookie) without an Origin, on HTTP and on the RPC socket
+    const bearer = { authorization: `Bearer ${sessionToken}` }
+    expect(await (await fetch(`${server.base}/api/auth/status`, { headers: bearer })).json()).toEqual({ authenticated: true })
+    expect(await (await fetch(`${server.base}/api/auth/status`, { headers: { cookie: `openbot_session=${sessionToken}` } })).json()).toEqual({ authenticated: true })
+    expect(await upgradeStatus(`${server.base}/rpc`, bearer)).toBe(101)
+    expect(await upgradeStatus(`${server.base}/rpc`, { authorization: "Bearer forged-session-token-value" })).toBe(401)
+    // its in-app web pages: a one-time code puts the app's own session in the web view's cookie
+    const web = (await (await post("/api/auth/web-code", {}, bearer)).json()) as { code: string }
+    const next = encodeURIComponent("#/settings/computers")
+    const signedIn = await fetch(`${server.base}/api/auth/login?code=${web.code}&next=${next}`, { redirect: "manual" })
+    expect(signedIn.status).toBe(302)
+    expect(signedIn.headers.get("location")).toBe("/#/settings/computers")
+    expect(signedIn.headers.get("set-cookie")).toContain(`openbot_session=${sessionToken}`)
+    expect((await fetch(`${server.base}/api/auth/login?code=${web.code}`, { redirect: "manual" })).status).toBe(401)
+    expect((await post("/api/auth/web-code", {})).status).toBe(401)
+    // single use
+    expect((await post("/api/auth/app-login", { code: minted.code })).status).toBe(401)
+    // the printed login link's token works too; anything else does not
+    expect((await post("/api/auth/app-login", { token: server.ownerToken })).status).toBe(200)
+    expect((await post("/api/auth/app-login", { token: "nope" })).status).toBe(401)
+    expect((await post("/api/auth/app-login", {})).status).toBe(401)
+  })
+
   test("each listener serves only its own routes; the MCP gateway is bearer-only", async () => {
     // internal routes are not mounted on the public listener, and vice versa
     expect((await fetch(`${server.base}/mcp/bot_x`, { method: "POST", headers: { cookie } })).status).toBe(404)

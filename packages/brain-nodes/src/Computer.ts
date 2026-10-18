@@ -3,8 +3,9 @@
  * on its host node, and the user's terminal there.
  *
  * Surface (per host node, effective capabilities): `desktop` with `desktop@1` (a whole X desktop
- * per bot: noVNC view), else `browser` with `browser@1` (the bot's browser window: CDP screencast),
- * else `none`. A node that lacks desktops but says what it misses (`node.hello.desktop.missing`)
+ * per bot: noVNC view), else `screen` with `screen@1` (a Mac's own screen, shared: screenshot frames
+ * framed like the CDP screencast, input through `screen.input`), else `browser` with `browser@1`
+ * (the bot's browser window: CDP screencast), else `none`. A node that lacks desktops but says what it misses (`node.hello.desktop.missing`)
  * gets `missing` in the status, whatever its surface, so the UI can say what to install.
  *
  * - `ComputerPort` (`computer.status / ensure / lease / reset`): `ensure` → `desktop.ensure` or
@@ -87,6 +88,8 @@ export const DesktopCloseCodes = {
 
 /** How long `desktop.ensure` may take before the screen counts as failed. */
 const DESKTOP_START_TIMEOUT = "60 seconds"
+/** How long a Mac may take to answer `screen.ensure` (it may be showing a permission prompt). */
+const SCREEN_CHECK_TIMEOUT = "30 seconds"
 
 export interface ComputerServiceShape {
   readonly status: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound>
@@ -106,7 +109,7 @@ export class ComputerService extends Context.Service<ComputerService, ComputerSe
   "openbot/brain-nodes/ComputerService",
 ) {}
 
-type Surface = "browser" | "desktop"
+type Surface = "browser" | "desktop" | "screen"
 
 interface BotComputer {
   readonly nodeId: NodeId
@@ -139,6 +142,8 @@ interface Viewer {
 interface Hub {
   readonly botId: BotId
   readonly nodeId: NodeId
+  /** the bot's browser window (CDP screencast) or the Mac's own screen */
+  readonly surface: "browser" | "screen"
   readonly viewers: Map<number, Viewer>
   lastFrame: Uint8Array | undefined
   lastUrl: string | undefined
@@ -146,7 +151,13 @@ interface Hub {
 }
 
 const surfaceOf = (capabilities: ReadonlyArray<string>): ComputerStatus["surface"] =>
-  hasCapability(capabilities, "desktop") ? "desktop" : hasCapability(capabilities, "browser") ? "browser" : "none"
+  hasCapability(capabilities, "desktop")
+    ? "desktop"
+    : hasCapability(capabilities, "screen")
+    ? "screen"
+    : hasCapability(capabilities, "browser")
+    ? "browser"
+    : "none"
 
 const decodeInput = Schema.decodeUnknownOption(Schema.fromJsonString(BrowserInputEvent))
 const decodeNotice = Schema.decodeUnknownOption(
@@ -240,6 +251,9 @@ export const makeComputerService = Effect.gen(function*() {
   /** What the node said about desktops at its last `node.hello` (absent on older nodes). */
   const desktopSupportOf = (nodeId: NodeId) =>
     Effect.map(registry.connection(nodeId), (conn) => (Option.isSome(conn) ? conn.value.hello.desktop : undefined))
+  /** What a Mac said about its own screen at its last `node.hello`. */
+  const screenSupportOf = (nodeId: NodeId) =>
+    Effect.map(registry.connection(nodeId), (conn) => (Option.isSome(conn) ? conn.value.hello.screen : undefined))
 
   const sizeOf = (current: BotComputer | undefined, support: DesktopSupport | undefined) => {
     const width = current?.width ?? support?.width
@@ -257,8 +271,10 @@ export const makeComputerService = Effect.gen(function*() {
         return { ...base, state: "error", surface: "none", message: `Can't reach ${bot.name}'s computer` } satisfies ComputerStatus
       }
       const support = yield* desktopSupportOf(nodeId)
-      // the node could give desktops if it had these programs (shown whatever the surface)
-      const lacking = support !== undefined && support.missing.length > 0 ? { missing: support.missing } : {}
+      const screenSupport = yield* screenSupportOf(nodeId)
+      // the node could give a screen if it had these programs or permissions (shown whatever the surface)
+      const lackingList = screenSupport !== undefined ? screenSupport.missing : support?.missing ?? []
+      const lacking = lackingList.length > 0 ? { missing: lackingList } : {}
       const surface = surfaceOf(node.value.capabilities)
       if (surface === "none") {
         return {
@@ -274,12 +290,15 @@ export const makeComputerService = Effect.gen(function*() {
       const viewPath = `/ws/computer/${botId}`
       const c = computers.get(botId)
       const current = c !== undefined && c.nodeId === nodeId && c.surface === surface ? c : undefined
-      const size = surface === "desktop" ? sizeOf(current, support) : {}
+      const size = surface === "desktop" ? sizeOf(current, support) : surface === "screen" ? sizeOf(current, screenSupport) : {}
       const missing = surface === "browser"
         ? lacking
-        : current?.missing === undefined
-        ? {}
-        : { missing: current.missing }
+        : current?.missing !== undefined
+        ? { missing: current.missing }
+        // a Mac's permissions as of its hello, until the screen was used
+        : surface === "screen" && current?.state !== "ready"
+        ? lacking
+        : {}
       if (node.value.status !== "online") {
         return {
           ...base,
@@ -391,6 +410,27 @@ export const makeComputerService = Effect.gen(function*() {
                 missing: undefined,
               })
             }
+          } else if (surface === "screen") {
+            const ensured = yield* Effect.result(client["screen.ensure"]({ botId }).pipe(Effect.timeout(SCREEN_CHECK_TIMEOUT)))
+            if (Result.isFailure(ensured)) {
+              const failure = ensured.failure
+              yield* setComputer(botId, s.nodeId, surface, {
+                state: "error",
+                // a Mac's permissions: its own words say what to allow
+                message: typeof failure === "object" && failure !== null && "_tag" in failure && failure._tag === "DesktopUnavailable"
+                  ? failure.message
+                  : `Can't use the screen: ${nodeErrorText(failure)}`,
+                missing: missingOf(failure),
+              })
+            } else {
+              yield* setComputer(botId, s.nodeId, surface, {
+                state: "ready",
+                message: undefined,
+                width: ensured.success.width,
+                height: ensured.success.height,
+                missing: undefined,
+              })
+            }
           } else {
             const ensured = yield* Effect.result(client["browser.ensure"]({ botId }))
             if (Result.isFailure(ensured)) {
@@ -466,22 +506,34 @@ export const makeComputerService = Effect.gen(function*() {
         if (Result.isFailure(ensured) || ensured.success.state !== "ready") {
           const message = Result.isFailure(ensured)
             ? ensured.failure.message
-            : ensured.success.message ?? "The browser is not available"
+            : ensured.success.message ?? (hub.surface === "screen" ? "The screen is not available" : "The browser is not available")
           return yield* broadcast(hub, notice({ _tag: "Ended", reason: message }))
         }
         const client = yield* directory.client(hub.nodeId)
         const opened = yield* Effect.result(
-          openNodeStream(broker, {
-            nodeId: hub.nodeId,
-            kind: "cdp-screencast",
-            open: (ticket) =>
-              client["browser.screencast"]({ botId: hub.botId, streamId: ticket.streamId, streamToken: ticket.streamToken }),
-          }),
+          hub.surface === "screen"
+            ? Effect.map(
+              openNodeStream(broker, {
+                nodeId: hub.nodeId,
+                kind: "screen",
+                open: (ticket) => client["screen.stream"]({ botId: hub.botId, streamId: ticket.streamId, streamToken: ticket.streamToken }),
+              }),
+              (o) => o.socket,
+            ).pipe(Effect.mapError((e): unknown => e))
+            : Effect.map(
+              openNodeStream(broker, {
+                nodeId: hub.nodeId,
+                kind: "cdp-screencast",
+                open: (ticket) =>
+                  client["browser.screencast"]({ botId: hub.botId, streamId: ticket.streamId, streamToken: ticket.streamToken }),
+              }),
+              (o) => o.socket,
+            ).pipe(Effect.mapError((e): unknown => e)),
         )
         if (Result.isFailure(opened)) {
           return yield* broadcast(hub, notice({ _tag: "Ended", reason: nodeErrorText(opened.failure) }))
         }
-        const node = yield* open(opened.success.socket)
+        const node = yield* open(opened.success)
         const pumped = yield* Effect.exit(
           Effect.forever(
             Effect.flatMap(node.pull, (frames) =>
@@ -513,11 +565,11 @@ export const makeComputerService = Effect.gen(function*() {
       ),
     )
 
-  const joinHub = (botId: BotId, nodeId: NodeId, viewer: Omit<Viewer, "id">) =>
+  const joinHub = (botId: BotId, nodeId: NodeId, surface: Hub["surface"], viewer: Omit<Viewer, "id">) =>
     hubLock.withPermits(1)(
       Effect.gen(function*() {
         let hub = hubs.get(botId)
-        if (hub !== undefined && hub.nodeId !== nodeId) {
+        if (hub !== undefined && (hub.nodeId !== nodeId || hub.surface !== surface)) {
           // the bot moved to another node: stop the old stream
           if (hub.fiber !== undefined) yield* Fiber.interrupt(hub.fiber)
           hubs.delete(botId)
@@ -525,7 +577,7 @@ export const makeComputerService = Effect.gen(function*() {
         }
         const v: Viewer = { ...viewer, id: ++viewerSeq }
         if (hub === undefined) {
-          const created: Hub = { botId, nodeId, viewers: new Map([[v.id, v]]), lastFrame: undefined, lastUrl: undefined, fiber: undefined }
+          const created: Hub = { botId, nodeId, surface, viewers: new Map([[v.id, v]]), lastFrame: undefined, lastUrl: undefined, fiber: undefined }
           hubs.set(botId, created)
           created.fiber = yield* Effect.forkIn(runHub(created), layerScope, { startImmediately: true })
           return { hub: created, viewer: v }
@@ -552,13 +604,13 @@ export const makeComputerService = Effect.gen(function*() {
       }),
     ).pipe(Effect.flatMap((fiber) => (fiber === undefined ? Effect.void : Fiber.interrupt(fiber))))
 
-  const runViewer = (socket: Socket.Socket, botId: BotId, nodeId: NodeId, mode: ViewerMode) =>
+  const runViewer = (socket: Socket.Socket, botId: BotId, nodeId: NodeId, mode: ViewerMode, surface: Hub["surface"]) =>
     Effect.scoped(
       Effect.gen(function*() {
         const io: Duplex = yield* open(socket)
         // joining and registering the leave are one step (a viewer can drop at any moment)
         const { hub } = yield* Effect.acquireRelease(
-          joinHub(botId, nodeId, { mode, writer: io.writer }),
+          joinHub(botId, nodeId, surface, { mode, writer: io.writer }),
           (joined) => leaveHub(joined.hub, joined.viewer),
         )
         // late joiners see the current state at once
@@ -572,7 +624,10 @@ export const makeComputerService = Effect.gen(function*() {
               const event = decodeInput(frame)
               if (Option.isNone(event)) return Effect.void
               return directory.client(nodeId).pipe(
-                Effect.flatMap((client) => client["browser.input"]({ botId, event: event.value })),
+                Effect.flatMap((client) =>
+                  surface === "screen"
+                    ? Effect.ignore(client["screen.input"]({ botId, event: event.value }))
+                    : Effect.ignore(client["browser.input"]({ botId, event: event.value }))),
                 Effect.ignore,
               )
             }, { discard: true })),
@@ -680,7 +735,7 @@ export const makeComputerService = Effect.gen(function*() {
         yield* Fiber.await(fiber)
         return HttpServerResponse.empty()
       }
-      yield* runViewer(upgraded.success, botId as BotId, st.nodeId, mode)
+      yield* runViewer(upgraded.success, botId as BotId, st.nodeId, mode, st.surface === "screen" ? "screen" : "browser")
       return HttpServerResponse.empty()
     })
 
@@ -864,8 +919,9 @@ export const makeComputerService = Effect.gen(function*() {
           if (c !== undefined && c.surface === "desktop" && c.nodeId === event.nodeId) computers.set(botId, { ...c, state: "absent" })
           return
         }
-        // on a desktop node the browser is one window of the screen: its events change nothing
-        if (c !== undefined && c.surface === "desktop" && c.nodeId === event.nodeId) return
+        // on a desktop node the browser is one window of the screen (and a Mac shares its whole
+        // screen): its events change nothing
+        if (c !== undefined && (c.surface === "desktop" || c.surface === "screen") && c.nodeId === event.nodeId) return
         if (event.type === NodeEventTypes.browserClosed && c !== undefined && c.nodeId === event.nodeId) {
           computers.set(botId, { ...c, state: "absent", windowTargetId: undefined })
         }

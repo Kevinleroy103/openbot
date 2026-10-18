@@ -60,7 +60,7 @@ import {
   type ToolContext,
   UsageService,
 } from "../../ports/services.ts"
-import { AttachmentStore } from "../../ports/stores.ts"
+import { AttachmentStore, CarryoverStore, EMPTY_CARRYOVER } from "../../ports/stores.ts"
 import { toAttachment } from "./AttachmentService.ts"
 import { DEFAULT_RUNNER_OPTIONS, type DeliveryOutcomes, makeRunner, type Runner, type RunnerOptions } from "./BotRunner.ts"
 import { routeOwnerMessage } from "./GroupRouter.ts"
@@ -99,6 +99,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
     const entries = yield* EntryRepo
     const turns = yield* TurnRepo
     const attachments = yield* AttachmentStore
+    const carryover = yield* CarryoverStore
     const nodeFiles = yield* NodeFiles
     const sendLimits = yield* SendFileLimits
 
@@ -132,6 +133,9 @@ const makeOrchestrator = (options: RunnerOptions) =>
 
     const runners = new Map<string, Runner>()
     const runnerLock = yield* Semaphore.make(1)
+    /** Deploys: from `drain` on no turn starts; after `handOff` new deliveries go to the next boot. */
+    let holding = false
+    let handedOff = false
 
     const runnersOf = (filter: (runner: Runner) => boolean) => [...runners.values()].filter(filter)
 
@@ -171,6 +175,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
           Effect.asVoid,
         ),
       onEvicted: forget,
+      held: () => holding,
       scope,
       options,
     }
@@ -217,6 +222,12 @@ const makeOrchestrator = (options: RunnerOptions) =>
         attachmentIds: input.attachmentIds ?? [],
         causalChain: input.causalChain ?? { rootId: id, hops: 0 },
       })
+      if (handedOff) {
+        // The brain is stopping: the next boot delivers it.
+        yield* orDie(carryover.save({ deliveries: [delivery], cutOff: [] }))
+        const receipt: DeliveryReceipt = { deliveryId: id, disposition: "queued" }
+        return receipt
+      }
       for (let attempt = 0;; attempt++) {
         const runner = yield* runnerFor(bot.id)
         const receipt = yield* runner.deliver(delivery, driver.capabilities)
@@ -385,6 +396,138 @@ const makeOrchestrator = (options: RunnerOptions) =>
       const closed: Turn = { ...turn, status: "interrupted", endedAt: yield* Clock.currentTimeMillis, stopReason: "interrupted" }
       yield* publishTurn(closed)
       return [closed]
+    })
+
+    // ------------------------------------------------------------------ retry
+
+    type MessageEntry = Extract<TranscriptEntry, { readonly kind: "message" }>
+    const isMessage = (entry: TranscriptEntry): entry is MessageEntry => entry.kind === "message"
+
+    /**
+     * The newest message a failed turn answered. One is enough: in a group the bot's catch-up brings
+     * every message it has not seen, and what a turn that died midway was given is in its session.
+     */
+    const retrySource = (turn: Turn) =>
+      Effect.gen(function*() {
+        const sources = turn.sourceEntryIds ?? (turn.inputEntryId !== undefined ? [turn.inputEntryId] : [])
+        for (const id of [...sources].reverse()) {
+          const entry = yield* orDie(entries.get(id))
+          if (Option.isSome(entry) && isMessage(entry.value)) return Option.some(entry.value)
+        }
+        // Turns failed before sources were recorded: the latest message from someone else.
+        const recent = (yield* orDie(entries.page({ conversationId: turn.conversationId, limit: 40 }))).entries
+        return Option.fromNullishOr(recent.filter(isMessage).findLast((entry) =>
+          !entry.streaming && entry.author.kind !== "system" &&
+          !(entry.author.kind === "bot" && entry.author.botId === turn.botId) &&
+          (entry.text.trim() !== "" || entry.attachments.length > 0)
+        ))
+      })
+
+    const retry = Effect.fn("Orchestrator.retry")(function*(input: {
+      readonly conversationId: ConversationId
+      readonly turnId: TurnId
+    }) {
+      yield* store.get(input.conversationId)
+      const turn = yield* required(turns.get(input.turnId), "turn", input.turnId)
+      if (turn.conversationId !== input.conversationId) {
+        return yield* new NotFound({ entity: "turn", id: input.turnId })
+      }
+      if (turn.status !== "failed") return yield* new InvalidInput({ message: "Only a reply that failed can be retried." })
+      const source = yield* retrySource(turn)
+      if (Option.isNone(source)) {
+        return yield* new InvalidInput({ message: "There is nothing to retry here. Send a new message instead." })
+      }
+      const entry = source.value
+      yield* deliver({
+        conversationId: turn.conversationId,
+        botId: turn.botId,
+        ...(entry.author.kind === "bot" ? { kind: "bot-message", fromBotId: entry.author.botId } : { kind: "user-message" }),
+        text: entry.text,
+        attachmentIds: entry.attachments.map((attachment) => attachment.id),
+        sourceEntryId: entry.id,
+        urgency: "urgent",
+      })
+    })
+
+    // ------------------------------------------------------------------ deploys: drain, hand-off, resume
+
+    const handOff = Effect.gen(function*() {
+      holding = true
+      handedOff = true
+      const live = [...runners.values()]
+      const taken = yield* Effect.forEach(live, (runner) => runner.takeOver)
+      const carried = { deliveries: taken.flatMap((t) => t.deliveries), cutOff: taken.flatMap((t) => t.cutOff) }
+      if (carried.deliveries.length > 0 || carried.cutOff.length > 0) {
+        yield* carryover.save(carried).pipe(
+          Effect.catch((error) => Effect.logError("Orchestrator: could not save the work for the next boot", error)),
+        )
+        yield* Effect.logInfo("handed off to the next boot", { deliveries: carried.deliveries.length, cutOff: carried.cutOff.length })
+      }
+      yield* Effect.forEach(live, (runner) => runner.stop("restart"), { concurrency: "unbounded", discard: true })
+    })
+
+    const drain = Effect.fn("Orchestrator.drain")(function*(input: { readonly graceMs: number }) {
+      if (holding) return
+      holding = true
+      yield* tasks.hold
+      const deadline = (yield* Clock.currentTimeMillis) + input.graceMs
+      yield* Effect.logInfo("draining: no new turns or tasks start; waiting for running ones", { graceMs: input.graceMs })
+      for (;;) {
+        const working = (yield* Effect.forEach([...runners.values()], (runner) => runner.isWorking)).filter(Boolean).length
+        const running = yield* tasks.running
+        if (working === 0 && running === 0) break
+        if ((yield* Clock.currentTimeMillis) >= deadline) {
+          yield* Effect.logInfo("drain grace over: handing off what still runs", { turns: working, tasks: running })
+          break
+        }
+        yield* Effect.sleep("1 second")
+      }
+      yield* handOff
+    })
+
+    /** What a cut-off bot is told (model-facing; the owner never sees it). */
+    const RESUME_TEXT =
+      "[Your last turn here was cut off before you finished: OpenBot restarted. Continue where you left off. A command that was still running was stopped, so check its result or run it again. Don't mention the restart.]"
+
+    const resume = Effect.fn("Orchestrator.resume")(function*(report: BootRecoveryReport) {
+      const carried = yield* carryover.take.pipe(
+        Effect.catch((error) => Effect.logError("Orchestrator: could not read the carried work", error).pipe(Effect.as(EMPTY_CARRYOVER))),
+      )
+      const redeliver = (input: DeliveryInput) =>
+        deliver(input).pipe(
+          Effect.catch((error) => Effect.logWarning(`Orchestrator: carried delivery to ${input.botId} dropped`, error)),
+          Effect.catchDefect((defect) => Effect.logError("Orchestrator: carried delivery failed", defect)),
+          Effect.asVoid,
+        )
+      // 1. what was queued, in order (queued turns keep their ids)
+      for (const delivery of carried.deliveries) yield* redeliver(delivery)
+      // 2. after a crash nothing was carried: the owner's queued messages are delivered again
+      const handled = new Set(carried.deliveries.flatMap((d) => (d.turnId === undefined ? [] : [d.turnId])))
+      const cutOffIds = new Set(report.cutOffTurns.map((t) => t.id))
+      for (const turn of report.interruptedTurns) {
+        if (handled.has(turn.id) || cutOffIds.has(turn.id) || turn.inputEntryId === undefined) continue
+        const entry = yield* orDie(entries.get(turn.inputEntryId))
+        if (Option.isNone(entry) || entry.value.kind !== "message" || entry.value.role !== "user") continue
+        yield* redeliver({
+          conversationId: turn.conversationId,
+          botId: turn.botId,
+          kind: "user-message",
+          text: entry.value.text,
+          attachmentIds: entry.value.attachments.map((a) => a.id),
+          sourceEntryId: entry.value.id,
+          urgency: "urgent",
+          turnId: turn.id,
+        })
+      }
+      // 3. every bot cut off mid-reply continues there (after what was queued: no message twice)
+      const cutOff = new Map<string, { readonly botId: BotId; readonly conversationId: ConversationId }>()
+      for (const c of [...carried.cutOff, ...report.cutOffTurns]) cutOff.set(`${c.botId} ${c.conversationId}`, c)
+      for (const c of cutOff.values()) {
+        yield* redeliver({ conversationId: c.conversationId, botId: c.botId, kind: "system-resume", text: RESUME_TEXT, urgency: "urgent" })
+      }
+      if (carried.deliveries.length + cutOff.size > 0) {
+        yield* Effect.logInfo("resumed work cut off by the restart", { deliveries: carried.deliveries.length, cutOff: cutOff.size })
+      }
     })
 
     // ------------------------------------------------------------------ sessions (one per bot)
@@ -572,6 +715,11 @@ const makeOrchestrator = (options: RunnerOptions) =>
         })
       }),
       interrupt,
+      retry,
+      drain,
+      draining: Effect.sync(() => holding),
+      handOff,
+      resume,
       deliver,
       awaitDelivery: (deliveryId) => {
         const deferred = outcomes.get(deliveryId)
@@ -625,6 +773,7 @@ export const makeOrchestratorLayer = (options?: Partial<RunnerOptions>): Layer.L
   | TurnRepo
   | ReplicaLog
   | AttachmentStore
+  | CarryoverStore
   | NodeFiles
 > =>
   Layer.effect(Orchestrator, makeOrchestrator({ ...DEFAULT_RUNNER_OPTIONS, ...options })).pipe(

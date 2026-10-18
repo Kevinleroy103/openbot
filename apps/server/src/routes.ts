@@ -6,7 +6,10 @@
  * - `GET /rpc`: Effect RPC over WebSocket (`RpcSerialization.layerJson`), cookie + Origin or
  *   `?wsTicket=`; the socket closes when its session is logged out.
  * - `/api/auth/login` (GET `?token=` → cookie + redirect, POST → cookie), `POST /api/auth/logout`,
- *   `POST /api/auth/ws-ticket`, `GET /api/auth/status`.
+ *   `POST /api/auth/ws-ticket`, `GET /api/auth/status`; for the iPhone app `POST /api/auth/app-code`
+ *   (signed in: a one-time code for its QR), `POST /api/auth/app-login` (`{code}` or `{token}` →
+ *   `{sessionToken}`, sent back as `Authorization: Bearer`) and `POST /api/auth/web-code` (a 60 s code
+ *   that signs its in-app web view in, `GET /api/auth/login?code=&next=`).
  * - `GET /api/attachments/:id` (cookie + Origin).
  * - `/ws/computer/:botId`, `/ws/terminal/:botId` (brain-nodes viewers, same auth as `/rpc`).
  * - `/node`, `POST /node/pair`, `/node/stream/:id` (brain-nodes; node signatures, codes, one-time tokens).
@@ -97,12 +100,24 @@ const readToken = (request: HttpServerRequest.HttpServerRequest) =>
 export const AuthRoutes = routes(Effect.fnUntraced(function*(router) {
   const auth = yield* WebAuth
 
-  // GET: the printed link (`/?token=` does the same); POST: programmatic clients.
+  // GET: the printed link (`/?token=` does the same), or the iPhone app's web view (`?code=` from
+  // `/api/auth/web-code`, `&next=#/…` the page to open); POST: programmatic clients.
   yield* router.add(
     "GET",
     "/api/auth/login",
     Effect.gen(function*() {
       const request = yield* HttpServerRequest.HttpServerRequest
+      const params = searchParamsOf(request)
+      const webCode = params.get("code")
+      if (webCode !== null) {
+        const sessionToken = yield* auth.redeemWebCode(webCode)
+        if (sessionToken === undefined) return htmlPage(loginPage({ error: "That link has expired. Open the page again from the app." }), 401)
+        const next = params.get("next") ?? ""
+        return HttpServerResponse.redirect(`/${/^#\/[\w/%?=.:-]*$/.test(next) ? next : ""}`, {
+          status: 302,
+          headers: { "set-cookie": auth.sessionCookie(request, sessionToken), "cache-control": "no-store" },
+        })
+      }
       const token = yield* readToken(request)
       const signedIn = token === undefined ? undefined : yield* auth.login(token)
       if (signedIn === undefined) {
@@ -150,6 +165,50 @@ export const AuthRoutes = routes(Effect.fnUntraced(function*(router) {
       const result = yield* auth.authenticate(request)
       if (!result.ok) return json({ error: result.reason }, result.status)
       return json(yield* auth.mintTicket(result.session))
+    }),
+  )
+  yield* router.add(
+    "POST",
+    "/api/auth/app-code",
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const result = yield* auth.authenticate(request)
+      if (!result.ok) return json({ error: result.reason }, result.status)
+      return json(yield* auth.mintAppCode(result.session), 200, { "cache-control": "no-store" })
+    }),
+  )
+  yield* router.add(
+    "POST",
+    "/api/auth/web-code",
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const result = yield* auth.authenticate(request)
+      const token = sessionTokenOf(request)
+      if (!result.ok || token === undefined) return json({ error: result.ok ? "not signed in" : result.reason }, result.ok ? 401 : result.status)
+      return json(yield* auth.mintWebCode(token), 200, { "cache-control": "no-store" })
+    }),
+  )
+  yield* router.add(
+    "POST",
+    "/api/auth/app-login",
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const body = yield* Effect.option(request.json)
+      const field = (name: string) => {
+        const value = Option.isSome(body) && typeof body.value === "object" && body.value !== null
+          ? (body.value as Record<string, unknown>)[name]
+          : undefined
+        return typeof value === "string" && value.length <= 256 ? value : undefined
+      }
+      const code = field("code")
+      const token = field("token")
+      const signedIn = code !== undefined
+        ? yield* auth.loginWithAppCode(code)
+        : token !== undefined
+        ? yield* auth.login(token)
+        : undefined
+      if (signedIn === undefined) return json({ error: code !== undefined ? "That code is not valid any more." : "That link is not valid." }, 401)
+      return json({ sessionToken: signedIn.sessionToken }, 200, { "cache-control": "no-store" })
     }),
   )
   yield* router.add(

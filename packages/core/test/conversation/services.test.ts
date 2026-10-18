@@ -571,6 +571,7 @@ describe("Orchestrator extras", () => {
         yield* (yield* Orchestrator).recover({
           killedProcesses: [],
           interruptedTurns: [turn],
+          cutOffTurns: [],
           expiredRequests: [],
           updatedEntries: [],
           interruptedRuns: [],

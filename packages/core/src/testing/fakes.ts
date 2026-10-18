@@ -183,6 +183,7 @@ export class PlacementServiceFake extends Context.Service<PlacementServiceFake, 
                   }
                   : undefined,
                 toolsets: plan.success.toolsets,
+                ...(plan.success.sharedScreen ? { sharedScreen: true } : {}),
                 promptAppend: describePlacement(plan.success, hostNode, workspacePath),
                 release,
               }

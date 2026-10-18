@@ -239,6 +239,10 @@ export const missingSentence = (missing: ReadonlyArray<string>, nodeName: string
 export const nodeDesktopState = (node: Pick<NodeSummary, "capabilities" | "declaredCapabilities">): "on" | "unapproved" | "off" =>
   node.capabilities.includes(NodeCapabilities.desktop) ? "on" : node.declaredCapabilities.includes(NodeCapabilities.desktop) ? "unapproved" : "off"
 
+/** A Mac's own screen on a node: on (effective `screen@1`), declared but not approved, or not offered. */
+export const nodeScreenState = (node: Pick<NodeSummary, "capabilities" | "declaredCapabilities">): "on" | "unapproved" | "off" =>
+  node.capabilities.includes(NodeCapabilities.screen) ? "on" : node.declaredCapabilities.includes(NodeCapabilities.screen) ? "unapproved" : "off"
+
 /** The bot's pending hand-off (`request_takeover`), if any. */
 export const pendingHandoffOf = (requests: ReadonlyArray<RuntimeRequest> | undefined, botId: string): RuntimeRequest | undefined =>
   requests?.find((r) => r.kind === "handoff" && r.botId === botId && r.status === "pending")

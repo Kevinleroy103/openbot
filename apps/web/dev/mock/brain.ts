@@ -803,6 +803,14 @@ export class MockBrain {
     return out
   }
 
+  /** A failed reply tries again (the mock answers instead of failing a second time). */
+  retry(conversationId: string, turnId: string) {
+    const turn = this.conv(conversationId).state.turns.get(turnId as TurnId)
+    if (!turn) throw new NotFound({ entity: "turn", id: turnId })
+    if (turn.status !== "failed") throw new InvalidInput({ message: "Only a reply that failed can be retried." })
+    this.replyTo(conversationId, turn.botId, "retry", turn.inputEntryId)
+  }
+
   respond(requestId: string, input: RuntimeResponseInput): RuntimeRequest {
     const conv = [...this.convs.values()].find((c) => c.state.requests.has(requestId as RequestId))
     if (!conv) throw new NotFound({ entity: "request", id: requestId })
@@ -1117,6 +1125,7 @@ export class MockBrain {
           this.put({ ...e, reactions: mine >= 0 ? reactions.filter((_, i) => i !== mine) : [...reactions, { emoji, by: OWNER }], updatedAt: this.now() } as Entry)
         })(),
       "turns.interrupt": ({ conversationId, turnId }) => sync(() => this.interrupt(conversationId, turnId))(),
+      "turns.retry": ({ conversationId, turnId }) => sync(() => this.retry(conversationId, turnId))(),
       "attachments.upload": ({ name, mime, bytesBase64 }) =>
         sync(() => {
           const bytes = Uint8Array.from(Buffer.from(bytesBase64, "base64"))

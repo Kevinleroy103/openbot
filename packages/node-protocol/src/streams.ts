@@ -42,8 +42,9 @@ export const decodeControlFrame = <S extends Schema.Top & { readonly DecodingSer
   }
 }
 
-// ---------------------------------------------------------------- cdp-screencast
-// node -> brain -> viewer. Each frame is ONE binary WebSocket frame:
+// ---------------------------------------------------------------- cdp-screencast (and screen)
+// node -> brain -> viewer; a `screen` stream (screen@1, the computer's own screen) is framed the
+// same way. Each frame is ONE binary WebSocket frame:
 //   [u32 big-endian N][N bytes UTF-8 JSON ScreencastFrameMeta][image bytes]
 // Text frames carry ScreencastNotice JSON (e.g. {"_tag":"Ended","reason":"target closed"}).
 export const ScreencastFrameMeta = Schema.Struct({

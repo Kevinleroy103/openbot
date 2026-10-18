@@ -6,11 +6,12 @@ import type { PlacementSummary, Toolset } from "../../src/ports/Placement.ts"
 import { renderBase } from "../../src/services/conversation/InstructionRenderer.ts"
 import { makeBot } from "../../src/testing/index.ts"
 
-const placement = (toolsets: ReadonlyArray<Toolset>): PlacementSummary => ({
+const placement = (toolsets: ReadonlyArray<Toolset>, sharedScreen = false): PlacementSummary => ({
   mode: "native-local",
   hostNodeId: LOCAL_NODE_ID,
   workspacePath: "/work",
   toolsets,
+  ...(sharedScreen ? { sharedScreen } : {}),
   promptAppend: "",
 })
 
@@ -37,5 +38,14 @@ describe("InstructionRenderer: screen tools", () => {
     expect(text).toContain("Prefer `browser` for web pages")
     expect(text).toContain("For a login, a password, a 2FA code, a CAPTCHA")
     expect(text).toContain("finish your turn and wait for it")
+  })
+
+  test("a Mac's own screen: shared with the owner, leave their work alone, wait when it is in use", () => {
+    const text = renderBase(bot, placement(["bot", "browser", "computer"], true))
+    expect(text).toContain("Your screen is your owner's own Mac screen")
+    expect(text).toContain("leave the owner's windows and work as they are")
+    expect(text).toContain("take a screenshot first")
+    expect(text).not.toContain("You have your own screen")
+    expect(text).toContain("call `request_takeover`")
   })
 })

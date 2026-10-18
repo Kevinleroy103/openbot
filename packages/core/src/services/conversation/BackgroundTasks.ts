@@ -51,6 +51,7 @@ import {
   DEFAULT_TASKS_PER_BOT,
   InvalidInput,
   isTerminalTaskStatus,
+  MAX_TASK_RESTARTS,
   NotFound,
   ROSTER_FINISHED_TASKS,
   TASK_BRIEF_MAX_CHARS,
@@ -105,6 +106,13 @@ export const TASK_CONTEXT_BYTES = 12 * 1024
 const TASK_CONTEXT_MESSAGE_BYTES = 4 * 1024
 /** Entries scanned for those messages (tool calls and events are skipped). */
 const TASK_CONTEXT_SCAN = 400
+
+/** A task a restart cut off, back in its own session (model-facing). */
+const TASK_RESUME_TEXT =
+  "[This work was cut off before you finished: OpenBot restarted. Continue where you left off. A command that was still running was stopped, so check its result or run it again.]"
+/** The same, when its session could not be resumed and it starts over. */
+const TASK_RESTART_NOTE =
+  "[This work was started before and cut off by a restart. Some of it may already be done: check the workspace before redoing anything.]"
 
 // ============================================================================ texts
 
@@ -377,6 +385,8 @@ interface Live {
   turn: { readonly session: HarnessSession; readonly turnId: TurnId } | undefined
   /** Its outcome is decided: updates are refused from now on ("already over"). */
   ending: boolean
+  /** It had started before a restart cut it off: it resumes its session, or starts over knowing that. */
+  readonly restarted: boolean
 }
 
 /** How `update` delivered a follow-up. */
@@ -409,8 +419,10 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
     const results = yield* Queue.unbounded<DeliveryInput>()
     yield* Effect.addFinalizer(() => Queue.shutdown(results))
 
-    /** Queued and running tasks (the queue is in memory: a restart fails them, see `recover`). */
+    /** Queued and running tasks (the queue is in memory: boot recovery fails them, `recover` reruns them). */
     const lives = new Map<TaskId, Live>()
+    /** Deploys (`hold`): queued tasks stay queued. */
+    let held = false
     /** `start_task` idempotency: `<botId>:<callId>` → task. */
     const startedBy = new Map<string, TaskId>()
 
@@ -622,23 +634,37 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
           onClosed: (reason) => Effect.asVoid(Deferred.succeed(closed, reason)),
         })
         live.ingest = ingest
-        const opened = yield* Effect.result(driver.success.openSession({
-          purpose: "task",
-          bot,
-          conversationId: task.conversationId,
-          sessionKey: taskSessionKeyOf(bot.id, task.id),
-          nativeSessionId: undefined,
-          placement: where,
-          instructions,
-          mcp: [binding],
-          model: bot.harness.model,
-          effort: bot.harness.effort,
-          onRequest: (request) => approve(task.id, request, { nodeId: where.hostNodeId, path: where.workspacePath }),
-        }))
+        const open = (nativeSessionId: string | undefined) =>
+          Effect.result(driver.success.openSession({
+            purpose: "task",
+            bot,
+            conversationId: task.conversationId,
+            sessionKey: taskSessionKeyOf(bot.id, task.id),
+            nativeSessionId,
+            placement: where,
+            instructions,
+            mcp: [binding],
+            model: bot.harness.model,
+            effort: bot.harness.effort,
+            onRequest: (request) => approve(task.id, request, { nodeId: where.hostNodeId, path: where.workspacePath }),
+          }))
+        // Cut off by a restart: its own session again when the harness can resume it.
+        const resumeId = live.restarted ? task.nativeSessionId : undefined
+        let opened = yield* open(resumeId)
+        const resumed = resumeId !== undefined && opened._tag === "Success"
+        if (opened._tag === "Failure" && resumeId !== undefined) {
+          yield* Effect.logWarning(`BackgroundTasks: could not resume task ${task.id}; starting it over`, opened.failure)
+          opened = yield* open(undefined)
+        }
         if (opened._tag === "Failure") return failed(`could not start: ${opened.failure.message}`)
         const session = opened.success
+        /** Saved at once (not throttled): a crash right after must still find it. */
+        const remember = (event: HarnessEvent) =>
+          event._tag !== "SessionBound" || live.task.nativeSessionId === event.nativeSessionId
+            ? Effect.void
+            : save({ ...live.task, nativeSessionId: event.nativeSessionId })
         yield* Effect.forkScoped(
-          Stream.runForEach(session.events, ingest.handle).pipe(
+          Stream.runForEach(session.events, (event) => Effect.andThen(remember(event), ingest.handle(event))).pipe(
             Effect.catchCause((cause) => Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("BackgroundTasks: event stream failed", cause)),
             Effect.ensuring(Deferred.succeed(closed, "the harness event stream ended")),
           ),
@@ -646,7 +672,11 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         )
         const steerable = driver.success.capabilities.steer
         // The first turn: the origin conversation's recent messages, the brief, early updates.
-        let text = yield* firstTurnText(task, live.pending.splice(0))
+        let text = resumed
+          ? TASK_RESUME_TEXT
+          : live.restarted
+          ? `${yield* firstTurnText(task, live.pending.splice(0))}\n\n${TASK_RESTART_NOTE}`
+          : yield* firstTurnText(task, live.pending.splice(0))
         type Ended = { readonly kind: "terminal"; readonly terminal: TurnTerminal } | { readonly kind: "closed"; readonly reason: string } | { readonly kind: "stop"; readonly stop: Stop }
         for (;;) {
           const turnId = yield* ids.turnId
@@ -747,6 +777,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
     const pump = (botId: BotId): Effect.Effect<void> =>
       Effect.gen(function*() {
         for (;;) {
+          if (held) return
           const mine = [...lives.values()].filter((l) => l.task.botId === botId)
           if (mine.filter((l) => l.task.status === "running").length >= options.maxPerBot) return
           const next = mine
@@ -807,6 +838,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         pending: [],
         turn: undefined,
         ending: false,
+        restarted: false,
       })
       yield* orDie(repo.upsert(task))
       yield* publish(task)
@@ -936,9 +968,42 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         { concurrency: "unbounded", discard: true },
       ).pipe(Effect.catchCause((cause) => Effect.logError("BackgroundTasks.cancelForConversation failed", cause)))
 
+    /** Runs a task a restart cut off again, under its id (`restarts` + 1). */
+    const restart = (task: Task) =>
+      Effect.gen(function*() {
+        const now = yield* Clock.currentTimeMillis
+        const next = compact<Task>({
+          ...task,
+          status: "queued",
+          error: undefined,
+          endedAt: undefined,
+          restarts: (task.restarts ?? 0) + 1,
+          updatedAt: now,
+        })
+        lives.set(task.id, {
+          task: next,
+          stop: yield* Deferred.make<Stop>(),
+          done: yield* Deferred.make<void>(),
+          ingest: undefined,
+          workspace: undefined,
+          stopped: undefined,
+          publishedAt: now,
+          flushing: false,
+          pending: [],
+          turn: undefined,
+          ending: false,
+          restarted: task.startedAt !== undefined,
+        })
+        yield* orDie(repo.upsert(next))
+        yield* publish(next)
+        yield* pump(task.botId)
+      })
+
     const recover = (bootReport: BootRecoveryReport) =>
       Effect.forEach(bootReport.interruptedTasks, (task) =>
         Effect.gen(function*() {
+          const bot = yield* orDie(bots.get(task.botId))
+          if (Option.isSome(bot) && (task.restarts ?? 0) < MAX_TASK_RESTARTS) return yield* restart(task)
           yield* publish(task)
           const steps = yield* orDie(repo.steps(task.id))
           const last = [...steps].reverse().find((s): s is Extract<TranscriptEntry, { kind: "message" }> =>
@@ -951,6 +1016,10 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
     yield* Effect.addFinalizer(() => Effect.sync(() => lives.clear()))
 
     return BackgroundTasks.of({
+      hold: Effect.sync(() => {
+        held = true
+      }),
+      running: Effect.sync(() => [...lives.values()].filter((l) => l.task.status === "running").length),
       start,
       list,
       get,

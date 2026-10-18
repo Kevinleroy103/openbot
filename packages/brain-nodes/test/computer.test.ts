@@ -239,6 +239,7 @@ const connectDesktopNode = (
   httpBase: string,
   capabilities: ReadonlyArray<string>,
   desktop?: { readonly missing: ReadonlyArray<string>; readonly width: number; readonly height: number },
+  screen?: { readonly missing: ReadonlyArray<string>; readonly width: number; readonly height: number },
 ) =>
   Effect.gen(function*() {
     const admin = yield* NodeAdmin
@@ -254,6 +255,7 @@ const connectDesktopNode = (
       brainPublicKey: paired.body.brainPublicKey,
       capabilities,
       ...(desktop === undefined ? {} : { desktop }),
+      ...(screen === undefined ? {} : { screen }),
     }).pipe(Scope.provide(scope))
     yield* registry.awaitConnection(nodeId).pipe(Effect.timeout("5 seconds"))
     return { nodeId, node, disconnect: Scope.close(scope, Exit.void) }
@@ -516,5 +518,76 @@ describe("computer: desktop", () => {
         expect(yield* computer.ensure(idle)).toMatchObject({ state: "ready", surface: "desktop" })
         expect(node.state.desktops.filter((id) => id === idle)).toHaveLength(2)
       }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path, desktopIdleMs: 200 })))),
+    ), 20_000)
+})
+
+describe("computer: a Mac's own screen", () => {
+  test("status (its permissions) → ensure → watchers get frames → control input → nothing to reset; a missing permission says what to allow", () =>
+    run(
+      Effect.gen(function*() {
+        const server = yield* startServer
+        const computer = yield* ComputerPort
+        const { node, nodeId } = yield* connectDesktopNode(server.ws, server.http, ["fs@1", "browser@1", "screen@1"], undefined, {
+          missing: ["Accessibility"],
+          width: 1440,
+          height: 900,
+        })
+        const botId = "bot_mac" as BotId
+        yield* putBot(makeBot({ id: botId, name: "Mac", hostNodeId: nodeId }))
+
+        // the screen wins over the browser; what the Mac still needs shows until it is used
+        expect(yield* computer.status(botId)).toEqual({
+          botId,
+          nodeId,
+          controller: "bot",
+          state: "absent",
+          surface: "screen",
+          viewPath: `/ws/computer/${botId}`,
+          width: 1440,
+          height: 900,
+          missing: ["Accessibility"],
+        })
+        expect(yield* computer.ensure(botId)).toMatchObject({ state: "ready", surface: "screen", width: 1440, height: 900 })
+        expect((yield* computer.status(botId)).missing).toBeUndefined()
+        expect(node.state.screenEnsured).toEqual([botId])
+        expect(node.state.ensured).toEqual([]) // never the browser window
+
+        const viewer = yield* open(yield* dialWebSocket(`${server.ws}/ws/computer/${botId}?mode=view`))
+        const frames = yield* collect(viewer, (fs) => images(fs).length >= 1)
+        expect(texts(frames)[0]).toEqual({ _tag: "Lease", holder: "bot" })
+        expect(decodeScreencastFrame(images(frames)[0]!)?.meta).toMatchObject({ viewportWidth: 1280, viewportHeight: 800 })
+        expect(node.state.screenStreams).toEqual([botId])
+        expect(node.state.screencasts).toEqual([])
+
+        yield* computer.lease(botId, true)
+        const control = yield* open(yield* dialWebSocket(`${server.ws}/ws/computer/${botId}?mode=control`))
+        yield* collect(control, (fs) => texts(fs).some((t) => t._tag === "Lease"))
+        const click = { _tag: "mouse", type: "down", x: 100, y: 200, button: "left", clickCount: 1 }
+        yield* control.writer.write(JSON.stringify(click))
+        yield* Effect.gen(function*() {
+          while (node.state.screenInputs.length < 1) yield* Effect.sleep("10 millis")
+        }).pipe(Effect.timeout("5 seconds"))
+        expect(node.state.screenInputs).toEqual([click])
+        expect(node.state.inputs).toEqual([])
+        yield* computer.lease(botId, false)
+
+        expect(yield* computer.reset(botId)).toMatchObject({ surface: "screen", state: "ready" })
+        expect(node.state.stopped).toEqual([])
+
+        // another Mac that still needs both permissions: its own words say what to allow
+        const other = yield* connectDesktopNode(server.ws, server.http, ["fs@1", "screen@1"], undefined, { missing: [], width: 1512, height: 982 })
+        other.node.state.screenFailure = new DesktopUnavailable({
+          message: "Allow Screen Recording and Accessibility for openbot-node on the Mac (System Settings › Privacy & Security), then try again.",
+          missing: ["Screen Recording", "Accessibility"],
+        })
+        const otherBot = "bot_mac2" as BotId
+        yield* putBot(makeBot({ id: otherBot, name: "Mac 2", hostNodeId: other.nodeId }))
+        expect(yield* computer.ensure(otherBot)).toMatchObject({
+          state: "error",
+          surface: "screen",
+          message: "Allow Screen Recording and Accessibility for openbot-node on the Mac (System Settings › Privacy & Security), then try again.",
+          missing: ["Screen Recording", "Accessibility"],
+        })
+      }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path })))),
     ), 20_000)
 })

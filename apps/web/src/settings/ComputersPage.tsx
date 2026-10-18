@@ -23,8 +23,9 @@ import {
 } from "@openbot/ui"
 import { Check, ChevronDown, Ellipsis, Laptop, Monitor, Pencil, Plus, RefreshCw, Server, ShieldCheck, Trash2 } from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
-import { nodeDesktopState } from "../computer/desktop.ts"
+import { nodeDesktopState, nodeScreenState } from "../computer/desktop.ts"
 import { DesktopSetupNote } from "../computer/DesktopSetupNote.tsx"
+import { ScreenPermissionsNote } from "../computer/ScreenPermissionsNote.tsx"
 import { InlineEdit } from "../details/InlineEdit.tsx"
 import { CommandBlock, ConfirmDialog, ErrorLine, capabilityInfo, capabilityName, formatAgo, useCommand, useRosterValue } from "../details/kit.tsx"
 import { GroupLabel, PageHeader, SettingsCard } from "./layout.tsx"
@@ -134,6 +135,12 @@ function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummar
                 Desktop
               </LabelChip>
             )}
+            {nodeScreenState(node) === "on" && (
+              <LabelChip className="gap-0.5 max-sm:hidden">
+                <Icon icon={Monitor} size="xs" />
+                Screen
+              </LabelChip>
+            )}
           </div>
           <span className="max-w-full truncate text-sm text-fg-secondary">{desc}</span>
         </div>
@@ -231,6 +238,25 @@ function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummar
 /** Settings › Computers › a node: whether its Bots get full desktops, and what to install if not. */
 function NodeDesktop({ node }: { readonly node: NodeSummary }): ReactNode {
   const state = nodeDesktopState(node)
+  const screen = nodeScreenState(node)
+  // a Mac shares its own screen instead of giving desktops
+  if (screen !== "off" && state === "off") {
+    return (
+      <div className="flex min-w-0 flex-col gap-1.5" data-testid="node-screen" data-screen={screen}>
+        <span className="text-xs text-fg-secondary">This Mac's screen</span>
+        {screen === "unapproved" ? (
+          <span className="text-sm text-fg-secondary">Turn on This Mac's screen above to let Bots use it.</span>
+        ) : node.screenMissing && node.screenMissing.length > 0 ? (
+          <ScreenPermissionsNote missing={node.screenMissing} nodeName={node.label} />
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-sm text-fg">
+            <Icon icon={Check} size="sm" className="text-success-fg" />
+            Bots use it one at a time, while you're away from it. Watch and take over from their Computer tab.
+          </span>
+        )}
+      </div>
+    )
+  }
   return (
     <div className="flex min-w-0 flex-col gap-1.5" data-testid="node-desktop" data-desktop={state}>
       <span className="text-xs text-fg-secondary">Full desktop</span>

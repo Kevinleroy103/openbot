@@ -34,6 +34,8 @@ import { NodeConfig, NodeConfigLive, type NodeConfigInput, type NodeConfigShape 
 import { describeComputerAction } from "./desktop/actions.ts"
 import { DesktopManager, DesktopManagerLive } from "./desktop/DesktopManager.ts"
 import { LeaseBook, LeaseBookLive } from "./lease.ts"
+import { MacScreen, MacScreenLive } from "./screen/MacScreen.ts"
+import * as Option from "effect/Option"
 import { makeFsOps } from "./fs.ts"
 import { makeGuard } from "./guard.ts"
 import { NodePolicy, NodePolicyLive } from "./NodePolicy.ts"
@@ -98,13 +100,14 @@ const describeAction = (a: BrowserAction): string => {
 }
 
 /** Capabilities this node declares, from its config and what is installed. */
-export const nodeCapabilities = (config: NodeConfigShape, browserAvailable: boolean, desktopOffered = false): ReadonlyArray<string> => [
+export const nodeCapabilities = (config: NodeConfigShape, browserAvailable: boolean, desktopOffered = false, screenOffered = false): ReadonlyArray<string> => [
   Capabilities.fs,
   Capabilities.shell,
   Capabilities.pty,
   Capabilities.tunnel,
   ...(browserAvailable ? [Capabilities.browser] : []),
   ...(desktopOffered ? [Capabilities.desktop] : []),
+  ...(screenOffered ? [Capabilities.screen] : []),
   ...(config.binaries.codex ? [Capabilities.codexExecServer] : []),
   ...(config.binaries.opencode ? [Capabilities.opencodeServe] : []),
 ]
@@ -117,6 +120,8 @@ export const makeNodeHandlers = Effect.gen(function* () {
   const audit = yield* AuditLog
   const browser = yield* BrowserManager
   const desktop = yield* DesktopManager
+  // the computer's own screen (macOS); optional so custom wirings and tests can leave it out
+  const screen = Option.getOrUndefined(yield* Effect.serviceOption(MacScreen))
   const leases = yield* LeaseBook
   const brain = yield* BrainLink
   const dialer = yield* StreamDialer
@@ -133,7 +138,9 @@ export const makeNodeHandlers = Effect.gen(function* () {
   const sessionDeps = { config, paths, guard, dialer, brain, sessions, scope }
   // the node's own ceiling can rule the computer out entirely: then it does not offer desktops
   const desktopOffered = desktop.offered && policy.ceilingFor("computer") !== "never"
-  const capabilities = nodeCapabilities(config, browser.available, desktopOffered)
+  // a node with per-bot desktops does not share its own screen too
+  const screenOffered = !desktopOffered && screen !== undefined && screen.offered && policy.ceilingFor("computer") !== "never"
+  const capabilities = nodeCapabilities(config, browser.available, desktopOffered, screenOffered)
 
   const info: NodeInfoShape = {
     nodeId: config.nodeId,
@@ -152,6 +159,7 @@ export const makeNodeHandlers = Effect.gen(function* () {
       policy: { ceiling: policy.summary.ceiling, remoteManaged: policy.summary.remoteManaged },
       brainVerified,
       desktop: { missing: [...desktop.support.missing], width: desktop.support.width, height: desktop.support.height },
+      ...(screen?.support !== undefined && !desktopOffered ? { screen: screen.support } : {}),
     }),
   }
 
@@ -160,6 +168,8 @@ export const makeNodeHandlers = Effect.gen(function* () {
       ? Effect.fail(new PolicyRefused({ action: "browser", reason: "The node's policy does not allow the browser.", retry: false }))
       : Effect.void,
   )
+
+  const noScreen = new DesktopUnavailable({ message: "This computer does not share its screen." })
 
   const desktopAllowed = Effect.suspend(() =>
     policy.ceilingFor("computer") === "never"
@@ -244,7 +254,8 @@ export const makeNodeHandlers = Effect.gen(function* () {
           return yield* new LeaseHeld({ botId: inv.botId, holder: "user", reason: "The user is controlling this screen. Wait until they hand it back." })
         }
         // the node's ceiling (never → PolicyRefused, ask → the owner is asked), audited
-        return yield* guard({ inv, action: "computer", target: describeComputerAction(action) }, desktop.act(inv.botId, action))
+        const run = screenOffered && screen !== undefined ? screen.act(inv.botId, action) : desktop.act(inv.botId, action)
+        return yield* guard({ inv, action: "computer", target: describeComputerAction(action) }, run)
       }),
     "computer.stream": ({ botId, mode, streamId, streamToken }) =>
       Effect.gen(function* () {
@@ -274,6 +285,37 @@ export const makeNodeHandlers = Effect.gen(function* () {
           }),
         )
       }),
+    "screen.ensure": ({ botId }) =>
+      Effect.andThen(desktopAllowed, screenOffered && screen !== undefined ? screen.ensure(botId) : Effect.fail(noScreen)),
+    "screen.stream": ({ botId, streamId, streamToken }) =>
+      Effect.gen(function* () {
+        yield* desktopAllowed
+        if (!screenOffered || screen === undefined) return yield* noScreen
+        const opened = yield* Deferred.make<void, TunnelFailed>()
+        yield* FiberSet.run(
+          sessions,
+          Effect.scoped(
+            Effect.gen(function* () {
+              const socket = yield* dialer
+                .dial({ ticket: { streamId, streamToken }, kind: "screen" })
+                .pipe(Effect.mapError((e) => new TunnelFailed({ kind: "screen", reason: `stream refused: ${e.reason}` })))
+              const io = yield* openDuplex(socket).pipe(
+                Effect.mapError((e) => new TunnelFailed({ kind: "screen", reason: `stream failed: ${e.message}` })),
+              )
+              yield* Deferred.succeed(opened, undefined)
+              yield* screen.stream({ botId, io })
+            }),
+          ).pipe(
+            Effect.catchCause((cause) => {
+              const e = Cause.squash(cause)
+              return Deferred.fail(opened, e instanceof TunnelFailed ? e : new TunnelFailed({ kind: "screen", reason: String(e) }))
+            }),
+            Effect.asVoid,
+          ),
+        )
+        yield* Deferred.await(opened)
+      }),
+    "screen.input": ({ botId, event }) => (screenOffered && screen !== undefined ? screen.input(botId, event) : Effect.fail(noScreen)),
   })
 
   return { handlers, info }
@@ -292,7 +334,7 @@ export const NodeHandlersLive = (
     // the browser depends on the desktops (a bot's browser runs on its screen), so it is released
     // first: browsers close gracefully before the screens go away
     Layer.provide(BrowserManagerLive),
-    Layer.provideMerge(Layer.mergeAll(PathPolicyLive, NodePolicyLive, AuditLogLive, DesktopManagerLive)),
+    Layer.provideMerge(Layer.mergeAll(PathPolicyLive, NodePolicyLive, AuditLogLive, DesktopManagerLive, MacScreenLive)),
     Layer.provideMerge(LeaseBookLive),
     Layer.provide(NodeConfigLive(config)),
   )

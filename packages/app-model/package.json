@@ -1,0 +1,19 @@
+{
+  "name": "@openbot/app-model",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests"
+  },
+  "dependencies": {
+    "@openbot/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@openbot/tsconfig": "workspace:*"
+  }
+}

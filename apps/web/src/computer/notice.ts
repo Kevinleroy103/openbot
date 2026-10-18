@@ -56,6 +56,10 @@ export const screenNotice = ({ name, availability, phase, message: raw, starting
         ...(availability.missing && availability.missing.length > 0 ? { action: "setup" as const } : {}),
       }
     case "unreachable":
+      // a Mac that still needs permissions: its own words say what to allow
+      if (availability.surface === "screen" && availability.missing && availability.missing.length > 0) {
+        return { icon: "off", title: `${name} can't use the Mac's screen yet`, body: availability.message, action: "retry" }
+      }
       return { icon: "unplug", title: `Can't reach ${name}'s screen`, body: reasonOf(availability.message), action: availability.surface === "desktop" ? "wake" : "retry" }
     case "absent":
       return availability.surface === "desktop"

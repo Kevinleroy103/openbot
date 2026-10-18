@@ -383,6 +383,7 @@ export const BotServiceLive: Layer.Layer<
           hostNodeId: node.value.id,
           workspacePath,
           toolsets: plan.success.toolsets,
+          ...(plan.success.sharedScreen ? { sharedScreen: true } : {}),
           promptAppend: describePlacement(plan.success, node.value, workspacePath),
         }
         return summary

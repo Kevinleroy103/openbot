@@ -9,6 +9,7 @@ import { PillButton, StatusPill } from "@openbot/ui"
 import { RotateCcw, SquareTerminal } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { DesktopSetupNote } from "../computer/DesktopSetupNote.tsx"
+import { ScreenPermissionsNote } from "../computer/ScreenPermissionsNote.tsx"
 import { computerInitialTabAtom, useComputer } from "../computer/useComputer.ts"
 import { ScreenThumbnail } from "../computer/ScreenThumbnail.tsx"
 import { useComputerView, useSettingsDialog } from "../contracts.ts"
@@ -73,7 +74,9 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
             </SheetLine>
           )}
         </SectionSheet>
-        {missing.length > 0 && <DesktopSetupNote missing={missing} nodeName={nodeName} platform={node?.platform} local={node?.kind === "local"} className="px-1" />}
+        {missing.length > 0 && (status.value?.surface === "screen"
+          ? <ScreenPermissionsNote missing={missing} nodeName={nodeName} className="px-1" />
+          : <DesktopSetupNote missing={missing} nodeName={nodeName} platform={node?.platform} local={node?.kind === "local"} className="px-1" />)}
         <div className="flex flex-wrap items-center gap-2 px-1">
           <PillButton
             size="md"

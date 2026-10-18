@@ -43,6 +43,8 @@ export interface ResolvedPlacement {
   readonly disableBuiltinTools: boolean
   readonly codexEnvironment?: CodexEnvironment | undefined
   readonly toolsets: ReadonlyArray<Toolset>
+  /** The `computer` screen is the host computer's own (a Mac's, `screen@1`), shared with the owner. */
+  readonly sharedScreen?: boolean | undefined
   /** Describes where tools run, node OS, workspace. Appended to the instructions. */
   readonly promptAppend: string
   /** Tears down relays/tunnels. Also run automatically when the resolve scope closes. */
@@ -50,7 +52,7 @@ export interface ResolvedPlacement {
 }
 
 /** The side-effect-free part of a placement (what `InstructionRenderer` and previews need). */
-export type PlacementSummary = Pick<ResolvedPlacement, "mode" | "hostNodeId" | "workspacePath" | "toolsets" | "promptAppend">
+export type PlacementSummary = Pick<ResolvedPlacement, "mode" | "hostNodeId" | "workspacePath" | "toolsets" | "sharedScreen" | "promptAppend">
 
 export interface PlacementInput {
   readonly bot: Bot
@@ -90,6 +92,8 @@ export interface PlacementPlan {
   readonly mode: PlacementMode
   readonly disableBuiltinTools: boolean
   readonly toolsets: ReadonlyArray<Toolset>
+  /** see `ResolvedPlacement.sharedScreen` */
+  readonly sharedScreen?: boolean | undefined
 }
 
 /**
@@ -100,7 +104,8 @@ export interface PlacementPlan {
  *   → `codex-environment`; otherwise `brain-mcp-hands` (built-ins off, "node" toolset) when the
  *   driver implements it; otherwise `unsupported-placement`;
  * - "node" toolset whenever the bot can reach a node other than where its native tools run;
- * - "browser" / "computer" when the host node advertises `browser` / `desktop`.
+ * - "browser" / "computer" when the host node advertises `browser` / `desktop` (or `screen`: a Mac's
+ *   own screen, `sharedScreen`).
  */
 export const planPlacement = (input: {
   readonly bot: Bot
@@ -122,7 +127,9 @@ export const planPlacement = (input: {
   const caps = hostNode.capabilities
   const extras: Array<Toolset> = []
   if (hasCapability(caps, "browser")) extras.push("browser")
-  if (hasCapability(caps, "desktop")) extras.push("computer")
+  const desktop = hasCapability(caps, "desktop")
+  const sharedScreen = !desktop && hasCapability(caps, "screen")
+  if (desktop || sharedScreen) extras.push("computer")
   const reachesOtherNodes = bot.boundNodeIds.some((id) => id !== hostNode.id)
 
   if (hostNode.id === LOCAL_NODE_ID) {
@@ -130,6 +137,7 @@ export const planPlacement = (input: {
       mode: "native-local",
       disableBuiltinTools: false,
       toolsets: ["bot", ...(reachesOtherNodes ? (["node"] as const) : []), ...extras],
+      ...(sharedScreen ? { sharedScreen } : {}),
     })
   }
   if (
@@ -140,10 +148,16 @@ export const planPlacement = (input: {
       mode: "codex-environment",
       disableBuiltinTools: false,
       toolsets: ["bot", ...(reachesOtherNodes ? (["node"] as const) : []), ...extras],
+      ...(sharedScreen ? { sharedScreen } : {}),
     })
   }
   if (capabilities.remotePlacements.includes("brain-mcp-hands")) {
-    return Result.succeed({ mode: "brain-mcp-hands", disableBuiltinTools: true, toolsets: ["bot", "node", ...extras] })
+    return Result.succeed({
+      mode: "brain-mcp-hands",
+      disableBuiltinTools: true,
+      toolsets: ["bot", "node", ...extras],
+      ...(sharedScreen ? { sharedScreen } : {}),
+    })
   }
   return Result.fail(
     new PlacementError({

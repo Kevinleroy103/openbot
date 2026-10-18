@@ -7,15 +7,24 @@ import { Atom } from "effect/reactivity"
 import { useMemo } from "react"
 import { useCommand, useQuery } from "../details/kit.tsx"
 
-/** Which live view a node offers: a whole desktop (`desktop@1`, noVNC) or a browser window (CDP). */
-export type ScreenSurface = "browser" | "desktop"
+/**
+ * Which live view a node offers: a whole desktop (`desktop@1`, noVNC), a Mac's own screen
+ * (`screen@1`, screenshot frames like the CDP screencast) or a browser window (CDP).
+ */
+export type ScreenSurface = "browser" | "desktop" | "screen"
 
 export type ScreenAvailability =
   | { readonly kind: "loading" }
   /** The host node has no screen to show (no `browser@1` / `desktop@1`); `missing` = what to install. */
   | { readonly kind: "unsupported"; readonly message: string; readonly missing?: ReadonlyArray<string> | undefined }
   /** The host node is offline / unreachable, or the screen failed to start. */
-  | { readonly kind: "unreachable"; readonly message: string; readonly surface?: ScreenSurface | undefined }
+  | {
+    readonly kind: "unreachable"
+    readonly message: string
+    readonly surface?: ScreenSurface | undefined
+    /** what the computer lacks (a Mac's permissions) */
+    readonly missing?: ReadonlyArray<string> | undefined
+  }
   /** No screen yet: a desktop that is asleep, or no browser window (needs `computer.ensure`). */
   | { readonly kind: "absent"; readonly surface: ScreenSurface }
   /** `ready` or `starting`: connect the viewer socket. */
@@ -27,8 +36,11 @@ export const availabilityOf = (status: ComputerStatus | undefined, error: string
     return { kind: "unsupported", message: status.message ?? "This computer has no screen to show", ...(status.missing ? { missing: status.missing } : {}) }
   }
   const surface: ScreenSurface = status.surface
-  if (status.state === "error") return { kind: "unreachable", message: status.message ?? "Can't reach the screen", surface }
-  if (status.state === "absent") return { kind: "absent", surface }
+  if (status.state === "error") {
+    return { kind: "unreachable", message: status.message ?? "Can't reach the screen", surface, ...(status.missing ? { missing: status.missing } : {}) }
+  }
+  // a Mac's screen is always there: watching it checks it
+  if (status.state === "absent" && surface !== "screen") return { kind: "absent", surface }
   return { kind: "stream", surface }
 }
 

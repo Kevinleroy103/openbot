@@ -609,6 +609,28 @@ describe("Codex session: lifecycle", () => {
     expect(result.events.at(-1)).toEqual({ _tag: "SessionClosed", reason: "closed" })
   })
 
+  test("a thread Codex unloaded while no session held it resumes cleanly (the stale thread/closed is not replayed)", async () => {
+    const result = await run(Effect.gen(function*() {
+      const ctx = yield* setup()
+      const first = yield* Scope.make()
+      const idle = yield* ctx.driver.openSession(makeSessionInput(ctx.workspace, allow())).pipe(Scope.provide(first))
+      const threadId = ((yield* collect(idle.events)).events[0] as { nativeSessionId: string }).nativeSessionId
+      yield* Scope.close(first, Exit.void)
+      yield* waitUntil(() => ctx.server().requests("thread/unsubscribe").length === 1, "unsubscribe")
+      // Codex unloads the unsubscribed thread a while later and says so to the connection.
+      ctx.server().notify("thread/closed", { threadId })
+      yield* Effect.sleep("20 millis")
+      const resumed = yield* ctx.driver.openSession(makeSessionInput(ctx.workspace, allow(), { nativeSessionId: threadId }))
+      const events = yield* collect(resumed.events)
+      const started = yield* Effect.exit(resumed.startTurn({ turnId: turnId(1), text: "hello", attachments: [] }))
+      if (Exit.isSuccess(started)) yield* events.waitFor(has("TurnCompleted"))
+      return { started, events: events.events }
+    }))
+    expect(failureOf(result.started)).toBeUndefined()
+    expect(ofTag(result.events, "SessionClosed")).toEqual([])
+    expect(ofTag(result.events, "TurnCompleted").map((e) => e.turnId)).toEqual([turnId(1)])
+  })
+
   test("two sessions share one app-server; events are routed by thread", async () => {
     const result = await run(Effect.gen(function*() {
       const ctx = yield* setup()

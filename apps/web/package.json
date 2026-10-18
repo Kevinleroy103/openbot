@@ -14,6 +14,7 @@
   "dependencies": {
     "@effect/atom-react": "catalog:",
     "@novnc/novnc": "catalog:",
+    "@openbot/app-model": "workspace:*",
     "@openbot/client": "workspace:*",
     "@openbot/contracts": "workspace:*",
     "@openbot/ui": "workspace:*",
@@ -21,12 +22,14 @@
     "@xterm/xterm": "catalog:",
     "effect": "catalog:",
     "lucide-react": "catalog:",
+    "qrcode": "1.5.4",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
     "@effect/platform-bun": "catalog:",
     "@openbot/tsconfig": "workspace:*",
+    "@types/qrcode": "1.5.6",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "bun-plugin-tailwind": "catalog:",

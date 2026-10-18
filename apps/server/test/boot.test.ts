@@ -10,7 +10,7 @@ import { join } from "node:path"
 import { eventually, login, rpcClient, startServer, watchConversation } from "./helpers.ts"
 
 describe("boot", () => {
-  test("restart: a turn waiting on approval is interrupted, its request expired; the session survives", async () => {
+  test("restart: a turn waiting on approval is interrupted, its request expired, the bot continues; the session survives", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "openbot-boot-test-"))
     try {
       const first = await startServer({ dataDir })
@@ -39,9 +39,13 @@ describe("boot", () => {
           expect(pendingRequestsOf(state)).toHaveLength(0)
           expect(requests.some((r) => r.status === "expired" || r.status === "cancelled")).toBe(true)
           const turns: Array<Turn> = [...state.turns.values()]
-          expect(turns.length).toBeGreaterThan(0)
-          expect(turns.every((t) => !["queued", "running", "waiting"].includes(t.status))).toBe(true)
-          expect(turns.some((t) => t.status === "interrupted")).toBe(true)
+          expect(turns.filter((t) => t.trigger === "user").map((t) => t.status)).toEqual(["interrupted"])
+          // the cut-off bot continues where it was (a system turn), then is idle again
+          yield* eventually(Ref.get(convo.state), (s) => {
+            const all = [...s.turns.values()]
+            return all.some((t) => t.trigger === "system" && t.status === "completed") &&
+              all.every((t) => !["queued", "running", "waiting"].includes(t.status))
+          }, { label: "resumed" })
           // the bot works again after the restart
           yield* client["messages.send"]({ conversationId, text: "echo: back again", clientNonce: "b2" })
           yield* eventually(

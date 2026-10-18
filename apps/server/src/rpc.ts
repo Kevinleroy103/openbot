@@ -188,6 +188,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "messages.lookupSend": (input) => edge("messages.lookupSend", orchestrator.lookupSend(input)),
     "messages.react": (input) => edge("messages.react", orchestrator.react(input)),
     "turns.interrupt": (input) => edge("turns.interrupt", orchestrator.interrupt(input)),
+    "turns.retry": (input) => edge("turns.retry", orchestrator.retry(input)),
     "attachments.upload": ({ bytesBase64, mime, name }) =>
       edge(
         "attachments.upload",

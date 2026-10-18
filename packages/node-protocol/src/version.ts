@@ -23,6 +23,8 @@ export const Capabilities = {
   tunnel: "tunnel@1",
   browser: "browser@1",
   desktop: "desktop@1",
+  /** the computer's own screen (macOS), shared by its bots and the owner */
+  screen: "screen@1",
   codexExecServer: "codex.exec-server@1",
   claudeCli: "claude.cli@1",
   opencodeServe: "opencode.serve@1",

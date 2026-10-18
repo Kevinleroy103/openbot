@@ -39,6 +39,11 @@ export interface ClientConfig {
   readonly reconnect: Backoff
   /** Re-subscribe backoff for replica streams when no reconnect wakes them earlier. */
   readonly resubscribe: Backoff
+  /**
+   * Handshake headers for the `/rpc` socket, for clients without a browser cookie jar (the iPhone app
+   * sends its session as `cookie: openbot_session=…`). React Native and Bun only.
+   */
+  readonly headers?: Readonly<Record<string, string>> | undefined
 }
 
 /** Default `/rpc` URL: same origin as the page (ws/wss), or the default brain port outside a browser. */

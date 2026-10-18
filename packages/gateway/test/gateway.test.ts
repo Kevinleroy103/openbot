@@ -556,7 +556,29 @@ describe("screen tools (D1.7)", () => {
 
     await upsertNode(h, localNodeSummary())
     const refused = await client.callTool({ name: "computer", arguments: { action: "screenshot" } })
-    expect(textOf(refused)).toContain("does not offer desktop")
+    expect(textOf(refused)).toContain("does not offer desktop or screen")
+  })
+
+  test("a Mac's own screen (screen@1): the computer works there and its refusals keep the node's words", async () => {
+    const mac = { ...desktopNode, capabilities: ["fs@1", "browser@1", "screen@1"], declaredCapabilities: ["fs@1", "browser@1", "screen@1"] }
+    h = await startHarness({ nodes: [mac] })
+    let failure: unknown = undefined
+    await setNodeClient(h, LOCAL_NODE_ID, {
+      "computer.act": () => (failure === undefined ? Effect.succeed({ text: "Screenshot of the screen (1280x800)." }) : Effect.fail(failure)),
+    })
+    const client = await h.connect((await h.issue({ toolsets: ["computer"] })).binding)
+    expect(textOf(await client.callTool({ name: "computer", arguments: { action: "screenshot" } }))).toBe("Screenshot of the screen (1280x800).")
+    failure = new LeaseHeld({ botId: BOT_A, holder: "user", reason: "The owner is using this computer right now. Try again in a few minutes, or ask them in the chat." })
+    expect(textOf(await client.callTool({ name: "computer", arguments: { action: "screenshot" } }))).toBe(
+      "ERROR: The owner is using this computer right now. Try again in a few minutes, or ask them in the chat.",
+    )
+    failure = new DesktopUnavailable({
+      message: "Allow Screen Recording and Accessibility for openbot-node on the Mac (System Settings › Privacy & Security), then try again.",
+      missing: ["Screen Recording", "Accessibility"],
+    })
+    expect(textOf(await client.callTool({ name: "computer", arguments: { action: "screenshot" } }))).toBe(
+      "ERROR: Allow Screen Recording and Accessibility for openbot-node on the Mac (System Settings › Privacy & Security), then try again.",
+    )
   })
 
   test("request_takeover posts a hand-off and returns pending at once", async () => {

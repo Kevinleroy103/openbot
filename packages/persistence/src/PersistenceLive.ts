@@ -16,6 +16,7 @@ import { SqliteClient } from "@effect/sql-sqlite-bun"
 import {
   ApprovalRuleRepo,
   AttachmentStore,
+  CarryoverStore,
   BootRecovery,
   type BootRecoveryReport,
   BotRepo,
@@ -59,6 +60,7 @@ import { makeSqlMcpTokenRepo, makeSqlProcessLedger } from "./repos/system.ts"
 import { makeSqlTaskRepo } from "./repos/tasks.ts"
 import { makeSqlRequestRepo, makeSqlTurnRepo } from "./repos/turns.ts"
 import { makeFileAttachmentStore } from "./stores/attachmentStore.ts"
+import { makeFileCarryoverStore } from "./stores/carryoverStore.ts"
 import { ensureDirectory } from "./stores/files.ts"
 import { makeFileMemoryStore } from "./stores/memoryStore.ts"
 import { makeFileSkillStore } from "./stores/skillStore.ts"
@@ -139,6 +141,7 @@ export const makeRepositories = (
       Context.add(MemoryStore, yield* makeFileMemoryStore(dirs)),
       Context.add(SkillStore, skills),
       Context.add(AttachmentStore, yield* makeFileAttachmentStore(dirs)),
+      Context.add(CarryoverStore, yield* makeFileCarryoverStore(dirs)),
     )
   })
 

@@ -31,7 +31,7 @@ import {
   TurnRepo,
   type UsageRepo,
 } from "./repos.ts"
-import type { AttachmentStore, MemoryStore, SkillStore } from "./stores.ts"
+import type { AttachmentStore, CarryoverStore, MemoryStore, SkillStore } from "./stores.ts"
 
 /** Every repository and store port (what `PersistenceLive(dataDir)` provides). */
 export type RepositoryPorts =
@@ -53,6 +53,7 @@ export type RepositoryPorts =
   | MemoryStore
   | SkillStore
   | AttachmentStore
+  | CarryoverStore
 
 /** What boot recovery changed; `Orchestrator.recover` publishes the entity changes. */
 export interface BootRecoveryReport {
@@ -60,6 +61,8 @@ export interface BootRecoveryReport {
   readonly killedProcesses: ReadonlyArray<ProcessRecord>
   /** Turns that were queued | running | waiting, now `interrupted` (stopReason "brain-restart"). */
   readonly interruptedTurns: ReadonlyArray<Turn>
+  /** The ones of them that were running | waiting: cut off mid-reply (`Orchestrator.resume` continues them). */
+  readonly cutOffTurns: ReadonlyArray<Turn>
   /** Requests that were pending, now `expired` with statusReason "not_resumable". */
   readonly expiredRequests: ReadonlyArray<RuntimeRequest>
   /**
@@ -141,10 +144,12 @@ export const runBootRecovery = (options: {
 
     // 2. in-flight turns
     const interruptedTurns: Array<Turn> = []
+    const cutOffTurns: Array<Turn> = []
     for (const turn of yield* turns.listActive) {
       const next: Turn = { ...turn, status: "interrupted", endedAt: now, stopReason: BOOT_RECOVERY_STOP_REASON }
       yield* turns.upsert(next)
       interruptedTurns.push(next)
+      if (turn.status !== "queued") cutOffTurns.push(next)
       for (const entry of yield* entries.listByTurn(turn.id)) yield* rewrite(entry)
     }
 
@@ -208,5 +213,5 @@ export const runBootRecovery = (options: {
     // 6. MCP tokens
     yield* tokens.revokeAll()
 
-    return { killedProcesses, interruptedTurns, expiredRequests, updatedEntries, interruptedRuns, interruptedTasks }
+    return { killedProcesses, interruptedTurns, cutOffTurns, expiredRequests, updatedEntries, interruptedRuns, interruptedTasks }
   })

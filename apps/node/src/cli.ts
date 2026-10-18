@@ -53,6 +53,8 @@ Options:
                           browser runs on the bot's own screen)
   --no-desktop            do not offer per-bot desktops (desktop@1; needs Xvfb, x11vnc, xdotool,
                           xfwm4 or openbox, ImageMagick; env OPENBOT_DESKTOP_PATH adds program dirs)
+  --no-screen             macOS: do not let bots use this Mac's own screen (screen@1; needs the
+                          Screen Recording and Accessibility permissions for openbot-node)
   --log-level <level>     debug | info | warn | error (default info)
   --force                 pair: replace an existing identity
   --json                  status: machine-readable output
@@ -112,6 +114,7 @@ const FileConfig = Schema.Struct({
       path: Schema.optional(Schema.Array(Schema.String)),
     }),
   ),
+  screen: Schema.optional(Schema.Struct({ enabled: Schema.optional(Schema.Boolean) })),
 })
 export type FileConfig = typeof FileConfig.Type
 
@@ -146,6 +149,7 @@ export interface RunFlags {
   readonly headless?: boolean | undefined
   readonly headful?: boolean | undefined
   readonly noDesktop?: boolean | undefined
+  readonly noScreen?: boolean | undefined
 }
 
 /** File config, then flags on top. */
@@ -201,6 +205,10 @@ export const buildNodeConfig = (input: {
         ...(file.desktop?.width !== undefined ? { width: file.desktop.width } : {}),
         ...(file.desktop?.height !== undefined ? { height: file.desktop.height } : {}),
         ...(file.desktop?.path ? { path: file.desktop.path.map(expandHome) } : {}),
+      },
+      screen: {
+        ...(file.screen?.enabled !== undefined ? { enabled: file.screen.enabled } : {}),
+        ...(flags.noScreen ? { enabled: false } : {}),
       },
     }
     return makeNodeConfig(config)
@@ -434,6 +442,7 @@ export const runCli = (argv: ReadonlyArray<string>, io: CliIo = processIo): Effe
             browser: { type: "string" },
             "no-browser": { type: "boolean" },
             "no-desktop": { type: "boolean" },
+            "no-screen": { type: "boolean" },
             headless: { type: "boolean" },
             headful: { type: "boolean" },
             "log-level": { type: "string" },
@@ -481,6 +490,7 @@ export const runCli = (argv: ReadonlyArray<string>, io: CliIo = processIo): Effe
               headless: values.headless,
               headful: values.headful,
               noDesktop: values["no-desktop"],
+              noScreen: values["no-screen"],
             },
           }),
         )

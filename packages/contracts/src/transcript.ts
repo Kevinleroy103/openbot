@@ -264,6 +264,8 @@ export const Turn = Schema.Struct({
   trigger: TurnTrigger,
   /** Message entry that started it (absent for routines and system resumes). */
   inputEntryId: Schema.optionalKey(EntryId),
+  /** Failed turns: the messages it was answering, delivered again by `turns.retry`. */
+  sourceEntryIds: Schema.optionalKey(Schema.Array(EntryId)),
   harnessRef: Schema.optionalKey(HarnessRef),
   startedAt: Millis,
   endedAt: Schema.optionalKey(Millis),

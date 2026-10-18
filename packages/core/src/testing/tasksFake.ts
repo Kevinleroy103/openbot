@@ -93,6 +93,7 @@ export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
           results: Stream.never,
           recover: () => Effect.void,
           hold: Effect.void,
+          handOff: Effect.void,
           running: Effect.sync(() => [...tasks.values()].filter((t) => t.status === "running").length),
         })
         return Context.make(BackgroundTasks, service).pipe(

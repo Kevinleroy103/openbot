@@ -463,7 +463,11 @@ const makeOrchestrator = (options: RunnerOptions) =>
         )
         yield* Effect.logInfo("handed off to the next boot", { deliveries: carried.deliveries.length, cutOff: carried.cutOff.length })
       }
-      yield* Effect.forEach(live, (runner) => runner.stop("restart"), { concurrency: "unbounded", discard: true })
+      // together: shutdown gives this a few seconds, and a task must be interrupted before the drivers close
+      yield* Effect.all([
+        Effect.forEach(live, (runner) => runner.stop("restart"), { concurrency: "unbounded", discard: true }),
+        tasks.handOff,
+      ], { concurrency: "unbounded", discard: true })
     })
 
     const drain = Effect.fn("Orchestrator.drain")(function*(input: { readonly graceMs: number }) {

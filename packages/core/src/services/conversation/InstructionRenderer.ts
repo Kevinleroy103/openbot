@@ -1,19 +1,20 @@
 /**
  * InstructionRenderer (architecture §4.3.7): OpenBot base + the bot's instructions + team roster +
+ * the group chats it is in (so work that belongs to a group is coordinated there, wherever it is asked) +
  * memory index (≤ 4 KB, via `MemoryService.promptIndex`) + `placement.promptAppend` + the bot's
  * project folders (Settings' shared ∪ its own), so it knows where it may work freely.
  *
  * The text is conversation-independent on purpose: a bot has ONE session for all of its
- * conversations (D5.0), and the hash only changes when the persona, the team, the memory index or the
- * placement or the project folders change, which is when a session must be reopened (Claude
+ * conversations (D5.0), and the hash only changes when the persona, the team, its groups, the memory
+ * index or the placement or the project folders change, which is when a session must be reopened (Claude
  * snapshot semantics).
  * Conversation context (origin tags, group catch-up, sender attribution) travels in the turn text.
  */
-import type { Bot } from "@openbot/contracts"
+import type { Bot, BotId, Conversation } from "@openbot/contracts"
 import { Effect, Layer } from "effect"
 import type { RenderedInstructions } from "../../ports/Harness.ts"
 import type { PlacementSummary } from "../../ports/Placement.ts"
-import { BotRepo } from "../../ports/repos.ts"
+import { BotRepo, ConversationRepo } from "../../ports/repos.ts"
 import { InstructionRenderer, MemoryService, SettingsService } from "../../ports/services.ts"
 import { hashText, orDie } from "./internal/util.ts"
 
@@ -21,7 +22,8 @@ const toolLines = (placement: PlacementSummary): ReadonlyArray<string> => {
   const lines = [
     "- In a group chat, everything stays in the group: your reply is posted in the group. Address teammates by @mentioning them in your reply (`message_bot` / `handoff_task` to a member only note who to wake; put your message to them in your reply). Never move group work to direct messages; reply to the owner in the group.",
     "- Only @mention a teammate when you need them to do something or to answer a question. Do not @mention to thank or acknowledge. If a message needs nothing from you, reply with exactly `NO_REPLY` (nothing is posted); you may first `react` with an emoji (e.g. 👍) instead of posting an acknowledgement.",
-    "- Outside groups, `message_bot` sends a message to another Bot's direct chat and wakes it: `background` (default) waits until it finishes its current turn, `urgent` gets it to read your message as soon as possible (it is never cut off mid-task). Their reply does not come back to you unless they message you, so when you delegate work, ask them to `message_bot` you when done — you will be woken by their message.",
+    "- Work that belongs to one of your groups (under \"Your groups\") is coordinated in that group, wherever the request reaches you: your owner's direct chat, a teammate's direct message, a routine run or a `[Result of …]`. Post assignments, questions, progress and results there with `post_to_group` (the group's id) and @mention who should act, instead of messaging those teammates directly; where the request came from, just say briefly what you did.",
+    "- For anything none of your groups is about, `message_bot` sends a message to another Bot's direct chat and wakes it: `background` (default) waits until it finishes its current turn, `urgent` gets it to read your message as soon as possible (it is never cut off mid-task). Their reply does not come back to you unless they message you, so when you delegate work, ask them to `message_bot` you when done — you will be woken by their message.",
     "- `post_to_group` posts in a group chat you are in (also from another conversation); `@Name` mentions wake those Bots.",
     "- `handoff_task` hands a task to another Bot; `list_bots` lists the team.",
     "- `list_models` shows the real model ids of a harness — use it before choosing a model; `create_bot` adds a new Bot to the team (name, label, instructions; harness and computer default to yours) and `update_bot` changes a Bot's name, label or instructions. When the owner asks for new teammates, create them yourself, then brief them with `message_bot` or `handoff_task`.",
@@ -106,25 +108,52 @@ export const renderTeam = (bot: Bot, team: ReadonlyArray<Bot>): string => {
     .join("\n")
 }
 
+/** One line per group chat the bot is in: title, id (for `post_to_group`) and the other members. */
+export const renderGroups = (bot: Bot, groups: ReadonlyArray<Conversation>, team: ReadonlyArray<Bot>): string => {
+  const name = (id: BotId) => team.find((b) => b.id === id)?.name
+  return groups
+    .flatMap((group) => {
+      if (group.kind !== "group") return []
+      const others = group.memberBotIds
+        .filter((id) => id !== bot.id)
+        .flatMap((id) => {
+          const n = name(id)
+          return n === undefined ? [] : [`@${n}${group.leadBotId === id ? " (lead)" : ""}`]
+        })
+      const lead = group.leadBotId === bot.id ? "; you lead it" : ""
+      const title = group.title.trim() === "" ? "Untitled group" : group.title.trim()
+      return [`- "${title}" (id ${group.id}): with ${others.length === 0 ? "nobody else" : others.join(", ")}${lead}`]
+    })
+    .sort()
+    .join("\n")
+}
+
 export const assembleInstructions = (sections: RenderedInstructions["sections"]): RenderedInstructions => {
   const parts: Array<string> = [sections.base]
   if (sections.persona.trim() !== "") parts.push(`## Your instructions\n${sections.persona.trim()}`)
   parts.push(`## Your team\n${sections.team}`)
+  if (sections.groups !== undefined && sections.groups.trim() !== "") parts.push(`## Your groups\n${sections.groups.trim()}`)
   if (sections.memoryIndex.trim() !== "") parts.push(`## Your memory (MEMORY.md)\n${sections.memoryIndex.trim()}`)
   if (sections.placement.trim() !== "") parts.push(`## Where you run\n${sections.placement.trim()}`)
   const text = parts.join("\n\n")
   return { text, sections, hash: hashText(text) }
 }
 
-export const InstructionRendererLive: Layer.Layer<InstructionRenderer, never, MemoryService | BotRepo | SettingsService> = Layer.effect(
+export const InstructionRendererLive: Layer.Layer<
+  InstructionRenderer,
+  never,
+  MemoryService | BotRepo | ConversationRepo | SettingsService
+> = Layer.effect(
   InstructionRenderer,
   Effect.gen(function*() {
     const memory = yield* MemoryService
     const bots = yield* BotRepo
+    const conversations = yield* ConversationRepo
     const settings = yield* SettingsService
     return InstructionRenderer.of({
       render: Effect.fn("InstructionRenderer.render")(function*({ bot, placement }) {
         const team = yield* orDie(bots.list)
+        const groups = yield* orDie(conversations.list({ kind: "group", botId: bot.id, includeHidden: false }))
         const memoryIndex = yield* memory.promptIndex(bot.id)
         const { sharedProjectFolders } = yield* settings.get
         const folders = renderProjectFolders([...sharedProjectFolders, ...bot.projectFolders])
@@ -132,6 +161,7 @@ export const InstructionRendererLive: Layer.Layer<InstructionRenderer, never, Me
           base: renderBase(bot, placement),
           persona: bot.instructions,
           team: renderTeam(bot, team),
+          groups: renderGroups(bot, groups, team),
           memoryIndex,
           placement: [placement.promptAppend, folders].filter((part) => part.trim() !== "").join("\n"),
         })

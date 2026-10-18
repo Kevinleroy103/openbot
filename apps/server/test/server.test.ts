@@ -361,7 +361,9 @@ describe("rpc", () => {
       })
       const memory = botMessages(transcriptOf(recalled)).find((t) => t.startsWith("Session "))!
       expect(memory).toContain(`fake-${sessionKeyOf(ada.id, ada.directConversationId).replaceAll(":", "-")}-`)
-      expect(memory).toContain("turn 3") // its introduction, the group turn, this DM turn
+      // the group turn and this DM turn: creating the group changed Ada's instructions (they list her
+      // groups), so her session was reopened, resuming the same native session
+      expect(memory).toContain("turn 2")
       expect(memory).toContain('I last said: "renamed the repo to tick"')
       // The group's transcript holds the group turn only (nothing from the DM leaked in).
       expect(botMessages(transcriptOf(yield* Ref.get(groupView.state)))).toEqual(["renamed the repo to tick"])

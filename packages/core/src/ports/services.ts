@@ -31,7 +31,7 @@
  *   3. MemoryService, SkillService                (events via ConversationService)
  *   4. ApprovalService                            (never calls Orchestrator: emits `asyncAnswers`;
  *                                                  optional ComputerPort for hand-offs, D1.7)
- *   5. InstructionRenderer                        (MemoryService, BotRepo, SettingsService)
+ *   5. InstructionRenderer                        (MemoryService, BotRepo, ConversationRepo, SettingsService)
  *   5b. BackgroundTasks                           (never calls Orchestrator: emits `results`)
  *   6. Orchestrator                               (drains `ApprovalService.asyncAnswers`; group
  *                                                  routing of bot replies is internal)
@@ -874,6 +874,11 @@ export class BackgroundTasks extends Context.Service<BackgroundTasks, {
   readonly hold: Effect.Effect<void>
   /** Tasks running now (not queued). */
   readonly running: Effect.Effect<number>
+  /**
+   * The brain is stopping (`Orchestrator.handOff`): running tasks are interrupted before the harness
+   * drivers close and stay `running`, so the next boot runs them again (`recover`).
+   */
+  readonly handOff: Effect.Effect<void>
 }>()("openbot/core/BackgroundTasks") {}
 
 // ============================================================================ RoutineScheduler (§4.3.5)

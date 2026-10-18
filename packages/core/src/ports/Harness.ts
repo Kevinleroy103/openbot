@@ -79,6 +79,8 @@ export interface RenderedInstructions {
     readonly persona: string
     /** Team roster, one line per bot. */
     readonly team: string
+    /** The group chats the bot is in (title, id, members), one line per group; absent or empty: none. */
+    readonly groups?: string | undefined
     /** `MEMORY.md` index (capped at 4 KB). */
     readonly memoryIndex: string
     /** `placement.promptAppend`. */

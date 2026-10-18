@@ -362,6 +362,31 @@ describe("background tasks", () => {
       appLayer(),
     )
 
+  test("hand-off: a running task is interrupted and stays running (untold) for the next boot to run again", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const driver = yield* TestDriver
+        const ada = yield* createBot("Ada")
+        const gates = yield* makeGates("long render")
+        yield* driver.setBehavior(ada.id, behavior(yield* BackgroundTasks, gates))
+        yield* send(ada.directConversationId, "start long render")
+        yield* settled(ada.directConversationId, 1)
+        yield* eventually(Effect.map(tasksOf(ada.id), (ts) => ts[0]?.status === "running"), "running")
+        const turnsBefore = (yield* driver.turns).filter((t) => t.taskId === undefined).length
+        yield* (yield* Orchestrator).handOff
+        // were it still running, it would finish now
+        yield* Deferred.succeed(gates.get("long render")!, undefined)
+        for (let i = 0; i < 200; i++) yield* Effect.yieldNow
+        const [task] = yield* tasksOf(ada.id)
+        const stored = yield* Effect.orDie((yield* TaskRepo).get(task!.id))
+        return { stored, turnsBefore, turnsAfter: (yield* driver.turns).filter((t) => t.taskId === undefined).length }
+      }),
+      appLayer(),
+    )
+    expect(Option.getOrThrow(out.stored).status).toBe("running")
+    expect(out.turnsAfter).toBe(out.turnsBefore)
+  })
+
   test("a task a restart cut off runs again under its id, back in its own session", async () => {
     const out = await afterRestart({ nativeSessionId: "native-task-old" })
     expect(out.report.interruptedTasks.map((t) => t.id)).toEqual(["tsk_old" as TaskId])

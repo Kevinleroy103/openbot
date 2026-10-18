@@ -58,7 +58,7 @@ import {
   TASK_RESULT_MAX_CHARS,
   TASK_TITLE_MAX_CHARS,
 } from "@openbot/contracts"
-import { Cause, Clock, Deferred, Duration, Effect, Exit, Layer, Option, Queue, Stream } from "effect"
+import { Cause, Clock, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Queue, Stream } from "effect"
 import type { RenderedInstructions } from "../../ports/Harness.ts"
 import { type HarnessSession, HarnessRegistry, sessionKeyOf, taskSessionKeyOf } from "../../ports/Harness.ts"
 import { IdGen } from "../../ports/IdGen.ts"
@@ -387,6 +387,8 @@ interface Live {
   ending: boolean
   /** It had started before a restart cut it off: it resumes its session, or starts over knowing that. */
   readonly restarted: boolean
+  /** Its run, while it runs (`handOff` interrupts it). */
+  fiber?: Fiber.Fiber<void> | undefined
 }
 
 /** How `update` delivered a follow-up. */
@@ -786,7 +788,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
           if (next === undefined) return
           // claimed synchronously: the next loop iteration sees it running
           next.task = { ...next.task, status: "running" }
-          yield* Effect.forkIn(runTask(next), scope, { startImmediately: true })
+          next.fiber = yield* Effect.forkIn(runTask(next), scope, { startImmediately: true })
         }
       })
 
@@ -1015,10 +1017,23 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
     // Running tasks stop with the layer (shutdown): boot recovery reports them next time.
     yield* Effect.addFinalizer(() => Effect.sync(() => lives.clear()))
 
+    /**
+     * The brain is stopping: running tasks are interrupted now, before the harness drivers close
+     * (a Codex task's app-server belongs to its driver: closing it first would end the task as
+     * failed). Interrupted, they stay `running`; the next boot runs them again (`recover`).
+     */
+    const handOff = Effect.gen(function*() {
+      held = true
+      const running = [...lives.values()].flatMap((l) => (l.task.status === "running" && l.fiber !== undefined ? [l.fiber] : []))
+      if (running.length > 0) yield* Effect.logInfo("handing running tasks to the next boot", { tasks: running.length })
+      yield* Fiber.interruptAll(running)
+    })
+
     return BackgroundTasks.of({
       hold: Effect.sync(() => {
         held = true
       }),
+      handOff,
       running: Effect.sync(() => [...lives.values()].filter((l) => l.task.status === "running").length),
       start,
       list,

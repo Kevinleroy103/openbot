@@ -183,6 +183,7 @@ All three adapters implement one `HarnessDriver` / `HarnessSession` port (t3code
   - Delivery is queued per recipient bot (D5.0). Messages are delivered at turn boundaries or steered into a running turn of the same conversation; they wake an idle bot. A bot message never interrupts a turn; only the owner can.
   - In the recipient's DM, its replies to another bot's message (a turn triggered by that message) are labelled "to @Sender" above the bubble group, so the owner sees they are not addressed to them.
   - Hop limit 8 per causal chain, plus a global kill switch in Settings.
+  - **Group work stays in its group** (owner feedback 2026-10-18: a "resume the work" passed on by Chief of Staff woke the group's lead in its DM, and it restarted the work by DMing each member). The instructions list the bot's groups (`## Your groups`: title, id for `post_to_group`, the other members, who leads), and a rule says: work that belongs to one of them is coordinated there wherever the request arrives (owner DM, a teammate's DM, a routine run, a task result), with `post_to_group` and @mentions; `message_bot` is for what no group of yours is about.
 - **D5.3 Routines.**
   - Owned by one bot. Triggers in v1: cron schedule with timezone, interval (5 minutes minimum) and once; webhooks come later.
   - Each run posts into the owning bot's DM as an event, followed by the bot's turn.

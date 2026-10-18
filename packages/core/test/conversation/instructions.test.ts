@@ -3,8 +3,11 @@
 import { describe, expect, test } from "bun:test"
 import { LOCAL_NODE_ID } from "@openbot/contracts"
 import type { PlacementSummary, Toolset } from "../../src/ports/Placement.ts"
-import { renderBase } from "../../src/services/conversation/InstructionRenderer.ts"
-import { makeBot } from "../../src/testing/index.ts"
+import { Effect } from "effect"
+import { ConversationService, InstructionRenderer } from "../../src/ports/index.ts"
+import { assembleInstructions, renderBase, renderGroups } from "../../src/services/conversation/InstructionRenderer.ts"
+import { botId, conversationId, makeBot, makeGroupConversation, runTest } from "../../src/testing/index.ts"
+import { appLayer, createBot } from "./helpers.ts"
 
 const placement = (toolsets: ReadonlyArray<Toolset>, sharedScreen = false): PlacementSummary => ({
   mode: "native-local",
@@ -47,5 +50,49 @@ describe("InstructionRenderer: screen tools", () => {
     expect(text).toContain("take a screenshot first")
     expect(text).not.toContain("You have your own screen")
     expect(text).toContain("call `request_takeover`")
+  })
+})
+
+describe("InstructionRenderer: groups", () => {
+  const lead = makeBot({ id: botId("bot_lead"), name: "Engineering Lead" })
+  const claude = makeBot({ id: botId("bot_claude"), name: "Claude Engineer" })
+  const codex = makeBot({ id: botId("bot_codex"), name: "Codex Engineer" })
+  const team = [lead, claude, codex]
+  const group = makeGroupConversation({
+    id: conversationId("cnv_render"),
+    title: "improve video render speed",
+    memberBotIds: [lead.id, claude.id, codex.id],
+    leadBotId: lead.id,
+  })
+
+  test("each group the bot is in: title, id for post_to_group, the other members and who leads", () => {
+    expect(renderGroups(claude, [group], team)).toBe(
+      '- "improve video render speed" (id cnv_render): with @Engineering Lead (lead), @Codex Engineer',
+    )
+    expect(renderGroups(lead, [group], team)).toBe(
+      '- "improve video render speed" (id cnv_render): with @Claude Engineer, @Codex Engineer; you lead it',
+    )
+  })
+
+  test("a \"Your groups\" section only when there are groups; the rule keeps group work in the group", () => {
+    const sections = { base: renderBase(lead, placement(["bot"])), persona: "", team: "", memoryIndex: "", placement: "" }
+    expect(assembleInstructions(sections).text).not.toContain("## Your groups")
+    const text = assembleInstructions({ ...sections, groups: renderGroups(lead, [group], team) }).text
+    expect(text).toContain('## Your groups\n- "improve video render speed" (id cnv_render)')
+    expect(text).toContain("Work that belongs to one of your groups (under \"Your groups\") is coordinated in that group, wherever the request reaches you")
+    expect(text).toContain("For anything none of your groups is about, `message_bot`")
+  })
+
+  test("the rendered instructions list the bot's live groups", async () => {
+    const text = await runTest(
+      Effect.gen(function*() {
+        const ada = yield* createBot("Ada")
+        const bob = yield* createBot("Bob")
+        yield* (yield* ConversationService).createGroup({ title: "launch", memberBotIds: [ada.id, bob.id], leadBotId: ada.id })
+        return (yield* (yield* InstructionRenderer).render({ bot: ada, placement: placement(["bot"]) })).text
+      }),
+      appLayer(),
+    )
+    expect(text).toMatch(/## Your groups\n- "launch" \(id cnv_\w+\): with @Bob; you lead it/)
   })
 })

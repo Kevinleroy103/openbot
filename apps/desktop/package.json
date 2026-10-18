@@ -1,0 +1,15 @@
+{
+  "name": "@openbot/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenBot desktop app (Electron): the owner's OpenBot in its own window, with notifications. Built and served by the brain (apps/server/src/desktop.ts).",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests"
+  },
+  "devDependencies": {
+    "@openbot/tsconfig": "workspace:*",
+    "electron": "44.9.0"
+  }
+}

@@ -84,6 +84,31 @@
 .ob-msg .ob-msg-actions { opacity: 0; transition: opacity 100ms; }
 .ob-msg:has([data-side]:hover) .ob-msg-actions, .ob-msg .ob-msg-actions:hover, .ob-msg:focus-within .ob-msg-actions { opacity: 1; }
 
+/* ===================================================================== desktop app (apps/desktop) ====
+ * `data-desktop` is the desktop app's platform (main.tsx). On macOS its window has no title bar: the
+ * window's buttons float over the top-left corner (the sidebar header starts after them; the compact
+ * sidebar's arrow and an overlay's title move clear of them), and the top strip moves the window.
+ * The strip comes first in the page, so every control after it punches a clickable hole in it. */
+.ob-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 52px;
+  pointer-events: none;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+html[data-desktop] :is(button, a, input, textarea, select, label, [role="button"], [role="tab"], [role="switch"], [role="menuitem"], [contenteditable="true"]) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+html[data-desktop="darwin"] .ob-sidebar-header,
+html[data-desktop="darwin"] .ob-overlay-top {
+  padding-inline-start: 84px;
+}
+html[data-desktop="darwin"] .ob-compact-top {
+  margin-top: 28px;
+}
+
 /* ===================================================================== responsive / mobile ======
  * Layout modes (layout.ts): phone < 768 ≤ tablet < 1024 ≤ desktop. Desktop is untouched by
  * everything below. These rules are unlayered, so they win over the Tailwind utilities they adjust. */

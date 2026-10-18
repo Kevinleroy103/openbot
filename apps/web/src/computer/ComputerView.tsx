@@ -190,7 +190,7 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
       className="absolute inset-0 z-[2500] flex animate-fade-in flex-col bg-[rgba(20,20,20,.95)] text-white"
     >
       {/* top bar (44, black 55 %) */}
-      <div className="grid h-[calc(44px+env(safe-area-inset-top))] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 bg-black/55 ps-3 pe-2 pt-[env(safe-area-inset-top)]">
+      <div className="ob-overlay-top grid h-[calc(44px+env(safe-area-inset-top))] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 bg-black/55 ps-3 pe-2 pt-[env(safe-area-inset-top)]">
         <div className="flex min-w-0 items-center gap-2">
           {bot && <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={22} working={controlling ? false : live} />}
           <span className="truncate text-sm font-medium text-white/90">{phone ? name : `${name}'s computer`}</span>

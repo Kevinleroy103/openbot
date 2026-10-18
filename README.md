@@ -138,6 +138,25 @@ workspace folders, read-only folders, how much the computer allows without askin
 Without the installer, from a clone of this repository: `bun apps/node/src/main.ts pair <openbot-url> <code>`,
 then `bun apps/node/src/main.ts run`.
 
+## Desktop app
+
+OpenBot also runs in its own window on macOS, Linux and Windows, with your Bots' updates as the
+computer's notifications and an unread badge. It keeps running when you close the window, so the
+notifications keep coming. Download it under Settings › General › Apps: your OpenBot builds it for
+that computer on the first download (about a minute) with its own address inside, so there is
+nothing to set up. On macOS and Linux you can also install it from a terminal, which on a Mac skips
+the one-time "Open Anyway" prompt for apps from outside the App Store:
+
+```sh
+curl -fsSL https://<your-openbot>/desktop/install.sh | sh
+```
+
+On first start the app shows a code and opens OpenBot in your browser: click **Allow** there and
+the app signs in. It updates itself from your OpenBot: when there is a new version it downloads it
+in the background and shows **Restart to update** in the sidebar (Settings › General › Apps and the
+app menu can also check right away). Notifications also work in the browser itself (turn on **Notifications on this
+device** in the same section), but only while OpenBot is open there.
+
 ## iPhone app
 
 `apps/mobile` is a native iPhone app (Expo) with the same chats, cards and live updates, in iOS's
@@ -169,6 +188,8 @@ bun run test
 | `apps/server` | The brain: orchestration, coding agents, storage, the MCP tool gateway and the web server |
 | `apps/web` | The web app (React) |
 | `apps/node` | The node daemon that connects another computer |
+| `apps/desktop` | The desktop app (Electron), built and served by the brain |
+| `apps/mobile` | The iPhone app (Expo) |
 | `packages/core` | Bots, conversations, tasks, routines, approvals, memory and skills |
 | `packages/contracts` | Shared schemas and the RPC API |
 | `packages/persistence` | SQLite storage and file stores |

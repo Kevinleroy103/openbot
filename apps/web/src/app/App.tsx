@@ -12,11 +12,13 @@ import { NewChatView } from "../chat/NewChat.tsx"
 import { SearchPalette } from "../palette/SearchPalette.tsx"
 import { Sidebar } from "../sidebar/Sidebar.tsx"
 import { AppShell } from "./AppShell.tsx"
+import { ConnectDeviceDialog } from "./ConnectDevice.tsx"
 import { useRoster, useSessionInfo, valueOr } from "./data.ts"
 import { PaneLoading } from "./fallbacks.tsx"
 import { ComputerView, DetailsPane, NewBotForm, NewGroupForm, Onboarding, SettingsDialog } from "./lazy.tsx"
 import { isPhoneNow, useLayoutMode, useVisualViewport } from "./layout.ts"
 import { useBackDismiss } from "./nav.ts"
+import { useSystemNotifications } from "./notifications.ts"
 import {
   isNewChatHash,
   previousConversationAtom,
@@ -85,6 +87,9 @@ export function App(): ReactNode {
   const settings = useSettingsDialog()
   const computer = useComputerView()
   const dialogs = useDialogs()
+  /** The desktop app's code waiting to be allowed (`#/connect-device?code=…`). */
+  const [connectCode, setConnectCode] = useState<string | undefined>()
+  useSystemNotifications()
   const [compact, setCompactState] = useState(() => {
     try {
       return localStorage.getItem(COMPACT_KEY) === "1"
@@ -105,12 +110,19 @@ export function App(): ReactNode {
   // First load: open the most recent conversation unless the URL picked one. A phone starts on Home;
   // a deep link to a chat gets a Home entry under it so Back / swipe-back land on Home.
   // The iPhone app opens pages of this app in a web view: `#/settings/<page>` and
-  // `#/computer/<botId>[?control=1]` (read before the boot below resets the hash on a phone).
+  // `#/computer/<botId>[?control=1]`; the desktop app `#/connect-device?code=…` in the browser
+  // (read before the boot below resets the hash on a phone).
   const embedHash = useRef(typeof location === "undefined" ? "" : location.hash)
   useEffect(() => {
     if (!roster.loaded || embedHash.current === "") return
     const hash = embedHash.current
     embedHash.current = ""
+    // The desktop app's "Allow this computer" (apps/desktop: it shows the same code).
+    const device = /^#\/connect-device\?code=([A-Za-z0-9-]{4,16})/.exec(hash)
+    if (device) {
+      history.replaceState(null, "", "#/")
+      return setConnectCode(device[1]!.toUpperCase())
+    }
     const page = /^#\/settings(?:\/([a-z]+))?/.exec(hash)
     if (page) return settings.show((page[1] ?? "general") as Parameters<typeof settings.show>[0])
     const screen = /^#\/computer\/([^/?#]+)(\?control=1)?/.exec(hash)
@@ -277,6 +289,7 @@ export function App(): ReactNode {
           ) : undefined
         }
       />
+      {connectCode !== undefined && <ConnectDeviceDialog code={connectCode} onClose={() => setConnectCode(undefined)} />}
       <SearchPalette open={dialog?.kind === "search"} onOpenChange={(o) => (o ? dialogs.show({ kind: "search" }) : dialogs.hide())} onToggleCompact={() => setCompact(!compact)} />
       <Dialog open={dialog?.kind === "new-bot"} onOpenChange={(o) => !o && dialogs.hide()} width={480} label="New Bot" className="ob-phone-full">
         <DialogHeader title="New Bot" onClose={dialogs.hide} />

@@ -19,6 +19,7 @@
  * Handlers close over their services at layer build time, so every route only needs the request.
  */
 import { NodeInternalRoutes, NodePublicRoutes, ViewerRoutes } from "@openbot/brain-nodes"
+import { DesktopRoutes } from "./desktop.ts"
 import { type AttachmentId, OpenBotRpcs } from "@openbot/contracts"
 import { AttachmentStore } from "@openbot/core"
 import { McpGateway } from "@openbot/gateway"
@@ -34,6 +35,26 @@ import { loginPage, makeWebApp, PAGE_HEADERS, STATIC_PAGE_CSP, unavailablePage }
 const routes = <E, R>(
   add: (router: HttpRouter.HttpRouter) => Effect.Effect<void, E, R>,
 ) => Layer.effectDiscard(Effect.flatMap(HttpRouter.HttpRouter, add))
+
+/** How long a desktop app's code waits to be allowed, and how many may wait at once. */
+const DEVICE_CODE_TTL_MS = 10 * 60 * 1000
+const DEVICE_PENDING_MAX = 64
+/** Letters and digits that cannot be mistaken for one another. */
+const USER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+/** `ABCD-EFGH` from 8 random bytes. */
+export const userCodeOf = (bytes: Uint8Array): string => {
+  const chars = [...bytes].map((b) => USER_CODE_ALPHABET[b % USER_CODE_ALPHABET.length]!).join("")
+  return `${chars.slice(0, 4)}-${chars.slice(4, 8)}`
+}
+
+/** What the owner typed or the link carried, in `ABCD-EFGH` form. */
+export const normalizeUserCode = (text: string): string => {
+  const chars = text.toUpperCase().replace(/[^A-Z0-9]/g, "")
+  return chars.length === 8 ? `${chars.slice(0, 4)}-${chars.slice(4)}` : chars
+}
+
+const randomToken = (bytes: number) => Buffer.from(crypto.getRandomValues(new Uint8Array(bytes))).toString("base64url")
 
 const json = (body: unknown, status = 200, headers?: Record<string, string>) =>
   HttpServerResponse.text(JSON.stringify(body), {
@@ -211,6 +232,59 @@ export const AuthRoutes = routes(Effect.fnUntraced(function*(router) {
       return json({ sessionToken: signedIn.sessionToken }, 200, { "cache-control": "no-store" })
     }),
   )
+  // Desktop app sign-in (device flow, apps/desktop): the app shows a code and opens the owner's
+  // browser on `/#/connect-device?code=…`; the signed-in owner allows it there; the app's poll then
+  // gets an app code (traded at `/api/auth/app-login` for a session of its own).
+  const devices = new Map<string, { readonly userCode: string; readonly expiresAt: number; appCode?: string }>()
+  const sweepDevices = (now: number) => {
+    for (const [deviceCode, device] of devices) if (device.expiresAt <= now) devices.delete(deviceCode)
+    while (devices.size >= DEVICE_PENDING_MAX) devices.delete(devices.keys().next().value!)
+  }
+  yield* router.add(
+    "POST",
+    "/api/auth/device/start",
+    Effect.sync(() => {
+      const now = Date.now()
+      sweepDevices(now)
+      const deviceCode = randomToken(32)
+      const userCode = userCodeOf(crypto.getRandomValues(new Uint8Array(8)))
+      devices.set(deviceCode, { userCode, expiresAt: now + DEVICE_CODE_TTL_MS })
+      return json({ deviceCode, userCode, expiresInSeconds: DEVICE_CODE_TTL_MS / 1000, interval: 2 })
+    }),
+  )
+  yield* router.add(
+    "POST",
+    "/api/auth/device/poll",
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const body = yield* Effect.option(request.json)
+      const deviceCode = Option.isSome(body) && typeof (body.value as { deviceCode?: unknown })?.deviceCode === "string"
+        ? (body.value as { deviceCode: string }).deviceCode
+        : ""
+      const device = devices.get(deviceCode)
+      if (device === undefined || device.expiresAt <= Date.now()) return json({ status: "expired" }, 410)
+      if (device.appCode === undefined) return json({ status: "pending" })
+      devices.delete(deviceCode)
+      return json({ status: "approved", code: device.appCode })
+    }),
+  )
+  yield* router.add(
+    "POST",
+    "/api/auth/device/approve",
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const result = yield* auth.authenticate(request)
+      if (!result.ok) return json({ error: result.reason }, result.status)
+      const body = yield* Effect.option(request.json)
+      const raw = Option.isSome(body) ? (body.value as { code?: unknown })?.code : undefined
+      const userCode = typeof raw === "string" ? normalizeUserCode(raw) : ""
+      const now = Date.now()
+      const found = [...devices.values()].find((d) => d.userCode === userCode && d.expiresAt > now)
+      if (found === undefined) return json({ error: "That code is not valid any more. Get a new one in the app." }, 404)
+      found.appCode = (yield* auth.mintAppCode(result.session)).code
+      return json({ ok: true })
+    }),
+  )
   yield* router.add(
     "GET",
     "/api/auth/status",
@@ -383,7 +457,7 @@ export const ViewerRoutesLive = ViewerRoutes((input) =>
 // ============================================================================ composition
 
 /** Every public route. */
-export const PublicRoutes = Layer.mergeAll(RpcRoute, AuthRoutes, AttachmentRoutes, WebRoutes, ViewerRoutesLive, NodePublicRoutes)
+export const PublicRoutes = Layer.mergeAll(RpcRoute, AuthRoutes, AttachmentRoutes, WebRoutes, ViewerRoutesLive, NodePublicRoutes, DesktopRoutes)
 
 /** `/mcp/:botId` → `McpGateway.handle` (the gateway checks the bearer; cookies are ignored). */
 export const McpRoute = routes(Effect.fnUntraced(function*(router) {

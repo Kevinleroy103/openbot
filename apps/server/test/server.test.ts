@@ -146,6 +146,35 @@ describe("auth negatives", () => {
     expect((await post("/api/auth/app-login", {})).status).toBe(401)
   })
 
+  test("the desktop app: its code is allowed in the signed-in browser, then its poll buys a session", async () => {
+    const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+      fetch(`${server.base}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) })
+    const started = (await (await post("/api/auth/device/start", {})).json()) as { deviceCode: string; userCode: string; expiresInSeconds: number }
+    expect(started.userCode).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/)
+    expect(started.expiresInSeconds).toBe(600)
+    expect(await (await post("/api/auth/device/poll", { deviceCode: started.deviceCode })).json()).toEqual({ status: "pending" })
+    // allowing needs the web session; the code may be typed in any case and without its dash
+    expect((await post("/api/auth/device/approve", { code: started.userCode })).status).toBe(401)
+    expect((await post("/api/auth/device/approve", { code: "ZZZZ-ZZZZ" }, { cookie, origin: server.base })).status).toBe(404)
+    const typed = started.userCode.replace("-", "").toLowerCase()
+    expect((await post("/api/auth/device/approve", { code: typed }, { cookie, origin: server.base })).status).toBe(200)
+    const approved = (await (await post("/api/auth/device/poll", { deviceCode: started.deviceCode })).json()) as { status: string; code: string }
+    expect(approved.status).toBe("approved")
+    const login = (await (await post("/api/auth/app-login", { code: approved.code })).json()) as { sessionToken: string }
+    expect(await (await fetch(`${server.base}/api/auth/status`, { headers: { authorization: `Bearer ${login.sessionToken}` } })).json()).toEqual({ authenticated: true })
+    // once only; unknown device codes are gone
+    expect((await post("/api/auth/device/poll", { deviceCode: started.deviceCode })).status).toBe(410)
+    expect((await post("/api/auth/device/poll", { deviceCode: "nope" })).status).toBe(410)
+  })
+
+  test("the desktop app downloads: an install script with this OpenBot's address; unknown targets are refused", async () => {
+    const script = await (await fetch(`${server.base}/desktop/install.sh`)).text()
+    expect(script).toStartWith("#!/bin/sh")
+    expect(script).toContain(`ORIGIN='${server.base}'`)
+    expect(script).toContain('"$ORIGIN/desktop/download/$TARGET"')
+    expect((await fetch(`${server.base}/desktop/download/beos-x86`)).status).toBe(404)
+  })
+
   test("each listener serves only its own routes; the MCP gateway is bearer-only", async () => {
     // internal routes are not mounted on the public listener, and vice versa
     expect((await fetch(`${server.base}/mcp/bot_x`, { method: "POST", headers: { cookie } })).status).toBe(404)
@@ -458,11 +487,17 @@ describe("rpc", () => {
         text: `tool: send_file {"path":"out/chart.png","to":"Receiver","caption":"The chart"}`,
         clientNonce: "send-file-bot-1",
       })
-      // Bob's chat: the file message from Ada, then Bob's (fake) reply to it
+      // Bob's chat: the file message from Ada, then Bob's (fake) reply to it (not his introduction,
+      // which may come first)
       const state = yield* eventually(
         Ref.get(bobConvo.state),
-        (s) => transcriptOf(s).some((e) => e.kind === "message" && e.role === "bot" && e.author.kind === "bot" && e.author.botId === bob.id && !e.streaming),
-        { label: "the recipient's reply", timeout: 20_000 },
+        (s) => {
+          const entries = transcriptOf(s)
+          const file = entries.findIndex((e) => e.kind === "message" && e.attachments.length > 0)
+          return file >= 0 &&
+            entries.slice(file + 1).some((e) => e.kind === "message" && e.author.kind === "bot" && e.author.botId === bob.id && !e.streaming)
+        },
+        { label: "the file, then the recipient's reply", timeout: 20_000 },
       )
       const fileMessage = transcriptOf(state).find((e) => e.kind === "message" && e.attachments.length > 0)!
       if (fileMessage.kind !== "message") throw new Error("unreachable")

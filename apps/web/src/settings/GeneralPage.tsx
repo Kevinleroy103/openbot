@@ -1,12 +1,14 @@
-// Settings › General: appearance (theme, accent, show steps), Bots (bot messaging kill switch, default
-// harness, approval expiry), the owner's name and connecting the iPhone app. Values ride on the roster (`settingsAtom`); edits are
-// applied optimistically until the roster echoes them.
+// Settings › General: appearance (theme, accent, show steps), Bots (bot messaging kill switch, idle
+// compaction, default harness, approval expiry), the owner's name, and the apps (desktop app, iPhone
+// app, notifications on this device). Values ride on the roster (`settingsAtom`); edits are applied
+// optimistically until the roster echoes them.
 import { useAtomValue } from "@effect/atom-react"
 import { harnessStatusAtom, settingsAtom } from "@openbot/client"
 import { type Settings, type SettingsPatch, applySettingsPatch } from "@openbot/contracts"
 import { Select, Switch, TextField } from "@openbot/ui"
 import { type ReactNode, useState } from "react"
 import { ErrorLine, harnessName, harnessReady, useCommand, useQuery } from "../details/kit.tsx"
+import { DesktopAppRow, NotificationsRow } from "./DesktopApp.tsx"
 import { IphoneAppRow } from "./IphoneApp.tsx"
 import { GroupLabel, PageHeader, SettingsCard, SettingsRow } from "./layout.tsx"
 
@@ -158,7 +160,13 @@ export function GeneralPage(): ReactNode {
             />
           }
         />
+      </SettingsCard>
+
+      <GroupLabel>Apps</GroupLabel>
+      <SettingsCard>
+        <DesktopAppRow />
         <IphoneAppRow />
+        <NotificationsRow />
       </SettingsCard>
     </div>
   )

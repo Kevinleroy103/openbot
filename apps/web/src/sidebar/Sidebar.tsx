@@ -20,6 +20,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  RefreshCw,
   Search,
   Settings,
   ShieldCheck,
@@ -52,6 +53,7 @@ import {
 import { ActionSheet } from "../app/ActionSheet.tsx"
 import { useRoster, useSessionInfo, valueOr } from "../app/data.ts"
 import { formatListTime, initials, plainPreview } from "../app/format.ts"
+import { updateReady, useDesktopUpdate } from "../app/desktopUpdate.ts"
 import { useIsPhone } from "../app/layout.ts"
 import { type LongPressPoint, useArmedClicks, useLongPress } from "../app/longPress.ts"
 import { useDialogs, useSelection, useSettingsDialog } from "../app/uiState.ts"
@@ -516,7 +518,7 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
           <IconButton icon={Plus} label="New chat" size={44} variant="elevated" onClick={onNewChat} />
         </div>
       ) : (
-        <div className="flex h-[calc(60px+env(safe-area-inset-top))] shrink-0 items-center gap-2 px-4 pt-[env(safe-area-inset-top)]">
+        <div className="ob-sidebar-header flex h-[calc(60px+env(safe-area-inset-top))] shrink-0 items-center gap-2 px-4 pt-[env(safe-area-inset-top)]">
           <IconButton icon={PanelLeft} label={`Compact sidebar (${modKey}B)`} size={28} className="-ms-1 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100" onClick={onToggleCompact} />
           <span className="flex-1" />
           <IconButton icon={Search} label="Search" title={`Search (${modKey}K)`} variant="elevated" onClick={onSearch} />
@@ -570,6 +572,7 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
           </div>
         )}
       </div>
+      {!phone && <DesktopUpdateButton />}
       <div className={cn("flex shrink-0 items-center gap-2 px-4 pt-2", phone ? "pb-[max(12px,env(safe-area-inset-bottom))]" : "pb-[max(16px,env(safe-area-inset-bottom))]")}>
         {!phone && <OwnerMenu />}
         <PillButton
@@ -584,6 +587,21 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
       </div>
       {menu && <RowContextMenu target={menu} onClose={() => setMenu(undefined)} />}
     </nav>
+  )
+}
+
+/** The desktop app downloaded a new version of itself: one click restarts into it. */
+function DesktopUpdateButton({ compact = false }: { readonly compact?: boolean }): ReactNode {
+  const update = useDesktopUpdate()
+  if (!updateReady(update.state)) return null
+  const label = update.state?.status === "ready" ? "Restart to update" : "Download the update"
+  if (compact) return <IconButton icon={RefreshCw} label={label} variant="elevated" onClick={update.install} data-testid="desktop-update" />
+  return (
+    <div className="shrink-0 px-4 pt-2">
+      <PillButton variant="primary" size="md" leadingIcon={RefreshCw} className="w-full" onClick={update.install} data-testid="desktop-update">
+        {label}
+      </PillButton>
+    </div>
   )
 }
 
@@ -610,7 +628,7 @@ function CompactSidebar({
   const groups: ReadonlyArray<ReadonlyArray<SidebarItem>> = [model.pinned, ...model.sections.map((s) => s.items)].filter((g) => g.length > 0)
   return (
     <nav aria-label="Bots" className="flex h-full flex-col items-center bg-sidebar">
-      <div className="flex h-[60px] shrink-0 items-center">
+      <div className="ob-compact-top flex h-[60px] shrink-0 items-center">
         <IconButton icon={ChevronRight} label={`Expand sidebar (${modKey}B)`} size={28} onClick={onToggleCompact} />
       </div>
       <div className="flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto pb-2 scrollbar-thin">
@@ -648,6 +666,7 @@ function CompactSidebar({
         ))}
       </div>
       <div className="flex shrink-0 flex-col items-center gap-2 pt-2 pb-4">
+        <DesktopUpdateButton compact />
         <IconButton icon={Plus} label="New chat" onClick={onNewChat} />
         <IconButton icon={Monitor} label="Computers" onClick={() => settingsDialog.show("computers")} />
         <OwnerMenu />

@@ -1,0 +1,4 @@
+{
+  "extends": "@openbot/tsconfig/bun.json",
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

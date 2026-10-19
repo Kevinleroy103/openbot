@@ -68,6 +68,8 @@ export const slackAppManifest = (name = "OpenBot") => ({
     background_color: "#1d1d1f",
   },
   features: {
+    // Slack requires a bot user for the bot scope below; it never posts anything
+    bot_user: { display_name: name, always_online: false },
     shortcuts: [{
       name: SLACK_SHORTCUT_NAME,
       type: "message",

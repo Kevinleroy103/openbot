@@ -161,6 +161,11 @@ writes in Slack by itself: it shows you a **Slack message** draft in the chat, w
 (it goes out as you) or discard. To start a Bot when someone DMs you, mentions you or says a phrase,
 add a routine with the **Slack** trigger (Details › Routines), or ask the Bot.
 
+To hand a Slack message or thread to a Bot, use **⋯ › Send to OpenBot** on the message in Slack. It
+lands in the chat of the Bot you pick under Connect apps › Slack (or the Bot you chatted with last),
+with its link, and the Bot reads the whole thread. It needs live messages on. An app created before
+this option existed needs its manifest updated once: Connect apps › Slack has the steps.
+
 ## Desktop app
 
 OpenBot also runs in its own window on macOS, Linux and Windows, with your Bots' updates as the

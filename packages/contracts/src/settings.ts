@@ -1,7 +1,7 @@
 // Owner settings (architecture §4.1 settings.ts). Every key has a decoding default so settings
 // written by an older build (missing new keys) still decode.
 import { Effect, Schema } from "effect"
-import { HarnessKindName } from "./base.ts"
+import { BotId, HarnessKindName } from "./base.ts"
 import { BotAutonomy, DEFAULT_BOT_AUTONOMY, ProjectFolders } from "./policy.ts"
 import { DEFAULT_APPROVAL_EXPIRY_MINUTES } from "./runtime-request.ts"
 
@@ -36,6 +36,8 @@ export const Settings = Schema.Struct({
   sharedProjectFolders: ProjectFolders.pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   /** Autonomy of new bots (New Bot preselection; `create_bot` caps it at its caller's). */
   defaultAutonomy: BotAutonomy.pipe(Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_BOT_AUTONOMY))),
+  /** Where Slack's "Send to OpenBot" puts a message (D3.4); absent: the Bot chatted with last. */
+  slackSendTo: Schema.optionalKey(BotId),
 })
 export type Settings = typeof Settings.Type
 
@@ -63,6 +65,8 @@ export const SettingsPatch = Schema.Struct({
   ownerName: Schema.optionalKey(Schema.NullOr(Schema.String)),
   sharedProjectFolders: Schema.optionalKey(ProjectFolders),
   defaultAutonomy: Schema.optionalKey(BotAutonomy),
+  /** `null`: the Bot chatted with last. */
+  slackSendTo: Schema.optionalKey(Schema.NullOr(BotId)),
 })
 export type SettingsPatch = typeof SettingsPatch.Type
 
@@ -81,5 +85,7 @@ export const applySettingsPatch = (settings: Settings, patch: SettingsPatch): Se
   else if (patch.defaultHarness !== undefined) next.defaultHarness = patch.defaultHarness
   if (patch.ownerName === null) delete next.ownerName
   else if (patch.ownerName !== undefined) next.ownerName = patch.ownerName
+  if (patch.slackSendTo === null) delete next.slackSendTo
+  else if (patch.slackSendTo !== undefined) next.slackSendTo = patch.slackSendTo
   return next
 }

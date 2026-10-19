@@ -47,6 +47,17 @@ export interface SlackEvent {
   readonly mentionsOwner: boolean
 }
 
+/**
+ * The owner clicked "Send to OpenBot" on a message in Slack (the message shortcut). Clicks by
+ * anyone else are answered in Slack and never reach here.
+ */
+export interface SlackShortcut {
+  readonly conversation: SlackConversation
+  readonly message: SlackMessage
+  /** A note only the owner sees in Slack, under the message ("Sent to …"). */
+  readonly reply: (text: string) => Effect.Effect<void>
+}
+
 export interface SlackTarget {
   readonly conversation: SlackConversation
   /** Set when answering in a thread: the thread's first message. */
@@ -94,6 +105,8 @@ export class SlackConnector extends Context.Service<SlackConnector, {
   >
   /** Messages as they arrive (while live). */
   readonly events: Stream.Stream<SlackEvent>
+  /** The owner's "Send to OpenBot" clicks (while live). */
+  readonly shortcuts: Stream.Stream<SlackShortcut>
 }>()("openbot/core/SlackConnector") {}
 
 /**

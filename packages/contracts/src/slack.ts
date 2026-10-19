@@ -18,6 +18,8 @@ export const SlackStatus = Schema.Struct({
    */
   events: Schema.Literals(["off", "connecting", "live", "failed"]),
   problem: Schema.optionalKey(Schema.String),
+  /** The Slack app's id (`A…`), known once live messages connect: links to its settings pages. */
+  appId: Schema.optionalKey(Schema.String),
 })
 export type SlackStatus = typeof SlackStatus.Type
 
@@ -51,6 +53,10 @@ export const SLACK_USER_SCOPES: ReadonlyArray<string> = [
   "chat:write",
 ]
 
+/** The "Send to OpenBot" message shortcut (⋯ on a message in Slack); its clicks arrive over Socket Mode. */
+export const SLACK_SHORTCUT_CALLBACK_ID = "openbot_send"
+export const SLACK_SHORTCUT_NAME = "Send to OpenBot"
+
 /** Messages Slack sends over Socket Mode (user events: what the owner can see). */
 export const SLACK_USER_EVENTS: ReadonlyArray<string> = ["message.im", "message.mpim", "message.channels", "message.groups"]
 
@@ -61,10 +67,19 @@ export const slackAppManifest = (name = "OpenBot") => ({
     description: "Lets your OpenBot Bots read your Slack and draft messages you send.",
     background_color: "#1d1d1f",
   },
-  oauth_config: { scopes: { user: [...SLACK_USER_SCOPES] } },
+  features: {
+    shortcuts: [{
+      name: SLACK_SHORTCUT_NAME,
+      type: "message",
+      callback_id: SLACK_SHORTCUT_CALLBACK_ID,
+      description: "Send this message and its thread to your OpenBot",
+    }],
+  },
+  // `commands` (a bot scope) is what Slack requires for shortcuts; OpenBot never uses the bot token
+  oauth_config: { scopes: { user: [...SLACK_USER_SCOPES], bot: ["commands"] } },
   settings: {
     event_subscriptions: { user_events: [...SLACK_USER_EVENTS] },
-    interactivity: { is_enabled: false },
+    interactivity: { is_enabled: true },
     org_deploy_enabled: false,
     socket_mode_enabled: true,
     token_rotation_enabled: false,

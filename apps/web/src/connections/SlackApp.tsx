@@ -1,14 +1,20 @@
 // Connect apps › Slack (D3.4): connect the owner's own Slack app. Three steps: create the app from
 // OpenBot's manifest (Slack's "Create an app" opens filled in), install it and paste the User OAuth
 // Token, and optionally an app-level token for live messages (Socket Mode). Tokens go to the brain
-// and are never shown again. Connected: the workspace, live messages and Disconnect.
+// and are never shown again. Connected: the workspace, live messages, "Send to OpenBot" (the message
+// shortcut: which Bot gets it, and the one-time manifest update for apps made before it) and
+// Disconnect.
 import { slackStatusAtom } from "@openbot/client"
-import { type SlackStatus, slackAppManifest, slackCreateAppUrl } from "@openbot/contracts"
-import { CardLink, PillButton, StatusPill, TextField } from "@openbot/ui"
+import { type BotId, SLACK_SHORTCUT_NAME, type SlackStatus, slackAppManifest, slackCreateAppUrl } from "@openbot/contracts"
+import { CardLink, PillButton, Select, StatusPill, TextField } from "@openbot/ui"
 import { ExternalLink } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { ConfirmDialog, ErrorLine, LoadingLine, useCommand, useQuery } from "../details/kit.tsx"
+import { useRoster } from "../app/data.ts"
+import { useSettingsEditor } from "../settings/GeneralPage.tsx"
 import { GroupLabel, RowDivider, SettingsCard, SettingsRow } from "../settings/layout.tsx"
+
+const copyManifest = () => navigator.clipboard.writeText(JSON.stringify(slackAppManifest(), null, 2))
 
 /** The page under the app's header; the window keeps the status fresh while it is open. */
 export function SlackApp(): ReactNode {
@@ -41,8 +47,8 @@ function Connect(): ReactNode {
   const [userToken, setUserToken] = useState("")
   const [appToken, setAppToken] = useState("")
   const [copied, setCopied] = useState(false)
-  const copyManifest = async () => {
-    await navigator.clipboard.writeText(JSON.stringify(slackAppManifest(), null, 2))
+  const copy = async () => {
+    await copyManifest()
     setCopied(true)
     setTimeout(() => setCopied(false), 2_000)
   }
@@ -59,7 +65,7 @@ function Connect(): ReactNode {
             </PillButton>
           }
         >
-          <CardLink className="text-sm" onClick={() => void copyManifest()}>
+          <CardLink className="text-sm" onClick={() => void copy()}>
             {copied ? "Copied" : "Or copy the manifest (Create New App › From a manifest)"}
           </CardLink>
         </SettingsRow>
@@ -194,6 +200,7 @@ function Connected({ status }: { readonly status: SlackStatus }): ReactNode {
           {connect.error && <p className="text-sm text-danger-fg">{connect.error}</p>}
         </SettingsRow>
       </SettingsCard>
+      <SendToOpenBot status={status} />
       <ConfirmDialog
         open={confirming}
         title="Disconnect Slack?"
@@ -205,6 +212,61 @@ function Connected({ status }: { readonly status: SlackStatus }): ReactNode {
         onConfirm={() => void disconnect.run(undefined as never).then((r) => r.ok && setConfirming(false))}
         onCancel={() => setConfirming(false)}
       />
+    </>
+  )
+}
+
+const LAST_CHATTED = "__last__"
+
+/** Slack's "Send to OpenBot" message shortcut: where it goes, and adding it to an older Slack app. */
+function SendToOpenBot({ status }: { readonly status: SlackStatus }): ReactNode {
+  const roster = useRoster()
+  const { settings, patch, error } = useSettingsEditor()
+  const [copied, setCopied] = useState(false)
+  const appPage = status.appId === undefined ? "https://api.slack.com/apps" : `https://api.slack.com/apps/${status.appId}/app-manifest`
+  return (
+    <>
+      <GroupLabel>{SLACK_SHORTCUT_NAME}</GroupLabel>
+      <SettingsCard testId="slack-send-to">
+        <SettingsRow
+          title="Goes to"
+          description={`In Slack, ⋯ on any message › ${SLACK_SHORTCUT_NAME} puts it, with its thread, in this Bot's chat.${status.events === "live" ? "" : " Needs live messages (above)."}`}
+          control={
+            <Select<string>
+              label="Send to"
+              value={settings.slackSendTo ?? LAST_CHATTED}
+              onValueChange={(v) => void patch({ slackSendTo: v === LAST_CHATTED ? null : (v as BotId) })}
+              options={[{ value: LAST_CHATTED, label: "The Bot you chatted with last" }, ...roster.bots.map((bot) => ({ value: bot.id as string, label: bot.name }))]}
+            />
+          }
+        >
+          {error && <p className="text-sm text-danger-fg">{error}</p>}
+        </SettingsRow>
+        <RowDivider />
+        <SettingsRow
+          title="Add it to your Slack app"
+          description="Once, if your app was made before this existed: copy the manifest, paste it over the one on the app's App Manifest page, Save, and reinstall the app when Slack asks. If Slack then shows a new User OAuth Token, connect again with it."
+          wide
+          control={
+            <div className="flex gap-2">
+              <PillButton
+                variant="secondary"
+                size="md"
+                onClick={() =>
+                  void copyManifest().then(() => {
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2_000)
+                  })}
+              >
+                {copied ? "Copied" : "Copy manifest"}
+              </PillButton>
+              <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(appPage, "_blank", "noopener")}>
+                Open in Slack
+              </PillButton>
+            </div>
+          }
+        />
+      </SettingsCard>
     </>
   )
 }

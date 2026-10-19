@@ -7,17 +7,21 @@
  * - People and the owner's conversations are cached (10 minutes) so text reads with names.
  * - Socket Mode: `apps.connections.open` → WebSocket; every envelope is acknowledged; Slack's
  *   `disconnect` and dropped sockets reconnect (backoff up to a minute). Message events from others
- *   (not edits, joins or the owner's own) become `events`.
+ *   (not edits, joins or the owner's own) become `events`; the owner's "Send to OpenBot" clicks
+ *   (message shortcut) become `shortcuts`, answered in Slack through the click's `response_url`
+ *   (anyone else's click is told it isn't theirs).
  */
 import {
   InvalidInput,
   SLACK_DISCONNECTED,
+  SLACK_SHORTCUT_CALLBACK_ID,
+  SLACK_SHORTCUT_NAME,
   SLACK_USER_SCOPES,
   type SlackConnectInput,
   type SlackStatus,
   Unavailable,
 } from "@openbot/contracts"
-import { SlackConnector, type SlackConversation, type SlackEvent, type SlackMessage, type SlackPerson } from "@openbot/core"
+import { SlackConnector, type SlackConversation, type SlackEvent, type SlackMessage, type SlackPerson, type SlackShortcut } from "@openbot/core"
 import { Effect, Layer, PubSub, Stream } from "effect"
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
@@ -107,6 +111,9 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
   Effect.gen(function*() {
     const api: SlackApi = makeSlackApi({ baseUrl: options.apiUrl, fetch: options.fetch })
     const events = yield* PubSub.unbounded<SlackEvent>()
+    const shortcuts = yield* PubSub.unbounded<SlackShortcut>()
+    /** The app's id, from Socket Mode's hello. */
+    let appId: string | undefined
     const statusChanges = yield* PubSub.unbounded<SlackStatus>()
 
     let saved = readSaved(options.file)
@@ -123,6 +130,7 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       userName: s.userName,
       events: live,
       ...(problem === undefined ? {} : { problem }),
+      ...(appId === undefined ? {} : { appId }),
     })
 
     // ---------------------------------------------------------------- caches
@@ -136,6 +144,7 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     const infos = new Map<string, Record<string, any>>() // other conversations seen
 
     const resetCaches = () => {
+      appId = undefined
       users = new Map()
       usersAt = 0
       mine = new Map()
@@ -362,6 +371,27 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       })
     }
 
+    /** "Send to OpenBot" on a message: the owner's click becomes a shortcut; anyone else is told no. */
+    const handleShortcut = async (payload: Record<string, any> | undefined) => {
+      const current = saved
+      if (current === undefined || payload?.type !== "message_action" || payload.callback_id !== SLACK_SHORTCUT_CALLBACK_ID) return
+      const responseUrl = typeof payload.response_url === "string" ? payload.response_url : undefined
+      const reply = (text: string): Promise<void> =>
+        responseUrl === undefined ? Promise.resolve() : (options.fetch ?? fetch)(responseUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ response_type: "ephemeral", text }),
+          signal: AbortSignal.timeout(10_000),
+        }).then(() => undefined, (error) => console.warn("[slack] shortcut reply failed:", error))
+      if (payload.user?.id !== current.userId) {
+        await reply(`${SLACK_SHORTCUT_NAME} belongs to ${current.userName}'s OpenBot.`)
+        return
+      }
+      const channelId = String(payload.channel?.id ?? "")
+      const [where, messages] = await Promise.all([conversation(channelId), toMessages([payload.message ?? {}], channelId)])
+      PubSub.publishUnsafe(shortcuts, { conversation: where, message: messages[0]!, reply: (text) => Effect.promise(() => reply(text)) })
+    }
+
     const listen = (appToken: string, owner: Saved) => {
       let stopped = false
       let socket: WebSocket | undefined
@@ -403,11 +433,20 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
           }
           if (data.type === "hello") {
             attempt = 0
+            const id = data.connection_info?.app_id
+            if (typeof id === "string" && id !== "") appId = id
             live("live")
           } else if (data.type === "disconnect") {
             ws.close()
           } else if (data.envelope_id !== undefined) {
             ws.send(JSON.stringify({ envelope_id: data.envelope_id }))
+            if (data.type === "interactive") {
+              const envelopeId = `envelope:${String(data.envelope_id)}`
+              if (seen.has(envelopeId)) return
+              seen.add(envelopeId)
+              void handleShortcut(data.payload).catch((error) => console.warn("[slack] shortcut not handled:", error))
+              return
+            }
             if (data.type !== "events_api") return
             const eventId = String(data.payload?.event_id ?? "")
             if (eventId !== "") {
@@ -618,6 +657,7 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       resolve,
       send,
       events: Stream.fromPubSub(events),
+      shortcuts: Stream.fromPubSub(shortcuts),
     })
   })
 

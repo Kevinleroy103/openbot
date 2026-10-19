@@ -67,6 +67,7 @@ import {
   type SkillDirectory,
   SkillServiceLive,
   SlackServiceLive,
+  SlackShortcutsLive,
   UsageServiceLive,
 } from "@openbot/core"
 import { McpBindingIssuerLive, McpGatewayLive } from "@openbot/gateway"
@@ -380,7 +381,7 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     Layer.provide(options?.skillDirectory ?? SkillsShLive(config.skillsShUrl === undefined ? undefined : { baseUrl: config.skillsShUrl })), // skills.sh import (D5.5)
     Layer.provideMerge(BotServiceLive),
   ).pipe(
-    Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive)), // 10
+    Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive, SlackShortcutsLive)), // 10 (+ Slack's "Send to OpenBot")
     Layer.provideMerge(LocalNodeDaemonLive(options?.localNode)), // 9
     Layer.provideMerge(HarnessProfilesLayer(options?.profiles)), // 8b: added accounts (profiles.ts)
     Layer.provideMerge(options?.drivers ?? harnessDrivers(config)), // 8

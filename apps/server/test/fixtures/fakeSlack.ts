@@ -1,7 +1,8 @@
 // A fake Slack for tests (D3.4): the Web API methods OpenBot calls (`POST /api/<method>`, Bearer
 // token, form body) and a Socket Mode WebSocket. Workspace "Acme": the owner (U_OWNER), Alice Smith
 // (U_ALICE, @alice, DM D_ALICE), Bob (U_BOB); #general (C_GENERAL). `push` sends a Socket Mode
-// envelope; `posted` and `acks` record what OpenBot sent.
+// envelope; `posted`, `acks` and `responses` (replies to shortcut clicks, through `response_url`)
+// record what OpenBot sent.
 import type { Server, ServerWebSocket } from "bun"
 
 export const FAKE_USER_TOKEN = "xoxp-good"
@@ -24,6 +25,9 @@ export interface FakeSlack {
   readonly posted: ReadonlyArray<Record<string, string>>
   readonly acks: ReadonlyArray<string>
   readonly calls: ReadonlyArray<string>
+  readonly responses: ReadonlyArray<Record<string, unknown>>
+  /** The `response_url` a shortcut click carries. */
+  readonly responseUrl: string
   /** Sends a Socket Mode envelope to every connected socket. */
   readonly push: (envelope: Record<string, unknown>) => void
   readonly sockets: () => number
@@ -34,6 +38,7 @@ export const startFakeSlack = (options?: { readonly scopes?: string }): FakeSlac
   const posted: Array<Record<string, string>> = []
   const acks: Array<string> = []
   const calls: Array<string> = []
+  const responses: Array<Record<string, unknown>> = []
   const sockets = new Set<ServerWebSocket<unknown>>()
   let server: Server<unknown>
   const ok = (body: Record<string, unknown>, headers?: Record<string, string>) =>
@@ -46,6 +51,10 @@ export const startFakeSlack = (options?: { readonly scopes?: string }): FakeSlac
       const url = new URL(request.url)
       if (url.pathname === "/socket") {
         return srv.upgrade(request, { data: undefined }) ? undefined : new Response("no", { status: 400 })
+      }
+      if (url.pathname === "/respond") {
+        responses.push((await request.json()) as Record<string, unknown>)
+        return new Response("ok")
       }
       const method = url.pathname.replace(/^\/api\//, "")
       calls.push(method)
@@ -112,7 +121,7 @@ export const startFakeSlack = (options?: { readonly scopes?: string }): FakeSlac
     websocket: {
       open(ws) {
         sockets.add(ws)
-        ws.send(JSON.stringify({ type: "hello", num_connections: 1 }))
+        ws.send(JSON.stringify({ type: "hello", num_connections: 1, connection_info: { app_id: "A_OPENBOT" } }))
       },
       message(_ws, message) {
         const data = JSON.parse(String(message)) as { envelope_id?: string }
@@ -128,6 +137,8 @@ export const startFakeSlack = (options?: { readonly scopes?: string }): FakeSlac
     posted,
     acks,
     calls,
+    responses,
+    responseUrl: `http://127.0.0.1:${server.port}/respond`,
     push: (envelope) => {
       for (const ws of sockets) ws.send(JSON.stringify(envelope))
     },
@@ -144,5 +155,23 @@ export const messageEnvelope = (event: Record<string, unknown>): Record<string, 
     type: "events_api",
     envelope_id: `env-${envelopes}`,
     payload: { event_id: `Ev${envelopes}`, event: { type: "message", ts: `17293405${String(envelopes).padStart(2, "0")}.000100`, ...event } },
+  }
+}
+
+/** A Socket Mode `interactive` envelope: someone clicked "Send to OpenBot" on a message. */
+export const shortcutEnvelope = (input: { readonly by: string; readonly channel: string; readonly message: Record<string, unknown>; readonly responseUrl: string }): Record<string, unknown> => {
+  envelopes++
+  return {
+    type: "interactive",
+    envelope_id: `env-${envelopes}`,
+    payload: {
+      type: "message_action",
+      callback_id: "openbot_send",
+      user: { id: input.by },
+      channel: { id: input.channel },
+      message: input.message,
+      response_url: input.responseUrl,
+      trigger_id: `trigger-${envelopes}`,
+    },
   }
 }

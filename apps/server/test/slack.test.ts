@@ -8,7 +8,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { makeSlackConnector, parseSlackLink } from "../src/slack/connector.ts"
 import { readableText, slackText } from "../src/slack/text.ts"
-import { FAKE_APP_TOKEN, FAKE_USER_TOKEN, type FakeSlack, messageEnvelope, startFakeSlack } from "./fixtures/fakeSlack.ts"
+import { FAKE_APP_TOKEN, FAKE_USER_TOKEN, type FakeSlack, messageEnvelope, shortcutEnvelope, startFakeSlack } from "./fixtures/fakeSlack.ts"
 import { eventually, login, rpcClient, startServer, type TestServer, watchConversation } from "./helpers.ts"
 
 describe("Slack text", () => {
@@ -206,5 +206,37 @@ describe("Slack in the brain", () => {
 
       yield* client["slack.disconnect"]()
       expect(yield* client["slack.status"]()).toEqual({ connected: false, events: "off" })
+    })), 60_000)
+
+  test("Send to OpenBot: the owner's click puts the message in the chosen Bot's chat; anyone else's is refused", () =>
+    server.run(Effect.gen(function*() {
+      const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
+      yield* client["slack.connect"]({ userToken: FAKE_USER_TOKEN, appToken: FAKE_APP_TOKEN })
+      yield* eventually(client["slack.status"](), (s) => s.events === "live", { label: "live messages" })
+      expect(yield* client["slack.status"]()).toMatchObject({ appId: "A_OPENBOT" })
+      const bot = yield* client["bots.create"]({ name: "Inbox", harness: { kind: "fake" }, clientNonce: "slack-inbox", introduce: false })
+      yield* client["settings.update"]({ patch: { slackSendTo: bot.id } })
+      const convo = yield* watchConversation(client, bot.directConversationId)
+      yield* eventually(Ref.get(convo.state), (s) => s.synchronized, { label: "synchronized" })
+
+      const thread = { ts: "1729340300.000100", thread_ts: "1729340000.000100", user: "U_BOB", text: "Rollback done, <@U_ALICE> can you confirm?" }
+      slack.push(shortcutEnvelope({ by: "U_ALICE", channel: "C_GENERAL", message: thread, responseUrl: slack.responseUrl }))
+      slack.push(shortcutEnvelope({ by: "U_OWNER", channel: "C_GENERAL", message: thread, responseUrl: slack.responseUrl }))
+      const got = yield* eventually(
+        Ref.get(convo.state),
+        (s) => transcriptOf(s).some((e) => e.kind === "message" && e.role === "user"),
+        { label: "the forwarded message", timeout: 20_000 },
+      )
+      const forwarded = transcriptOf(got).filter((e) => e.kind === "message" && e.role === "user")
+      expect(forwarded).toHaveLength(1)
+      expect(forwarded[0]).toMatchObject({
+        text: "From Slack, #general (Bob):\n> Rollback done, @Alice Smith can you confirm?\nhttps://acme.slack.com/archives/C_GENERAL/p1729340300000100?thread_ts=1729340000.000100&cid=C_GENERAL",
+      })
+      yield* eventually(Effect.sync(() => slack.responses.length), (n) => n === 2, { label: "both replies" })
+      expect(slack.responses).toEqual(expect.arrayContaining([
+        { response_type: "ephemeral", text: "Send to OpenBot belongs to Owner's OpenBot." },
+        { response_type: "ephemeral", text: "Sent to Inbox in OpenBot." },
+      ]))
+      yield* client["slack.disconnect"]()
     })), 60_000)
 })

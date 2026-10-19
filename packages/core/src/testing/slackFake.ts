@@ -1,11 +1,12 @@
 /**
  * In-memory `SlackConnector` for tests (D3.4): workspace "Acme" where the owner is "Owner" (U_OWNER),
  * with #general (C_GENERAL) and Alice (U_ALICE, DM D_ALICE). `emit` publishes a Slack message as if
- * it arrived; `sent` lists what was posted.
+ * it arrived; `click` is the owner's "Send to OpenBot" on a message; `sent` lists what was posted and
+ * `replies` the notes Slack showed the owner.
  */
 import { InvalidInput, type SlackStatus, Unavailable } from "@openbot/contracts"
 import { Context, Effect, Layer, PubSub, Stream } from "effect"
-import { SlackConnector, type SlackConversation, type SlackEvent, type SlackMessage } from "../ports/Slack.ts"
+import { SlackConnector, type SlackConversation, type SlackEvent, type SlackMessage, type SlackShortcut } from "../ports/Slack.ts"
 
 export const SLACK_GENERAL: SlackConversation = { id: "C_GENERAL", kind: "channel", label: "#general" }
 export const SLACK_ALICE_DM: SlackConversation = { id: "D_ALICE", kind: "dm", label: "Alice" }
@@ -27,13 +28,17 @@ export interface SlackSent {
 
 export class SlackConnectorFake extends Context.Service<SlackConnectorFake, {
   readonly emit: (event: SlackEvent) => Effect.Effect<void>
+  readonly click: (shortcut: Omit<SlackShortcut, "reply">) => Effect.Effect<void>
   readonly sent: Effect.Effect<ReadonlyArray<SlackSent>>
+  readonly replies: Effect.Effect<ReadonlyArray<string>>
   readonly setConnected: (connected: boolean) => Effect.Effect<void>
 }>()("openbot/core/testing/SlackConnectorFake") {
   static readonly layer = (options?: { readonly connected?: boolean }): Layer.Layer<SlackConnector | SlackConnectorFake> =>
     Layer.effectContext(
       Effect.gen(function*() {
         const events = yield* PubSub.unbounded<SlackEvent>()
+        const shortcuts = yield* PubSub.unbounded<SlackShortcut>()
+        const replies: Array<string> = []
         const changes = yield* PubSub.unbounded<SlackStatus>()
         const sent: Array<SlackSent> = []
         let connected = options?.connected ?? true
@@ -84,10 +89,14 @@ export class SlackConnectorFake extends Context.Service<SlackConnectorFake, {
               }),
             ),
           events: Stream.fromPubSub(events),
+          shortcuts: Stream.fromPubSub(shortcuts),
         })
         const fake = SlackConnectorFake.of({
           emit: (event) => Effect.asVoid(PubSub.publish(events, event)),
+          click: (shortcut) =>
+            Effect.asVoid(PubSub.publish(shortcuts, { ...shortcut, reply: (text) => Effect.sync(() => void replies.push(text)) })),
           sent: Effect.sync(() => [...sent]),
+          replies: Effect.sync(() => [...replies]),
           setConnected: (value) =>
             Effect.sync(() => {
               connected = value

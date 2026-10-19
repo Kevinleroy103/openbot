@@ -129,7 +129,7 @@ describe("settings key/value codec", () => {
     expect(out.second).toEqual({ ...DEFAULT_SETTINGS, theme: "light" })
     expect(out.keys).toEqual(["accent", "approvalExpiryMinutes", "botMessaging", "compactIdleBots", "defaultAutonomy", "sharedProjectFolders", "showSteps", "theme"])
     expect(settingsToEntries(DEFAULT_SETTINGS).map(([k]) => k).sort()).toEqual(
-      ["accent", "approvalExpiryMinutes", "botMessaging", "compactIdleBots", "defaultAutonomy", "defaultHarness", "ownerName", "sharedProjectFolders", "showSteps", "theme"],
+      ["accent", "approvalExpiryMinutes", "botMessaging", "compactIdleBots", "defaultAutonomy", "defaultHarness", "ownerName", "sharedProjectFolders", "showSteps", "slackSendTo", "theme"],
     )
   })
 })

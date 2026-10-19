@@ -9,6 +9,8 @@
  *   ApprovalServiceLive     Layer<ApprovalService, never, ConversationService | SettingsService | Notifier |
  *                                 RequestRepo | ApprovalRuleRepo | BotRepo | IdGen>
  *   RoutineSchedulerLive    Layer<RoutineScheduler, never, Orchestrator | ConversationService | RoutineRepo | BotRepo | IdGen>
+ *                                 (optional SlackConnector: Slack-triggered routines)
+ *   SlackServiceLive        Layer<SlackService, never, ConversationService | EntryRepo | BotRepo | Notifier> (optional SlackConnector)
  *
  * RoutineSchedulerLive starts its scheduler fiber in the layer scope. Requirements only name tags
  * from LOWER layers (services.ts header). `@openbot/core` re-exports this barrel.
@@ -19,6 +21,13 @@ export { MEMORY_LIMITS, MemoryServiceLive } from "./MemoryService.ts"
 export { SKILL_LIMITS, SkillServiceLive } from "./SkillService.ts"
 export { ASK_LIMITS, ApprovalServiceLive, BLOCKED_BY_RULES, EXPIRED_MESSAGE } from "./ApprovalService.ts"
 export { MAX_SCHEDULER_SLEEP_MS, ROUTINE_LIMITS, RoutineSchedulerLive } from "./RoutineScheduler.ts"
+export {
+  describeSlackPlace,
+  SLACK_DRAFT_MAX_CHARS,
+  SlackServiceLive,
+  slackEventsText,
+  slackTriggerMatches,
+} from "./SlackService.ts"
 export {
   CATCH_UP_WINDOW_MS,
   describeTrigger,

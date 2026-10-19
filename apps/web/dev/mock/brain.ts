@@ -58,6 +58,7 @@ import {
   type Skill,
   type SkillName,
   type SkillPreview,
+  type SlackStatus,
   type ToolKind,
   type Turn,
   type TurnFailure,
@@ -131,6 +132,8 @@ export class MockBrain {
   readonly memory = new Map<string, BotMemory>()
   readonly skills = new Map<string, Skill>()
   readonly rules = new Map<string, ApprovalRule>()
+  /** Slack (D3.4): any `xoxp-` token connects the mock to workspace "Acme". */
+  slack: SlackStatus = { connected: false, events: "off" }
   readonly attachments = new Map<string, { readonly mime: string; readonly bytes: Uint8Array }>()
   readonly sends = new Map<string, SendResult>()
   readonly usage = new Map<string, BotUsage>()
@@ -811,6 +814,20 @@ export class MockBrain {
     this.replyTo(conversationId, turn.botId, "retry", turn.inputEntryId)
   }
 
+  /** A Slack draft card (by entry): Send (with the owner's edits) or Discard. */
+  answerSlackDraft(entryId: string, text: string | undefined) {
+    const conv = [...this.convs.values()].find((c) => c.state.entries.has(entryId as EntryId))
+    const entry = conv?.state.entries.get(entryId as EntryId)
+    if (entry?.kind !== "card" || entry.card.type !== "slack-draft") throw new NotFound({ entity: "slack draft", id: entryId })
+    if (entry.state.status !== "pending") throw new Conflict({ reason: entry.state.status === "resolved" ? "This message was already sent." : "This draft was discarded." })
+    if (text !== undefined && !this.slack.connected) throw new Unavailable({ message: "Slack isn't connected (Settings › Slack)." })
+    const card = text === undefined ? entry.card : { ...entry.card, text }
+    const state = text === undefined
+      ? { status: "dismissed" as const, detail: "Discarded" }
+      : { status: "resolved" as const, detail: "Sent", link: `https://acme.slack.com/archives/${entry.card.channelId}/p${this.now()}000` }
+    this.put({ ...entry, card, state, updatedAt: this.now() } as Entry)
+  }
+
   respond(requestId: string, input: RuntimeResponseInput): RuntimeRequest {
     const conv = [...this.convs.values()].find((c) => c.state.requests.has(requestId as RequestId))
     if (!conv) throw new NotFound({ entity: "request", id: requestId })
@@ -1332,6 +1349,21 @@ export class MockBrain {
       "computer.ensure": ({ botId }) => sync(() => this.computerEnsure(botId))(),
       "computer.lease": ({ botId, take }) => sync(() => this.computerLease(botId, take))(),
       "computer.reset": ({ botId }) => sync(() => this.computerReset(botId))(),
+      "slack.status": () => Effect.succeed(this.slack),
+      "slack.connect": ({ userToken, appToken }) =>
+        sync(() => {
+          if (!this.slack.connected && !(userToken ?? "").startsWith("xoxp-")) throw new InvalidInput({ message: "Paste the User OAuth Token: it starts with xoxp-." })
+          const events = appToken !== undefined || this.slack.events === "live" ? ("live" as const) : ("off" as const)
+          this.slack = { connected: true, team: "Acme", teamUrl: "https://acme.slack.com/", userId: "U_OWNER", userName: this.settings.ownerName ?? "Alex", events }
+          return this.slack
+        })(),
+      "slack.disconnect": () =>
+        sync(() => {
+          this.slack = { connected: false, events: "off" }
+          return this.slack
+        })(),
+      "slack.sendDraft": ({ entryId, text }) => sync(() => this.answerSlackDraft(entryId, text))(),
+      "slack.discardDraft": ({ entryId }) => sync(() => this.answerSlackDraft(entryId, undefined))(),
       "settings.get": () => Effect.succeed(this.settings),
       "settings.update": ({ patch }) =>
         sync(() => {

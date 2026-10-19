@@ -138,6 +138,24 @@ workspace folders, read-only folders, how much the computer allows without askin
 Without the installer, from a clone of this repository: `bun apps/node/src/main.ts pair <openbot-url> <code>`,
 then `bun apps/node/src/main.ts run`.
 
+## Slack
+
+Bots can read and search your Slack, start routines when someone messages you, and draft messages
+that you send yourself. It uses a Slack app of your own, so nothing goes through anyone else:
+
+1. Settings › Slack › **Create in Slack** opens Slack's "Create an app" with OpenBot's app filled in
+   (or copy the manifest and use Create New App › From a manifest). Pick your workspace and create it.
+2. In the app, **Install App** › Install to your workspace › Allow, then paste the **User OAuth
+   Token** (`xoxp-…`) into OpenBot.
+3. Optional, for routines that start on Slack messages: Basic Information › App-Level Tokens ›
+   Generate Token and Scopes with `connections:write`, and paste it (`xapp-…`).
+
+The tokens stay on the machine that runs OpenBot (`<data>/slack.json`). Live messages use Slack's
+Socket Mode, which connects out, so OpenBot doesn't need to be reachable from the internet. A Bot never
+writes in Slack by itself: it shows you a **Slack message** draft in the chat, which you edit and send
+(it goes out as you) or discard. To start a Bot when someone DMs you, mentions you or says a phrase,
+add a routine with the **Slack** trigger (Details › Routines), or ask the Bot.
+
 ## Desktop app
 
 OpenBot also runs in its own window on macOS, Linux and Windows, with your Bots' updates as the

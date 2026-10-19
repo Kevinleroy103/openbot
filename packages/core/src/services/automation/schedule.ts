@@ -32,9 +32,19 @@ export const validateTrigger = (trigger: RoutineTrigger, now: number): string | 
       return trigger.at > now ? undefined : "The time for a one-time routine must be in the future."
     case "manual":
       return undefined
+    case "slack":
+      return validateSlackTrigger(trigger)
     case "webhook":
       return "Webhook triggers are not supported yet."
   }
+}
+
+const validateSlackTrigger = (trigger: Extract<RoutineTrigger, { type: "slack" }>): string | undefined => {
+  if (trigger.on === "phrase" && (trigger.phrase ?? "").trim().length === 0) return "A Slack phrase trigger needs the phrase to look for."
+  if (trigger.on === "message" && (trigger.channel ?? "").trim().length === 0) {
+    return "A trigger on every Slack message needs a channel."
+  }
+  return undefined
 }
 
 /**
@@ -66,6 +76,7 @@ export const nextRunAfter = (
     case "once":
       return options?.ranOnce === true || trigger.at <= after ? undefined : trigger.at
     case "manual":
+    case "slack":
     case "webhook":
       return undefined
   }
@@ -116,8 +127,25 @@ export const describeTrigger = (trigger: RoutineTrigger): string => {
       return `Once at ${utcStamp(trigger.at)}`
     case "manual":
       return "Manual only"
+    case "slack":
+      return describeSlackTrigger(trigger)
     case "webhook":
       return "Webhook"
+  }
+}
+
+const describeSlackTrigger = (trigger: Extract<RoutineTrigger, { type: "slack" }>): string => {
+  const channel = trigger.channel?.trim()
+  const where = channel === undefined || channel.length === 0 ? "" : ` in ${channel}`
+  switch (trigger.on) {
+    case "dm":
+      return `When someone messages you on Slack${where}`
+    case "mention":
+      return `When you're mentioned on Slack${where}`
+    case "phrase":
+      return `When a Slack message says “${(trigger.phrase ?? "").trim()}”${where}`
+    case "message":
+      return `Every Slack message${where}`
   }
 }
 
@@ -130,6 +158,9 @@ export const sameTrigger = (a: RoutineTrigger, b: RoutineTrigger): boolean => {
       return b.type === "interval" && a.everyMinutes === b.everyMinutes
     case "once":
       return b.type === "once" && a.at === b.at
+    case "slack":
+      return b.type === "slack" && a.on === b.on && (a.phrase ?? "").trim() === (b.phrase ?? "").trim() &&
+        (a.channel ?? "").trim() === (b.channel ?? "").trim()
     case "manual":
     case "webhook":
       return a.type === b.type

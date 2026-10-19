@@ -4,7 +4,7 @@
  * - `McpGateway` / `McpGatewayLive`: HTTP handler for `/mcp/:botId` on the internal listener.
  * - `McpBindingIssuerLive`: per-run bearer tokens (hashed in `McpTokenRepo`) → `McpBinding`.
  * - Toolkits: `BotToolkit`, `NodeToolkit`, `BrowserToolkit`, `ComputerToolkit` (`computer`,
- *   `request_takeover`) and the result/param helpers they use.
+ *   `request_takeover`), `SlackToolkit` (while Slack is connected) and the result/param helpers they use.
  */
 export * from "./McpGateway.ts"
 export * from "./McpBindingIssuer.ts"
@@ -26,6 +26,7 @@ export {
   spillToNode,
 } from "./toolkits/node.ts"
 export { BrowserToolkit, type BrowserToolkitServices, toBrowserAction } from "./toolkits/browser.ts"
+export { formatSlackMessage, SlackToolkit, slackTime } from "./toolkits/slack.ts"
 export {
   ComputerToolkit,
   type ComputerToolkitServices,

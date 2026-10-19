@@ -29,6 +29,8 @@ import {
   RoutineScheduler,
   SettingsService,
   SkillService,
+  SlackConnector,
+  SlackService,
   UsageService,
   userActor,
 } from "@openbot/core"
@@ -129,6 +131,8 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
   const nodeAdmin = yield* NodeAdmin
   const computer = yield* ComputerPort
   const tasks = yield* BackgroundTasks
+  const slack = yield* SlackConnector
+  const slackDrafts = yield* SlackService
   const ownerFallback = defaultOwnerName()
 
   return OpenBotRpcs.of({
@@ -274,6 +278,13 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "tasks.get": ({ taskId }) => edge("tasks.get", tasks.get(taskId)),
     // the owner's Stop: only that task; the bot is told
     "tasks.cancel": ({ taskId }) => edge("tasks.cancel", tasks.cancel(taskId, "owner")),
+
+    // ---------------------------------------------------------------- Slack (D3.4)
+    "slack.status": () => edge("slack.status", slack.status),
+    "slack.connect": (input) => edge("slack.connect", slack.connect(input)),
+    "slack.disconnect": () => edge("slack.disconnect", Effect.andThen(slack.disconnect, slack.status)),
+    "slack.sendDraft": ({ entryId, text }) => edge("slack.sendDraft", slackDrafts.send({ entryId, text })),
+    "slack.discardDraft": ({ entryId }) => edge("slack.discardDraft", slackDrafts.discard(entryId)),
 
     // ---------------------------------------------------------------- usage
     "usage.byBot": ({ sinceMs }) => edge("usage.byBot", usage.byBot({ sinceMs })),

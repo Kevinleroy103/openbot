@@ -669,21 +669,30 @@ const recallMemory = defineTool({
 
 const triggerFields = {
   schedule: p.literals(
-    ["cron", "interval", "once", "manual"],
-    "cron: a 5-field cron expression in `cron` (+ `timezone`). interval: every `every_minutes` (≥ 5). once: at the time in `at`. manual: only when run by hand.",
+    ["cron", "interval", "once", "manual", "slack"],
+    "cron: a 5-field cron expression in `cron` (+ `timezone`). interval: every `every_minutes` (≥ 5). once: at the time in `at`. manual: only when run by hand. slack: when a Slack message arrives (`slack_on`; only while the owner's Slack is connected); the run reads the messages after the prompt.",
   ),
   cron: p.optional(p.string("5-field cron expression, e.g. \"0 9 * * 1-5\" (schedule=cron).")),
   timezone: p.optional(p.string("IANA timezone for cron, e.g. \"Europe/Berlin\" (default UTC).")),
   every_minutes: p.optional(p.number("Interval in minutes, at least 5 (schedule=interval).", { integer: true })),
   at: p.optional(p.string("ISO 8601 date-time for schedule=once, e.g. \"2026-11-01T09:00:00Z\".")),
+  slack_on: p.optional(p.literals(
+    ["dm", "mention", "phrase", "message"],
+    "schedule=slack: dm (someone writes to the owner directly), mention (someone @mentions them), phrase (a message contains `slack_phrase`), message (every message in `slack_channel`).",
+  )),
+  slack_phrase: p.optional(p.string("schedule=slack, slack_on=phrase: the words to look for (any case).")),
+  slack_channel: p.optional(p.string("schedule=slack: only in this channel (#name or id); required for slack_on=message.")),
 }
 
 interface TriggerArgs {
-  readonly schedule?: "cron" | "interval" | "once" | "manual" | undefined
+  readonly schedule?: "cron" | "interval" | "once" | "manual" | "slack" | undefined
   readonly cron?: string | undefined
   readonly timezone?: string | undefined
   readonly every_minutes?: number | undefined
   readonly at?: string | undefined
+  readonly slack_on?: "dm" | "mention" | "phrase" | "message" | undefined
+  readonly slack_phrase?: string | undefined
+  readonly slack_channel?: string | undefined
 }
 
 const parseAt = (at: string): Effect.Effect<number, ToolRefusal> => {
@@ -719,6 +728,18 @@ const buildTrigger = (args: TriggerArgs, current: RoutineTrigger | undefined): E
       }
       case "manual":
         return { type: "manual" }
+      case "slack": {
+        const on = args.slack_on ?? (same?.type === "slack" ? same.on : undefined)
+        if (on === undefined) return yield* new ToolRefusal({ message: "`slack_on` is required when schedule is slack" })
+        const phrase = args.slack_phrase ?? (same?.type === "slack" ? same.phrase : undefined)
+        const channel = args.slack_channel ?? (same?.type === "slack" ? same.channel : undefined)
+        return {
+          type: "slack",
+          on,
+          ...(phrase === undefined || phrase.trim() === "" ? {} : { phrase: phrase.trim() }),
+          ...(channel === undefined || channel.trim() === "" ? {} : { channel: channel.trim() }),
+        }
+      }
       default:
         return yield* new ToolRefusal({ message: `Routines with a ${type} trigger cannot be edited by a bot` })
     }
@@ -734,6 +755,8 @@ const describeTrigger = (trigger: RoutineTrigger): string => {
       return `once at ${isoTime(trigger.at)}`
     case "manual":
       return "manual"
+    case "slack":
+      return `slack ${trigger.on}${trigger.phrase === undefined ? "" : ` "${trigger.phrase}"`}${trigger.channel === undefined ? "" : ` in ${trigger.channel}`}`
     case "webhook":
       return "webhook"
   }
@@ -757,7 +780,7 @@ const createRoutine = defineTool({
   name: "create_routine",
   toolset: "bot",
   description:
-    "Create a routine for yourself: a prompt that is delivered to you on a schedule (cron, interval, once or manual). Each run posts into your chat. Returns the routine id.",
+    "Create a routine for yourself: a prompt that is delivered to you on a schedule (cron, interval, once or manual) or when a Slack message arrives (slack). Each run posts into your chat. Returns the routine id.",
   params: p.params({
     name: p.text("Routine name."),
     prompt: p.text("The instruction you will receive on each run."),
@@ -794,6 +817,9 @@ const updateRoutine = defineTool({
     timezone: triggerFields.timezone,
     every_minutes: triggerFields.every_minutes,
     at: triggerFields.at,
+    slack_on: triggerFields.slack_on,
+    slack_phrase: triggerFields.slack_phrase,
+    slack_channel: triggerFields.slack_channel,
     output: p.optional(outputParam),
     enabled: p.optional(p.boolean("Active (true) or paused (false).")),
   }),
@@ -806,7 +832,8 @@ const updateRoutine = defineTool({
         return yield* new ToolRefusal({ message: "You can only change your own routines" })
       }
       const triggerChanged = args.schedule !== undefined || args.cron !== undefined || args.timezone !== undefined ||
-        args.every_minutes !== undefined || args.at !== undefined
+        args.every_minutes !== undefined || args.at !== undefined || args.slack_on !== undefined ||
+        args.slack_phrase !== undefined || args.slack_channel !== undefined
       const trigger = triggerChanged ? yield* buildTrigger(args, current.trigger) : current.trigger
       const spec = yield* decodeOrRefuse(
         RoutineSpec,

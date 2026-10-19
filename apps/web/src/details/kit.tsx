@@ -499,6 +499,19 @@ export const describeTrigger = (trigger: RoutineTrigger): string => {
       return `Once, ${formatWhen(trigger.at)}`
     case "manual":
       return "Only when run by hand"
+    case "slack": {
+      const where = trigger.channel === undefined || trigger.channel.trim() === "" ? "" : ` in ${trigger.channel.trim()}`
+      switch (trigger.on) {
+        case "dm":
+          return `When someone messages you on Slack${where}`
+        case "mention":
+          return `When you're mentioned on Slack${where}`
+        case "phrase":
+          return `When a Slack message says “${(trigger.phrase ?? "").trim()}”${where}`
+        case "message":
+          return `Every Slack message${where}`
+      }
+    }
     case "webhook":
       return "On webhook"
   }

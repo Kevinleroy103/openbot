@@ -1,7 +1,7 @@
 // Details › Routines (D5.3; grok-bot-ui-activity.md F.9): rows with a clock in the bot color, name,
 // schedule (or "Paused") and an Active switch; a row menu (Run now, Edit, Delete); "+" creates one.
 // The editor covers cron + timezone, interval (≥ 5 min), once and manual triggers, plus the last runs.
-import { routineRunsAtom, routinesAtom } from "@openbot/client"
+import { routineRunsAtom, routinesAtom, slackStatusAtom } from "@openbot/client"
 import {
   type Bot,
   MIN_ROUTINE_INTERVAL_MINUTES,
@@ -170,7 +170,15 @@ function RoutineRow({ routine, onEdit }: { readonly routine: Routine; readonly o
 
 // ----------------------------------------------------------------------------------- editor
 
-type TriggerKind = "cron" | "interval" | "once" | "manual"
+type TriggerKind = "cron" | "interval" | "once" | "manual" | "slack"
+type SlackOn = "dm" | "mention" | "phrase" | "message"
+
+const SLACK_ON_OPTIONS: ReadonlyArray<{ value: SlackOn; label: string }> = [
+  { value: "dm", label: "Someone messages me" },
+  { value: "mention", label: "Someone mentions me" },
+  { value: "phrase", label: "A message says…" },
+  { value: "message", label: "Every message in a channel" },
+]
 type Repeat = "daily" | "weekdays" | "weekends" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "custom"
 
 const REPEAT_OPTIONS: ReadonlyArray<{ value: Repeat; label: string }> = [
@@ -238,6 +246,11 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
   const [timezone, setTimezone] = useState(t?.type === "cron" ? t.timezone : localZone())
   const [every, setEvery] = useState(String(t?.type === "interval" ? t.everyMinutes : 60))
   const [once, setOnce] = useState(() => toLocalInput(t?.type === "once" ? t.at : Date.now() + 3_600_000))
+  const [slackOn, setSlackOn] = useState<SlackOn>(t?.type === "slack" ? t.on : "dm")
+  const [slackPhrase, setSlackPhrase] = useState(t?.type === "slack" ? (t.phrase ?? "") : "")
+  const [slackChannel, setSlackChannel] = useState(t?.type === "slack" ? (t.channel ?? "") : "")
+  const slack = useQuery(slackStatusAtom)
+  const slackConnected = slack.value?.connected === true
   const [output, setOutput] = useState<RoutineOutput>(routine?.output ?? "direct")
   const [enabled, setEnabled] = useState(routine?.enabled ?? true)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -261,8 +274,21 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
       }
       case "manual":
         return { type: "manual" }
+      case "slack": {
+        if (!slackConnected) return "Connect Slack first (Settings › Slack)"
+        const phrase = slackPhrase.trim()
+        const channel = slackChannel.trim()
+        if (slackOn === "phrase" && phrase === "") return "Say which words to look for"
+        if (slackOn === "message" && channel === "") return "Choose the channel"
+        return {
+          type: "slack",
+          on: slackOn,
+          ...(slackOn === "phrase" ? { phrase } : {}),
+          ...(channel === "" ? {} : { channel: channel.startsWith("#") || /^[CDG][A-Z0-9]{6,}$/.test(channel) ? channel : `#${channel}` }),
+        }
+      }
     }
-  }, [kind, schedule, timezone, every, once])
+  }, [kind, schedule, timezone, every, once, slackOn, slackPhrase, slackChannel, slackConnected])
 
   const invalid = typeof trigger === "string" ? trigger : !name.trim() ? "Give the routine a name" : !prompt.trim() ? "Tell the Bot what to do each run" : undefined
   const error = create.error ?? update.error ?? runNow.error ?? del.error
@@ -293,6 +319,7 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
               { value: "interval", label: "Interval" },
               { value: "once", label: "Once" },
               { value: "manual", label: "Manual" },
+              ...(slackConnected || kind === "slack" ? [{ value: "slack" as const, label: "Slack" }] : []),
             ]}
           />
           <div className="flex flex-col gap-2 rounded-xl bg-quaternary p-3 hairline border-line-quaternary">
@@ -334,6 +361,28 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
               />
             )}
             {kind === "manual" && <span className="text-sm text-fg-secondary">Runs only when you press Run now.</span>}
+            {kind === "slack" && (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select label="When" value={slackOn} options={SLACK_ON_OPTIONS} onValueChange={setSlackOn} align="start" />
+                  {slackOn === "phrase" && (
+                    <TextField size="sm" aria-label="Words to look for" placeholder="deploy failed" value={slackPhrase} onChange={(e) => setSlackPhrase(e.target.value)} wrapperClassName="min-w-[140px] flex-1" />
+                  )}
+                </div>
+                <TextField
+                  size="sm"
+                  aria-label="Channel"
+                  placeholder={slackOn === "message" ? "#channel" : "#channel (optional: anywhere)"}
+                  value={slackChannel}
+                  onChange={(e) => setSlackChannel(e.target.value)}
+                />
+                <span className="text-xs text-fg-tertiary">
+                  {slackConnected
+                    ? `${bot.name} reads the message with your instruction. Messages that arrive close together come as one run.`
+                    : "Connect Slack in Settings › Slack to use this."}
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -419,7 +468,7 @@ function RunHistory({ routineId }: { readonly routineId: Routine["id"] }): React
                 <Icon icon={s.icon} size="sm" className={s.className} label={s.label} />
                 <span className="shrink-0 text-sm text-fg">{formatWhen(run.startedAt)}</span>
                 <span className={cn("min-w-0 flex-1 truncate text-xs", run.error ? "text-danger-fg" : "text-fg-tertiary")}>
-                  {run.error ?? run.summary ?? (run.firedBy === "manual" ? "Run by you" : run.firedBy === "catch-up" ? "Catch-up run" : "")}
+                  {run.error ?? run.summary ?? (run.firedBy === "manual" ? "Run by you" : run.firedBy === "catch-up" ? "Catch-up run" : run.firedBy === "event" ? "Started by a Slack message" : "")}
                 </span>
               </div>
             )

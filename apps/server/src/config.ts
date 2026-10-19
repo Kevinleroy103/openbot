@@ -15,6 +15,7 @@
  * | `--max-file-mb <n>` | `OPENBOT_MAX_FILE_MB` | `200` (largest file a bot may send with `send_file`) |
  * | `--desktop-idle <minutes>` | `OPENBOT_DESKTOP_IDLE_MINUTES` | `10` (an unused bot desktop goes to sleep; `0` = never) |
  * | (env only) | `OPENBOT_SKILLS_SH_URL` | `https://skills.sh` (the skills catalog; tests point it at a fake) |
+ * | (env only) | `OPENBOT_SLACK_API_URL` | `https://slack.com/api` (Slack's Web API; tests point it at a fake) |
  */
 import { KnownHarnessKinds } from "@openbot/contracts"
 import { Context, Layer } from "effect"
@@ -50,6 +51,8 @@ export interface ServerConfigShape {
   readonly maxFileBytes?: number | undefined
   /** skills.sh base URL (D5.5 import); absent = https://skills.sh. */
   readonly skillsShUrl?: string | undefined
+  /** Slack Web API base URL (D3.4); absent = https://slack.com/api. */
+  readonly slackApiUrl?: string | undefined
   /** An unused bot desktop sleeps after this long, ms (0 = never); absent = 10 min. */
   readonly desktopIdleMs?: number | undefined
 }
@@ -285,6 +288,13 @@ export const parseCommand = (
     skillsShUrl = skillsShInput.replace(/\/+$/, "")
   }
 
+  const slackInput = env["OPENBOT_SLACK_API_URL"]?.trim()
+  let slackApiUrl: string | undefined
+  if (slackInput !== undefined && slackInput !== "") {
+    if (!/^https?:\/\/[^/\s]+/i.test(slackInput)) throw new ConfigError(`OPENBOT_SLACK_API_URL: "${slackInput}" is not an http(s) URL`)
+    slackApiUrl = slackInput.replace(/\/+$/, "")
+  }
+
   return {
     _tag: "Run",
     config: {
@@ -299,6 +309,7 @@ export const parseCommand = (
       ...(maxFileBytes === undefined ? {} : { maxFileBytes }),
       ...(desktopIdleMs === undefined ? {} : { desktopIdleMs }),
       ...(skillsShUrl === undefined ? {} : { skillsShUrl }),
+      ...(slackApiUrl === undefined ? {} : { slackApiUrl }),
     },
   }
 }

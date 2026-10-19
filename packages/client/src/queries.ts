@@ -34,6 +34,9 @@ export const harnessDiscoverAtom = Atom.family((kind: HarnessKindName) => OpenBo
  */
 export const settingsQueryAtom = OpenBotClient.query("settings.get", undefined, { reactivityKeys: [Keys.settings] })
 
+/** The Slack connection (D3.4): workspace, who the owner is there, and whether live messages arrive. */
+export const slackStatusAtom = OpenBotClient.query("slack.status", undefined, { reactivityKeys: [Keys.slack] })
+
 /** Rendered instructions + memory for the details pane. */
 export const botContextAtom = Atom.family((botId: BotId) => OpenBotClient.query("bots.readContext", { botId }, { reactivityKeys: [Keys.botContext] }))
 

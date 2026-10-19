@@ -36,6 +36,8 @@ export interface ToolAvailability {
   readonly claims: McpClaims
   /** Effective capabilities of the host node (empty when it is offline at session start). */
   readonly hostNode: NodeSummary | undefined
+  /** The owner's Slack is connected (D3.4). */
+  readonly slack?: boolean | undefined
 }
 
 export interface ToolDef<A, R> {

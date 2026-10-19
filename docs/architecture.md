@@ -294,6 +294,7 @@ Start from the seed `rpc.ts`. **Cut for v1:** connectors.*, tasks.*, messages.fe
 | nodes | `nodes.list`, `nodes.createPairingCode` → `{code, expiresAt, command}`, `nodes.rename`, `nodes.revoke`, `nodes.setCapabilities {nodeId, approved[]}` |
 | computer | `computer.status {botId}`, `computer.ensure {botId}` (start browser window), `computer.lease {botId, take: boolean}` |
 | settings | `settings.get`, `settings.update {patch}`, `rules.list/upsert/delete` |
+| slack (D3.4) | `slack.status`, `slack.connect {userToken?, appToken?}`, `slack.disconnect`, `slack.sendDraft {entryId, text}`, `slack.discardDraft {entryId}` |
 | usage | `usage.byBot {sinceMs?}` |
 
 ### 4.2 node-protocol
@@ -341,7 +342,8 @@ core/src/
     BackgroundTasks.ts    background tasks (D5.7, §4.3.8): start/queue (≤ 3 running per bot), one ephemeral harness session per task, its steps (TaskRepo), approvals labelled with the task, task-result deliveries (`results`), cancel, boot `recover`
   services/automation/     — WP-core-b
     ApprovalService.ts    policy eval (rules), RuntimeRequest lifecycle (create → card entry → Deferred → resolve/expire), allow-always rule creation, boot-time expiry, onRequest implementation for runners, ask_user/request_approval tools (non-blocking, D3.3)
-    RoutineScheduler.ts   cron/interval/once via effect Cron; next-run computation; fires → Orchestrator.deliverSystem; runs history; runNow
+    RoutineScheduler.ts   cron/interval/once via effect Cron; next-run computation; fires → Orchestrator.deliverSystem; runs history; runNow; Slack-triggered runs (SlackConnector.events, batched)
+    SlackService.ts       Slack drafts (D3.4): slack_draft → a `slack-draft` card; the owner's Send / Discard (SlackConnector.send)
     MemoryService.ts      read/write MEMORY.md + facts; remember/forget/recall for tools; emits "updated-memory" events
     SkillService.ts       skills library on SkillStore, per-Bot skills (via BotService), skills.sh import (SkillDirectory)
     SettingsService.ts    typed settings with defaults; rules CRUD

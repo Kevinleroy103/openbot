@@ -1,7 +1,7 @@
 // Card union = the immutable content of a `card` transcript entry. Mutable state
 // (pending/resolved/…) lives on the entry (`CardState`), mirroring Grok, which keeps
 // respondedValue/widgetDismissed/formResolution on the send-message ENTRY (domain-contract.md §F.0.2).
-// Ported from vendor/scratch/contracts/src/card.ts; connector and draft cards are cut for v1.
+// Ported from vendor/scratch/contracts/src/card.ts; connector cards are cut for v1.
 import { Schema } from "effect"
 import { NodeId, RequestId, RoutineId, withUnknownFallback } from "./base.ts"
 import { SuggestedRule } from "./policy.ts"
@@ -76,7 +76,26 @@ export const RoutineCard = Schema.Struct({
   prompt: Schema.optionalKey(Schema.String),
 })
 
-export const CardMembers = [ApprovalCard, QuestionCard, FormCard, SecretRequestCard, HandoffCard, RoutineCard] as const
+/**
+ * A Slack message a Bot drafted (`slack_draft`, D3.4): the owner edits it and presses Send (it goes
+ * out as them) or Discard. Pending until then; it never expires. When sent, `text` becomes what was
+ * sent and the state's `link` opens the message in Slack.
+ */
+export const SlackDraftCard = Schema.Struct({
+  type: Schema.Literal("slack-draft"),
+  /** Workspace name. */
+  team: Schema.String,
+  channelId: Schema.String,
+  /** Who it goes to: "#general", "Alice Smith", "Alice, Bob". */
+  to: Schema.String,
+  /** Reply in this thread (the parent message's `ts`). */
+  threadTs: Schema.optionalKey(Schema.String),
+  /** The start of the thread's first message. */
+  threadLabel: Schema.optionalKey(Schema.String),
+  text: Schema.String,
+})
+
+export const CardMembers = [ApprovalCard, QuestionCard, FormCard, SecretRequestCard, HandoffCard, RoutineCard, SlackDraftCard] as const
 const fallback = withUnknownFallback({ members: CardMembers, tag: "type", keep: {} })
 /** Decodes unknown card types into `{ type: "unknown", originalTag }` (decode-only). */
 export const Card = fallback.schema
@@ -93,5 +112,7 @@ export const CardState = Schema.Struct({
   response: Schema.optionalKey(RuntimeResponse),
   /** e.g. "Saved securely and kept private", "Blocked by your rules". */
   detail: Schema.optionalKey(Schema.String),
+  /** Where the result lives, e.g. a sent Slack message. */
+  link: Schema.optionalKey(Schema.String),
 })
 export type CardState = typeof CardState.Type

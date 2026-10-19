@@ -1,11 +1,12 @@
 // Cards in a chat (the web's cards/Cards.tsx, native): questions with lettered options (Grok iOS),
-// approvals, computer hand-offs, secrets, routines; forms open in the web app.
+// approvals, computer hand-offs, secrets, routines, Slack drafts; forms open in the web app.
 import { useAtomSet } from "@effect/atom-react"
 import { commandAtom, respondRequestAtom } from "@openbot/client"
-import type { Bot, Card, CardState, RequestId, RuntimeRequest, RuntimeResponseInput } from "@openbot/contracts"
+import type { Bot, Card, CardState, EntryId, RequestId, RuntimeRequest, RuntimeResponseInput } from "@openbot/contracts"
 import { Exit } from "effect"
 import * as Haptics from "expo-haptics"
 import { type ReactNode, useState } from "react"
+import * as Linking from "expo-linking"
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
 import { openWeb } from "../nav.ts"
 import type { Theme } from "../theme.ts"
@@ -51,6 +52,8 @@ export interface CardProps {
   readonly state: CardState
   readonly request: RuntimeRequest | undefined
   readonly bot: Bot | undefined
+  /** The card's transcript entry (a Slack draft is answered by entry). */
+  readonly entryId?: EntryId | undefined
   readonly theme: Theme
 }
 
@@ -65,6 +68,8 @@ export function CardView(props: CardProps): ReactNode {
       return <HandoffCard {...props} card={card} />
     case "secret-request":
       return <SecretCard {...props} card={card} />
+    case "slack-draft":
+      return <SlackDraftCard {...props} card={card} />
     case "routine":
       return (
         <Shell theme={props.theme}>
@@ -300,6 +305,69 @@ function SecretCard({ card, state, request, theme }: CardProps & { readonly card
   )
 }
 
+// ------------------------------------------------------------------------------------ Slack draft
+
+/** A Slack message a Bot drafted (D3.4): edit it, then Send (it goes out as you) or Discard. */
+function SlackDraftCard({ card, state, entryId, theme }: CardProps & { readonly card: Extract<Card, { type: "slack-draft" }> }): ReactNode {
+  const [text, setText] = useState(card.text)
+  const send = useAtomSet(commandAtom("slack.sendDraft", entryId ?? "none"), { mode: "promiseExit" })
+  const discard = useAtomSet(commandAtom("slack.discardDraft", entryId ?? "none"), { mode: "promiseExit" })
+  const [busy, setBusy] = useState<"send" | "discard" | null>(null)
+  const act = async (which: "send" | "discard") => {
+    if (entryId === undefined) return
+    setBusy(which)
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined)
+    try {
+      const exit = which === "send" ? await send({ entryId, text: text.trim() }) : await discard({ entryId })
+      if (Exit.isFailure(exit)) Alert.alert(which === "send" ? "Couldn't send it" : "Couldn't discard it", failureText(exit))
+    } finally {
+      setBusy(null)
+    }
+  }
+  const pending = state.status === "pending"
+  const facts: ReadonlyArray<[string, string]> = [["Workspace", card.team], ["To", card.to], ["Thread", card.threadLabel ?? "New message"]]
+  return (
+    <Shell theme={theme}>
+      <Text style={[styles.kicker, { color: theme.fgSecondary }]}>Slack message</Text>
+      <View style={{ gap: 2 }}>
+        {facts.map(([label, value]) => (
+          <Text key={label} style={[styles.body, { color: theme.fg }]} numberOfLines={1}>
+            <Text style={{ color: theme.fgSecondary }}>{label}  </Text>
+            {value}
+          </Text>
+        ))}
+      </View>
+      {pending ? (
+        <>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            multiline
+            editable={busy === null}
+            style={[styles.draft, { color: theme.fg, backgroundColor: theme.bg, borderColor: theme.lineSecondary }]}
+          />
+          <View style={styles.row}>
+            <Button theme={theme} primary label="Send" busy={busy === "send"} disabled={text.trim() === "" || entryId === undefined} onPress={() => void act("send")} />
+            <View style={{ flex: 1 }} />
+            <Button theme={theme} label="Discard" busy={busy === "discard"} disabled={entryId === undefined} onPress={() => void act("discard")} />
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={[styles.body, { color: state.status === "resolved" ? theme.fg : theme.fgTertiary }]}>{card.text}</Text>
+          {state.status === "resolved" && state.link !== undefined ? (
+            <Pressable onPress={() => void Linking.openURL(state.link!)} accessibilityRole="link">
+              <Done theme={theme} text="Sent · Open in Slack" />
+            </Pressable>
+          ) : (
+            <Done theme={theme} text={state.status === "resolved" ? "Sent" : "Discarded"} />
+          )}
+        </>
+      )}
+    </Shell>
+  )
+}
+
 const styles = StyleSheet.create({
   card: { borderRadius: 24, padding: 18, gap: 12, alignSelf: "stretch" },
   kicker: { fontSize: 14, fontWeight: "500" },
@@ -314,4 +382,5 @@ const styles = StyleSheet.create({
   done: { flexDirection: "row", alignItems: "center", gap: 6 },
   command: { borderRadius: 10, padding: 10 },
   secret: { height: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, fontSize: 16 },
+  draft: { minHeight: 88, maxHeight: 240, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, lineHeight: 22, textAlignVertical: "top" },
 })

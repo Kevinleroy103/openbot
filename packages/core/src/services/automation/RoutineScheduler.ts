@@ -14,6 +14,10 @@
  *   last bot message, truncated) and the event entry is updated. `RoutineRepo` keeps the last 20.
  * - One run per routine at a time: a scheduled fire while the previous run is still going is
  *   skipped (logged); `runNow` fails with `Conflict`.
+ * - Slack triggers (D3.4, with a `SlackConnector` in the context): each Slack message is matched
+ *   against the enabled Slack routines (`slackTriggerMatches`). Messages for one routine within
+ *   `SLACK_BATCH_MS` make one `event` run, which reads them after its prompt (`slackEventsText`);
+ *   messages arriving while it runs wait and make the next run.
  */
 import type {
   Bot,
@@ -28,11 +32,13 @@ import type {
   RoutineSpec,
 } from "@openbot/contracts"
 import { Conflict, InvalidInput, NotFound } from "@openbot/contracts"
-import { Clock, Duration, Effect, FiberSet, Layer, Option, Queue, Semaphore } from "effect"
+import { Clock, Duration, Effect, FiberSet, Layer, Option, Queue, Semaphore, Stream } from "effect"
 import { IdGen } from "../../ports/IdGen.ts"
 import { BotRepo, RoutineRepo } from "../../ports/repos.ts"
 import { type Actor, ConversationService, type EntryDraft, Orchestrator, RoutineScheduler } from "../../ports/services.ts"
+import { SlackConnector, type SlackEvent } from "../../ports/Slack.ts"
 import { CATCH_UP_WINDOW_MS, describeTrigger, nextRunAfter, sameTrigger, validateTrigger } from "./schedule.ts"
+import { slackEventsText, slackTriggerMatches } from "./SlackService.ts"
 import { oneLine, truncate, utf8Length } from "./text.ts"
 
 export const ROUTINE_LIMITS = {
@@ -41,6 +47,11 @@ export const ROUTINE_LIMITS = {
   perBot: 50,
   summaryChars: 500,
 } as const
+
+/** Slack messages for one routine within this window make one run. */
+export const SLACK_BATCH_MS = 5_000
+/** At most this many Slack messages wait for one routine (the oldest are dropped). */
+const SLACK_QUEUE_MAX = 20
 
 /** The scheduler re-checks at least this often (clock jumps, missed wake-ups). */
 export const MAX_SCHEDULER_SLEEP_MS = 60 * 60 * 1000
@@ -70,6 +81,7 @@ export const makeRoutineScheduler = Effect.gen(function*() {
   const conversations = yield* ConversationService
   const orchestrator = yield* Orchestrator
   const ids = yield* IdGen
+  const slack = Option.getOrUndefined(yield* Effect.serviceOption(SlackConnector))
 
   const lock = yield* Semaphore.make(1)
   const wake = yield* Queue.sliding<void>(1)
@@ -117,7 +129,12 @@ export const makeRoutineScheduler = Effect.gen(function*() {
       return Effect.fail(new InvalidInput({ message: `The routine instruction is too long (max ${ROUTINE_LIMITS.promptBytes / 1024} KB).` }))
     }
     const problem = validateTrigger(spec.trigger, now)
-    return problem === undefined ? Effect.succeed(name) : Effect.fail(new InvalidInput({ message: problem }))
+    if (problem !== undefined) return Effect.fail(new InvalidInput({ message: problem }))
+    if (spec.trigger.type !== "slack") return Effect.succeed(name)
+    const notConnected = new InvalidInput({ message: "Slack isn't connected: the owner connects it in Settings › Slack." })
+    return slack === undefined
+      ? Effect.fail(notConnected)
+      : slack.status.pipe(Effect.flatMap((status) => (status.connected ? Effect.succeed(name) : Effect.fail(notConnected))))
   }
 
   const checkNameFree = (botId: BotId, name: string, except?: RoutineId) =>
@@ -234,7 +251,7 @@ export const makeRoutineScheduler = Effect.gen(function*() {
    * Starts a run of `routine`. Scheduled fires advance `nextRunAt` (even when skipped); manual runs
    * leave the schedule alone. Returns none when a scheduled fire was skipped.
    */
-  const fire = (routineId: RoutineId, firedBy: FiredBy) =>
+  const fire = (routineId: RoutineId, firedBy: FiredBy, eventText?: string) =>
     Effect.gen(function*() {
       const started = yield* lock.withPermits(1)(Effect.gen(function*() {
         const routine = yield* getRoutine(routineId)
@@ -291,8 +308,10 @@ export const makeRoutineScheduler = Effect.gen(function*() {
             ? "manual run: the owner pressed Run now (this is not a duplicate scheduled run)"
             : run.firedBy === "catch-up"
             ? "catch-up run: it was due while OpenBot was offline"
+            : run.firedBy === "event"
+            ? "it was triggered by what follows the instruction"
             : "scheduled run"
-        }:\n${routine.prompt}`,
+        }:\n${routine.prompt}${eventText === undefined ? "" : `\n\n${eventText}`}`,
         // Wakes an idle bot; queues behind a running turn instead of steering into it.
         urgency: "urgent",
         mode: "queue",
@@ -323,8 +342,8 @@ export const makeRoutineScheduler = Effect.gen(function*() {
 
   // ------------------------------------------------------------------------ scheduler loop
 
-  const fireSafely = (routineId: RoutineId, firedBy: FiredBy) =>
-    fire(routineId, firedBy).pipe(
+  const fireSafely = (routineId: RoutineId, firedBy: FiredBy, eventText?: string) =>
+    fire(routineId, firedBy, eventText).pipe(
       Effect.catch((error) => Effect.logWarning(`RoutineScheduler: ${routineId} did not start`, error)),
       Effect.catchDefect((defect) => Effect.logError(`RoutineScheduler: ${routineId} failed to fire`, defect)),
       Effect.asVoid,
@@ -392,6 +411,49 @@ export const makeRoutineScheduler = Effect.gen(function*() {
     ),
   )
   yield* Effect.forkScoped(loop, { startImmediately: true })
+
+  // ------------------------------------------------------------------------ Slack triggers (D3.4)
+
+  /** routineId → Slack messages waiting for its next run; a routine is in `flushing` while one is due. */
+  const slackQueue = new Map<RoutineId, Array<SlackEvent>>()
+  const flushing = new Set<RoutineId>()
+
+  const flushSlack = (routineId: RoutineId): Effect.Effect<void> =>
+    Effect.gen(function*() {
+      yield* Effect.sleep(Duration.millis(SLACK_BATCH_MS))
+      // messages that arrive while a run is going wait for it to end
+      if (running.has(routineId)) return yield* flushSlack(routineId)
+      flushing.delete(routineId)
+      const events = slackQueue.get(routineId) ?? []
+      slackQueue.delete(routineId)
+      const routine = yield* repo.get(routineId).pipe(Effect.orDie)
+      if (events.length === 0 || Option.isNone(routine) || !routine.value.enabled || routine.value.trigger.type !== "slack") return
+      yield* fireSafely(routineId, "event", slackEventsText(events))
+    })
+
+  const onSlackEvent = (event: SlackEvent) =>
+    Effect.gen(function*() {
+      const matching = (yield* repo.list().pipe(Effect.orDie)).filter((r) =>
+        r.enabled && r.trigger.type === "slack" && slackTriggerMatches(r.trigger, event)
+      )
+      for (const routine of matching) {
+        const queue = slackQueue.get(routine.id) ?? []
+        queue.push(event)
+        if (queue.length > SLACK_QUEUE_MAX) queue.shift()
+        slackQueue.set(routine.id, queue)
+        if (flushing.has(routine.id)) continue
+        flushing.add(routine.id)
+        yield* FiberSet.run(watchers, flushSlack(routine.id))
+      }
+    }).pipe(Effect.catchDefect((defect) => Effect.logError("RoutineScheduler: Slack message not handled", defect)))
+
+  if (slack !== undefined) {
+    yield* slack.events.pipe(
+      Stream.runForEach(onSlackEvent),
+      Effect.catchCause((cause) => Effect.logWarning("RoutineScheduler: Slack messages ended", cause)),
+      Effect.forkScoped({ startImmediately: true }),
+    )
+  }
 
   // ------------------------------------------------------------------------ service
 

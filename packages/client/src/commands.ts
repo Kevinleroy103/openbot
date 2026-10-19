@@ -78,6 +78,10 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "rules.upsert": [Keys.rules],
   "rules.delete": [Keys.rules],
   "tasks.cancel": [Keys.tasks],
+  "slack.connect": [Keys.slack, Keys.botContext],
+  "slack.disconnect": [Keys.slack, Keys.botContext],
+  "slack.sendDraft": [],
+  "slack.discardDraft": [],
 }
 
 /** Run one RPC as an Effect (for composing inside other `runtime.fn` atoms). */

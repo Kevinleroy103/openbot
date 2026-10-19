@@ -85,6 +85,8 @@ export interface RenderedInstructions {
     readonly memoryIndex: string
     /** `placement.promptAppend`. */
     readonly placement: string
+    /** How to use the owner's Slack while it is connected (D3.4); absent or empty: not connected. */
+    readonly slack?: string | undefined
   }
   /** Stable hash of `text`; a change means the session must be reopened (Claude snapshot semantics). */
   readonly hash: string

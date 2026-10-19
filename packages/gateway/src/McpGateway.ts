@@ -35,6 +35,7 @@ import {
   NodeDirectory,
   Orchestrator,
   sessionKeyOf,
+  SlackConnector,
   type ToolContext,
 } from "@openbot/core"
 import { randomToken, sha256Hex } from "@openbot/node-protocol"
@@ -50,6 +51,7 @@ import { BotToolkit, type BotToolkitServices } from "./toolkits/bot.ts"
 import { BrowserToolkit } from "./toolkits/browser.ts"
 import { ComputerToolkit } from "./toolkits/computer.ts"
 import { NodeToolkit, type NodeToolkitServices } from "./toolkits/node.ts"
+import { SlackToolkit } from "./toolkits/slack.ts"
 import { TaskToolkit, type TaskToolkitServices } from "./toolkits/tasks.ts"
 
 // ============================================================================ service
@@ -68,13 +70,14 @@ export class McpGateway extends Context.Service<McpGateway, McpGatewayShape>()("
 /** Every service the default toolkits need. */
 export type GatewayToolServices = BotToolkitServices | NodeToolkitServices | TaskToolkitServices
 
-/** The default toolkits: bot, task, node, browser and screen (`computer`, `request_takeover`) tools. */
+/** The default toolkits: bot, task, node, browser, screen (`computer`, `request_takeover`) and Slack tools. */
 export const DefaultToolkits: ReadonlyArray<AnyTool<GatewayToolServices>> = [
   ...BotToolkit,
   ...TaskToolkit,
   ...NodeToolkit,
   ...BrowserToolkit,
   ...ComputerToolkit,
+  ...SlackToolkit,
 ]
 
 export interface McpGatewayOptions<R = GatewayToolServices> {
@@ -375,11 +378,11 @@ export const makeMcpGateway = <R = GatewayToolServices>(
 
     // ---------------------------------------------------------------- sessions
 
-    const toolListFor = (claims: McpClaims, hostNode: NodeSummary | undefined): ReadonlyMap<string, AnyTool<R>> => {
+    const toolListFor = (claims: McpClaims, hostNode: NodeSummary | undefined, slack: boolean): ReadonlyMap<string, AnyTool<R>> => {
       const map = new Map<string, AnyTool<R>>()
       for (const tool of tools) {
         if (!claims.toolsets.includes(tool.toolset)) continue
-        if (tool.available !== undefined && !tool.available({ claims, hostNode })) continue
+        if (tool.available !== undefined && !tool.available({ claims, hostNode, slack })) continue
         if (!map.has(tool.name)) map.set(tool.name, tool)
       }
       return map
@@ -400,7 +403,15 @@ export const makeMcpGateway = <R = GatewayToolServices>(
       const hostNode = await run(
         directory.get(auth.claims.hostNodeId).pipe(Effect.option, Effect.map(Option.getOrUndefined)),
       )
-      const sessionTools = toolListFor(auth.claims, hostNode)
+      const slack = await run(
+        Effect.serviceOption(SlackConnector).pipe(
+          Effect.flatMap(Option.match({
+            onNone: () => Effect.succeed(false),
+            onSome: (connector) => connector.status.pipe(Effect.map((status) => status.connected)),
+          })),
+        ),
+      )
+      const sessionTools = toolListFor(auth.claims, hostNode, slack)
       const server = new Server(serverInfo, { capabilities: { tools: {} }, instructions })
       const session: GatewaySession = {
         id: undefined,

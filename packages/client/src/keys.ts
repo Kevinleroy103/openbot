@@ -19,6 +19,8 @@ export const Keys = {
   settings: "settings",
   /** Background tasks (D5.7): their list and details refetch when the roster carries a task change. */
   tasks: "tasks",
+  /** The Slack connection (D3.4). */
+  slack: "slack",
 } as const
 export type ReactivityKey = (typeof Keys)[keyof typeof Keys]
 

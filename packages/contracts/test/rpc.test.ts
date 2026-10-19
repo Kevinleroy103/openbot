@@ -100,6 +100,11 @@ const V1_RPCS = [
   "tasks.list",
   "tasks.get",
   "tasks.cancel",
+  "slack.status",
+  "slack.connect",
+  "slack.disconnect",
+  "slack.sendDraft",
+  "slack.discardDraft",
   "usage.byBot",
 ] as const satisfies ReadonlyArray<OpenBotRpcTag>
 

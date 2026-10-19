@@ -47,7 +47,7 @@ export function RowView({ row, ctx }: { readonly row: Row; readonly ctx: RowCont
       return (
         <View style={styles.block}>
           {ctx.group && author && <Text style={[styles.speaker, { color: theme.fgSecondary }]}>{author.name}</Text>}
-          <CardView card={row.entry.card} state={row.entry.state} request={ctx.requestFor(row.entry)} bot={author ?? ctx.primary} theme={theme} />
+          <CardView card={row.entry.card} state={row.entry.state} request={ctx.requestFor(row.entry)} bot={author ?? ctx.primary} entryId={row.entry.id} theme={theme} />
         </View>
       )
     }

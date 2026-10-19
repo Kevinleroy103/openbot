@@ -268,7 +268,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
         return (
           <div key={row.key} className="flex flex-col items-start py-1" data-entry={row.entry.id}>
             {isGroup && author && <span className="mb-0.5 ps-3 text-xs text-fg-secondary">{author.name}</span>}
-            <CardView card={row.entry.card} state={row.entry.state} request={requestForCard(row.entry, state.requests)} bot={author ?? primary} />
+            <CardView card={row.entry.card} state={row.entry.state} request={requestForCard(row.entry, state.requests)} bot={author ?? primary} entryId={row.entry.id} />
           </div>
         )
       }

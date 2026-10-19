@@ -232,12 +232,27 @@ export const OnceTrigger = Schema.Struct({ type: Schema.Literal("once"), at: Mil
 export const ManualTrigger = Schema.Struct({ type: Schema.Literal("manual") })
 /** Later (webhooks are not in v1). Decoded so stored data survives; rejected as input. */
 export const WebhookTrigger = Schema.Struct({ type: Schema.Literal("webhook") })
+/**
+ * A Slack message the owner can see (D3.4, needs Slack connected with live events):
+ * - `dm`: someone writes to them directly (a DM or a group DM);
+ * - `mention`: someone @mentions them;
+ * - `phrase`: a message contains `phrase` (any case);
+ * - `message`: any message (needs `channel`).
+ * `channel` ("#name" or an id) limits it to one channel. Messages close together arrive as one run.
+ */
+export const SlackTrigger = Schema.Struct({
+  type: Schema.Literal("slack"),
+  on: Schema.Literals(["dm", "mention", "phrase", "message"]),
+  phrase: Schema.optionalKey(Schema.String),
+  channel: Schema.optionalKey(Schema.String),
+})
+export type SlackTrigger = typeof SlackTrigger.Type
 
 /** Triggers a client may create or update in v1. */
-export const RoutineTriggerInput = Schema.Union([CronTrigger, IntervalTrigger, OnceTrigger, ManualTrigger])
+export const RoutineTriggerInput = Schema.Union([CronTrigger, IntervalTrigger, OnceTrigger, ManualTrigger, SlackTrigger])
 export type RoutineTriggerInput = typeof RoutineTriggerInput.Type
 /** Triggers as stored and shown (input triggers plus decode-only `webhook`). */
-export const RoutineTrigger = Schema.Union([CronTrigger, IntervalTrigger, OnceTrigger, ManualTrigger, WebhookTrigger])
+export const RoutineTrigger = Schema.Union([CronTrigger, IntervalTrigger, OnceTrigger, ManualTrigger, SlackTrigger, WebhookTrigger])
 export type RoutineTrigger = typeof RoutineTrigger.Type
 
 export const RoutineOutput = Schema.Literals(["direct", "own-conversation"])
@@ -268,8 +283,8 @@ export type Routine = typeof Routine.Type
 export const RoutineRun = Schema.Struct({
   id: RoutineRunId,
   routineId: RoutineId,
-  /** What fired it: the schedule, the user ("Test run" / runNow), or the boot-time catch-up. */
-  firedBy: Schema.Literals(["schedule", "manual", "catch-up"]),
+  /** What fired it: the schedule, the user ("Test run" / runNow), the boot-time catch-up, or an event (a Slack message). */
+  firedBy: Schema.Literals(["schedule", "manual", "catch-up", "event"]),
   startedAt: Millis,
   finishedAt: Schema.optionalKey(Millis),
   status: RoutineRunStatus,

@@ -1,9 +1,10 @@
 // Typed in-chat cards (grok-bot-ui.md §4.5, grok-bot-ui-activity.md F.6). Each card renders from its
 // `card` transcript entry plus the linked RuntimeRequest (live status) and answers through
-// `requests.respond`. Unknown card types render a placeholder.
-import { Check, Clock, FolderCheck, Globe, KeyRound, Monitor, ShieldCheck, TriangleAlert } from "lucide-react"
+// `requests.respond` (a Slack draft: `slack.sendDraft` / `slack.discardDraft`). Unknown card types
+// render a placeholder.
+import { Check, Clock, ExternalLink, FolderCheck, Globe, Hash, KeyRound, Monitor, ShieldCheck, TriangleAlert } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useMemo, useRef, useState } from "react"
-import type { Bot, BotId, Card as CardModel, CardState, DecisionId, Question, RuntimeRequest, RuntimeResponse } from "@openbot/contracts"
+import type { Bot, BotId, Card as CardModel, CardState, DecisionId, EntryId, Question, RuntimeRequest, RuntimeResponse } from "@openbot/contracts"
 import {
   Card,
   CardActions,
@@ -25,6 +26,7 @@ import { useComputerView, useDetailsPane, useSelection, useSettingsDialog } from
 import { renderInline } from "../chat/Markdown.tsx"
 import { ScreenPeek } from "../computer/ScreenThumbnail.tsx"
 import { useComputer } from "../computer/useComputer.ts"
+import { useCommand } from "../details/kit.tsx"
 import { useRespond, useSaveRule } from "./useRespond.ts"
 
 export interface CardViewProps {
@@ -32,6 +34,8 @@ export interface CardViewProps {
   readonly state: CardState
   readonly request?: RuntimeRequest | undefined
   readonly bot?: Bot | undefined
+  /** The card's transcript entry (cards answered by entry, e.g. a Slack draft). */
+  readonly entryId?: EntryId | undefined
   readonly className?: string
 }
 
@@ -66,6 +70,8 @@ export function CardView(props: CardViewProps): ReactNode {
       return <HandoffCard {...props} card={card} />
     case "routine":
       return <RoutineCard {...props} card={card} />
+    case "slack-draft":
+      return <SlackDraftCard {...props} card={card} />
     default:
       return <UnknownCard className={props.className} />
   }
@@ -684,6 +690,92 @@ function RoutineCard({ card, className }: CardViewProps & { readonly card: Routi
       <CardLink className="text-sm" onClick={() => details.show("details")}>
         View routines
       </CardLink>
+    </Card>
+  )
+}
+
+// ------------------------------------------------------------------------------------- Slack draft
+
+type SlackDraftModel = Extract<CardModel, { type: "slack-draft" }>
+
+/**
+ * "Slack message" (a Bot's `slack_draft`, D3.4; Grok's Slack draft card): Workspace, To, Thread,
+ * then the message, editable while pending. **Send message** posts it as the owner; **Discard**
+ * drops it. Sent: the message as sent and **Open in Slack**.
+ */
+function SlackDraftCard({ card, state, entryId, className }: CardViewProps & { readonly card: SlackDraftModel }): ReactNode {
+  const status = state.status
+  const pending = status === "pending"
+  const [text, setText] = useState(card.text)
+  const send = useCommand("slack.sendDraft", entryId ?? "")
+  const discard = useCommand("slack.discardDraft", entryId ?? "")
+  const busy = send.pending || discard.pending
+  const pill = pending ? (
+    <StatusPill tone="success" dot>
+      Ready to send
+    </StatusPill>
+  ) : status === "resolved" ? (
+    <StatusPill tone="success" dot>
+      Sent
+    </StatusPill>
+  ) : (
+    <StatusPill tone="neutral">Discarded</StatusPill>
+  )
+  const error = send.error ?? discard.error
+  return (
+    <Card className={cn("w-full max-w-[560px]", className)} data-card="slack-draft" data-status={status}>
+      <CardHeader
+        title="Slack message"
+        icon={
+          <span className="inline-flex size-9 items-center justify-center rounded-xl bg-elevated hairline border-line-tertiary">
+            <Icon icon={Hash} size="lg" className="text-icon-secondary" />
+          </span>
+        }
+        status={pill}
+      />
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt className="text-fg-secondary">Workspace</dt>
+        <dd className="min-w-0 truncate text-fg">{card.team}</dd>
+        <dt className="text-fg-secondary">To</dt>
+        <dd className="min-w-0 truncate text-fg">{card.to}</dd>
+        <dt className="text-fg-secondary">Thread</dt>
+        <dd className="min-w-0 truncate text-fg">{card.threadLabel ?? "New message"}</dd>
+      </dl>
+      {pending ? (
+        <TextArea
+          aria-label="Message"
+          rows={Math.min(10, Math.max(3, text.split("\n").length + 1))}
+          value={text}
+          disabled={busy}
+          onChange={(e) => setText(e.target.value)}
+          className="text-base"
+        />
+      ) : (
+        <p className={cn("text-base break-words whitespace-pre-wrap", status !== "resolved" && "text-fg-secondary line-through decoration-fg-tertiary")}>{card.text}</p>
+      )}
+      {error && <p className="text-sm text-danger-fg">{error}</p>}
+      {pending && entryId !== undefined && (
+        <CardActions>
+          <PillButton
+            variant="primary"
+            size="card"
+            disabled={text.trim() === "" || busy}
+            loading={send.pending}
+            onClick={() => void send.run({ entryId, text: text.trim() })}
+          >
+            Send message
+          </PillButton>
+          <PillButton variant="tertiary" size="card" className="ms-auto" disabled={busy} loading={discard.pending} onClick={() => void discard.run({ entryId })}>
+            Discard
+          </PillButton>
+        </CardActions>
+      )}
+      {status === "resolved" && state.link !== undefined && (
+        <a href={state.link} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-sm text-fg-secondary hover:text-fg">
+          Open in Slack
+          <Icon icon={ExternalLink} size="sm" />
+        </a>
+      )}
     </Card>
   )
 }

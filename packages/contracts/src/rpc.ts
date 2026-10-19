@@ -1,6 +1,6 @@
 // The client <-> brain RpcGroup `OpenBotRpcs` (architecture §4.1.1; Effect RPC over WebSocket at
 // `/rpc`, `RpcSerialization.layerJson`). Names are dotted like t3code (`conversations.subscribe`).
-// Ported from vendor/scratch/contracts/src/rpc.ts; v1 cut: connectors.*, messages.feedback,
+// Ported from vendor/scratch/contracts/src/rpc.ts; v1 cut: connectors.* (Slack has its own `slack.*`), messages.feedback,
 // bots.setAvatarImage, conversations.thread/outline, routines.webhookCredential (and the seed's
 // bots.list/search, conversations.reset, skills.import, host.status, replaced by roster / bots.newSession /
 // harnesses.status).
@@ -31,6 +31,7 @@ import { ApprovalRule, ApprovalRuleInput, BotAutonomy, ProjectFolders } from "./
 import { RuntimeRequest, RuntimeResponseInput } from "./runtime-request.ts"
 import { Settings, SettingsPatch } from "./settings.ts"
 import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
+import { SlackConnectInput, SlackStatus } from "./slack.ts"
 import { ConversationStreamItem, ExchangePage, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
 import { Task, TaskDetail } from "./task.ts"
 import { Attachment, MessageDelivery, Turn } from "./transcript.ts"
@@ -378,6 +379,19 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("tasks.get", { payload: { taskId: TaskId }, success: TaskDetail, error: Missing }),
   /** The owner stops a queued or running task (only that one); a finished task is returned unchanged. */
   Rpc.make("tasks.cancel", { payload: { taskId: TaskId }, success: Task, error: Missing }),
+
+  // Slack (D3.4)
+  Rpc.make("slack.status", { success: SlackStatus, error: errors() }),
+  /** Checks the tokens with Slack, keeps them on the brain and starts listening. */
+  Rpc.make("slack.connect", { payload: SlackConnectInput, success: SlackStatus, error: errors(InvalidInput, Unavailable) }),
+  /** Forgets the tokens (the app stays installed in Slack until the owner removes it). */
+  Rpc.make("slack.disconnect", { success: SlackStatus, error: errors() }),
+  /** Sends a Bot's pending draft as the owner, with their edits. */
+  Rpc.make("slack.sendDraft", {
+    payload: { entryId: EntryId, text: Schema.String },
+    error: errors(NotFound, InvalidInput, Conflict, Unavailable),
+  }),
+  Rpc.make("slack.discardDraft", { payload: { entryId: EntryId }, error: errors(NotFound, Conflict) }),
 
   // usage
   Rpc.make("usage.byBot", { payload: { sinceMs: Schema.optionalKey(Millis) }, success: Schema.Array(BotUsage), error: errors() }),

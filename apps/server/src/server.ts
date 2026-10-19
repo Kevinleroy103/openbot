@@ -54,6 +54,7 @@ import {
   IdGen,
   InstructionRendererLive,
   LiveHubLive,
+  makeDataDir,
   MAX_SENT_FILES,
   MemoryServiceLive,
   MessagingLive,
@@ -65,6 +66,7 @@ import {
   SettingsServiceLive,
   type SkillDirectory,
   SkillServiceLive,
+  SlackServiceLive,
   UsageServiceLive,
 } from "@openbot/core"
 import { McpBindingIssuerLive, McpGatewayLive } from "@openbot/gateway"
@@ -95,6 +97,7 @@ import { InternalRoutes, PublicRoutes } from "./routes.ts"
 import { RpcHandlersLive } from "./rpc.ts"
 import { setShutdownPhase } from "./shutdown.ts"
 import { SkillsShLive } from "./skillsSh.ts"
+import { SlackConnectorLive } from "./slack/connector.ts"
 
 // ============================================================================ startup errors
 
@@ -344,7 +347,16 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
   const base = Layer.mergeAll(ServerConfig.layer(config), DataDir.layer(config.dataDir), IdGen.layer, limits)
   const listeners = Layer.mergeAll(PublicListenerLive, InternalListenerLive)
   // HostPathsLive: the local computer's home and git repo roots (project folders, "Allow in ‹folder›").
-  const ports = Layer.mergeAll(InternalAddressLive, HarnessRegistry.layer, BrainNodesConfigLive, BrainIdentityLive, WebAuthLive, HostPathsLive)
+  const ports = Layer.mergeAll(
+    InternalAddressLive,
+    HarnessRegistry.layer,
+    BrainNodesConfigLive,
+    BrainIdentityLive,
+    WebAuthLive,
+    HostPathsLive,
+    // the owner's Slack (D3.4): tokens in <data>/slack.json
+    SlackConnectorLive({ file: makeDataDir(config.dataDir).slack, apiUrl: config.slackApiUrl }),
+  )
   const level2 = Layer.mergeAll(SettingsServiceLive, UsageServiceLive, NotifierLive, ConversationServiceLive, AttachmentServiceLive)
 
   const publicServed = HttpRouter.serve(PublicRoutes, { disableLogger: true, disableListenLog: true }).pipe(
@@ -377,6 +389,7 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     Layer.provideMerge(BackgroundTasksLive), // 5b (D5.7)
     Layer.provideMerge(InstructionRendererLive),
     Layer.provideMerge(ApprovalServiceLive),
+    Layer.provideMerge(SlackServiceLive), // Slack drafts (D3.4)
     Layer.provideMerge(MemoryServiceLive),
     Layer.provideMerge(level2),
     Layer.provideMerge(LiveHubLive),

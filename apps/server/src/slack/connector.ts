@@ -144,7 +144,7 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     }
 
     const token = (): string => {
-      if (saved === undefined) throw new Unavailable({ message: "Slack isn't connected (Settings › Slack)." })
+      if (saved === undefined) throw new Unavailable({ message: "Slack isn't connected (Connect apps › Slack)." })
       return saved.userToken
     }
 

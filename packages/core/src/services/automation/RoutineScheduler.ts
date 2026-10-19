@@ -131,7 +131,7 @@ export const makeRoutineScheduler = Effect.gen(function*() {
     const problem = validateTrigger(spec.trigger, now)
     if (problem !== undefined) return Effect.fail(new InvalidInput({ message: problem }))
     if (spec.trigger.type !== "slack") return Effect.succeed(name)
-    const notConnected = new InvalidInput({ message: "Slack isn't connected: the owner connects it in Settings › Slack." })
+    const notConnected = new InvalidInput({ message: "Slack isn't connected: the owner connects it in Connect apps › Slack." })
     return slack === undefined
       ? Effect.fail(notConnected)
       : slack.status.pipe(Effect.flatMap((status) => (status.connected ? Effect.succeed(name) : Effect.fail(notConnected))))

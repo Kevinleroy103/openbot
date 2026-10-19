@@ -1,8 +1,8 @@
-// Slack connector (D3.4): the owner's own Slack app (user token, Socket Mode), what Settings shows
+// Slack connector (D3.4): the owner's own Slack app (user token, Socket Mode), what Connect apps shows
 // about it, and the app manifest the owner creates it from.
 import { Schema } from "effect"
 
-/** What Settings › Slack shows. Tokens never leave the brain. */
+/** What Connect apps › Slack shows. Tokens never leave the brain. */
 export const SlackStatus = Schema.Struct({
   connected: Schema.Boolean,
   /** Workspace name, e.g. "Seen". */

@@ -1,4 +1,4 @@
-// Settings › Slack (D3.4): connect the owner's own Slack app. Three steps: create the app from
+// Connect apps › Slack (D3.4): connect the owner's own Slack app. Three steps: create the app from
 // OpenBot's manifest (Slack's "Create an app" opens filled in), install it and paste the User OAuth
 // Token, and optionally an app-level token for live messages (Socket Mode). Tokens go to the brain
 // and are never shown again. Connected: the workspace, live messages and Disconnect.
@@ -6,24 +6,15 @@ import { slackStatusAtom } from "@openbot/client"
 import { type SlackStatus, slackAppManifest, slackCreateAppUrl } from "@openbot/contracts"
 import { CardLink, PillButton, StatusPill, TextField } from "@openbot/ui"
 import { ExternalLink } from "lucide-react"
-import { type ReactNode, useEffect, useState } from "react"
+import { type ReactNode, useState } from "react"
 import { ConfirmDialog, ErrorLine, LoadingLine, useCommand, useQuery } from "../details/kit.tsx"
-import { GroupLabel, PageHeader, RowDivider, SettingsCard, SettingsRow } from "./layout.tsx"
+import { GroupLabel, RowDivider, SettingsCard, SettingsRow } from "../settings/layout.tsx"
 
-export function SlackPage(): ReactNode {
+/** The page under the app's header; the window keeps the status fresh while it is open. */
+export function SlackApp(): ReactNode {
   const status = useQuery(slackStatusAtom)
-  const { refresh } = status
-  // live messages connect in the background: keep the status fresh while the page is open
-  useEffect(() => {
-    const t = setInterval(refresh, 5_000)
-    return () => clearInterval(t)
-  }, [refresh])
   return (
     <div className="flex flex-col">
-      <PageHeader
-        title="Slack"
-        description="Let your Bots read and search your Slack, start routines when someone messages you, and draft messages that you send yourself. It uses a Slack app of your own; its tokens stay on this OpenBot."
-      />
       {status.loading ? (
         <LoadingLine />
       ) : status.error && !status.value ? (

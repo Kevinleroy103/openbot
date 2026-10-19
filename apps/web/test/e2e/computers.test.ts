@@ -140,7 +140,8 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
 
   test("Settings › Computers: install, pair and run a second node with the dialog's one-liner, approve it, run a command there", async () => {
     const { page } = app
-    await page.getByRole("button", { name: "Computers", exact: true }).click()
+    await page.getByRole("button", { name: "Account" }).click()
+    await page.getByRole("menuitem", { name: "Computers" }).click()
     const settings = page.getByTestId("settings-dialog")
     await settings.waitFor()
     await page.getByTestId("pair-computer").click()

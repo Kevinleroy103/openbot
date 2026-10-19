@@ -81,6 +81,17 @@ export const settingsDialogAtom: Atom.Writable<SettingsDialogState> = Atom.make<
   Atom.withLabel("openbot/web/settingsDialog"),
 )
 
+/** Connect apps (D3.4): the catalog, the manage view of connected apps, or one app's page. */
+export type ConnectAppsView = { readonly kind: "browse" } | { readonly kind: "manage" } | { readonly kind: "app"; readonly id: string }
+export interface ConnectAppsState {
+  readonly open: boolean
+  readonly view: ConnectAppsView
+}
+export const connectAppsAtom: Atom.Writable<ConnectAppsState> = Atom.make<ConnectAppsState>({ open: false, view: { kind: "browse" } }).pipe(
+  Atom.keepAlive,
+  Atom.withLabel("openbot/web/connectApps"),
+)
+
 export interface ComputerViewState {
   readonly botId: BotId | null
   /** Take control right away (a hand-off card's "Take over"). */
@@ -187,6 +198,20 @@ export const useSettingsDialog = () => {
       open: state.open,
       page: state.page,
       show: (page?: SettingsPage) => set({ open: true, page: page ?? "general" }),
+      hide: () => set({ ...state, open: false }),
+    }),
+    [state, set],
+  )
+}
+
+export const useConnectApps = () => {
+  const [state, set] = useAtom(connectAppsAtom)
+  return useMemo(
+    () => ({
+      open: state.open,
+      view: state.view,
+      /** Opens the window (on the catalog, or on `view`, e.g. `{kind: "app", id: "slack"}`). */
+      show: (view?: ConnectAppsView) => set({ open: true, view: view ?? { kind: "browse" } }),
       hide: () => set({ ...state, open: false }),
     }),
     [state, set],

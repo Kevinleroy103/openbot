@@ -134,7 +134,7 @@ export const SCENES: ReadonlyArray<Shot> = [
       await page.getByRole("dialog").locator("[data-exchange-item][data-target]").first().waitFor()
     },
   },
-  { name: "50-settings", route: "#/c/cnv_chief", act: async (page) => void (await page.getByRole("button", { name: "Computers" }).click()) },
+  { name: "50-settings", route: "#/c/cnv_chief", act: async (page) => void (await openComputers(page)) },
   // skills (D5.5): the library, the editor, the skills.sh import, a Bot's Library tab
   { name: "60-skills", route: "#/c/cnv_chief", act: async (page) => void (await openSkills(page)) },
   {
@@ -304,16 +304,22 @@ export const COMPUTER_SCENES: ReadonlyArray<Shot> = [
     name: "79-settings-computers",
     route: "#/c/cnv_chief",
     act: async (page) => {
-      await page.getByRole("button", { name: "Computers" }).click()
+      await openComputers(page)
       await page.getByTestId("node-row").filter({ hasText: "vps-1" }).getByRole("button", { name: "Show details" }).click()
       await page.getByTestId("desktop-setup").waitFor()
     },
   },
 ]
 
-/** Settings › Skills (from the sidebar's Computers pill, then the nav). */
+/** Settings › Computers (from the account menu). */
+const openComputers = async (page: Page) => {
+  await page.getByRole("button", { name: "Account" }).click()
+  await page.getByRole("menuitem", { name: "Computers" }).click()
+}
+
+/** Settings › Skills (Settings › Computers, then the nav). */
 const openSkills = async (page: Page) => {
-  await page.getByRole("button", { name: "Computers" }).click()
+  await openComputers(page)
   await page.getByTestId("settings-nav-skills").click()
   await page.getByTestId("skills-library").getByTestId("skill-row").first().waitFor()
 }

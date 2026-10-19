@@ -275,7 +275,7 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
       case "manual":
         return { type: "manual" }
       case "slack": {
-        if (!slackConnected) return "Connect Slack first (Settings › Slack)"
+        if (!slackConnected) return "Connect Slack first (Connect apps › Slack)"
         const phrase = slackPhrase.trim()
         const channel = slackChannel.trim()
         if (slackOn === "phrase" && phrase === "") return "Say which words to look for"
@@ -379,7 +379,7 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
                 <span className="text-xs text-fg-tertiary">
                   {slackConnected
                     ? `${bot.name} reads the message with your instruction. Messages that arrive close together come as one run.`
-                    : "Connect Slack in Settings › Slack to use this."}
+                    : "Connect Slack in Connect apps › Slack to use this."}
                 </span>
               </>
             )}

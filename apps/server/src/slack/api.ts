@@ -95,7 +95,7 @@ export const describeSlackError = (error: unknown): InvalidInput | Unavailable =
       return new Unavailable({ message: "Slack did not answer; try again in a minute." })
     default:
       return REJECTED.has(error.code)
-        ? new Unavailable({ message: "Slack no longer accepts OpenBot's token. Connect Slack again in Settings › Slack." })
+        ? new Unavailable({ message: "Slack no longer accepts OpenBot's token. Connect Slack again in Connect apps › Slack." })
         : new Unavailable({ message: `Slack refused (${error.code}).` })
   }
 }

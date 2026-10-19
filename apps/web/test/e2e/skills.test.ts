@@ -66,7 +66,8 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
 
   test("Settings › Skills: write a skill and give it to Mira", async () => {
     const { page } = app
-    await page.getByRole("button", { name: "Computers" }).click()
+    await page.getByRole("button", { name: "Account" }).click()
+    await page.getByRole("menuitem", { name: "Settings" }).click()
     await page.getByTestId("settings-nav-skills").click()
     const library = page.getByTestId("skills-library")
     await library.getByText("No skills yet", { exact: false }).waitFor()
@@ -182,7 +183,8 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
 
   test("re-importing replaces: the Bots that have it start checked, unchecking one takes it away", async () => {
     const { page } = app
-    await page.getByRole("button", { name: "Computers" }).click()
+    await page.getByRole("button", { name: "Account" }).click()
+    await page.getByRole("menuitem", { name: "Settings" }).click()
     await page.getByTestId("settings-nav-skills").click()
     await page.getByTestId("import-skill").click()
     const dialog = page.getByRole("dialog", { name: "Import from skills.sh" })

@@ -1,5 +1,6 @@
-// E2E: Slack (D3.4) against the real brain and a fake Slack (OPENBOT_SLACK_API_URL). Settings › Slack
-// connects with pasted tokens and shows live messages on; a Bot's draft shows as a "Slack message"
+// E2E: Slack (D3.4) against the real brain and a fake Slack (OPENBOT_SLACK_API_URL). Connect apps
+// (the sidebar pill) lists Slack; its page connects with pasted tokens and shows live messages on,
+// and the window then counts it as connected (manage view); a Bot's draft shows as a "Slack message"
 // card that the owner edits and sends (the fake Slack receives it as the owner, mentions resolved);
 // the routine editor offers a Slack trigger, and a Slack DM starts that routine. Screenshots: e2e-8x-*.png.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
@@ -34,13 +35,16 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
     slack?.stop()
   })
 
-  test("Settings › Slack: paste the tokens and connect", async () => {
+  test("Connect apps › Slack: paste the tokens and connect", async () => {
     const { page } = app
-    await page.getByRole("button", { name: "Computers" }).click()
-    await page.getByTestId("settings-nav-slack").click()
+    await page.getByTestId("connect-apps-pill").click()
+    const window = page.getByTestId("connect-apps")
+    await window.getByText("0 connected").waitFor()
+    await app.shot("e2e-80-connect-apps")
+    await window.getByTestId("app-slack").getByRole("button", { name: "Connect" }).click()
     const steps = page.getByTestId("slack-connect")
     await steps.waitFor()
-    await app.shot("e2e-80-slack-connect")
+    await app.shot("e2e-81-slack-connect")
     await steps.getByRole("textbox", { name: "User OAuth Token" }).fill("xoxp-wrong")
     await page.getByTestId("slack-connect-button").click()
     await steps.getByText("Slack didn't accept that User OAuth Token.").waitFor()
@@ -51,9 +55,16 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
     await connected.getByText("Acme", { exact: true }).waitFor()
     await connected.getByText("As Owner · acme.slack.com").waitFor()
     await connected.getByText("On", { exact: true }).waitFor()
-    await app.shot("e2e-81-slack-connected")
+    await app.shot("e2e-85-slack-connected")
     expect(await rpc.call((c) => c["slack.status"]())).toMatchObject({ connected: true, team: "Acme", events: "live" })
-    await page.getByRole("button", { name: "Close settings" }).click()
+    // back in the catalog Slack is connected; "1 connected ›" lists it
+    await page.getByTestId("connect-apps-back").click()
+    await window.getByTestId("app-slack").getByText("Connected").waitFor()
+    await window.getByTestId("connected-count").click()
+    await window.getByTestId("connected-slack").getByText("Acme · live messages on").waitFor()
+    await app.shot("e2e-86-connect-apps-manage")
+    await window.getByRole("button", { name: "Close" }).click()
+    await window.waitFor({ state: "detached" })
     expect(app.errors).toEqual([])
   }, 60_000)
 

@@ -1,7 +1,7 @@
 // Search palette (Cmd/Ctrl+K, grok-bot-ui.md §4.10): Bots (unread first), group chats, settings
 // pages and actions. Rows: 22 px avatar + name + label chip, unread dot at the right. Phone: a
 // full-screen sheet with an iOS "Cancel", without the keyboard-only actions.
-import { ChartNoAxesColumn, Cpu, MessageSquarePlus, MessagesSquare, Monitor, Moon, PanelLeft, Plus, Settings, ShieldCheck, Sparkles, Sun, Users } from "lucide-react"
+import { Blocks, ChartNoAxesColumn, Cpu, MessageSquarePlus, Monitor, Moon, PanelLeft, Plus, Settings, ShieldCheck, Sparkles, Sun, Users } from "lucide-react"
 import { type ReactNode, useMemo } from "react"
 import { useAtomSet } from "@effect/atom-react"
 import { DEFAULT_SETTINGS, type ConversationSummary } from "@openbot/contracts"
@@ -9,7 +9,8 @@ import { updateSettingsAtom } from "@openbot/client"
 import { Avatar, AvatarStack, CommandPalette, CommandPaletteBody, Dialog, Icon, KeyBadge, LabelChip, UnreadDot, type PaletteItem } from "@openbot/ui"
 import { useIsPhone } from "../app/layout.ts"
 import { useRoster } from "../app/data.ts"
-import { useDialogs, useResolvedTheme, useSelection, useSettingsDialog } from "../app/uiState.ts"
+import { useConnectApps, useDialogs, useResolvedTheme, useSelection, useSettingsDialog } from "../app/uiState.ts"
+import { APPS, AppTile } from "../connections/apps.tsx"
 import type { SettingsPage } from "../contracts.ts"
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -26,6 +27,7 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
   const { select } = useSelection()
   const dialogs = useDialogs()
   const settingsDialog = useSettingsDialog()
+  const connectApps = useConnectApps()
   const theme = useResolvedTheme()
   const updateSettings = useAtomSet(updateSettingsAtom)
   const settings = roster.state.settings ?? DEFAULT_SETTINGS
@@ -113,11 +115,26 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
       page("computers", "Computers", Monitor, ["nodes", "pair", "pairing"]),
       page("permissions", "Permissions", ShieldCheck, ["rules", "approvals", "allow"]),
       page("skills", "Skills", Sparkles, ["library", "skills.sh", "import"]),
-      page("slack", "Slack", MessagesSquare, ["connect", "connector", "workspace"]),
       page("usage", "Usage", ChartNoAxesColumn, ["tokens", "cost"]),
+      {
+        id: "apps",
+        label: "Connect apps",
+        group: "Apps",
+        keywords: ["connections", "connectors", "integrations", "plugins"],
+        leading: <Icon icon={Blocks} size="xl" className="text-icon-secondary" />,
+        onSelect: () => connectApps.show(),
+      },
+      ...APPS.map((app): PaletteItem => ({
+        id: `apps:${app.id}`,
+        label: `Connect apps › ${app.name}`,
+        group: "Apps",
+        keywords: ["connect", "connection", ...app.keywords],
+        leading: <AppTile app={app} size={24} />,
+        onSelect: () => connectApps.show({ kind: "app", id: app.id }),
+      })),
       ...(phone ? actions.filter((a) => a.id !== "action:compact").map(({ trailing: _shortcut, ...a }) => a) : actions),
     ]
-  }, [roster, select, dialogs, settingsDialog, theme, settings.showSteps, updateSettings, onToggleCompact, phone])
+  }, [roster, select, dialogs, settingsDialog, connectApps, theme, settings.showSteps, updateSettings, onToggleCompact, phone])
 
   if (phone) {
     return (

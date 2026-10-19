@@ -1,10 +1,11 @@
 // Sidebar (grok-bot-ui.md §4.1): Search + New round buttons, pinned tiles (3 per row), sections with
 // counts and collapse, Bot rows (36 px avatar, name, label chip, preview, unread dot, status),
-// group chats, Unassigned, Hidden Bots, and the footer (owner menu + "Computers" pill, Grok's
-// "Connect apps" slot, opening Settings › Computers). Compact mode = 88 px avatar rail. On a phone
+// group chats, Unassigned, Hidden Bots, and the footer (owner menu + Grok's "Connect apps" pill with
+// the connected apps' logos; Computers is in the owner menu). Compact mode = 88 px avatar rail. On a phone
 // this is Home (Grok iOS): full width, account / search / new in the header, larger rows with a time
 // column, and a long-press on a row or tile opens its menu as an action sheet.
 import {
+  Blocks,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -56,7 +57,8 @@ import { formatListTime, initials, plainPreview } from "../app/format.ts"
 import { updateReady, useDesktopUpdate } from "../app/desktopUpdate.ts"
 import { useIsPhone } from "../app/layout.ts"
 import { type LongPressPoint, useArmedClicks, useLongPress } from "../app/longPress.ts"
-import { useDialogs, useSelection, useSettingsDialog } from "../app/uiState.ts"
+import { useConnectApps, useDialogs, useSelection, useSettingsDialog } from "../app/uiState.ts"
+import { APPS, StackedLogos, useAppStatuses } from "../connections/apps.tsx"
 import { describeFailure } from "../cards/useRespond.ts"
 import { modKey } from "../palette/SearchPalette.tsx"
 import { buildSidebar, type SidebarItem, type SidebarSection } from "./model.ts"
@@ -487,7 +489,6 @@ export interface SidebarProps {
 export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: SidebarProps): ReactNode {
   const roster = useRoster()
   const { conversationId, select } = useSelection()
-  const settingsDialog = useSettingsDialog()
   const dialogs = useDialogs()
   // Phone Home: no "current" row (the open chat is not on screen), so its unread dot shows too.
   const phone = useIsPhone()
@@ -575,18 +576,31 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
       {!phone && <DesktopUpdateButton />}
       <div className={cn("flex shrink-0 items-center gap-2 px-4 pt-2", phone ? "pb-[max(12px,env(safe-area-inset-bottom))]" : "pb-[max(16px,env(safe-area-inset-bottom))]")}>
         {!phone && <OwnerMenu />}
-        <PillButton
-          variant="ghost"
-          size="lg"
-          leadingIcon={Monitor}
-          onClick={() => settingsDialog.show("computers")}
-          className={cn("flex-1 bg-elevated hairline border-line-tertiary shadow-control hover:bg-elevated-hover", phone && "h-11!")}
-        >
-          Computers
-        </PillButton>
+        <ConnectAppsPill phone={phone} />
       </div>
       {menu && <RowContextMenu target={menu} onClose={() => setMenu(undefined)} />}
     </nav>
+  )
+}
+
+/** Grok's "Connect apps" pill: opens Connect Apps; the connected apps' logos at the right. */
+function ConnectAppsPill({ phone }: { readonly phone: boolean }): ReactNode {
+  const connectApps = useConnectApps()
+  const statuses = useAppStatuses()
+  const connected = APPS.filter((app) => statuses.get(app.id)?.state !== "off")
+  return (
+    <button
+      type="button"
+      onClick={() => connectApps.show()}
+      data-testid="connect-apps-pill"
+      className={cn(
+        "inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-elevated px-4 text-base font-medium text-fg hairline border-line-tertiary shadow-control transition-colors hover:bg-elevated-hover",
+        phone ? "h-11" : "h-9",
+      )}
+    >
+      <span className="truncate">Connect apps</span>
+      <StackedLogos apps={connected} size={18} />
+    </button>
   )
 }
 
@@ -624,7 +638,7 @@ function CompactSidebar({
   readonly menu: ContextTarget | undefined
   readonly closeMenu: () => void
 }): ReactNode {
-  const settingsDialog = useSettingsDialog()
+  const connectApps = useConnectApps()
   const groups: ReadonlyArray<ReadonlyArray<SidebarItem>> = [model.pinned, ...model.sections.map((s) => s.items)].filter((g) => g.length > 0)
   return (
     <nav aria-label="Bots" className="flex h-full flex-col items-center bg-sidebar">
@@ -668,7 +682,7 @@ function CompactSidebar({
       <div className="flex shrink-0 flex-col items-center gap-2 pt-2 pb-4">
         <DesktopUpdateButton compact />
         <IconButton icon={Plus} label="New chat" onClick={onNewChat} />
-        <IconButton icon={Monitor} label="Computers" onClick={() => settingsDialog.show("computers")} />
+        <IconButton icon={Blocks} label="Connect apps" onClick={() => connectApps.show()} />
         <OwnerMenu />
       </div>
       {menu && <RowContextMenu target={menu} onClose={closeMenu} />}

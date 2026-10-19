@@ -85,7 +85,7 @@ export const slackEventsText = (events: ReadonlyArray<SlackEvent>): string => {
   }).join("\n\n")
 }
 
-const notConnected = new Unavailable({ message: "Slack isn't connected (Settings › Slack)." })
+const notConnected = new Unavailable({ message: "Slack isn't connected (Connect apps › Slack)." })
 
 export const makeSlackService = Effect.gen(function*() {
   const conversations = yield* ConversationService

@@ -820,7 +820,7 @@ export class MockBrain {
     const entry = conv?.state.entries.get(entryId as EntryId)
     if (entry?.kind !== "card" || entry.card.type !== "slack-draft") throw new NotFound({ entity: "slack draft", id: entryId })
     if (entry.state.status !== "pending") throw new Conflict({ reason: entry.state.status === "resolved" ? "This message was already sent." : "This draft was discarded." })
-    if (text !== undefined && !this.slack.connected) throw new Unavailable({ message: "Slack isn't connected (Settings › Slack)." })
+    if (text !== undefined && !this.slack.connected) throw new Unavailable({ message: "Slack isn't connected (Connect apps › Slack)." })
     const card = text === undefined ? entry.card : { ...entry.card, text }
     const state = text === undefined
       ? { status: "dismissed" as const, detail: "Discarded" }

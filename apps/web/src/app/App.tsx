@@ -2,7 +2,7 @@
 // real history entries, uiState.ts / nav.ts), keyboard shortcuts, the shell, the palettes and the
 // W2.3 mounts (details pane, computer view, settings, new bot / group forms, onboarding).
 import { WifiOff } from "lucide-react"
-import { type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { BotId, ConversationId } from "@openbot/contracts"
 import { connectionAtom, reconnectAtom } from "@openbot/client"
@@ -19,6 +19,8 @@ import { ComputerView, DetailsPane, NewBotForm, NewGroupForm, Onboarding, Settin
 import { isPhoneNow, useLayoutMode, useVisualViewport } from "./layout.ts"
 import { useBackDismiss } from "./nav.ts"
 import { useSystemNotifications } from "./notifications.ts"
+
+const ConnectAppsDialog = lazy(() => import("../connections/ConnectAppsDialog.tsx").then((m) => ({ default: m.ConnectAppsDialog })))
 import {
   isNewChatHash,
   previousConversationAtom,
@@ -28,6 +30,7 @@ import {
   usePhoneNav,
   useResolvedTheme,
   useSelection,
+  useConnectApps,
   useSettingsDialog,
 } from "./uiState.ts"
 
@@ -85,6 +88,7 @@ export function App(): ReactNode {
   const nav = usePhoneNav()
   const details = useDetailsPane()
   const settings = useSettingsDialog()
+  const connectApps = useConnectApps()
   const computer = useComputerView()
   const dialogs = useDialogs()
   /** The desktop app's code waiting to be allowed (`#/connect-device?code=…`). */
@@ -326,6 +330,11 @@ export function App(): ReactNode {
       {settings.open && (
         <Suspense fallback={null}>
           <SettingsDialog open={settings.open} initialPage={settings.page} onClose={settings.hide} />
+        </Suspense>
+      )}
+      {connectApps.open && (
+        <Suspense fallback={null}>
+          <ConnectAppsDialog key={JSON.stringify(connectApps.view)} open view={connectApps.view} onClose={connectApps.hide} />
         </Suspense>
       )}
       <ConnectionBanner />

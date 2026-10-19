@@ -34,8 +34,9 @@ logs
 *.sqlite
 *.sqlite-*
 
-# research material (cloned repos, SDK scratch, design references)
+# research material (cloned repos, SDK scratch, design references) and research notes: local only
 vendor/
+docs/research/
 
 # generated screenshots (bun apps/web/test/shoot*.ts, packages/ui/scripts/screenshot.ts)
 apps/web/test/screenshots/

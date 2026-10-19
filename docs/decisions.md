@@ -1,6 +1,6 @@
 # OpenBot decision record
 
-Binding decisions for the v1 design and implementation. Each one cites the research that supports it (`docs/research/*`). Where research reports disagree, the resolution here wins. Decisions marked **(reversible)** are defaults the user may change later; they are recorded so the code keeps the seam open.
+Binding decisions for the v1 design and implementation. Each one cites the research that supports it (`docs/research/*`, kept locally and not in the repo). Where research reports disagree, the resolution here wins. Decisions marked **(reversible)** are defaults the user may change later; they are recorded so the code keeps the seam open.
 
 Status: accepted 2026-10-15 (orchestrator), pending user review.
 

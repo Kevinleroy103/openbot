@@ -2,7 +2,7 @@
 
 OpenBot is an open-source, self-hosted, harness-agnostic Grok Bot. The **brain** (`apps/server`) runs orchestration, harness agent loops, persistence, the MCP gateway and the web UI. **Nodes** (`apps/node`, plus an in-process local node) execute tools.
 
-Read first: `docs/decisions.md` (binding), `docs/architecture.md`, `docs/plan.md`. Research with evidence lives in `docs/research/`.
+Read first: `docs/decisions.md` (binding), `docs/architecture.md`, `docs/plan.md`. Research with evidence lives in `docs/research/` (local only: gitignored, not in the repo).
 
 ## Rules
 

@@ -2,16 +2,20 @@ import { describe, expect, test } from "bun:test"
 import type { RoutineSpec, TranscriptEntry } from "@openbot/contracts"
 import { ROUTINE_RUNS_KEPT } from "@openbot/contracts"
 import { Effect, Exit, Layer, Option } from "effect"
-import { botActor, ConversationRepo, RoutineRepo, RoutineScheduler, userActor } from "../../src/ports/index.ts"
+import { botActor, ConversationRepo, EntryRepo, RoutineRepo, RoutineScheduler, userActor } from "../../src/ports/index.ts"
 import { RoutineSchedulerLive } from "../../src/services/automation/index.ts"
 import { DONE_ONCE_RETENTION_MS } from "../../src/services/automation/RoutineScheduler.ts"
 import {
   advance,
   ConversationServiceFake,
+  entryId,
   makeClaims,
+  makeEventEntry,
+  makeMessageEntry,
   makeRoutine,
   OrchestratorFake,
   routineId,
+  routineRunId,
   runTest,
   setTime,
 } from "../../src/testing/index.ts"
@@ -289,5 +293,64 @@ describe("RoutineScheduler", () => {
     })
     const changes = out.written.flatMap((e) => (e.kind === "event" && e.event.type === "routine-changed" ? [e.event.action] : []))
     expect(changes).toEqual(["disabled", "enabled", "updated", "deleted"])
+  })
+})
+
+describe("routine runs with nothing to say", () => {
+  const silentLayer = RoutineSchedulerLive.pipe(Layer.provideMerge(baseLayer({ autoComplete: { status: "completed" } })))
+  const dmEntries = Effect.flatMap(EntryRepo, (repo) => repo.page({ conversationId: DM_A.id, limit: 100 })).pipe(
+    Effect.orDie,
+    Effect.map((page) => page.entries),
+  )
+
+  test("a run that ends without a message leaves no line in the chat; the run is still recorded", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const scheduler = yield* RoutineScheduler
+        const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: hourly })
+        yield* scheduler.runNow(routine.id)
+        yield* eventually(Effect.map(runsOf(routine.id), (runs) => runs[0]?.status === "succeeded"))
+        yield* eventually(Effect.map(dmEntries, (all) => !all.some((e) => e.kind === "event" && e.event.type === "routine-run")))
+        return { runs: yield* runsOf(routine.id), entries: yield* dmEntries }
+      }),
+      silentLayer,
+    )
+    expect(out.runs[0]).toMatchObject({ status: "succeeded" })
+    expect(out.runs[0]!.summary).toBeUndefined()
+    expect(out.entries.filter((e) => e.kind === "event" && e.event.type === "routine-run")).toEqual([])
+  })
+
+  test("at boot, lines of earlier silent runs go; a run that said something keeps its line", async () => {
+    const run = (id: string, at: number) =>
+      makeEventEntry({
+        id: entryId(`ent_run_${id}`),
+        conversationId: DM_A.id,
+        createdAt: at,
+        updatedAt: at,
+        event: { type: "routine-run", routineId: routineId("rtn_brief"), routineName: "Briefing", runId: routineRunId(`run_${id}`), status: "succeeded" },
+      })
+    const seeded = Layer.effectDiscard(Effect.gen(function*() {
+      yield* seed
+      const repo = yield* EntryRepo
+      for (
+        const entry of [
+          run("1", 1_000),
+          run("2", 2_000),
+          makeMessageEntry({ id: entryId("ent_said"), conversationId: DM_A.id, createdAt: 2_500, updatedAt: 2_500, role: "bot", author: { kind: "bot", botId: BOT_A.id }, text: "Meeting at 3" }),
+          run("3", 3_000),
+          makeMessageEntry({ id: entryId("ent_owner"), conversationId: DM_A.id, createdAt: 3_500, updatedAt: 3_500, text: "thanks" }),
+          run("4", 4_000),
+        ]
+      ) yield* repo.upsert(entry).pipe(Effect.orDie)
+    }))
+    const remaining = await runTest(
+      Effect.gen(function*() {
+        yield* eventually(Effect.map(dmEntries, (all) => all.length === 3))
+        return (yield* dmEntries).map((e) => e.id)
+      }),
+      RoutineSchedulerLive.pipe(Layer.provideMerge(seeded), Layer.provideMerge(baseLayer())),
+    )
+    expect(remaining.map(String)).toEqual(["ent_run_2", "ent_said", "ent_owner"])
   })
 })

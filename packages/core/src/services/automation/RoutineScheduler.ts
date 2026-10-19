@@ -14,6 +14,9 @@
  *   last bot message, truncated) and the event entry is updated. `RoutineRepo` keeps the last 20.
  * - One run per routine at a time: a scheduled fire while the previous run is still going is
  *   skipped (logged); `runNow` fails with `Conflict`.
+ * - A run the Bot had nothing to say about (it succeeded without a message) leaves no line in the
+ *   Bot's chat: its `routine-run` event is removed; the run stays in the routine's history. At boot
+ *   the lines such runs left before this rule (in the Bots' chats) are removed too.
  * - Slack triggers (D3.4, with a `SlackConnector` in the context): each Slack message is matched
  *   against the enabled Slack routines (`slackTriggerMatches`). Messages for one routine within
  *   `SLACK_BATCH_MS` make one `event` run, which reads them after its prompt (`slackEventsText`);
@@ -34,7 +37,7 @@ import type {
 import { Conflict, InvalidInput, NotFound } from "@openbot/contracts"
 import { Clock, Duration, Effect, FiberSet, Layer, Option, Queue, Semaphore, Stream } from "effect"
 import { IdGen } from "../../ports/IdGen.ts"
-import { BotRepo, RoutineRepo } from "../../ports/repos.ts"
+import { BotRepo, EntryRepo, RoutineRepo } from "../../ports/repos.ts"
 import { type Actor, ConversationService, type EntryDraft, Orchestrator, RoutineScheduler } from "../../ports/services.ts"
 import { SlackConnector, type SlackEvent } from "../../ports/Slack.ts"
 import { CATCH_UP_WINDOW_MS, describeTrigger, nextRunAfter, sameTrigger, validateTrigger } from "./schedule.ts"
@@ -78,6 +81,7 @@ const scheduleFrom = (routine: Routine, now: number): Routine =>
 export const makeRoutineScheduler = Effect.gen(function*() {
   const repo = yield* RoutineRepo
   const bots = yield* BotRepo
+  const entries = yield* EntryRepo
   const conversations = yield* ConversationService
   const orchestrator = yield* Orchestrator
   const ids = yield* IdGen
@@ -186,6 +190,14 @@ export const makeRoutineScheduler = Effect.gen(function*() {
     ).pipe(Effect.asVoid, Effect.catch((error) => Effect.logWarning("RoutineScheduler: run event not updated", error)))
   }
 
+  const removeRunEvent = (runId: RoutineRunId) => {
+    const entryId = runEvents.get(runId)
+    if (entryId === undefined) return Effect.void
+    return conversations.removeEntry(entryId).pipe(
+      Effect.catchCause((cause) => Effect.logWarning("RoutineScheduler: run event not removed", cause)),
+    )
+  }
+
   /** Closes a run (idempotent: only a running run changes). */
   const finishRun = (
     routineId: RoutineId,
@@ -217,7 +229,9 @@ export const makeRoutineScheduler = Effect.gen(function*() {
       if (routine.value.lastRunAt === run.value.startedAt) {
         yield* repo.upsert({ ...routine.value, lastRunStatus: result.status }).pipe(Effect.orDie)
       }
-      yield* updateRunEvent(runId, result.status)
+      // nothing to say: no line in the Bot's chat (the run stays in the routine's history)
+      const silent = result.status === "succeeded" && (summary === undefined || summary.length === 0)
+      yield* silent && routine.value.output === "direct" ? removeRunEvent(runId) : updateRunEvent(runId, result.status)
       runEvents.delete(runId)
     }))
 
@@ -397,6 +411,39 @@ export const makeRoutineScheduler = Effect.gen(function*() {
     const sleepMs = earliest === undefined ? MAX_SCHEDULER_SLEEP_MS : Math.min(MAX_SCHEDULER_SLEEP_MS, Math.max(0, earliest - after))
     yield* Effect.raceFirst(Effect.sleep(Duration.millis(sleepMs)), Queue.take(wake))
   })
+
+  /**
+   * Boot: removes the lines that silent runs left in the Bots' chats (a finished `routine-run` event
+   * with no message or card from the Bot before the next run or the owner's next message), among
+   * each chat's latest entries.
+   */
+  const SILENT_SCAN_ENTRIES = 500
+  const cleanSilentRuns = Effect.gen(function*() {
+    let removed = 0
+    for (const bot of yield* bots.list.pipe(Effect.orDie)) {
+      const page = yield* entries.page({ conversationId: bot.directConversationId, limit: SILENT_SCAN_ENTRIES }).pipe(Effect.orDie)
+      const list = page.entries
+      for (let i = 0; i < list.length; i++) {
+        const entry = list[i]!
+        if (entry.kind !== "event" || entry.event.type !== "routine-run" || entry.event.status !== "succeeded") continue
+        let said = false
+        for (let j = i + 1; j < list.length; j++) {
+          const next = list[j]!
+          if (next.kind === "event" && next.event.type === "routine-run") break
+          if (next.kind === "message" && next.role === "user") break
+          if ((next.kind === "message" && next.role === "bot") || next.kind === "card") {
+            said = true
+            break
+          }
+        }
+        if (said) continue
+        yield* conversations.removeEntry(entry.id)
+        removed++
+      }
+    }
+    if (removed > 0) yield* Effect.logInfo(`RoutineScheduler: removed ${removed} lines of routine runs that had nothing to say`)
+  }).pipe(Effect.catchCause((cause) => Effect.logWarning("RoutineScheduler: silent run lines not cleaned", cause)))
+  yield* Effect.forkScoped(cleanSilentRuns, { startImmediately: true })
 
   const loop = boot.pipe(
     Effect.catchDefect((defect) => Effect.logError("RoutineScheduler: boot pass failed", defect)),
@@ -591,5 +638,5 @@ export const makeRoutineScheduler = Effect.gen(function*() {
 export const RoutineSchedulerLive: Layer.Layer<
   RoutineScheduler,
   never,
-  Orchestrator | ConversationService | RoutineRepo | BotRepo | IdGen
+  Orchestrator | ConversationService | RoutineRepo | BotRepo | EntryRepo | IdGen
 > = Layer.effect(RoutineScheduler, makeRoutineScheduler)

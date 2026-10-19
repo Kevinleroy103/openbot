@@ -10,7 +10,7 @@
  * - `LiveHubFake`: records every publish with a per-replica cursor; subscriptions stream
  *   `synchronized` then live items (no snapshots).
  * - `ConversationServiceFake`: the transcript-write subset over EntryRepo/RequestRepo/ConversationRepo
- *   + LiveHub (append/update entries, events, notices, requests, routine-run conversations).
+ *   + LiveHub (append/update/remove entries, events, notices, requests, routine-run conversations).
  * - `OrchestratorFake`: records deliveries; `awaitDelivery` resolves via `complete` or `autoComplete`.
  * - `ApprovalServiceFake`: `evaluate` follows a policy (default: allow / first options); tool
  *   requests return pending receipts; `asyncAnswers` is fed by `answer`.
@@ -258,7 +258,13 @@ export class ConversationServiceFake extends Context.Service<ConversationService
         markRead: () => notImplemented("ConversationServiceFake", "markRead"),
         setHidden: () => notImplemented("ConversationServiceFake", "setHidden"),
         removeGroup: () => notImplemented("ConversationServiceFake", "removeGroup"),
-        removeEntry: () => notImplemented("ConversationServiceFake", "removeEntry"),
+        removeEntry: (entryId) =>
+          Effect.gen(function*() {
+            const current = yield* repoOrDie(entries.get(entryId))
+            if (Option.isNone(current)) return
+            yield* repoOrDie(entries.remove(entryId))
+            yield* hub.publishConversation(current.value.conversationId, { type: "entry.removed", entryId, reason: "retracted" })
+          }),
         appendEntry,
         updateEntry: (entryId, update) =>
           Effect.gen(function*() {

@@ -8,7 +8,7 @@
  *   SkillServiceLive        Layer<SkillService, never, SkillStore | ConversationService>
  *   ApprovalServiceLive     Layer<ApprovalService, never, ConversationService | SettingsService | Notifier |
  *                                 RequestRepo | ApprovalRuleRepo | BotRepo | IdGen>
- *   RoutineSchedulerLive    Layer<RoutineScheduler, never, Orchestrator | ConversationService | RoutineRepo | BotRepo | IdGen>
+ *   RoutineSchedulerLive    Layer<RoutineScheduler, never, Orchestrator | ConversationService | RoutineRepo | BotRepo | EntryRepo | IdGen>
  *                                 (optional SlackConnector: Slack-triggered routines)
  *   SlackServiceLive        Layer<SlackService, never, ConversationService | EntryRepo | BotRepo | Notifier> (optional SlackConnector)
  *

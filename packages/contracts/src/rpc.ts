@@ -32,6 +32,7 @@ import { RuntimeRequest, RuntimeResponseInput } from "./runtime-request.ts"
 import { Settings, SettingsPatch } from "./settings.ts"
 import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
 import { SlackConnectInput, SlackStatus } from "./slack.ts"
+import { HarkSends, HarkStatus } from "./hark.ts"
 import { ConversationStreamItem, ExchangePage, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
 import { Task, TaskDetail } from "./task.ts"
 import { Attachment, MessageDelivery, Turn } from "./transcript.ts"
@@ -392,6 +393,14 @@ export class OpenBotRpcs extends RpcGroup.make(
     error: errors(NotFound, InvalidInput, Conflict, Unavailable),
   }),
   Rpc.make("slack.discardDraft", { payload: { entryId: EntryId }, error: errors(NotFound, Conflict) }),
+
+  // Hark: iPhone notifications (D3.5)
+  Rpc.make("hark.status", { success: HarkStatus, error: errors() }),
+  /** Checks the webhook by sending a test notification, then keeps it on the brain. */
+  Rpc.make("hark.connect", { payload: { webhook: Schema.String }, success: HarkStatus, error: errors(InvalidInput, Unavailable) }),
+  Rpc.make("hark.disconnect", { success: HarkStatus, error: errors() }),
+  Rpc.make("hark.test", { success: HarkStatus, error: errors(InvalidInput, Unavailable) }),
+  Rpc.make("hark.setSends", { payload: { sends: HarkSends }, success: HarkStatus, error: errors(InvalidInput) }),
 
   // usage
   Rpc.make("usage.byBot", { payload: { sinceMs: Schema.optionalKey(Millis) }, success: Schema.Array(BotUsage), error: errors() }),

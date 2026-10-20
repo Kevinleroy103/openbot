@@ -99,6 +99,7 @@ import { RpcHandlersLive } from "./rpc.ts"
 import { setShutdownPhase } from "./shutdown.ts"
 import { SkillsShLive } from "./skillsSh.ts"
 import { SlackConnectorLive } from "./slack/connector.ts"
+import { HarkLive } from "./hark.ts"
 
 // ============================================================================ startup errors
 
@@ -391,6 +392,7 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     Layer.provideMerge(InstructionRendererLive),
     Layer.provideMerge(ApprovalServiceLive),
     Layer.provideMerge(SlackServiceLive), // Slack drafts (D3.4)
+    Layer.provideMerge(HarkLive({ file: makeDataDir(config.dataDir).hark, baseUrl: config.harkUrl })), // iPhone notifications (D3.5)
     Layer.provideMerge(MemoryServiceLive),
     Layer.provideMerge(level2),
     Layer.provideMerge(LiveHubLive),

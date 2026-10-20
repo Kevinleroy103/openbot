@@ -166,6 +166,14 @@ lands in the chat of the Bot you pick under Connect apps › Slack (or the Bot y
 with its link, and the Bot reads the whole thread. It needs live messages on. An app created before
 this option existed needs its manifest updated once: Connect apps › Slack has the steps.
 
+### Hark: notifications on your iPhone
+
+Until the OpenBot iPhone app has push notifications, [Hark](https://hark.ryan.ceo) can bring them to
+your phone. Install Hark, add a service called OpenBot, and paste its webhook URL under Connect apps ›
+Hark. OpenBot sends a test notification, then pushes every notification it makes (or only the ones
+where a Bot needs you), grouped by Bot. Tapping one opens that chat, through the address you gave
+`--public-origin`.
+
 ## Desktop app
 
 OpenBot also runs in its own window on macOS, Linux and Windows, with your Bots' updates as the

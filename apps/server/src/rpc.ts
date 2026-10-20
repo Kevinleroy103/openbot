@@ -37,6 +37,7 @@ import {
 import { Cause, Clock, Effect, Option, Stream } from "effect"
 import { userInfo } from "node:os"
 import { OPENBOT_VERSION, ServerConfig } from "./config.ts"
+import { Hark } from "./hark.ts"
 import { HarnessProfiles } from "./profiles.ts"
 
 const INTERNAL_MESSAGE = "Something went wrong on the brain; the details are in its log."
@@ -133,6 +134,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
   const tasks = yield* BackgroundTasks
   const slack = yield* SlackConnector
   const slackDrafts = yield* SlackService
+  const hark = yield* Hark
   const ownerFallback = defaultOwnerName()
 
   return OpenBotRpcs.of({
@@ -285,6 +287,13 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "slack.disconnect": () => edge("slack.disconnect", Effect.andThen(slack.disconnect, slack.status)),
     "slack.sendDraft": ({ entryId, text }) => edge("slack.sendDraft", slackDrafts.send({ entryId, text })),
     "slack.discardDraft": ({ entryId }) => edge("slack.discardDraft", slackDrafts.discard(entryId)),
+
+    // ---------------------------------------------------------------- Hark (D3.5)
+    "hark.status": () => edge("hark.status", hark.status),
+    "hark.connect": ({ webhook }) => edge("hark.connect", hark.connect(webhook)),
+    "hark.disconnect": () => edge("hark.disconnect", hark.disconnect),
+    "hark.test": () => edge("hark.test", hark.test),
+    "hark.setSends": ({ sends }) => edge("hark.setSends", hark.setSends(sends)),
 
     // ---------------------------------------------------------------- usage
     "usage.byBot": ({ sinceMs }) => edge("usage.byBot", usage.byBot({ sinceMs })),

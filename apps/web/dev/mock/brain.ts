@@ -59,6 +59,7 @@ import {
   type SkillName,
   type SkillPreview,
   type SlackStatus,
+  type HarkStatus,
   type ToolKind,
   type Turn,
   type TurnFailure,
@@ -134,6 +135,8 @@ export class MockBrain {
   readonly rules = new Map<string, ApprovalRule>()
   /** Slack (D3.4): any `xoxp-` token connects the mock to workspace "Acme". */
   slack: SlackStatus = { connected: false, events: "off" }
+  /** Hark (D3.5): any `whk_` webhook connects the mock. */
+  hark: HarkStatus = { connected: false, sends: "all" }
   readonly attachments = new Map<string, { readonly mime: string; readonly bytes: Uint8Array }>()
   readonly sends = new Map<string, SendResult>()
   readonly usage = new Map<string, BotUsage>()
@@ -1349,6 +1352,28 @@ export class MockBrain {
       "computer.ensure": ({ botId }) => sync(() => this.computerEnsure(botId))(),
       "computer.lease": ({ botId, take }) => sync(() => this.computerLease(botId, take))(),
       "computer.reset": ({ botId }) => sync(() => this.computerReset(botId))(),
+      "hark.status": () => Effect.succeed(this.hark),
+      "hark.connect": ({ webhook }) =>
+        sync(() => {
+          if (!/whk_/.test(webhook)) throw new InvalidInput({ message: "Paste the service's webhook URL from Hark (…/hooks/whk_…)." })
+          this.hark = { connected: true, sends: this.hark.sends, lastSentAt: this.now() }
+          return this.hark
+        })(),
+      "hark.disconnect": () =>
+        sync(() => {
+          this.hark = { connected: false, sends: "all" }
+          return this.hark
+        })(),
+      "hark.test": () =>
+        sync(() => {
+          this.hark = { ...this.hark, lastSentAt: this.now() }
+          return this.hark
+        })(),
+      "hark.setSends": ({ sends }) =>
+        sync(() => {
+          this.hark = { ...this.hark, sends }
+          return this.hark
+        })(),
       "slack.status": () => Effect.succeed(this.slack),
       "slack.connect": ({ userToken, appToken }) =>
         sync(() => {

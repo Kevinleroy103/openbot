@@ -63,6 +63,11 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
     await window.getByTestId("connected-count").click()
     await window.getByTestId("connected-slack").getByText("Acme · live messages on").waitFor()
     await app.shot("e2e-86-connect-apps-manage")
+    // Hark sits under Notifications
+    await page.getByTestId("connect-apps-back").click()
+    await window.getByTestId("app-hark").getByRole("button", { name: "Connect" }).click()
+    await page.getByTestId("hark-connect").waitFor()
+    await app.shot("e2e-87-hark-connect")
     await window.getByRole("button", { name: "Close" }).click()
     await window.waitFor({ state: "detached" })
     expect(app.errors).toEqual([])

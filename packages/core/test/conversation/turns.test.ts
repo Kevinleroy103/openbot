@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { KnownConversationStreamItem, KnownRosterStreamItem } from "@openbot/contracts"
 import { Effect, Option } from "effect"
 import { TestClock } from "effect/testing"
-import { BotRepo, LiveHub, Orchestrator, sessionKeyOf } from "../../src/ports/index.ts"
+import { BotRepo, ConversationService, LiveHub, Orchestrator, sessionKeyOf } from "../../src/ports/index.ts"
 import { NotifierFake, runTest, UsageServiceFake } from "../../src/testing/index.ts"
 import {
   appLayer,
@@ -452,13 +452,18 @@ describe("session lifecycle", () => {
       Effect.gen(function*() {
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
+        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "Hello there.").pipe(Effect.andThen(turn.complete())))
         yield* send(bot.directConversationId, "hi")
         yield* settled(bot.directConversationId)
+        const before = yield* conversation(bot.directConversationId)
+        yield* TestClock.adjust("5 minutes")
         yield* (yield* Orchestrator).compact({ botId: bot.id })
         return {
           compactions: yield* driver.compactions,
           entries: yield* transcript(bot.directConversationId),
+          before,
           conv: yield* conversation(bot.directConversationId),
+          summary: yield* Effect.flatMap(ConversationService, (c) => c.summary(bot.directConversationId)),
         }
       }),
       appLayer({ capabilities: { compact: true } }),
@@ -466,5 +471,8 @@ describe("session lifecycle", () => {
     expect(out.compactions).toBe(1)
     expect(eventsOf(out.entries).some((e) => e.type === "session-changed" && e.action === "compacted")).toBe(true)
     expect(out.conv.sessions?.[0]?.contextUsage?.usedTokens).toBe(500)
+    // housekeeping: the chat neither moves nor shows it as its preview
+    expect(out.conv.lastActivityAt).toBe(out.before.lastActivityAt)
+    expect(out.summary.preview).toBe("Hello there.")
   })
 })

@@ -176,6 +176,17 @@ describe("layoutTranscript", () => {
     expect(layoutTranscript({ entries, turns: [turn("trn_1", "completed")], showSteps: false }).map((r) => r.type)).toEqual(["timestamp", "group", "group", "timestamp", "group", "event"])
   })
 
+  test("compaction lines show only when the owner asks for them (Settings › Show compactions)", () => {
+    const t0 = 3_600_000_000
+    const entries: Array<KnownTranscriptEntry> = [
+      msg(t0, user, "hi"),
+      { ...base(t0 + 1, { kind: "system" }), kind: "event", event: { type: "session-changed", action: "compacted", botId: "bot_a" as BotId } },
+      msg(t0 + 2, bot(), "hello"),
+    ]
+    expect(layoutTranscript({ entries, turns: [], showSteps: true }).map((r) => r.type)).toEqual(["timestamp", "group", "group"])
+    expect(layoutTranscript({ entries, turns: [], showSteps: true, showCompactions: true }).map((r) => r.type)).toEqual(["timestamp", "group", "event", "group"])
+  })
+
   test("a turn with only auto-decisions still gets a steps disclosure", () => {
     const t0 = 3_600_000_000
     const entries: Array<KnownTranscriptEntry> = [

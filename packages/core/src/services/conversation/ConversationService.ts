@@ -20,7 +20,7 @@ import { BotRepo, ConversationRepo, EntryRepo, type EntryPosition, ReplicaLog, R
 import { ConversationService, type EntryDraft, LiveHub } from "../../ports/services.ts"
 import { ConversationStore, ConversationStoreLive } from "./internal/ConversationStore.ts"
 import { summarize } from "./internal/summary.ts"
-import { compact, orDie, required } from "./internal/util.ts"
+import { compact, isHousekeeping, orDie, required } from "./internal/util.ts"
 
 /** Upper bound for `conversations.history` and `conversations.exchange` pages. */
 export const MAX_HISTORY_LIMIT = 500
@@ -31,7 +31,7 @@ type GroupConversation = Extract<Conversation, { kind: "group" }>
 
 /** Entry kinds that move the conversation (activity time, unread, preview). */
 const touchesConversation = (entry: KnownTranscriptEntry): boolean =>
-  entry.kind === "message" || entry.kind === "card" || entry.kind === "event" || entry.kind === "notice"
+  (entry.kind === "message" || entry.kind === "card" || entry.kind === "event" || entry.kind === "notice") && !isHousekeeping(entry)
 
 /** Bookkeeping applied to the conversation when `entry` is appended. */
 export const bumpForEntry = (conversation: Conversation, entry: KnownTranscriptEntry): Conversation => {

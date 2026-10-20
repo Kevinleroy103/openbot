@@ -16,6 +16,8 @@ export const Settings = Schema.Struct({
   accent: AccentPreference.pipe(Schema.withDecodingDefaultKey(Effect.succeed("bot" as const))),
   /** The collapsed "N steps ›" disclosure under finished turns (D6.4). */
   showSteps: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
+  /** "Compacted context" lines in chats (a Bot compacting its context); hidden by default. */
+  showCompactions: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   /** Global switch for bot-to-bot tools (D5.2 kill switch). */
   botMessaging: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
   /** Compact a Bot's large context when it goes idle, while the prompt cache is still warm. */
@@ -45,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   accent: "bot",
   showSteps: true,
+  showCompactions: false,
   botMessaging: true,
   compactIdleBots: true,
   approvalExpiryMinutes: DEFAULT_APPROVAL_EXPIRY_MINUTES,
@@ -57,6 +60,7 @@ export const SettingsPatch = Schema.Struct({
   theme: Schema.optionalKey(ThemePreference),
   accent: Schema.optionalKey(AccentPreference),
   showSteps: Schema.optionalKey(Schema.Boolean),
+  showCompactions: Schema.optionalKey(Schema.Boolean),
   botMessaging: Schema.optionalKey(Schema.Boolean),
   compactIdleBots: Schema.optionalKey(Schema.Boolean),
   /** `null` clears the default. */
@@ -76,6 +80,7 @@ export const applySettingsPatch = (settings: Settings, patch: SettingsPatch): Se
   if (patch.theme !== undefined) next.theme = patch.theme
   if (patch.accent !== undefined) next.accent = patch.accent
   if (patch.showSteps !== undefined) next.showSteps = patch.showSteps
+  if (patch.showCompactions !== undefined) next.showCompactions = patch.showCompactions
   if (patch.botMessaging !== undefined) next.botMessaging = patch.botMessaging
   if (patch.compactIdleBots !== undefined) next.compactIdleBots = patch.compactIdleBots
   if (patch.approvalExpiryMinutes !== undefined) next.approvalExpiryMinutes = patch.approvalExpiryMinutes

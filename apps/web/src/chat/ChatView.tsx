@@ -128,9 +128,10 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
   )
   const turns = useMemo(() => [...stateTurns.values()], [stateTurns])
   const showSteps = settings.showSteps
+  const showCompactions = settings.showCompactions
   const rows = useMemo(
-    () => layoutTranscript({ entries, turns: stateTurns, pending, unreadBoundaryAt: boundary, showSteps, direct: !isGroup }),
-    [entries, stateTurns, pending, boundary, showSteps, isGroup],
+    () => layoutTranscript({ entries, turns: stateTurns, pending, unreadBoundaryAt: boundary, showSteps, showCompactions, direct: !isGroup }),
+    [entries, stateTurns, pending, boundary, showSteps, showCompactions, isGroup],
   )
   const byId = useMemo(() => messageIndex(entries), [entries])
 

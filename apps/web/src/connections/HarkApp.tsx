@@ -1,6 +1,7 @@
 // Connect apps › Hark (D3.5): OpenBot's notifications on the owner's iPhone through Hark until the
-// OpenBot iPhone app has its own. Not connected: get Hark, add a service, paste its webhook (OpenBot
-// sends a test notification to check it). Connected: what to send, a test, Disconnect.
+// OpenBot iPhone app has its own. Not connected: get Hark on the iPhone, create a service in Hark's
+// web dashboard (the app has none), paste its webhook (OpenBot sends a test notification to check
+// it). Connected: what to send, a test, Disconnect.
 import { harkStatusAtom } from "@openbot/client"
 import type { HarkSends, HarkStatus } from "@openbot/contracts"
 import { PillButton, Select, TextField } from "@openbot/ui"
@@ -10,6 +11,7 @@ import { ConfirmDialog, ErrorLine, formatWhen, LoadingLine, useCommand, useQuery
 import { GroupLabel, RowDivider, SettingsCard, SettingsRow } from "../settings/layout.tsx"
 
 export const HARK_SITE = "https://hark.ryan.ceo"
+const HARK_APP_STORE = "https://apps.apple.com/us/app/hark-developer-notifications/id6794121509"
 
 export function HarkApp(): ReactNode {
   const status = useQuery(harkStatusAtom)
@@ -37,18 +39,23 @@ function Connect(): ReactNode {
       <SettingsCard testId="hark-connect">
         <SettingsRow
           title="1. Get Hark on your iPhone"
-          description="Install it and allow notifications."
+          description="Install it, sign in and allow notifications."
           control={
-            <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(HARK_SITE, "_blank", "noopener")}>
-              Open Hark
+            <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(HARK_APP_STORE, "_blank", "noopener")}>
+              App Store
             </PillButton>
           }
         />
         <RowDivider />
         <SettingsRow
-          title="2. Add a service"
-          description="In Hark, add a service called OpenBot and copy its webhook URL (…/hooks/whk_…)."
+          title="2. Create a service"
+          description="In Hark's web dashboard (signed in with the same account), create a service called OpenBot and copy the webhook URL it shows (…/hooks/whk_…)."
           wide
+          control={
+            <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(HARK_SITE, "_blank", "noopener")}>
+              Hark dashboard
+            </PillButton>
+          }
         >
           <TextField
             type="password"

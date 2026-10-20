@@ -169,8 +169,8 @@ this option existed needs its manifest updated once: Connect apps › Slack has 
 ### Hark: notifications on your iPhone
 
 Until the OpenBot iPhone app has push notifications, [Hark](https://hark.ryan.ceo) can bring them to
-your phone. Install Hark, add a service called OpenBot, and paste its webhook URL under Connect apps ›
-Hark. OpenBot sends a test notification, then pushes every notification it makes (or only the ones
+your phone. Install Hark on the iPhone, create a service called OpenBot in Hark's web dashboard
+(hark.ryan.ceo; the app has no such option), and paste its webhook URL under Connect apps › Hark. OpenBot sends a test notification, then pushes every notification it makes (or only the ones
 where a Bot needs you), grouped by Bot. Tapping one opens that chat, through the address you gave
 `--public-origin`.
 

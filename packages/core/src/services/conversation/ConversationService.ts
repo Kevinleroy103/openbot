@@ -397,6 +397,23 @@ export const ConversationServiceLive: Layer.Layer<
       markRead,
       setHidden: (conversationId, hidden) =>
         Effect.asVoid(store.update(conversationId, (c) => ({ ...c, hiddenFromSidebar: hidden }))),
+      place: Effect.fn("ConversationService.place")(function*(conversationId, input) {
+        const before = yield* store.get(conversationId)
+        if (before.kind !== "group") return yield* new InvalidInput({ message: "Only group chats have their own place in the sidebar." })
+        yield* store.update(conversationId, (c) => {
+          if (c.kind !== "group") return c
+          let next: typeof c = c
+          if (input.sectionId !== undefined) {
+            const { sectionId: _drop, ...rest } = next
+            next = input.sectionId === null ? rest : { ...rest, sectionId: input.sectionId }
+          }
+          if (input.sidebarOrder !== undefined) {
+            const { sidebarOrder: _drop, ...rest } = next
+            next = input.sidebarOrder === null ? rest : { ...rest, sidebarOrder: input.sidebarOrder }
+          }
+          return next
+        })
+      }),
       appendEntry,
       updateEntry,
       removeEntry: Effect.fn("ConversationService.removeEntry")(function*(entryId) {

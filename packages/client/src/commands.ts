@@ -41,6 +41,7 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "sections.rename": [Keys.sections],
   "sections.delete": [Keys.sections],
   "sections.reorder": [Keys.sections],
+  "sidebar.arrange": [],
   "conversations.createGroup": [],
   "conversations.setMembers": [],
   "conversations.rename": [],

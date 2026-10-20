@@ -41,5 +41,7 @@ export const summarize = (
       unreadCount: conversation.unreadCount,
       pendingRequestCount: pending.length,
       hiddenFromSidebar: conversation.hiddenFromSidebar,
+      sectionId: conversation.kind === "group" ? conversation.sectionId : undefined,
+      sidebarOrder: conversation.kind === "group" ? conversation.sidebarOrder : undefined,
     })
   })

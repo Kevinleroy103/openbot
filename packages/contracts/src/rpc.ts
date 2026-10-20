@@ -96,6 +96,8 @@ export const BotPatch = Schema.Struct({
   instructions: Schema.optionalKey(Schema.String),
   sectionId: Schema.optionalKey(Schema.NullOr(SectionId)),
   pinned: Schema.optionalKey(Schema.Boolean),
+  /** `null`: back to ordering by recent activity. */
+  sidebarOrder: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   hidden: Schema.optionalKey(Schema.Boolean),
   notify: Schema.optionalKey(BotNotify),
   autonomy: Schema.optionalKey(BotAutonomy),
@@ -105,6 +107,16 @@ export const BotPatch = Schema.Struct({
   skills: Schema.optionalKey(Schema.Array(SkillName)),
 })
 export type BotPatch = typeof BotPatch.Type
+
+/** Where a chat is dragged in the sidebar: the pins, a section, Unassigned (Bots) or Group chats. */
+export const SidebarPlace = Schema.Union([Schema.Literals(["pinned", "unassigned", "groups"]), SectionId])
+export type SidebarPlace = typeof SidebarPlace.Type
+
+export const SidebarItemRef = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("bot"), botId: BotId }),
+  Schema.Struct({ kind: Schema.Literal("group"), conversationId: ConversationId }),
+])
+export type SidebarItemRef = typeof SidebarItemRef.Type
 
 export const BotContext = Schema.Struct({
   /** The fully rendered instructions the harness receives (persona + team + memory index + placement). */
@@ -237,6 +249,11 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("sections.delete", { payload: { sectionId: SectionId }, error: Missing }),
   /** Full desired order; returns the sections with their new `order`. */
   Rpc.make("sections.reorder", { payload: { sectionIds: Schema.Array(SectionId) }, success: Schema.Array(Section), error: Common }),
+  /**
+   * A chat dragged in the sidebar: `items` is the new order of everything at `place`; each goes there
+   * and keeps that position (Bots pinned or in a section, group chats in a section or Group chats).
+   */
+  Rpc.make("sidebar.arrange", { payload: { place: SidebarPlace, items: Schema.Array(SidebarItemRef) }, error: errors(NotFound, InvalidInput) }),
 
   // conversations
   ConversationsSubscribe,

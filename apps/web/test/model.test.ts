@@ -296,6 +296,30 @@ describe("sidebar model", () => {
     expect(gamma.preview).toBe("Waiting for you")
     expect(model.hidden.items.map((i) => (i.kind === "bot" ? i.bot.name : ""))).toEqual(["Delta"])
   })
+  test("dragged chats keep their place; undragged ones come first by recent activity; groups join sections", () => {
+    const state: RosterState = {
+      ...emptyRosterState,
+      bots: new Map([
+        ["a", mkBot("a", "Alpha", { sectionId: "sec_1", sidebarOrder: 1 })],
+        ["b", mkBot("b", "Beta", { sectionId: "sec_1", sidebarOrder: 0 })],
+        ["c", mkBot("c", "Gamma", { sectionId: "sec_1" })],
+        ["p", mkBot("p", "Pin1", { pinned: true, sidebarOrder: 1, createdAt: 1 })],
+        ["q", mkBot("q", "Pin2", { pinned: true, sidebarOrder: 0, createdAt: 2 })],
+      ]) as never,
+      sections: new Map([["sec_1" as SectionId, { id: "sec_1" as SectionId, name: "Revenue", order: 1 }]]),
+      conversations: new Map([
+        ["cnv_a" as ConversationId, summary("cnv_a", { lastActivityAt: 50 })],
+        ["cnv_c" as ConversationId, summary("cnv_c", { lastActivityAt: 10 })],
+        ["cnv_g" as ConversationId, summary("cnv_g", { kind: "group", title: "Crew", botIds: ["a"] as never, sectionId: "sec_1" as SectionId, sidebarOrder: 2 })],
+      ]),
+    }
+    const model = buildSidebar(state)
+    expect(model.pinned.map((p) => p.bot.name)).toEqual(["Pin2", "Pin1"])
+    const revenue = model.sections.find((s) => s.id === "sec_1")!
+    expect(revenue.items.map((i) => (i.kind === "bot" ? i.bot.name : i.summary.title))).toEqual(["Gamma", "Beta", "Alpha", "Crew"])
+    // Group chats stays (empty) while a group chat exists: somewhere to drag it back to
+    expect(model.sections.find((s) => s.id === "groups")?.items).toEqual([])
+  })
   test("one mind: a bot working in a group says where in its DM row", () => {
     const state: RosterState = {
       ...emptyRosterState,

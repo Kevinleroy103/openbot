@@ -42,6 +42,7 @@ const V1_RPCS = [
   "sections.rename",
   "sections.delete",
   "sections.reorder",
+  "sidebar.arrange",
   "conversations.subscribe",
   "conversations.history",
   "conversations.exchange",

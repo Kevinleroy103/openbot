@@ -288,6 +288,9 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "slack.sendDraft": ({ entryId, text }) => edge("slack.sendDraft", slackDrafts.send({ entryId, text })),
     "slack.discardDraft": ({ entryId }) => edge("slack.discardDraft", slackDrafts.discard(entryId)),
 
+    // ---------------------------------------------------------------- sidebar (drag and drop)
+    "sidebar.arrange": (input) => edge("sidebar.arrange", bots.arrangeSidebar(input)),
+
     // ---------------------------------------------------------------- Hark (D3.5)
     "hark.status": () => edge("hark.status", hark.status),
     "hark.connect": ({ webhook }) => edge("hark.connect", hark.connect(webhook)),

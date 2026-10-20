@@ -231,6 +231,8 @@ export class MockBrain {
       pendingRequestCount: r.requests.filter((q) => q.status === "pending" && q.blocking).length,
       hiddenFromSidebar: c.hiddenFromSidebar,
       ...((previewText ?? prev?.preview) !== undefined ? { preview: previewText ?? prev?.preview } : {}),
+      ...(c.kind === "group" && c.sectionId !== undefined ? { sectionId: c.sectionId } : {}),
+      ...(c.kind === "group" && c.sidebarOrder !== undefined ? { sidebarOrder: c.sidebarOrder } : {}),
     }
     this.roster.apply({ type: "conversation.upserted", conversation: summary })
   }
@@ -1124,6 +1126,27 @@ export class MockBrain {
         })(),
       "conversations.markRead": ({ conversationId, unread, at }) => sync(() => this.markRead(conversationId, unread, at))(),
       "conversations.setHidden": ({ conversationId, hidden }) => sync(() => this.updateConversation(conversationId, { hiddenFromSidebar: hidden }))(),
+      "sidebar.arrange": ({ place, items }: { place: string; items: ReadonlyArray<{ kind: "bot"; botId: string } | { kind: "group"; conversationId: string }> }) =>
+        sync(() => {
+          const section = place === "pinned" || place === "unassigned" || place === "groups" ? undefined : place
+          items.forEach((item, index) => {
+            if (item.kind === "bot") {
+              const bot = this.bot(item.botId)
+              if (!bot) throw new NotFound({ entity: "bot", id: item.botId })
+              const next: Record<string, unknown> = { ...bot, pinned: place === "pinned", sidebarOrder: index, updatedAt: this.now() }
+              if (place !== "pinned") {
+                if (section === undefined) delete next.sectionId
+                else next.sectionId = section
+              }
+              this.putBot(next as unknown as Bot)
+            } else {
+              const r = this.conv(item.conversationId)
+              const { sectionId: _drop, ...rest } = r.conversation as Conversation & { sectionId?: string }
+              r.apply({ type: "conversation.updated", conversation: { ...rest, ...(section === undefined ? {} : { sectionId: section }), sidebarOrder: index } as Conversation })
+              this.publishSummary(item.conversationId)
+            }
+          })
+        })(),
       "conversations.delete": ({ conversationId }) =>
         sync(() => {
           const c = this.conv(conversationId).conversation

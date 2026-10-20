@@ -18,6 +18,8 @@ export const SlackStatus = Schema.Struct({
    */
   events: Schema.Literals(["off", "connecting", "live", "failed"]),
   problem: Schema.optionalKey(Schema.String),
+  /** Permissions the app has not been given yet (an app made from an older manifest): it needs an update. */
+  missingScopes: Schema.optionalKey(Schema.Array(Schema.String)),
   /** The Slack app's id (`A…`), known once live messages connect: links to its settings pages. */
   appId: Schema.optionalKey(Schema.String),
 })
@@ -36,7 +38,7 @@ export type SlackConnectInput = typeof SlackConnectInput.Type
 
 /**
  * User scopes: read and search what the owner can see, send as the owner (only after they press
- * Send on a draft), and open a DM with someone.
+ * Send on a draft), with files, and open a DM with someone.
  */
 export const SLACK_USER_SCOPES: ReadonlyArray<string> = [
   "channels:history",
@@ -51,6 +53,7 @@ export const SLACK_USER_SCOPES: ReadonlyArray<string> = [
   "search:read",
   "users:read",
   "chat:write",
+  "files:write",
 ]
 
 /** The "Send to OpenBot" message shortcut (⋯ on a message in Slack); its clicks arrive over Socket Mode. */

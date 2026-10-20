@@ -96,9 +96,10 @@ export interface AppStatus {
 const slackStatusOf = (status: SlackStatus | undefined, loading: boolean): AppStatus => {
   if (status === undefined || !status.connected) return { state: "off", loading }
   const live = status.events === "live" ? "live messages on" : status.events === "connecting" ? "connecting live messages" : status.events === "off" ? "live messages off" : "live messages not working"
+  const outdated = status.missingScopes !== undefined && status.missingScopes.length > 0
   return {
-    state: status.events === "failed" ? "attention" : "connected",
-    summary: [status.team, live].filter((part) => part !== undefined).join(" · "),
+    state: status.events === "failed" || outdated ? "attention" : "connected",
+    summary: [status.team, outdated ? "the app needs an update" : live].filter((part) => part !== undefined).join(" · "),
     loading,
   }
 }

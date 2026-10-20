@@ -681,6 +681,17 @@ export class Messaging extends Context.Service<Messaging, {
       readonly progress?: ((message: string) => Effect.Effect<void>) | undefined
     },
   ) => Effect.Effect<SendFilesResult, NotFound | InvalidInput>
+  /**
+   * The files at `paths` on a node, brought into OpenBot (attachments) without posting them: for a
+   * Slack draft's files. Same limits and path policy as `sendFiles`.
+   */
+  readonly importFiles: (input: {
+    readonly nodeId: NodeId
+    readonly inv: Invocation
+    readonly cwd?: string | undefined
+    readonly paths: ReadonlyArray<string>
+    readonly progress?: ((message: string) => Effect.Effect<void>) | undefined
+  }) => Effect.Effect<ReadonlyArray<Attachment>, InvalidInput>
 }>()("openbot/core/Messaging") {}
 
 // ============================================================================ InstructionRenderer (§4.3.7)

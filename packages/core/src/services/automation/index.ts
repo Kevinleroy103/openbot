@@ -10,7 +10,7 @@
  *                                 RequestRepo | ApprovalRuleRepo | BotRepo | IdGen>
  *   RoutineSchedulerLive    Layer<RoutineScheduler, never, Orchestrator | ConversationService | RoutineRepo | BotRepo | EntryRepo | IdGen>
  *                                 (optional SlackConnector: Slack-triggered routines)
- *   SlackServiceLive        Layer<SlackService, never, ConversationService | EntryRepo | BotRepo | Notifier> (optional SlackConnector)
+ *   SlackServiceLive        Layer<SlackService, never, ConversationService | EntryRepo | BotRepo | Notifier | AttachmentStore> (optional SlackConnector)
  *   SlackShortcutsLive      Layer<never, never, Orchestrator | SettingsService | BotRepo | ConversationService>
  *                                 (Slack's "Send to OpenBot" clicks; optional SlackConnector)
  *

@@ -155,6 +155,41 @@ describe("finished notifications", () => {
   })
 })
 
+describe("a signed-out harness", () => {
+  test("says so in plain words, notifies once for the account, and leaves the bot no note", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const driver = yield* TestDriver
+        const ada = yield* createBot("Ada")
+        const bob = yield* createBot("Bob")
+        for (const bot of [ada, bob]) {
+          yield* driver.setBehavior(bot.id, (turn) => turn.fail("auth", "Failed to authenticate: OAuth session expired"))
+        }
+        yield* send(ada.directConversationId, "hi")
+        yield* settled(ada.directConversationId)
+        yield* send(bob.directConversationId, "hi")
+        yield* settled(bob.directConversationId)
+        // signed in again: the next turn carries no "ended early" note
+        yield* driver.setBehavior(ada.id, (turn) => turn.say(`${turn.turnId}/m`, "Hello!").pipe(Effect.andThen(turn.complete())))
+        yield* send(ada.directConversationId, "again")
+        yield* settled(ada.directConversationId, 2)
+        return {
+          failure: (yield* turnsOf(ada.directConversationId)).find((t) => t.status === "failed")?.failure,
+          errors: (yield* (yield* NotifierFake).sent).filter((n) => n.kind === "error"),
+          inputs: (yield* driver.turns).map((t) => t.input.text),
+        }
+      }),
+      appLayer(),
+    )
+    expect(out.failure).toMatchObject({ code: "auth" })
+    expect(out.failure!.message).toContain("is signed out on the computer OpenBot runs on, so Ada can't reply")
+    expect(out.failure!.message).toContain("(Failed to authenticate: OAuth session expired)")
+    expect(out.errors).toHaveLength(1)
+    expect(out.errors[0]!.title).toContain("is signed out")
+    expect(out.inputs.at(-1)).not.toContain("[Note:")
+  })
+})
+
 describe("queue vs steer", () => {
   test("auto steers into a running turn when the harness can; queue mode always queues", async () => {
     const out = await runTest(

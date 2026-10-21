@@ -217,6 +217,11 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
     prevHeight.current = null
     if (stick.current) el.scrollTop = el.scrollHeight
   }, [rows, statuses.length, showTray])
+  // too little to scroll (a short page) means no scroll to load older on: load it until there is
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el !== null && el.scrollHeight <= el.clientHeight) onScroll()
+  }, [rows, onScroll])
   // (ChatView is keyed by conversation id in the shell, so per-conversation state starts fresh.)
   const scrollToBottom = () => {
     const el = scrollRef.current

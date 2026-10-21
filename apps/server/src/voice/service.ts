@@ -11,21 +11,22 @@ import {
   type Bot,
   type BotId,
   Conflict,
+  type TurnId,
   defaultVoiceFor,
   VOICE_OUTPUT_SAMPLE_RATE,
   type VoiceCallStatus,
   type VoiceClientMessage,
 } from "@openbot/contracts"
-import { BotRepo, EntryRepo, LiveHub, Orchestrator, SettingsService } from "@openbot/core"
+import { BotRepo, ConversationService, EntryRepo, LiveHub, Orchestrator, SettingsService } from "@openbot/core"
 import { closeWriter, type Frame, open } from "@openbot/brain-nodes"
-import { Context, Duration, Effect, Layer, Option, Queue, Result } from "effect"
+import { Context, Duration, Effect, Fiber, Layer, Option, Queue, Result } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import type * as Socket from "effect/socket/Socket"
 import { access, rm } from "node:fs/promises"
 import path from "node:path"
 import { sttPlatformOf } from "../stt/manifest.ts"
 import { SpeechToText } from "../stt/service.ts"
-import { CALL_INPUT_SAMPLE_RATE, toPcm16, type Transcription, VoiceCall } from "./call.ts"
+import { type Answer, CALL_INPUT_SAMPLE_RATE, toPcm16, type Transcription, VoiceCall } from "./call.ts"
 import { downloadVoice, isVoiceInstalled, type Speaker, startSpeaker, startThinker, type Thinker, voiceLayout } from "./engine.ts"
 import { VOICE_MANIFEST, type VoiceManifest, voiceDownloadBytes } from "./manifest.ts"
 import { streamReply } from "./reply.ts"
@@ -103,7 +104,7 @@ interface Engines {
   readonly speaker: Speaker
 }
 
-export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | EntryRepo | SettingsService> =>
+export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | EntryRepo | SettingsService | ConversationService> =>
   Layer.effect(
     VoiceCalls,
     Effect.gen(function*() {
@@ -118,6 +119,7 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
       const bots = yield* BotRepo
       const entries = yield* EntryRepo
       const settings = yield* SettingsService
+      const conversations = yield* ConversationService
       const layerScope = yield* Effect.scope
 
       const restingStatus = (): VoiceCallStatus =>
@@ -203,7 +205,23 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
        * Work for the Bot: delivered like the owner's words but with no message in the chat (the call is
        * the conversation); its answer is the turn's last message, which the chat shows.
        */
-      const delegate = (bot: Bot) => async (work: { readonly instruction: string; readonly words: string }): Promise<string> => {
+      /**
+       * Once its answer was told on the call, the turn leaves the chat: its messages, thinking and steps
+       * (the call is where that exchange happened). Cards and notices stay (a draft to send, an approval).
+       */
+      const hideTurn = (turnId: TurnId) =>
+        entries.listByTurn(turnId).pipe(
+          Effect.flatMap((list) =>
+            Effect.forEach(
+              list.filter((e) => e.kind === "message" || e.kind === "reasoning" || e.kind === "tool-call" || (e.kind === "event" && e.event.type === "auto-decided")),
+              (e) => conversations.removeEntry(e.id),
+              { discard: true },
+            )
+          ),
+          Effect.catch((error) => Effect.logWarning("voice call: could not hide the handed-over turn", { error: String(error) })),
+        )
+
+      const delegate = (bot: Bot) => async (work: { readonly instruction: string; readonly words: string }): Promise<Answer> => {
         const receipt = await run(orchestrator.deliver({
           conversationId: bot.directConversationId,
           botId: bot.id,
@@ -215,10 +233,12 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           Effect.timeout(ANSWER_TIMEOUT),
           Effect.orElseSucceed(() => undefined),
         ))
-        if (outcome === undefined) return "Still working on it; the answer will be in the chat."
+        if (outcome === undefined) return { text: "Still working on it; the answer will be in the chat." }
         const answer = outcome.lastBotMessage?.trim() ?? ""
-        if (outcome.status !== "completed") return answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}`
-        return answer === "" ? "It finished without saying anything." : answer.slice(-ANSWER_CHARS)
+        const turnId = outcome.turn?.id
+        const told = turnId === undefined ? undefined : () => void run(hideTurn(turnId))
+        if (outcome.status !== "completed") return { text: answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}` }
+        return { text: answer === "" ? "It finished without saying anything." : answer.slice(-ANSWER_CHARS), told }
       }
 
       const transcribe = async (): Promise<Transcription> => {
@@ -288,7 +308,15 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
                 }
               })),
           ).pipe(Effect.ensuring(Effect.sync(() => call.hangup())), Effect.ignore)
-          yield* Effect.logInfo("voice call ended", { bot: bot.name })
+          // the chat keeps the call as one line ("Voice chat · 00:31") that opens to what was said
+          const summary = call.summary()
+          if (summary.lines.length > 0) {
+            yield* conversations.appendEvent({
+              conversationId: bot.directConversationId,
+              event: { type: "voice-call", botId: bot.id, durationMs: Math.round(summary.durationMs), lines: [...summary.lines] },
+            }).pipe(Effect.ignore)
+          }
+          yield* Effect.logInfo("voice call ended", { bot: bot.name, seconds: Math.round(summary.durationMs / 1000) })
         })).pipe(Effect.catchCause((cause) => Effect.logDebug("voice call failed", { cause })))
 
       const call = (botId: string) =>
@@ -300,7 +328,10 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           const upgraded = yield* Effect.result(request.upgrade)
           if (Result.isFailure(upgraded)) return HttpServerResponse.text("expected a WebSocket upgrade", { status: 400 })
           activeCalls++
-          yield* runCall(upgraded.success, bot).pipe(Effect.ensuring(Effect.sync(callEnded)))
+          // detached: the route's fiber is interrupted when the app closes the socket, and the call still
+          // has to finish (the "Voice chat" line)
+          const running = yield* Effect.forkDetach(runCall(upgraded.success, bot).pipe(Effect.ensuring(Effect.sync(callEnded))))
+          yield* Fiber.await(running)
           return HttpServerResponse.empty()
         })
 

@@ -7,8 +7,8 @@
  * - The owner talking over the Bot stops it at once: the reply being written is dropped and the app
  *   is told to drop audio it has not played yet.
  * - Each reply from the voice model is spoken sentence by sentence while it is written. `delegate`
- *   hands the work to the Bot (its chat shows it); the Bot's answer comes back later and is told at
- *   the next quiet moment.
+ *   hands the work to the Bot; its answer comes back later and is told at the next quiet moment
+ *   (then it leaves the chat: `Answer.told`).
  */
 import type { VoiceCallPhase, VoiceServerMessage } from "@openbot/contracts"
 import { frameLevels, speechThreshold } from "../stt/segmenter.ts"
@@ -38,8 +38,8 @@ export interface CallDeps {
   readonly reply: (messages: ReadonlyArray<ChatMessage>, signal: AbortSignal) => AsyncIterable<ReplyEvent>
   /** Speech for `text` at the call's output rate. */
   readonly speak: (text: string) => Promise<Float32Array>
-  /** Hands work to the Bot; resolves with its answer. */
-  readonly delegate: (work: { readonly instruction: string; readonly words: string }) => Promise<string>
+  /** Hands work to the Bot; resolves with its answer (`told`: it was said on the call). */
+  readonly delegate: (work: { readonly instruction: string; readonly words: string }) => Promise<Answer>
   readonly systemPrompt: () => Promise<string>
   readonly send: (message: VoiceServerMessage) => void
   readonly sendAudio: (pcm16: Uint8Array) => void
@@ -87,10 +87,16 @@ interface Turn {
   said: string
 }
 
+export interface Answer {
+  readonly text: string
+  /** Called once the answer has been told on the call. */
+  readonly told?: (() => void) | undefined
+}
+
 interface Work {
   readonly id: string
   readonly instruction: string
-  readonly answer: string
+  readonly answer: Answer
 }
 
 export class VoiceCall {
@@ -109,11 +115,20 @@ export class VoiceCall {
   private ended = false
   private readonly results: Array<Work> = []
   private nextWork = 0
+  private startedAt = 0
+  /** What was said, for the chat's "Voice chat" line. */
+  private readonly lines: Array<{ who: "you" | "bot"; text: string }> = []
 
   constructor(private readonly deps: CallDeps) {}
 
   start(): void {
+    this.startedAt = Date.now()
     this.setPhase("listening")
+  }
+
+  /** How long the call went and what was said (both sides). */
+  summary(): { readonly durationMs: number; readonly lines: ReadonlyArray<{ readonly who: "you" | "bot"; readonly text: string }> } {
+    return { durationMs: this.startedAt === 0 ? 0 : Date.now() - this.startedAt, lines: this.lines.map((l) => ({ ...l })) }
   }
 
   // ---------------------------------------------------------------- input
@@ -240,6 +255,7 @@ export class VoiceCall {
         return
       }
       this.deps.send({ type: "you", text, final: true })
+      this.lines.push({ who: "you", text })
       this.remember({ role: "user", content: text })
       void this.runTurn(text)
     })
@@ -272,6 +288,7 @@ export class VoiceCall {
     let firstAudioAt: number | undefined
     const chunker = new SentenceChunker()
     let speaking: Promise<void> = Promise.resolve()
+    let line: { who: "bot"; text: string } | undefined
     const say = (sentence: string) => {
       // the next sentence is synthesized while this one plays
       const audio = this.deps.speak(sentence).catch((error) => {
@@ -283,6 +300,10 @@ export class VoiceCall {
         if (this.turn !== turn || samples.length === 0) return
         firstAudioAt ??= performance.now()
         turn.said = turn.said === "" ? sentence : `${turn.said} ${sentence}`
+        if (line === undefined) {
+          line = { who: "bot", text: sentence }
+          this.lines.push(line)
+        } else line.text = `${line.text} ${sentence}`
         this.playing = true
         this.deps.sendAudio(toPcm16(samples))
         this.deps.send({ type: "bot", text: sentence })
@@ -326,7 +347,7 @@ export class VoiceCall {
     this.deps.send({ type: "work", id, instruction, done: false })
     void this.deps.delegate({ instruction, words }).then(
       (answer) => answer,
-      (error) => `It could not be done: ${error instanceof Error ? error.message : String(error)}`,
+      (error): Answer => ({ text: `It could not be done: ${error instanceof Error ? error.message : String(error)}` }),
     ).then((answer) => {
       if (this.ended) return
       this.deps.send({ type: "work", id, instruction, done: true })
@@ -340,7 +361,8 @@ export class VoiceCall {
     if (this.ended || this.turn !== undefined || this.utterance !== undefined || this.playing) return
     const work = this.results.shift()
     if (work === undefined) return
-    this.remember({ role: "user", content: `RESULT from your full self (the work: "${work.instruction}"):\n${work.answer}` })
+    this.remember({ role: "user", content: `RESULT from your full self (the work: "${work.instruction}"):\n${work.answer.text}` })
+    work.answer.told?.()
     void this.runTurn(undefined)
   }
 }

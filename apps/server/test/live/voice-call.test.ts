@@ -11,7 +11,9 @@ import { SpeechToTextLive } from "../../src/stt/service.ts"
 import { toPcm16 } from "../../src/voice/call.ts"
 import { startSpeaker, voiceLayout } from "../../src/voice/engine.ts"
 import { VOICE_MANIFEST } from "../../src/voice/manifest.ts"
-import { login, rpcClient, startServer } from "../helpers.ts"
+import { transcriptOf } from "@openbot/contracts"
+import { Ref } from "effect"
+import { eventually, login, rpcClient, startServer, watchConversation } from "../helpers.ts"
 
 const LIVE = process.env["OPENBOT_LIVE_VOICE"] === "1"
 const VOICE_DIR = process.env["OPENBOT_LIVE_VOICE_DIR"] ?? join(homedir(), ".cache", "openbot-live-voice")
@@ -108,6 +110,14 @@ describe.skipIf(!LIVE)("a voice call with the real models", () => {
       const told = messages.slice(answerAt).filter((m) => m.message.type === "bot").map((m) => (m.message as { text: string }).text)
       console.log(`handed over: ${JSON.stringify(handed)}\ntold: ${JSON.stringify(told)}`)
       expect((handed as { instruction: string }).instruction.toLowerCase()).toContain("slack")
+      // the exchange happened on the call: once told, the chat keeps nothing of it
+      const left = await server.run(Effect.gen(function*() {
+        const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
+        const convo = yield* watchConversation(client, bot.directConversationId)
+        const state = yield* eventually(Ref.get(convo.state), (s) => s.synchronized && !transcriptOf(s).some((e) => e.kind === "message"), { label: "no messages left", timeout: 10_000 })
+        return transcriptOf(state).map((e) => e.kind)
+      }).pipe(Effect.scoped))
+      console.log(`left in the chat: ${JSON.stringify(left)}`)
       socket.send(JSON.stringify({ type: "hangup" }))
       socket.close()
     } finally {

@@ -36,6 +36,7 @@ const makeCall = (script: {
   const audio: Array<number> = []
   const prompts: Array<ReadonlyArray<ChatMessage>> = []
   const delegated: Array<{ instruction: string; words: string }> = []
+  const told: Array<string> = []
   let heard = 0
   let replied = 0
   const deps: CallDeps = {
@@ -61,7 +62,7 @@ const makeCall = (script: {
     },
     delegate: async (work) => {
       delegated.push(work)
-      return script.answer ?? "done"
+      return { text: await (script.answer ?? Promise.resolve("done")), told: () => void told.push(work.instruction) }
     },
     systemPrompt: async () => "You are Otto's voice.",
     send: (message) => sent.push(message),
@@ -70,7 +71,7 @@ const makeCall = (script: {
   }
   const call = new VoiceCall(deps)
   call.start()
-  return { call, sent, audio, prompts, delegated }
+  return { call, sent, audio, prompts, delegated, told }
 }
 
 describe("a voice call", () => {
@@ -94,7 +95,7 @@ describe("a voice call", () => {
 
   test("work goes to the Bot with the owner's words, and its answer is told at the next quiet moment", async () => {
     let answer!: (text: string) => void
-    const { call, sent, delegated, prompts } = makeCall({
+    const { call, sent, delegated, prompts, told } = makeCall({
       heard: ["Did Anthony reply on Slack?"],
       replies: [
         { action: "delegate", say: "On it.", instruction: "Check Slack for Anthony's reply." },
@@ -113,6 +114,7 @@ describe("a voice call", () => {
     answer("Anthony: plan looks good, ship Thursday.")
     await until(() => sent.some((m) => m.type === "bot" && m.text === "He says the plan looks good."), "the result told")
     expect(sent).toContainEqual({ type: "work", id: "work-1", instruction: "Check Slack for Anthony's reply.", done: true })
+    expect(told).toEqual(["Check Slack for Anthony's reply."])
     expect(prompts[1]!.at(-1)).toEqual({ role: "user", content: "RESULT from your full self (the work: \"Check Slack for Anthony's reply.\"):\nAnthony: plan looks good, ship Thursday." })
   })
 

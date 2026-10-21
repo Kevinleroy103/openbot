@@ -2,8 +2,9 @@
 // so it goes on while the owner moves between chats; the call bar shows it (useVoiceCall).
 //
 // Up: the microphone (echo cancelled) as 16 kHz PCM16. Down: the Bot's voice as 24 kHz PCM16, played
-// back to back; "stop" (the owner talked over it) drops what is still queued. When everything sent
-// has played, the brain is told ("played"), so it knows the Bot is quiet.
+// back to back. When the owner starts talking over it, it is turned down ("duck"); "unduck" brings it
+// back ("mm-hm"), "stop" drops what is still queued. When everything sent has played, the brain is
+// told ("played"), so it knows the Bot is quiet.
 import { downsample, encodePcm16 } from "@openbot/app-model"
 import type { BotId, VoiceCallPhase, VoiceServerMessage } from "@openbot/contracts"
 import { describeMicrophoneError, type Microphone, startMicrophone } from "../chat/dictation.ts"
@@ -45,6 +46,15 @@ export const callState = (): CallState => state
 // ---------------------------------------------------------------- levels (read by the waveform each frame)
 
 let outputAnalyser: AnalyserNode | undefined
+/** The Bot's volume: turned down while the owner talks over it. */
+let outputGain: GainNode | undefined
+const DUCKED_GAIN = 0.15
+const GAIN_SECONDS = 0.04
+
+const setGain = (value: number) => {
+  if (playback === undefined || outputGain === undefined) return
+  outputGain.gain.setTargetAtTime(value, playback.currentTime, GAIN_SECONDS)
+}
 let micLevel = 0
 const levelBuffer = new Float32Array(512)
 
@@ -95,8 +105,15 @@ const onMessage = (message: VoiceServerMessage) => {
       else addLine({ who: "bot", text: message.text })
       return
     }
+    case "duck":
+      setGain(DUCKED_GAIN)
+      return
+    case "unduck":
+      setGain(1)
+      return
     case "stop":
       stopPlayback()
+      setGain(1)
       return
     case "error":
       set({ error: message.message })
@@ -123,7 +140,7 @@ const play = (pcm: ArrayBuffer) => {
   for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(i * 2, true) / 0x8000
   const source = context.createBufferSource()
   source.buffer = buffer
-  source.connect(outputAnalyser ?? context.destination)
+  source.connect(outputGain ?? context.destination)
   playAt = Math.max(playAt, context.currentTime + 0.02)
   source.start(playAt)
   playAt += buffer.duration
@@ -151,6 +168,7 @@ const teardown = () => {
   void playback?.close()
   playback = undefined
   outputAnalyser = undefined
+  outputGain = undefined
   micLevel = 0
   const open = socket
   socket = undefined
@@ -170,6 +188,8 @@ export const startCall = async (botId: BotId): Promise<void> => {
   outputAnalyser = playback.createAnalyser()
   outputAnalyser.fftSize = 512
   outputAnalyser.connect(playback.destination)
+  outputGain = playback.createGain()
+  outputGain.connect(outputAnalyser)
   const ws = new WebSocket(`${wsOrigin()}/ws/voice/${encodeURIComponent(botId)}`)
   ws.binaryType = "arraybuffer"
   socket = ws

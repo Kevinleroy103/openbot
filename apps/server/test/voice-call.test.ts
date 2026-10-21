@@ -3,7 +3,7 @@
 // Parakeet and Kokoro; the Bot is played by the test.
 import { describe, expect, test } from "bun:test"
 import type { VoiceServerMessage } from "@openbot/contracts"
-import { CALL_INPUT_SAMPLE_RATE, type CallDeps, toPcm16, VoiceCall } from "../src/voice/call.ts"
+import { type AskNote, CALL_INPUT_SAMPLE_RATE, type CallDeps, isBackchannel, isStop, toPcm16, VoiceCall } from "../src/voice/call.ts"
 
 const tone = (seconds: number, amplitude = 0.3) => {
   const samples = new Float32Array(Math.round(CALL_INPUT_SAMPLE_RATE * seconds))
@@ -26,10 +26,11 @@ const say = async (call: VoiceCall, pcm: Uint8Array) => {
   }
 }
 
-const makeCall = (heard: ReadonlyArray<string>, speakMs = 1) => {
+/** `audioSeconds`: how long each spoken sentence plays (the default is nearly instant). */
+const makeCall = (heard: ReadonlyArray<string>, speakMs = 1, audioSeconds?: number) => {
   const sent: Array<VoiceServerMessage> = []
   const audio: Array<number> = []
-  const asked: Array<{ words: string; first: boolean }> = []
+  const asked: Array<{ words: string; first: boolean; note?: AskNote }> = []
   let next = 0
   const deps: CallDeps = {
     transcribe: async () => {
@@ -38,9 +39,9 @@ const makeCall = (heard: ReadonlyArray<string>, speakMs = 1) => {
     },
     speak: async (text) => {
       await Bun.sleep(speakMs)
-      return new Float32Array(text.length * 10)
+      return new Float32Array(audioSeconds === undefined ? text.length * 10 : Math.round(24_000 * audioSeconds))
     },
-    ask: (words, first) => void asked.push({ words, first }),
+    ask: (words, first, note) => void asked.push({ words, first, ...(Object.keys(note).length === 0 ? {} : { note }) }),
     send: (message) => sent.push(message),
     sendAudio: (pcm) => audio.push(pcm.length),
     log: () => undefined,
@@ -122,24 +123,67 @@ describe("a voice call", () => {
     expect(spoken()).toEqual(["Sorry, I couldn't do that just now."])
   })
 
-  test("talking over the Bot stops its voice and drops the rest of that message; a quiet murmur does not", async () => {
-    const { call, sent, asked, spoken } = makeCall(["Tell me everything.", "Wait, stop."], 30)
+  test("talking over the Bot turns it down, stops it at the first real word, and tells it how far it got", async () => {
+    const { call, sent, asked, spoken } = makeCall(["Tell me everything.", "Wait, which one overlaps?"], 5, 0.4)
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    await until(() => asked.length === 1, "asked")
+    void stream(call, "m1", "First thing. Second thing. Third thing. Fourth thing. Fifth thing. Sixth thing.")
+    await until(() => spoken().length >= 2, "speaking")
+    // the owner listens to the first sentence (0.4 s) and part of the second
+    await Bun.sleep(650)
+    // its own voice leaking back quietly is not the owner
+    await say(call, tone(0.3, 0.004))
+    expect(sent.some((m) => m.type === "duck")).toBe(false)
+    await say(call, tone(0.6))
+    expect(sent).toContainEqual({ type: "duck" })
+    // the first partial is real words ("Wait,"): stopped right away
+    await until(() => sent.some((m) => m.type === "stop"), "stopped")
+    await say(call, quiet(0.8))
+    await until(() => asked.length === 2, "asked again")
+    expect(asked[1]!.words).toBe("Wait, which one overlaps?")
+    const heard = asked[1]!.note?.heard ?? ""
+    expect(heard).toMatch(/^First thing\. /)
+    // the rest was already queued in the app ("stop" drops it there): the Bot is told it went unheard
+    expect(heard).not.toContain("Sixth")
+    // the Bot's next message is spoken
+    await stream(call, "m2", "The eleven forty-five one.")
+    await until(() => spoken().includes("The eleven forty-five one."), "the next message")
+  })
+
+  test("\"mm-hm\" or a cough over the Bot: its voice comes back and it carries on", async () => {
+    const { call, sent, asked, spoken } = makeCall(["Go on.", "Mm-hm.", ""], 5, 0.3)
     await say(call, tone(1))
     await say(call, quiet(0.8))
     await until(() => asked.length === 1, "asked")
     void stream(call, "m1", "First thing. Second thing. Third thing. Fourth thing. Fifth thing. Sixth thing.")
     await until(() => spoken().length >= 1, "speaking")
-    // its own voice leaking back quietly is not the owner
-    await say(call, tone(0.5, 0.004))
+    await say(call, tone(0.5))
+    await say(call, quiet(0.8))
+    await until(() => sent.some((m) => m.type === "unduck"), "back up")
+    await say(call, tone(0.4))
+    await say(call, quiet(0.8))
+    await until(() => sent.filter((m) => m.type === "unduck").length === 2, "back up after the cough")
+    await until(() => spoken().includes("Sixth thing."), "carried on", 5_000)
     expect(sent.some((m) => m.type === "stop")).toBe(false)
+    expect(asked).toHaveLength(1)
+  })
+
+  test("\"stop\" on its own stops the Bot's work too", async () => {
+    const { call, asked } = makeCall(["Check my whole inbox.", "Stop, stop."])
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    await until(() => asked.length === 1, "asked")
     await say(call, tone(0.6))
-    expect(sent).toContainEqual({ type: "stop" })
     await say(call, quiet(0.8))
     await until(() => asked.length === 2, "asked again")
-    await Bun.sleep(150)
-    expect(spoken()).not.toContain("Sixth thing.")
-    // the Bot's next message is spoken
-    await stream(call, "m2", "Sure, stopping.")
-    await until(() => spoken().includes("Sure, stopping."), "the next message")
+    expect(asked[1]).toEqual({ words: "Stop, stop.", first: false, note: { stop: true } })
+  })
+
+  test("what counts as listening, and as stop", () => {
+    for (const text of ["Mm-hm.", "Yeah.", "Okay, cool.", "Got it.", "Uh-huh", "Yeah yeah, right."]) expect(isBackchannel(text)).toBe(true)
+    for (const text of ["Yeah, but which one?", "Wait.", "No.", "Okay, send it."]) expect(isBackchannel(text)).toBe(false)
+    for (const text of ["Stop.", "Wait, wait.", "Okay stop.", "Hold on a second.", "Never mind.", "Cancel that."]) expect(isStop(text)).toBe(true)
+    for (const text of ["Wait, which one overlaps?", "Stop the meeting invite.", "Don't stop."]) expect(isStop(text)).toBe(false)
   })
 })

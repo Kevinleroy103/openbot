@@ -10,6 +10,7 @@ import {
   type Bot,
   type BotId,
   Conflict,
+  type TurnId,
   InvalidInput,
   isTerminalTurnStatus,
   kokoroVoice,
@@ -61,16 +62,26 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
 
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 
-/** What the Bot is given for the owner's words on a call (not shown in the chat). */
-export const voiceText = (words: string, first: boolean): string =>
-  first
+/**
+ * What the Bot is given for the owner's words on a call (not shown in the chat): the first time, how
+ * a call works; when the owner cut it off, how far it got; when they said "stop", that its work was.
+ */
+export const voiceText = (words: string, first: boolean, note: { readonly heard?: string | undefined; readonly stopped?: boolean | undefined } = {}): string => {
+  const intro = first
     ? [
       "We're on a voice call now. You hear me through speech-to-text, so names and words may be misheard: go by what makes sense. What you write is read out to me as you write it.",
       "Talk like on a call: short, plain sentences, no lists, markdown or links. When you need tools, first say a few words (\"Let me check.\") so I'm not left in silence, then give the answer.",
       "",
-      `Me: ${oneLine(words)}`,
-    ].join("\n")
-    : `Me (on the call): ${oneLine(words)}`
+    ]
+    : []
+  const notes = [
+    ...(note.heard === undefined
+      ? []
+      : [note.heard === "nothing yet" ? "(I cut you off before you said anything.)" : `(I cut you off. All I heard was: "${oneLine(note.heard)}" The rest wasn't said.)`]),
+    ...(note.stopped === true ? ["(I stopped what you were working on.)"] : []),
+  ]
+  return [...intro, ...notes, `${first ? "Me" : "Me (on the call)"}: ${oneLine(words)}`].join("\n")
+}
 
 export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | ConversationService> =>
   Layer.effect(
@@ -168,6 +179,8 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
 
           // the Bot's turns answering this call, and from when on their messages count
           const answering = new Map<string, number>()
+          /** Those not ended yet ("stop" interrupts them). */
+          const running = new Set<string>()
           /** Deliveries whose turn has not ended (their answer goes to the chat if the call ends first). */
           const unanswered = new Set<string>()
           let ended = false
@@ -175,16 +188,20 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           const call = new VoiceCall({
             transcribe,
             speak: async (text) => kokoro.speak(text, (await currentVoice()).sid),
-            ask: (words, first) => {
+            ask: (words, first, note) => {
               const askedAt = Date.now()
-              void run(orchestrator.deliver({
-                conversationId,
-                botId: bot.id,
-                kind: "user-message",
-                text: voiceText(words, first),
-                urgency: "urgent",
-                voice: true,
-              })).then((receipt) => {
+              // "stop" / "wait" alone while the Bot works on the call's request: its work stops too
+              const halting = note.stop === true ? [...running] : []
+              void Promise.all(halting.map((turnId) => run(orchestrator.interrupt({ conversationId, turnId: turnId as TurnId }).pipe(Effect.ignore)))).then(() =>
+                run(orchestrator.deliver({
+                  conversationId,
+                  botId: bot.id,
+                  kind: "user-message",
+                  text: voiceText(words, first, { heard: note.heard, stopped: halting.length > 0 }),
+                  urgency: "urgent",
+                  voice: true,
+                }))
+              ).then((receipt) => {
                 // steered into a turn already running: its messages from now on answer this
                 if (receipt.turnId !== undefined && !answering.has(receipt.turnId)) answering.set(receipt.turnId, askedAt)
                 unanswered.add(receipt.deliveryId)
@@ -218,7 +235,11 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
             if (change.type === "turn.upserted") {
               const turn = change.turn
               if (turn.voice === true && turn.botId === bot.id && !answering.has(turn.id)) answering.set(turn.id, turn.startedAt - TURN_CLOCK_SLACK_MS)
-              if (answering.has(turn.id) && isTerminalTurnStatus(turn.status)) call.botDone(turn.status === "failed")
+              if (!answering.has(turn.id)) return
+              if (isTerminalTurnStatus(turn.status)) {
+                running.delete(turn.id)
+                call.botDone(turn.status === "failed")
+              } else running.add(turn.id)
               return
             }
             if (change.type !== "entry.upserted") return

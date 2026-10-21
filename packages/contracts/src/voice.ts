@@ -99,7 +99,11 @@ export type VoiceServerMessage =
   | { readonly type: "you"; readonly text: string; readonly final: boolean }
   /** A sentence the Bot is saying now. */
   | { readonly type: "bot"; readonly text: string }
-  /** The owner started talking over the Bot: drop the audio not yet played. */
+  /** The owner started talking over the Bot: turn its voice down (it may be "mm-hm"). */
+  | { readonly type: "duck" }
+  /** It was "mm-hm" (or a cough): its voice back up, it carries on. */
+  | { readonly type: "unduck" }
+  /** The owner is really talking over the Bot: drop the audio not yet played. */
   | { readonly type: "stop" }
   | { readonly type: "error"; readonly message: string }
 

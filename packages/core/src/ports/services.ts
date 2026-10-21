@@ -207,6 +207,8 @@ export interface Delivery {
   readonly taskId?: TaskId | undefined
   /** Carried over a restart: the turn it was queued as keeps its id. */
   readonly turnId?: TurnId | undefined
+  /** Handed over on a voice call: its turn is marked `voice` (out of the chat, no notification). */
+  readonly voice?: boolean | undefined
 }
 
 /**

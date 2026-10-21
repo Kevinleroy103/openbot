@@ -83,7 +83,13 @@ export const ConversationServiceLive: Layer.Layer<
     const bots = yield* BotRepo
     const settings = yield* SettingsRepo
     const ids = yield* IdGen
-    const repos = yield* Effect.context<EntryRepo | RequestRepo>()
+    const repos = yield* Effect.context<EntryRepo | RequestRepo | TurnRepo>()
+    const turnRepo = yield* TurnRepo
+    /** Part of work handed over on a voice call (it does not move the conversation). */
+    const inVoiceTurn = (entry: KnownTranscriptEntry) =>
+      entry.turnId === undefined
+        ? Effect.succeed(false)
+        : turnRepo.get(entry.turnId).pipe(Effect.map((t) => t._tag === "Some" && t.value.voice === true), Effect.orElseSucceed(() => false))
 
     // ------------------------------------------------------------------ transcript writes
 
@@ -100,7 +106,7 @@ export const ConversationServiceLive: Layer.Layer<
       const outcome = yield* orDie(entries.upsert(entry))
       if (!outcome.applied) return outcome.current
       yield* publishEntry(outcome.value)
-      if (touchesConversation(entry)) yield* Effect.ignore(store.update(conversation.id, (c) => bumpForEntry(c, entry)))
+      if (touchesConversation(entry) && !(yield* inVoiceTurn(entry))) yield* Effect.ignore(store.update(conversation.id, (c) => bumpForEntry(c, entry)))
       return outcome.value
     })
 

@@ -269,6 +269,8 @@ export const Turn = Schema.Struct({
   usage: Schema.optionalKey(Usage),
   stopReason: Schema.optionalKey(Schema.String),
   failure: Schema.optionalKey(TurnFailure),
+  /** Work handed over on a voice call (experiment): told on the call, so it stays out of the chat. */
+  voice: Schema.optionalKey(Schema.Boolean),
 })
 export type Turn = typeof Turn.Type
 

@@ -31,6 +31,7 @@ const makeCall = (script: {
   readonly replies: ReadonlyArray<VoiceReply>
   readonly speakMs?: number
   readonly answer?: Promise<string>
+  readonly untold?: Array<string>
 }) => {
   const sent: Array<VoiceServerMessage> = []
   const audio: Array<number> = []
@@ -62,7 +63,11 @@ const makeCall = (script: {
     },
     delegate: async (work) => {
       delegated.push(work)
-      return { text: await (script.answer ?? Promise.resolve("done")), told: () => void told.push(work.instruction) }
+      return {
+        text: await (script.answer ?? Promise.resolve("done")),
+        told: () => void told.push(work.instruction),
+        untold: () => void script.untold?.push(work.instruction),
+      }
     },
     systemPrompt: async () => "You are Otto's voice.",
     send: (message) => sent.push(message),
@@ -116,6 +121,26 @@ describe("a voice call", () => {
     expect(sent).toContainEqual({ type: "work", id: "work-1", instruction: "Check Slack for Anthony's reply.", done: true })
     expect(told).toEqual(["Check Slack for Anthony's reply."])
     expect(prompts[1]!.at(-1)).toEqual({ role: "user", content: "RESULT from your full self (the work: \"Check Slack for Anthony's reply.\"):\nAnthony: plan looks good, ship Thursday." })
+  })
+
+  test("an answer the call never told goes to the chat instead", async () => {
+    let answer!: (text: string) => void
+    const untold: Array<string> = []
+    const { call, delegated } = makeCall({
+      heard: ["What's on tomorrow?"],
+      replies: [{ action: "delegate", say: "Let me look.", instruction: "List tomorrow's meetings." }],
+      answer: new Promise((resolve) => {
+        answer = resolve
+      }),
+      untold,
+    })
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    await until(() => delegated.length === 1, "the delegation")
+    call.hangup()
+    answer("Two meetings.")
+    await until(() => untold.length === 1, "handed to the chat")
+    expect(untold).toEqual(["List tomorrow's meetings."])
   })
 
   test("talking over the Bot stops it; a quiet murmur while it speaks does not", async () => {

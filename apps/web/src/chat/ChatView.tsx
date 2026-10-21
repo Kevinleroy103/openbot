@@ -152,13 +152,15 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
   )
 
   // ------------------------------------------------------------------------------- activity
-  const activeTurns = turns.filter((t) => ACTIVE.has(t.status)).sort((a, b) => a.startedAt - b.startedAt)
+  // work handed over on a voice call is told on the call: no status line, no Stop
+  const activeTurns = turns.filter((t) => ACTIVE.has(t.status) && t.voice !== true).sort((a, b) => a.startedAt - b.startedAt)
+  const onCallOnly = new Set(turns.filter((t) => ACTIVE.has(t.status) && t.voice === true && !activeTurns.some((a) => a.botId === t.botId)).map((t) => t.botId))
   // ONE status line per bot, in the activity row's look (busy.ts): its turn here, else "Busy in …"
   // (one mind per bot, D5.0) or "Handling…" (background work started here, D5.7).
   const statuses = chatStatuses({
     conversationId,
     botIds,
-    activities: roster.state.activities,
+    activities: onCallOnly.size === 0 ? roster.state.activities : new Map([...roster.state.activities].filter(([botId]) => !onCallOnly.has(botId))),
     turns: activeTurns,
     conversations: roster.state.conversations,
     tasks: roster.state.tasks,

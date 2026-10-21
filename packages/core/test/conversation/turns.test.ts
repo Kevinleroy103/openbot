@@ -153,6 +153,39 @@ describe("finished notifications", () => {
     )
     expect(out.map((n) => n.body)).toEqual(["Here it is."])
   })
+
+  test("work handed over on a voice call: its turn is marked voice, notifies nobody and does not move the chat", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        const driver = yield* TestDriver
+        const orchestrator = yield* Orchestrator
+        const bot = yield* createBot("Ada")
+        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "Two meetings tomorrow.").pipe(Effect.andThen(turn.complete())))
+        const before = Option.getOrThrow(yield* (yield* ConversationService).summary(bot.directConversationId).pipe(Effect.option))
+        const receipt = yield* orchestrator.deliver({
+          conversationId: bot.directConversationId,
+          botId: bot.id,
+          kind: "user-message",
+          text: "On a voice call with you I said: \"what's on tomorrow?\"",
+          urgency: "urgent",
+          voice: true,
+        })
+        const outcome = yield* orchestrator.awaitDelivery(receipt.deliveryId)
+        const after = Option.getOrThrow(yield* (yield* ConversationService).summary(bot.directConversationId).pipe(Effect.option))
+        return {
+          outcome,
+          before,
+          after,
+          notified: (yield* (yield* NotifierFake).sent).filter((n) => n.kind === "finished"),
+        }
+      }),
+      appLayer(),
+    )
+    expect(out.outcome).toMatchObject({ status: "completed", lastBotMessage: "Two meetings tomorrow.", turn: { voice: true } })
+    expect(out.notified).toEqual([])
+    expect(out.after.preview).toBe(out.before.preview)
+    expect(out.after.unreadCount).toBe(out.before.unreadCount)
+  })
 })
 
 describe("a signed-out harness", () => {

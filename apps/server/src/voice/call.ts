@@ -91,6 +91,8 @@ export interface Answer {
   readonly text: string
   /** Called once the answer has been told on the call. */
   readonly told?: (() => void) | undefined
+  /** Called when the call ended before it was told (the chat gets it instead). */
+  readonly untold?: (() => void) | undefined
 }
 
 interface Work {
@@ -163,7 +165,9 @@ export class VoiceCall {
   }
 
   hangup(): void {
+    if (this.ended) return
     this.ended = true
+    for (const work of this.results.splice(0)) work.answer.untold?.()
     this.turn?.abort.abort()
     this.turn = undefined
     void this.utterance?.transcription.then((t) => t?.discard())
@@ -349,7 +353,7 @@ export class VoiceCall {
       (answer) => answer,
       (error): Answer => ({ text: `It could not be done: ${error instanceof Error ? error.message : String(error)}` }),
     ).then((answer) => {
-      if (this.ended) return
+      if (this.ended) return void answer.untold?.()
       this.deps.send({ type: "work", id, instruction, done: true })
       this.results.push({ id, instruction, answer })
       this.deliverResult()

@@ -1,7 +1,7 @@
 // A voice call in the chat (experiment; Grok Bot's design): one centered line, "Voice chat · 00:31",
 // that opens into what was said, the owner's words on the right, the Bot's on the left.
 import { AudioLines, X } from "lucide-react"
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 import { EventLine, Icon, IconButton } from "@openbot/ui"
 
 export interface VoiceChatLineProps {
@@ -16,6 +16,11 @@ export const callLength = (ms: number): string => {
 
 export function VoiceChatLine({ durationMs, lines }: VoiceChatLineProps): ReactNode {
   const [open, setOpen] = useState(false)
+  const card = useRef<HTMLDivElement>(null)
+  // opened at the bottom of the chat, it would end below the fold
+  useEffect(() => {
+    if (open) card.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [open])
   const title = (
     <span className="inline-flex items-center gap-1.5">
       <Icon icon={AudioLines} size="sm" className="text-icon-secondary" />
@@ -39,7 +44,7 @@ export function VoiceChatLine({ durationMs, lines }: VoiceChatLineProps): ReactN
     )
   }
   return (
-    <div className="mx-auto my-2 w-full max-w-[720px] rounded-3xl bg-elevated hairline border-line-tertiary" data-testid="voice-chat">
+    <div ref={card} className="mx-auto my-2 w-full max-w-[720px] rounded-3xl bg-elevated hairline border-line-tertiary" data-testid="voice-chat">
       <div className="relative flex h-12 items-center justify-center border-b-[0.5px] border-line-secondary text-sm text-fg-secondary">
         {title}
         <IconButton icon={X} label="Close" size={28} className="absolute end-3" onClick={() => setOpen(false)} />

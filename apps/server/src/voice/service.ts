@@ -228,6 +228,7 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           kind: "user-message",
           text: delegationText(work),
           urgency: "urgent",
+          voice: true,
         }))
         const outcome = await run(orchestrator.awaitDelivery(receipt.deliveryId).pipe(
           Effect.timeout(ANSWER_TIMEOUT),
@@ -237,8 +238,19 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
         const answer = outcome.lastBotMessage?.trim() ?? ""
         const turnId = outcome.turn?.id
         const told = turnId === undefined ? undefined : () => void run(hideTurn(turnId))
-        if (outcome.status !== "completed") return { text: answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}` }
-        return { text: answer === "" ? "It finished without saying anything." : answer.slice(-ANSWER_CHARS), told }
+        // the call ended first: the answer goes to the chat as the Bot's message (its turn stays hidden)
+        const untold = answer === "" ? undefined : () =>
+          void run(conversations.appendEntry({
+            conversationId: bot.directConversationId,
+            kind: "message",
+            role: "bot",
+            author: { kind: "bot", botId: bot.id },
+            text: answer,
+            attachments: [],
+            streaming: false,
+          }).pipe(Effect.ignore))
+        if (outcome.status !== "completed") return { text: answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}`, untold }
+        return { text: answer === "" ? "It finished without saying anything." : answer.slice(-ANSWER_CHARS), told, untold }
       }
 
       const transcribe = async (): Promise<Transcription> => {

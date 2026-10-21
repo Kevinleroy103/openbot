@@ -100,7 +100,7 @@ export const LiveHubLive: Layer.Layer<
     const taskRepo = yield* TaskRepo
     const directory = yield* NodeDirectory
     const ids = yield* IdGen
-    const repos = yield* Effect.context<EntryRepo | RequestRepo | SettingsRepo>()
+    const repos = yield* Effect.context<EntryRepo | RequestRepo | SettingsRepo | TurnRepo>()
 
     const lock = yield* Semaphore.make(1)
     const heads = new Map<ReplicaKey, StreamCursor>()

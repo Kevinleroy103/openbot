@@ -11,21 +11,16 @@ import {
   type Bot,
   type BotId,
   Conflict,
-  type ConversationId,
   defaultVoiceFor,
-  isTerminalTurnStatus,
-  type KnownConversationChange,
-  type TurnId,
   VOICE_OUTPUT_SAMPLE_RATE,
   type VoiceCallStatus,
   type VoiceClientMessage,
 } from "@openbot/contracts"
 import { BotRepo, EntryRepo, LiveHub, Orchestrator, SettingsService } from "@openbot/core"
 import { closeWriter, type Frame, open } from "@openbot/brain-nodes"
-import { Context, Duration, Effect, Layer, Option, Queue, Result, Stream } from "effect"
+import { Context, Duration, Effect, Layer, Option, Queue, Result } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import type * as Socket from "effect/socket/Socket"
-import { randomUUID } from "node:crypto"
 import { access, rm } from "node:fs/promises"
 import path from "node:path"
 import { sttPlatformOf } from "../stt/manifest.ts"
@@ -77,29 +72,31 @@ export const voiceBrief = (input: {
 }): string => {
   const { bot, owner } = input
   const when = input.now.toLocaleString("en-GB", { timeZone: input.timeZone, weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  const tomorrow = new Date(input.now.getTime() + 24 * 60 * 60_000).toLocaleDateString("en-GB", { timeZone: input.timeZone, weekday: "long", day: "numeric", month: "long" })
   const about = oneLine(bot.instructions, ABOUT_CHARS)
   const recent = input.recent.map((m) => `  - ${m.fromOwner ? owner : "You"}: ${oneLine(m.text, RECENT_MESSAGE_CHARS)}`)
   return `You are the voice of ${bot.name}, on a phone call with ${owner}, the person you work for. Speak as ${bot.name}, in first person.
 
 Every reply is JSON: {"action": "talk" or "delegate", "say": "...", "instruction": "..."}.
 - "say" is spoken aloud: one or two short, plain sentences. No lists, no markdown, no emoji.
-- action "delegate" whenever ${owner} wants something done or found out that is not in WHAT YOU KNOW below: checking or searching anything (Slack, email, calendar, files, code, the web, the weather, news), sending or writing anything, reminders, scheduling, changes, research. "instruction" is the complete task for your full self, with every detail ${owner} gave (names, times, places). "say" is a short line like "On it, I'll check Slack." Never pretend you did it.
+- action "delegate" whenever ${owner} wants something done or found out that is not in WHAT YOU KNOW below: checking or searching anything (Slack, email, calendar, files, code, the web, the weather, news), sending or writing anything, reminders, scheduling, changes, research. "instruction" is the complete task for your full self, with every detail ${owner} gave (names, times, places, dates written out). "say" tells ${owner}, in your own words, what you are about to do for this request, the way a colleague would ("Let me pull up your calendar."). Say it differently every time; never just "On it". Don't repeat times, dates or numbers in it. Never pretend you did it.
 - action "talk" for small talk, answers from WHAT YOU KNOW, "never mind", and when the request is unclear: then "say" asks one short question. "instruction" is "".
 - When a RESULT arrives from your full self, action "talk": tell ${owner} the gist in one or two sentences.
 
 WHAT YOU KNOW:
-- Now: ${when} (${input.timeZone}).${about === "" ? "" : `\n- About you: ${about}`}${input.activity === undefined ? "" : `\n- Right now you are: ${input.activity}`}${recent.length === 0 ? "" : `\n- Your latest messages with ${owner} (oldest first):\n${recent.join("\n")}`}
+- Now: ${when} (${input.timeZone}). Tomorrow is ${tomorrow}.${about === "" ? "" : `\n- About you: ${about}`}${input.activity === undefined ? "" : `\n- Right now you are: ${input.activity}`}${recent.length === 0 ? "" : `\n- Your latest messages with ${owner} (oldest first):\n${recent.join("\n")}`}
 
 Examples:
-${owner}: "Did Karl answer my email?" → {"action":"delegate","say":"Let me check your email.","instruction":"Check ${owner}'s email for a reply from Karl and say what it says."}
-${owner}: "Book a table for two at eight." → {"action":"delegate","say":"On it.","instruction":"Book a table for two at 20:00 tonight; ask ${owner} which restaurant if it isn't clear."}
+${owner}: "Did Karl answer my email?" → {"action":"delegate","say":"Let me look through your inbox for Karl.","instruction":"Check ${owner}'s email for a reply from Karl and say what it says."}
+${owner}: "Book a table for two at eight." → {"action":"delegate","say":"Sure, I'll find you a table.","instruction":"Book a table for two at 20:00 tonight; ask ${owner} which restaurant if it isn't clear."}
+${owner}: "What's on my plate this week?" → {"action":"delegate","say":"Give me a second, I'll go through this week.","instruction":"List ${owner}'s meetings and deadlines from today to Sunday."}
 ${owner}: "Thanks, that's all." → {"action":"talk","say":"Anytime. Talk soon.","instruction":""}
 ${owner}: "Move it." → {"action":"talk","say":"Move what?","instruction":""}`
 }
 
-/** The owner's message in the Bot's chat for work handed over on a call. */
+/** What the Bot is given for work handed over on a call (it is not shown in the chat). */
 export const delegationText = (input: { readonly words: string; readonly instruction: string }): string =>
-  `On our call: "${oneLine(input.words, 600)}"\n${input.instruction}\n\nKeep your answer short and plain: it's read out to me on the call.`
+  `On a voice call with you I said: "${oneLine(input.words, 600)}"\n(Your voice on the call took it as: ${input.instruction} If that doesn't match my words, go by my words.)\n\nDo it, then answer in a few short, plain sentences: your answer is read out to me on the call.`
 
 interface Engines {
   readonly thinker: Thinker
@@ -202,38 +199,26 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           })
         })
 
-      /** The Bot's answer to the turns started by a delegation: its messages in them, once they end. */
-      const answerOf = (conversationId: ConversationId, turnIds: ReadonlyArray<TurnId>) =>
-        Effect.gen(function*() {
-          const messages = new Map<string, { readonly at: number; readonly text: string }>()
-          const running = new Set(turnIds)
-          const apply = (change: KnownConversationChange) => {
-            if (change.type === "entry.upserted" && change.entry.kind === "message" && change.entry.role === "bot" && change.entry.turnId !== undefined && turnIds.includes(change.entry.turnId)) {
-              messages.set(change.entry.id, { at: change.entry.createdAt, text: change.entry.text })
-            }
-            if (change.type === "turn.upserted" && running.has(change.turn.id) && isTerminalTurnStatus(change.turn.status)) running.delete(change.turn.id)
-          }
-          yield* hub.subscribeConversation({ conversationId }).pipe(
-            Stream.map((item) => {
-              if (item.kind === "snapshot") {
-                for (const entry of item.entries) apply({ type: "entry.upserted", entry } as KnownConversationChange)
-                for (const turn of item.turns) apply({ type: "turn.upserted", turn } as KnownConversationChange)
-              } else if (item.kind === "change") apply(item.change as KnownConversationChange)
-              return running.size === 0
-            }),
-            Stream.takeUntil((done) => done),
-            Stream.runDrain,
-            Effect.timeout(ANSWER_TIMEOUT),
-            Effect.catch(() => Effect.void),
-          )
-          const text = [...messages.values()].sort((a, b) => a.at - b.at).map((m) => m.text.trim()).filter((t) => t !== "").join("\n\n")
-          if (running.size > 0) return text === "" ? "Still working on it; the answer will be in the chat." : `So far: ${text.slice(-ANSWER_CHARS)}`
-          return text === "" ? "It finished without saying anything." : text.slice(-ANSWER_CHARS)
-        })
-
+      /**
+       * Work for the Bot: delivered like the owner's words but with no message in the chat (the call is
+       * the conversation); its answer is the turn's last message, which the chat shows.
+       */
       const delegate = (bot: Bot) => async (work: { readonly instruction: string; readonly words: string }): Promise<string> => {
-        const sent = await run(orchestrator.send({ conversationId: bot.directConversationId, text: delegationText(work), clientNonce: `voice-${randomUUID()}` }))
-        return run(answerOf(bot.directConversationId, sent.turnIds))
+        const receipt = await run(orchestrator.deliver({
+          conversationId: bot.directConversationId,
+          botId: bot.id,
+          kind: "user-message",
+          text: delegationText(work),
+          urgency: "urgent",
+        }))
+        const outcome = await run(orchestrator.awaitDelivery(receipt.deliveryId).pipe(
+          Effect.timeout(ANSWER_TIMEOUT),
+          Effect.orElseSucceed(() => undefined),
+        ))
+        if (outcome === undefined) return "Still working on it; the answer will be in the chat."
+        const answer = outcome.lastBotMessage?.trim() ?? ""
+        if (outcome.status !== "completed") return answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}`
+        return answer === "" ? "It finished without saying anything." : answer.slice(-ANSWER_CHARS)
       }
 
       const transcribe = async (): Promise<Transcription> => {

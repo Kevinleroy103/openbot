@@ -278,7 +278,12 @@ export function App(): ReactNode {
         sidebar={({ compact: c, toggleCompact }) => (
           <Sidebar compact={c} onToggleCompact={toggleCompact} onSearch={() => dialogs.show({ kind: "search" })} onNewChat={() => select(null)} />
         )}
-        chat={conversationId ? <ChatView key={conversationId} conversationId={conversationId} /> : <NewChatView onClose={newChatClose} />}
+        chat={
+          <>
+            {conversationId ? <ChatView key={conversationId} conversationId={conversationId} /> : <NewChatView onClose={newChatClose} />}
+            <CallBar />
+          </>
+        }
         details={
           details.open && conversationId ? (
             <Suspense fallback={<PaneLoading />}>
@@ -338,7 +343,6 @@ export function App(): ReactNode {
           <ConnectAppsDialog key={JSON.stringify(connectApps.view)} open view={connectApps.view} onClose={connectApps.hide} />
         </Suspense>
       )}
-      <CallBar />
       <ConnectionBanner />
     </>
   )

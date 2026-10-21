@@ -1,8 +1,8 @@
-// The call bar (experiment; Grok Bot's design): floats over the app while a voice call with a Bot is
-// on. The Bot's avatar (working while it speaks), a dotted waveform that follows whoever is talking,
+// The call bar (experiment; Grok Bot's design): floats at the top of the chat while a voice call with
+// a Bot is on (whichever chat is open). The Bot's avatar (working while it speaks), a dotted waveform that follows whoever is talking,
 // the transcript (what was said, and the work handed to the Bot), mute and hang up.
 import { useRoster } from "../app/data.ts"
-import { Avatar, IconButton, cn } from "@openbot/ui"
+import { Avatar, IconButton, botTintStyle, cn } from "@openbot/ui"
 import { MessageCircle, Mic, MicOff, X } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { callLevel, callState, dismissCall, hangUp, setMuted, subscribeCall } from "./voiceCall.ts"
@@ -62,19 +62,11 @@ export function CallBar(): ReactNode {
   const bot = roster.botById(call.botId)
   const ended = call.phase === "ended"
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-28 z-40 flex flex-col items-center gap-2 px-3" data-testid="call-bar">
-      {transcript && call.lines.length > 0 && (
-        <div className="pointer-events-auto max-h-[40vh] w-full max-w-[520px] overflow-y-auto rounded-3xl bg-elevated/95 p-4 text-sm shadow-lg backdrop-blur hairline border-line-tertiary" data-testid="call-transcript">
-          {call.lines.map((line) => (
-            <p key={line.id} className={cn("py-1", line.who === "you" ? "text-fg" : line.who === "bot" ? "text-fg-secondary" : "text-fg-tertiary italic")}>
-              {line.who === "you" ? "You: " : line.who === "bot" ? `${bot?.name ?? "Bot"}: ` : line.pending ? "Working on: " : "Done: "}
-              {line.text}
-            </p>
-          ))}
-          <div ref={end} />
-        </div>
-      )}
-      {call.error !== undefined && <p className="pointer-events-auto rounded-full bg-elevated px-4 py-2 text-sm text-danger-fg shadow">{call.error}</p>}
+    <div
+      className="pointer-events-none absolute inset-x-0 top-14 z-40 flex flex-col items-center gap-2 px-3 pt-[env(safe-area-inset-top)]"
+      style={bot === undefined ? undefined : botTintStyle(bot.avatar.color)}
+      data-testid="call-bar"
+    >
       <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-elevated py-2 ps-3 pe-2 shadow-xl hairline border-line-tertiary" aria-label={`Call with ${bot?.name ?? "Bot"}`}>
         {bot !== undefined && <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={36} working={call.phase === "speaking"} />}
         <Waveform active={!ended && !call.muted} />
@@ -91,6 +83,18 @@ export function CallBar(): ReactNode {
           <X className="size-5" strokeWidth={2} />
         </button>
       </div>
+      {call.error !== undefined && <p className="pointer-events-auto rounded-full bg-elevated px-4 py-2 text-sm text-danger-fg shadow">{call.error}</p>}
+      {transcript && call.lines.length > 0 && (
+        <div className="pointer-events-auto max-h-[40vh] w-full max-w-[520px] overflow-y-auto rounded-3xl bg-elevated/95 p-4 text-sm shadow-lg backdrop-blur hairline border-line-tertiary" data-testid="call-transcript">
+          {call.lines.map((line) => (
+            <p key={line.id} className={cn("py-1", line.who === "you" ? "text-fg" : line.who === "bot" ? "text-fg-secondary" : "text-fg-tertiary italic")}>
+              {line.who === "you" ? "You: " : line.who === "bot" ? `${bot?.name ?? "Bot"}: ` : line.pending ? "Working on: " : "Done: "}
+              {line.text}
+            </p>
+          ))}
+          <div ref={end} />
+        </div>
+      )}
     </div>
   )
 }

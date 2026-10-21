@@ -1,9 +1,9 @@
-// Voice calls (experiment): turn taking, the owner's words going to the Bot, what the Bot writes being
-// spoken as it streams, fillers while it is slow to start, and being talked over. Stand-ins for
+// Voice calls (experiment): turn taking, the owner's words going to the Bot (an unfinished sentence
+// waits for the rest), what the Bot writes being spoken as it streams, and being talked over. Stand-ins for
 // Parakeet and Kokoro; the Bot is played by the test.
 import { describe, expect, test } from "bun:test"
 import type { VoiceServerMessage } from "@openbot/contracts"
-import { CALL_INPUT_SAMPLE_RATE, type CallDeps, FILLERS, toPcm16, VoiceCall } from "../src/voice/call.ts"
+import { CALL_INPUT_SAMPLE_RATE, type CallDeps, toPcm16, VoiceCall } from "../src/voice/call.ts"
 
 const tone = (seconds: number, amplitude = 0.3) => {
   const samples = new Float32Array(Math.round(CALL_INPUT_SAMPLE_RATE * seconds))
@@ -91,17 +91,24 @@ describe("a voice call", () => {
     ])
   })
 
-  test("while the Bot is slow to start, a short filler keeps the line alive (not in the transcript)", async () => {
-    const { call, asked, spoken } = makeCall(["What's on my calendar?"])
-    await say(call, tone(1))
+  test("an unfinished sentence waits for the rest: a pause mid-thought sends it as one", async () => {
+    const { call, asked, sent, spoken } = makeCall(["Uh can you", "message engineering?", "Thanks"])
+    await say(call, tone(0.8))
+    await say(call, quiet(0.8))
+    await Bun.sleep(300)
+    expect(asked).toEqual([])
+    await say(call, tone(0.8))
     await say(call, quiet(0.8))
     await until(() => asked.length === 1, "asked")
-    await until(() => spoken().length === 1, "a filler", 3_000)
-    expect(FILLERS).toContain(spoken()[0]!)
-    call.played()
-    await stream(call, "m1", "Two meetings tomorrow.")
-    await until(() => spoken().length === 2, "the answer")
-    expect(call.summary().lines.map((l) => l.text)).toEqual(["What's on my calendar?", "Two meetings tomorrow."])
+    expect(asked).toEqual([{ words: "Uh can you message engineering?", first: true }])
+    expect(sent.filter((m) => m.type === "you" && m.final)).toEqual([{ type: "you", text: "Uh can you message engineering?", final: true }])
+    // nothing more came: after a moment it goes as it is
+    await say(call, tone(0.8))
+    await say(call, quiet(0.8))
+    await until(() => asked.length === 2, "asked again", 3_000)
+    expect(asked[1]).toEqual({ words: "Thanks", first: false })
+    // no fillers: the Bot's own words only
+    expect(spoken()).toEqual([])
   })
 
   test("a silent reply says nothing; a failed turn says so", async () => {

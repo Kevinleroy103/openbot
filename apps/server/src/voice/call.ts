@@ -6,8 +6,8 @@
  *   a short run of speech (longer, and louder, while the Bot's voice is still playing) and ends after
  *   ~0.65 s of quiet. Captions follow as Parakeet hears it.
  * - What the owner said goes to the Bot (`ask`); what the Bot writes comes back as it is written
- *   (`botText`) and is spoken sentence by sentence. If the Bot hasn't started talking after a moment,
- *   a short filler ("One sec.") keeps the line from going dead.
+ *   (`botText`) and is spoken sentence by sentence. A sentence Parakeet heard as unfinished ("Uh can
+ *   you") waits a moment for the rest, so a pause mid-thought doesn't send half of it.
  * - The owner talking over the Bot stops its voice at once: what it was saying is dropped (the Bot
  *   keeps working; its next message is spoken) and the app drops audio it has not played yet.
  */
@@ -25,11 +25,10 @@ const PRE_ROLL_FRAMES = 10 // 300 ms kept from before it started
 const PARTIAL_EVERY_SAMPLES = Math.round(CALL_INPUT_SAMPLE_RATE * 0.4)
 const MAX_UTTERANCE_SAMPLES = CALL_INPUT_SAMPLE_RATE * 60
 const LEVEL_HISTORY_FRAMES = 1_000
-const FILLER_AFTER_MS = 1_500
-const STILL_WORKING_AFTER_MS = 10_000
-/** Said when the Bot is slow to start talking (not its words: kept out of the transcript). */
-export const FILLERS = ["One sec.", "Mm-hm, one moment.", "Let me see.", "Give me a second.", "Sure, one sec.", "Okay, let me check."]
-const STILL_WORKING = "Still on it."
+/** How long an unfinished sentence waits for the rest. */
+const UNFINISHED_HOLD_MS = 1_200
+/** Parakeet punctuates: a finished sentence ends with one of these. */
+const FINISHED = /[.!?…]["'”’)\]]*$/
 /** A Bot reply that says nothing. */
 const SILENT = "NO_REPLY"
 
@@ -127,8 +126,8 @@ export class VoiceCall {
   /** Waiting for the Bot to start talking after the owner's last words. */
   private waiting = false
   private asked = 0
-  private fillers: Array<ReturnType<typeof setTimeout>> = []
-  private lastFiller = -1
+  /** An unfinished sentence waiting for the rest of it. */
+  private held: { readonly text: string; timer: ReturnType<typeof setTimeout> | undefined } | undefined
 
   constructor(private readonly deps: CallDeps) {}
 
@@ -176,7 +175,8 @@ export class VoiceCall {
     if (this.ended) return
     this.ended = true
     this.generation++
-    this.clearFillers()
+    clearTimeout(this.held?.timer)
+    this.held = undefined
     void this.utterance?.transcription.then((t) => t?.discard())
     this.utterance = undefined
   }
@@ -206,7 +206,6 @@ export class VoiceCall {
     if (this.ended) return
     if (failed && this.waiting) this.say("Sorry, I couldn't do that just now.")
     this.waiting = false
-    this.clearFillers()
     this.settle()
   }
 
@@ -214,11 +213,7 @@ export class VoiceCall {
     const text = speakable(sentence)
     if (text === "") return
     const generation = this.generation
-    if (message !== undefined) {
-      // the Bot is talking: no filler needed
-      this.waiting = false
-      this.clearFillers()
-    }
+    if (message !== undefined) this.waiting = false
     this.inFlight++
     const audio = this.deps.speak(text).catch((error) => {
       this.deps.log("voice call: Kokoro failed", { error: String(error) })
@@ -239,23 +234,6 @@ export class VoiceCall {
       this.deps.send({ type: "bot", text })
       this.setPhase("speaking")
     })
-  }
-
-  private filler(text: string) {
-    if (this.ended || this.utterance !== undefined || !this.waiting || this.inFlight > 0 || this.playing) return
-    this.say(text)
-  }
-
-  private nextFiller(): string {
-    let pick = Math.floor(Math.random() * FILLERS.length)
-    if (pick === this.lastFiller) pick = (pick + 1) % FILLERS.length
-    this.lastFiller = pick
-    return FILLERS[pick]!
-  }
-
-  private clearFillers() {
-    for (const timer of this.fillers) clearTimeout(timer)
-    this.fillers = []
   }
 
   /** The phase once nothing is happening on the owner's side. */
@@ -296,7 +274,11 @@ export class VoiceCall {
   private startUtterance() {
     this.loudFrames = 0
     if (this.playing || this.inFlight > 0) this.talkedOver()
-    this.clearFillers()
+    // the rest of an unfinished sentence: it joins it
+    if (this.held !== undefined) {
+      clearTimeout(this.held.timer)
+      this.held.timer = undefined
+    }
     const heard = [...this.preRoll]
     this.preRoll.length = 0
     const utterance: Utterance = {
@@ -329,7 +311,7 @@ export class VoiceCall {
       const text = await transcription.append(samples).catch(() => utterance.latestText)
       if (text !== utterance.latestText && this.utterance === utterance && text !== "") {
         utterance.latestText = text
-        this.deps.send({ type: "you", text, final: false })
+        this.deps.send({ type: "you", text: this.held === undefined ? text : `${this.held.text} ${text}`, final: false })
       }
     })
   }
@@ -344,18 +326,35 @@ export class VoiceCall {
       const transcription = await utterance.transcription
       const text = transcription === undefined ? "" : (await transcription.finish(rest).catch(() => utterance.latestText)).trim()
       if (this.ended) return
-      if (text === "") return this.settle()
-      this.deps.send({ type: "you", text, final: true })
-      this.lines.push({ who: "you", text })
-      this.deps.ask(text, this.asked++ === 0)
-      this.waiting = true
-      this.clearFillers()
-      this.fillers = [
-        setTimeout(() => this.filler(this.nextFiller()), FILLER_AFTER_MS),
-        setTimeout(() => this.filler(STILL_WORKING), STILL_WORKING_AFTER_MS),
-      ]
-      this.settle()
+      const held = this.held
+      this.held = undefined
+      const words = [held?.text, text].filter((part) => part !== undefined && part !== "").join(" ")
+      if (words === "") return this.settle()
+      if (text !== "" && !FINISHED.test(words)) {
+        // unfinished ("Uh can you"): wait a moment for the rest
+        this.held = { text: words, timer: setTimeout(() => this.release(), UNFINISHED_HOLD_MS) }
+        this.deps.send({ type: "you", text: words, final: false })
+        return this.settle()
+      }
+      this.commit(words)
     })
+  }
+
+  /** An unfinished sentence that got no more: it goes as it is. */
+  private release() {
+    const held = this.held
+    if (held === undefined || this.utterance !== undefined || this.ended) return
+    this.held = undefined
+    this.commit(held.text)
+  }
+
+  /** The owner's words, complete: to the Bot. */
+  private commit(words: string) {
+    this.deps.send({ type: "you", text: words, final: true })
+    this.lines.push({ who: "you", text: words })
+    this.deps.ask(words, this.asked++ === 0)
+    this.waiting = true
+    this.settle()
   }
 
   /** The owner talks over the Bot: its voice stops at once, and what it was saying is dropped. */

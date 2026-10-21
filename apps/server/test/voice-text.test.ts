@@ -19,4 +19,11 @@ describe("voice messages to the Bot", () => {
     expect(voiceText("Hold on.", false, { heard: "nothing yet" })).toContain("I cut you off before you said anything.")
     expect(voiceText("Stop.", false, { stopped: true })).toContain("(I stopped what you were working on.)")
   })
+
+  test("asked while still working on the last request: acknowledge it and tell what's already found", () => {
+    const busy = voiceText("Is it going to rain tomorrow?", false, { busy: true })
+    expect(busy).toContain("You're still on what I asked before. First say in a few words that you'll do this too")
+    expect(busy.indexOf("You're still on")).toBeLessThan(busy.indexOf("Me (on the call): Is it going to rain tomorrow?"))
+    expect(voiceText("Stop.", false, { busy: true, stopped: true })).not.toContain("You're still on")
+  })
 })

@@ -66,11 +66,15 @@ const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
  * What the Bot is given for the owner's words on a call (not shown in the chat): the first time, how
  * a call works; when the owner cut it off, how far it got; when they said "stop", that its work was.
  */
-export const voiceText = (words: string, first: boolean, note: { readonly heard?: string | undefined; readonly stopped?: boolean | undefined } = {}): string => {
+export const voiceText = (
+  words: string,
+  first: boolean,
+  note: { readonly heard?: string | undefined; readonly stopped?: boolean | undefined; readonly busy?: boolean | undefined } = {},
+): string => {
   const intro = first
     ? [
       "We're on a voice call now. You hear me through speech-to-text, so names and words may be misheard: go by what makes sense. What you write is read out to me as you write it.",
-      "Talk like on a call: short, plain sentences, no lists, markdown or links.",
+      "Talk like on a call: short, plain sentences, no lists, markdown or links. When there are several things to do, tell me each answer as soon as you have it, before the next lookup.",
       "Work that takes more than a few seconds (several steps, research, going through a lot): start it as background work with start_task, tell me in a sentence that you're on it, and keep talking with me. When it's done you'll get its result here and can tell me.",
       "",
     ]
@@ -80,6 +84,9 @@ export const voiceText = (words: string, first: boolean, note: { readonly heard?
       ? []
       : [note.heard === "nothing yet" ? "(I cut you off before you said anything.)" : `(I cut you off. All I heard was: "${oneLine(note.heard)}" The rest wasn't said.)`]),
     ...(note.stopped === true ? ["(I stopped what you were working on.)"] : []),
+    ...(note.busy === true && note.stopped !== true
+      ? ["(You're still on what I asked before. First say in a few words that you'll do this too and tell me anything you already found; then carry on, telling me each answer as soon as you have it.)"]
+      : []),
   ]
   return [
     ...intro,
@@ -205,7 +212,7 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
                   conversationId,
                   botId: bot.id,
                   kind: "user-message",
-                  text: voiceText(words, first, { heard: note.heard, stopped: halting.length > 0 }),
+                  text: voiceText(words, first, { heard: note.heard, stopped: halting.length > 0, busy: running.size > halting.length }),
                   urgency: "urgent",
                   voice: true,
                 }))

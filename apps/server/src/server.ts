@@ -41,6 +41,7 @@ import {
   NodeRegistry,
 } from "@openbot/brain-nodes"
 import {
+  CallPresence,
   ApprovalServiceLive,
   AttachmentServiceLive,
   BackgroundTasks,
@@ -364,6 +365,8 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     // the owner's Slack (D3.4): tokens in <data>/slack.json
     SlackConnectorLive({ file: makeDataDir(config.dataDir).slack, apiUrl: config.slackApiUrl }),
     options?.speechToText ?? SpeechToTextLive({ dir: makeDataDir(config.dataDir).stt }),
+    // voice calls (experiment): who is on a call (background work started on one reports back on it)
+    CallPresence.layer,
   )
   const level2 = Layer.mergeAll(SettingsServiceLive, UsageServiceLive, NotifierLive, ConversationServiceLive, AttachmentServiceLive)
 

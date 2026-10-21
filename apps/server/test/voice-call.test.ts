@@ -106,6 +106,22 @@ describe("a voice call", () => {
     expect(spoken()).toHaveLength(1)
   })
 
+  test("what the Bot says while the owner is talking (a result coming in) waits until they finish", async () => {
+    const { call, asked, spoken } = makeCall(["Check my whole inbox.", "And the calendar?"])
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    await until(() => asked.length === 1, "asked")
+    // the owner starts talking again; meanwhile the inbox result comes in
+    await say(call, tone(0.5))
+    call.botText("m1", "Your inbox is clear.", true)
+    await Bun.sleep(200)
+    expect(spoken()).toEqual([])
+    await say(call, tone(0.3))
+    await say(call, quiet(0.8))
+    await until(() => spoken().includes("Your inbox is clear."), "said once they finished")
+    expect(asked[1]?.words).toBe("And the calendar?")
+  })
+
   test("an unfinished sentence waits for the rest: a pause mid-thought sends it as one", async () => {
     const { call, asked, sent, spoken } = makeCall(["Uh can you", "message engineering?", "Thanks"])
     await say(call, tone(0.8))

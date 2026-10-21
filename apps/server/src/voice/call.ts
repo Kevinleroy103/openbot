@@ -35,6 +35,8 @@ const FINISHED = /[.!?…]["'”’)\]]*$/
 const SILENT = "NO_REPLY"
 /** The Bot's text stopped growing this long ago and ends a sentence: say it (it is probably working). */
 const SETTLED_TEXT_MS = 350
+/** How often waiting speech checks whether the owner stopped talking. */
+const QUIET_POLL_MS = 50
 /** How long it takes the app to start playing what it is sent. */
 const PLAYBACK_LATENCY_MS = 60
 /** At most this much of what the owner heard goes back to the Bot. */
@@ -289,6 +291,8 @@ export class VoiceCall {
     })
     this.speaking = this.speaking.then(async () => {
       const samples = await audio
+      // not over the owner: while they talk it waits ("mm-hm" lets it go on, real words drop it)
+      while (this.utterance !== undefined && generation === this.generation && !this.ended) await Bun.sleep(QUIET_POLL_MS)
       this.inFlight--
       if (generation !== this.generation || this.ended || samples.length === 0 || message?.dropped === true) return this.settle()
       if (message !== undefined) {

@@ -22,7 +22,7 @@ import {
   voiceOf,
   type VoicePreview,
 } from "@openbot/contracts"
-import { BotRepo, ConversationService, LiveHub, Orchestrator } from "@openbot/core"
+import { BotRepo, CallPresence, ConversationService, LiveHub, Orchestrator } from "@openbot/core"
 import { closeWriter, type Frame, open } from "@openbot/brain-nodes"
 import { Context, Effect, Fiber, Layer, Option, Queue, Result, Stream } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -71,6 +71,7 @@ export const voiceText = (words: string, first: boolean, note: { readonly heard?
     ? [
       "We're on a voice call now. You hear me through speech-to-text, so names and words may be misheard: go by what makes sense. What you write is read out to me as you write it.",
       "Talk like on a call: short, plain sentences, no lists, markdown or links.",
+      "Work that takes more than a few seconds (several steps, research, going through a lot): start it as background work with start_task, tell me in a sentence that you're on it, and keep talking with me. When it's done you'll get its result here and can tell me.",
       "",
     ]
     : []
@@ -89,7 +90,7 @@ export const voiceText = (words: string, first: boolean, note: { readonly heard?
   ].join("\n")
 }
 
-export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | ConversationService> =>
+export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | ConversationService | CallPresence> =>
   Layer.effect(
     VoiceCalls,
     Effect.gen(function*() {
@@ -102,6 +103,7 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
       const hub = yield* LiveHub
       const bots = yield* BotRepo
       const conversations = yield* ConversationService
+      const presence = yield* CallPresence
       const layerScope = yield* Effect.scope
 
       const restingStatus = (): VoiceCallStatus =>
@@ -236,7 +238,8 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
             log: (message, details) => void Effect.runFork(Effect.logInfo(message, { bot: bot.name, ...details })),
           })
 
-          // what the Bot writes in its turns for this call, as it streams
+          // what the Bot writes in its turns for this call, as it streams (its answers, and the results of
+          // work it started on the call in the background)
           const apply = (change: KnownConversationChange) => {
             if (change.type === "turn.upserted") {
               const turn = change.turn
@@ -309,9 +312,13 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           const upgraded = yield* Effect.result(request.upgrade)
           if (Result.isFailure(upgraded)) return HttpServerResponse.text("expected a WebSocket upgrade", { status: 400 })
           activeCalls++
+          presence.enter(bot.id)
           // detached: the route's fiber is interrupted when the app closes the socket, and the call still
           // has to finish (the "Voice chat" line)
-          const running = yield* Effect.forkDetach(runCall(upgraded.success, bot).pipe(Effect.ensuring(Effect.sync(callEnded))))
+          const running = yield* Effect.forkDetach(runCall(upgraded.success, bot).pipe(Effect.ensuring(Effect.sync(() => {
+            presence.leave(bot.id)
+            callEnded()
+          }))))
           yield* Fiber.await(running)
           return HttpServerResponse.empty()
         })

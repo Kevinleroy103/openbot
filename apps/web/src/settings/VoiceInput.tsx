@@ -68,18 +68,16 @@ export function VoiceInputRow(): ReactNode {
   )
 }
 
-const gigabytes = (bytes: number | undefined) => ((bytes ?? 0) / (1024 * BYTES_PER_MB)).toFixed(1)
-
 const describeCalls = (status: VoiceCallStatus, inputReady: boolean): string => {
-  const how = `Talk with a Bot: the call button in its chat. A small model on this OpenBot (${status.model}) speaks as the Bot and hands it the work; your voice never leaves this OpenBot.`
+  const how = "Talk with a Bot: the call button in its chat. The Bot itself answers; your voice is heard and spoken on this OpenBot (Parakeet, Kokoro) and never leaves it."
   switch (status.state) {
     case "unsupported":
       return "Voice calls need OpenBot running on Linux (x64) or a Mac with Apple silicon."
     case "absent":
-      return `${how} Turning it on downloads about ${gigabytes(status.downloadBytes)} GB once.${inputReady ? "" : " It needs voice input on too."}`
+      return `${how} Turning it on downloads about ${megabytes(status.downloadBytes)} MB once.${inputReady ? "" : " It needs voice input on too."}`
     case "installing": {
       const percent = status.downloadBytes ? Math.floor(((status.downloadedBytes ?? 0) / status.downloadBytes) * 100) : 0
-      return `Downloading: ${percent}% (${gigabytes(status.downloadedBytes)} of ${gigabytes(status.downloadBytes)} GB).`
+      return `Downloading: ${percent}% (${megabytes(status.downloadedBytes)} of ${megabytes(status.downloadBytes)} MB).`
     }
     case "ready":
       return inputReady ? `On. ${how}` : "On, but calls need voice input on too (above)."

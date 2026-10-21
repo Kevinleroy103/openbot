@@ -87,8 +87,8 @@ export function CallBar(): ReactNode {
       {transcript && call.lines.length > 0 && (
         <div className="pointer-events-auto max-h-[40vh] w-full max-w-[520px] overflow-y-auto rounded-3xl bg-elevated/95 p-4 text-sm shadow-lg backdrop-blur hairline border-line-tertiary" data-testid="call-transcript">
           {call.lines.map((line) => (
-            <p key={line.id} className={cn("py-1", line.who === "you" ? "text-fg" : line.who === "bot" ? "text-fg-secondary" : "text-fg-tertiary italic")}>
-              {line.who === "you" ? "You: " : line.who === "bot" ? `${bot?.name ?? "Bot"}: ` : line.pending ? "Working on: " : "Done: "}
+            <p key={line.id} className={cn("py-1", line.who === "you" ? "text-fg" : "text-fg-secondary")}>
+              {line.who === "you" ? "You: " : `${bot?.name ?? "Bot"}: `}
               {line.text}
             </p>
           ))}

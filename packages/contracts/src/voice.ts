@@ -1,6 +1,6 @@
 /**
- * Voice calls (experiment): talk with a Bot. A small local model speaks as the Bot and hands real
- * work to it ("voice delegation"); speech in and out stays on the brain (Parakeet, Kokoro).
+ * Voice calls (experiment): talk with a Bot. The Bot itself does the thinking and the talking; speech
+ * in and out stays on the brain (Parakeet, Kokoro).
  *
  * The call runs over `/ws/voice/:botId`. App → brain: binary frames of 16 kHz mono PCM16 (the
  * microphone) and JSON `VoiceClientMessage`s. Brain → app: binary frames of `VOICE_OUTPUT_SAMPLE_RATE`
@@ -11,7 +11,7 @@ import { NonNegativeInt } from "./base.ts"
 
 export const VoiceCallStatus = Schema.Struct({
   state: Schema.Literals(["unsupported", "absent", "installing", "ready", "failed"]),
-  /** What it runs, e.g. "Qwen3.5 2B · Kokoro". */
+  /** What it runs ("Kokoro"). */
   model: Schema.String,
   downloadBytes: Schema.optionalKey(NonNegativeInt),
   downloadedBytes: Schema.optionalKey(NonNegativeInt),
@@ -59,8 +59,6 @@ export type VoiceServerMessage =
   | { readonly type: "bot"; readonly text: string }
   /** The owner started talking over the Bot: drop the audio not yet played. */
   | { readonly type: "stop" }
-  /** Work went to the Bot (its chat shows it); `done` when its answer came back. */
-  | { readonly type: "work"; readonly id: string; readonly instruction: string; readonly done: boolean }
   | { readonly type: "error"; readonly message: string }
 
 export type VoiceClientMessage =

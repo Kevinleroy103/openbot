@@ -121,7 +121,7 @@ describe.skipIf(!hasChromium || !LIVE)("e2e: a voice call with a Bot", () => {
     await app.shot("e2e-96-voice-chat-line")
     await line.click()
     const opened = page.getByTestId("voice-chat")
-    await opened.getByText("Hey Otto, how's it going today?", { exact: false }).waitFor()
+    await opened.getByText("how's it going today?", { exact: false }).waitFor()
     await app.shot("e2e-97-voice-chat-opened")
     expect(app.errors).toEqual([])
   }, 120_000)

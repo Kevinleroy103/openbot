@@ -12,11 +12,10 @@ const INPUT_RATE = 16_000
 
 export interface CallLine {
   readonly id: number
-  readonly who: "you" | "bot" | "work"
+  readonly who: "you" | "bot"
   readonly text: string
-  /** `you`: still being heard. `work`: the Bot is on it. */
+  /** Still being heard. */
   readonly pending?: boolean
-  readonly workId?: string
 }
 
 export interface CallState {
@@ -98,10 +97,6 @@ const onMessage = (message: VoiceServerMessage) => {
     }
     case "stop":
       stopPlayback()
-      return
-    case "work":
-      if (message.done) set({ lines: state.lines.map((l) => (l.workId === message.id ? { ...l, pending: false } : l)) })
-      else addLine({ who: "work", text: message.instruction, pending: true, workId: message.id })
       return
     case "error":
       set({ error: message.message })

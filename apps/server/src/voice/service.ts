@@ -1,35 +1,34 @@
 /**
- * Voice calls (experiment): install them (llama.cpp, the voice model, Kokoro: `<data>/voice`), and
- * run a call over `/ws/voice/:botId`. The voice model and Kokoro start with the first call and stop
- * five minutes after the last one.
- *
- * A call's voice model gets a short brief: who the Bot is, the time, what it is doing, its latest
- * messages with the owner. Work it hands over goes into the Bot's chat as the owner's message (their
- * words and the voice model's reading of them); the Bot's answer comes back when its turn ends.
+ * Voice calls (experiment): install them (Kokoro: `<data>/voice`) and run a call over
+ * `/ws/voice/:botId`. The Bot does the thinking and the talking: what the owner says goes to it as a
+ * voice message (a `voice` delivery: its turn stays out of the chat and notifies nobody), and what it
+ * writes in that turn is spoken as it streams in. Kokoro starts with the first call and stops five
+ * minutes after the last one. A call leaves one "Voice chat" line in the chat; what the Bot answers
+ * after the owner hung up is posted there instead.
  */
 import {
   type Bot,
   type BotId,
   Conflict,
-  type TurnId,
   defaultVoiceFor,
+  isTerminalTurnStatus,
+  type KnownConversationChange,
   VOICE_OUTPUT_SAMPLE_RATE,
   type VoiceCallStatus,
   type VoiceClientMessage,
 } from "@openbot/contracts"
-import { BotRepo, ConversationService, EntryRepo, LiveHub, Orchestrator, SettingsService } from "@openbot/core"
+import { BotRepo, ConversationService, LiveHub, Orchestrator } from "@openbot/core"
 import { closeWriter, type Frame, open } from "@openbot/brain-nodes"
-import { Context, Duration, Effect, Fiber, Layer, Option, Queue, Result } from "effect"
+import { Context, Effect, Fiber, Layer, Option, Queue, Result, Stream } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import type * as Socket from "effect/socket/Socket"
 import { access, rm } from "node:fs/promises"
 import path from "node:path"
 import { sttPlatformOf } from "../stt/manifest.ts"
 import { SpeechToText } from "../stt/service.ts"
-import { type Answer, CALL_INPUT_SAMPLE_RATE, type CallLine, toPcm16, type Transcription, VoiceCall } from "./call.ts"
-import { downloadVoice, isVoiceInstalled, type Speaker, startSpeaker, startThinker, type Thinker, voiceLayout } from "./engine.ts"
+import { CALL_INPUT_SAMPLE_RATE, toPcm16, type Transcription, VoiceCall } from "./call.ts"
+import { downloadVoice, isVoiceInstalled, type Speaker, startSpeaker, voiceLayout } from "./engine.ts"
 import { VOICE_MANIFEST, type VoiceManifest, voiceDownloadBytes } from "./manifest.ts"
-import { streamReply } from "./reply.ts"
 
 export class VoiceCalls extends Context.Service<VoiceCalls, {
   readonly status: Effect.Effect<VoiceCallStatus>
@@ -46,220 +45,91 @@ export interface VoiceCallsOptions {
   readonly manifest?: VoiceManifest | undefined
 }
 
-const ENGINES_IDLE_MS = 5 * 60_000
-const STARTUP_TIMEOUT_MS = 90_000
+const SPEAKER_IDLE_MS = 5 * 60_000
+const STARTUP_TIMEOUT_MS = 60_000
 const SPEAK_TIMEOUT_MS = 30_000
-const ANSWER_TIMEOUT = Duration.minutes(20)
-const RECENT_MESSAGES = 8
-const RECENT_MESSAGE_CHARS = 220
-const ABOUT_CHARS = 600
-const ANSWER_CHARS = 2_000
-
-const oneLine = (text: string, max: number) => {
-  const flat = text.replace(/\s+/g, " ").trim()
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
-}
+/** A turn that started this long before the call's own words is not its answer. */
+const TURN_CLOCK_SLACK_MS = 2_000
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-/** The voice model's brief for a call with `bot`. */
-export const voiceBrief = (input: {
-  readonly bot: Pick<Bot, "name" | "instructions">
-  readonly owner: string
-  readonly now: Date
-  readonly timeZone: string
-  readonly activity?: string | undefined
-  readonly recent: ReadonlyArray<{ readonly fromOwner: boolean; readonly text: string }>
-}): string => {
-  const { bot, owner } = input
-  const when = input.now.toLocaleString("en-GB", { timeZone: input.timeZone, weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })
-  const tomorrow = new Date(input.now.getTime() + 24 * 60 * 60_000).toLocaleDateString("en-GB", { timeZone: input.timeZone, weekday: "long", day: "numeric", month: "long" })
-  const about = oneLine(bot.instructions, ABOUT_CHARS)
-  const recent = input.recent.map((m) => `  - ${m.fromOwner ? owner : "You"}: ${oneLine(m.text, RECENT_MESSAGE_CHARS)}`)
-  return `You are the voice of ${bot.name}, on a phone call with ${owner}, the person you work for. Speak as ${bot.name}, in first person.
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 
-Every reply is JSON: {"action": "talk" or "delegate", "say": "..."}.
-- "say" is spoken aloud: one or two short, plain sentences. No lists, no markdown, no emoji.
-- action "delegate" whenever ${owner} wants something done or found out that is not in WHAT YOU KNOW below: checking or searching anything (Slack, email, calendar, files, code, the web, the weather, news), sending, writing, accepting or changing anything, reminders, scheduling, research, or a follow-up or correction to earlier work. Your full self gets ${owner}'s exact words and this call, does the work, and its answer is told to ${owner}. "say" is only a quick acknowledgement in your own words, different each time ("Sure, one sec.", "Yep, give me a moment.", "Let me take a look."). Never repeat what was asked: no names, dates, times, numbers or details (you may have misheard them). Never pretend it is done.
-- action "talk" for small talk, answers from WHAT YOU KNOW, and "never mind". If you didn't catch what ${owner} said, ask them to say it again.
-- When a RESULT has been told, keep talking from it: don't repeat it.
+/** What the Bot is given for the owner's words on a call (not shown in the chat). */
+export const voiceText = (words: string, first: boolean): string =>
+  first
+    ? [
+      "We're on a voice call now. You hear me through speech-to-text, so names and words may be misheard: go by what makes sense. What you write is read out to me as you write it.",
+      "Talk like on a call: short, plain sentences, no lists, markdown or links. When you need tools, first say a few words (\"Let me check.\") so I'm not left in silence, then give the answer.",
+      "",
+      `Me: ${oneLine(words)}`,
+    ].join("\n")
+    : `Me (on the call): ${oneLine(words)}`
 
-WHAT YOU KNOW:
-- Now: ${when} (${input.timeZone}). Tomorrow is ${tomorrow}.${about === "" ? "" : `\n- About you: ${about}`}${input.activity === undefined ? "" : `\n- Right now you are: ${input.activity}`}${recent.length === 0 ? "" : `\n- Your latest messages with ${owner} (oldest first):\n${recent.join("\n")}`}
-
-Examples:
-${owner}: "Did Karl answer my email?" → {"action":"delegate","say":"Let me take a look."}
-${owner}: "Book a table for two at eight." → {"action":"delegate","say":"Sure, on it in a sec."}
-${owner}: "No, the other one." → {"action":"delegate","say":"Got it, one moment."}
-${owner}: "Thanks, that's all." → {"action":"talk","say":"Anytime. Talk soon."}`
-}
-
-/** What the Bot is given for work handed over on a call (it is not shown in the chat). */
-export const delegationText = (input: { readonly words: string; readonly call: ReadonlyArray<{ readonly who: "you" | "bot"; readonly text: string }> }): string => {
-  const call = input.call.map((l) => `${l.who === "you" ? "Me" : "You"}: ${oneLine(l.text, 300)}`)
-  return [
-    "We're on a voice call. You hear me through speech-to-text, so names and words may be misheard: go by what makes sense.",
-    ...(call.length === 0 ? [] : ["", "The call so far:", ...call]),
-    "",
-    `Just now I said: "${oneLine(input.words, 600)}"`,
-    "",
-    "Do what I'm asking, using the call for context. Then answer in two or three short sentences written to be spoken: no lists, no markdown, no links. Your answer is read out to me as is.",
-  ].join("\n")
-}
-
-interface Engines {
-  readonly thinker: Thinker
-  readonly speaker: Speaker
-}
-
-export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | EntryRepo | SettingsService | ConversationService> =>
+export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | ConversationService> =>
   Layer.effect(
     VoiceCalls,
     Effect.gen(function*() {
       const manifest = options.manifest ?? VOICE_MANIFEST
       const layout = voiceLayout(options.dir)
       const platform = sttPlatformOf(process.platform, process.arch)
-      const runner = platform === undefined ? undefined : manifest.runners[platform]
-      const label = `${manifest.model.label} · ${manifest.voices.label}`
+      const label = manifest.voices.label
       const speech = yield* SpeechToText
       const orchestrator = yield* Orchestrator
       const hub = yield* LiveHub
       const bots = yield* BotRepo
-      const entries = yield* EntryRepo
-      const settings = yield* SettingsService
       const conversations = yield* ConversationService
       const layerScope = yield* Effect.scope
 
       const restingStatus = (): VoiceCallStatus =>
-        runner === undefined || platform === undefined
-          ? { state: "unsupported", model: label }
-          : { state: "absent", model: label, downloadBytes: voiceDownloadBytes(manifest, platform)! }
-      const installed = runner !== undefined && (yield* Effect.promise(() => isVoiceInstalled(layout, runner, manifest)))
+        platform === undefined ? { state: "unsupported", model: label } : { state: "absent", model: label, downloadBytes: voiceDownloadBytes(manifest, platform)! }
+      const installed = platform !== undefined && (yield* Effect.promise(() => isVoiceInstalled(layout, manifest)))
       let status: VoiceCallStatus = installed ? { state: "ready", model: label } : restingStatus()
 
-      // ------------------------------------------------------------ engines (one pair for every call)
-      let engines: Promise<Engines> | undefined
+      // ------------------------------------------------------------ Kokoro (one for every call)
+      let speaker: Promise<Speaker> | undefined
       let activeCalls = 0
       let idleTimer: ReturnType<typeof setTimeout> | undefined
 
-      const startEngines = async (): Promise<Engines> => {
+      const startKokoro = async (): Promise<Speaker> => {
         const sherpaLibDir = path.join(options.sttDir, "runtime", "lib")
         await access(sherpaLibDir).catch(() => {
           throw new Error("Turn on voice input first (Settings › General): calls hear you with it.")
         })
-        const [thinker, speaker] = await Promise.all([
-          startThinker({ layout, startupTimeoutMs: STARTUP_TIMEOUT_MS }),
-          startSpeaker({ layout, manifest, sherpaLibDir, startupTimeoutMs: STARTUP_TIMEOUT_MS, speakTimeoutMs: SPEAK_TIMEOUT_MS }),
-        ])
-        if (speaker.sampleRate !== VOICE_OUTPUT_SAMPLE_RATE) throw new Error(`Kokoro speaks at ${speaker.sampleRate} Hz, not ${VOICE_OUTPUT_SAMPLE_RATE}.`)
-        return { thinker, speaker }
+        const started = await startSpeaker({ layout, manifest, sherpaLibDir, startupTimeoutMs: STARTUP_TIMEOUT_MS, speakTimeoutMs: SPEAK_TIMEOUT_MS })
+        if (started.sampleRate !== VOICE_OUTPUT_SAMPLE_RATE) throw new Error(`Kokoro speaks at ${started.sampleRate} Hz, not ${VOICE_OUTPUT_SAMPLE_RATE}.`)
+        return started
       }
 
-      const stopEngines = async () => {
+      const stopKokoro = async () => {
         clearTimeout(idleTimer)
-        const running = engines
-        engines = undefined
-        const started = await running?.catch(() => undefined)
-        await Promise.all([started?.thinker.stop(), started?.speaker.stop()])
+        const running = speaker
+        speaker = undefined
+        await (await running?.catch(() => undefined))?.stop()
       }
 
-      const enginesForCall = async (): Promise<Engines> => {
+      const kokoroForCall = async (): Promise<Speaker> => {
         clearTimeout(idleTimer)
-        const current = engines ?? (engines = startEngines())
+        const current = speaker ?? (speaker = startKokoro())
         const started = await current.catch((error) => {
-          if (engines === current) engines = undefined
+          if (speaker === current) speaker = undefined
           throw error
         })
-        if (started.thinker.alive() && started.speaker.alive()) return started
-        if (engines === current) {
-          engines = undefined
-          void Promise.all([started.thinker.stop(), started.speaker.stop()])
-        }
-        return enginesForCall()
+        if (started.alive()) return started
+        if (speaker === current) speaker = undefined
+        return kokoroForCall()
       }
 
       const callEnded = () => {
         activeCalls--
         if (activeCalls > 0) return
         clearTimeout(idleTimer)
-        idleTimer = setTimeout(() => void stopEngines(), ENGINES_IDLE_MS)
+        idleTimer = setTimeout(() => void stopKokoro(), SPEAKER_IDLE_MS)
       }
 
-      yield* Effect.addFinalizer(() => Effect.promise(stopEngines))
-
-      // ------------------------------------------------------------ the Bot's side
+      yield* Effect.addFinalizer(() => Effect.promise(stopKokoro))
 
       const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
-
-      const briefFor = (bot: Bot) =>
-        Effect.gen(function*() {
-          const owner = (yield* settings.get).ownerName ?? "the owner"
-          const page = yield* entries.page({ conversationId: bot.directConversationId, limit: 40 }).pipe(Effect.orElseSucceed(() => ({ entries: [] })))
-          const recent = page.entries
-            .flatMap((e) => (e.kind === "message" && e.text.trim() !== "" ? [{ fromOwner: e.role === "user", text: e.text }] : []))
-            .slice(-RECENT_MESSAGES)
-          const activity = (yield* hub.activities).find((a) => a.botId === bot.id)
-          return voiceBrief({
-            bot,
-            owner,
-            now: new Date(),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            activity: activity === undefined || activity.state === "idle" ? undefined : activity.label,
-            recent,
-          })
-        })
-
-      /**
-       * Work for the Bot: delivered like the owner's words but with no message in the chat (the call is
-       * the conversation); its answer is the turn's last message, which the chat shows.
-       */
-      /**
-       * Once its answer was told on the call, the turn leaves the chat: its messages, thinking and steps
-       * (the call is where that exchange happened). Cards and notices stay (a draft to send, an approval).
-       */
-      const hideTurn = (turnId: TurnId) =>
-        entries.listByTurn(turnId).pipe(
-          Effect.flatMap((list) =>
-            Effect.forEach(
-              list.filter((e) => e.kind === "message" || e.kind === "reasoning" || e.kind === "tool-call" || (e.kind === "event" && e.event.type === "auto-decided")),
-              (e) => conversations.removeEntry(e.id),
-              { discard: true },
-            )
-          ),
-          Effect.catch((error) => Effect.logWarning("voice call: could not hide the handed-over turn", { error: String(error) })),
-        )
-
-      const delegate = (bot: Bot) => async (work: { readonly words: string; readonly call: ReadonlyArray<CallLine> }): Promise<Answer> => {
-        const receipt = await run(orchestrator.deliver({
-          conversationId: bot.directConversationId,
-          botId: bot.id,
-          kind: "user-message",
-          text: delegationText(work),
-          urgency: "urgent",
-          voice: true,
-        }))
-        const outcome = await run(orchestrator.awaitDelivery(receipt.deliveryId).pipe(
-          Effect.timeout(ANSWER_TIMEOUT),
-          Effect.orElseSucceed(() => undefined),
-        ))
-        if (outcome === undefined) return { text: "Still working on it; the answer will be in the chat." }
-        const answer = outcome.lastBotMessage?.trim() ?? ""
-        const turnId = outcome.turn?.id
-        const told = turnId === undefined ? undefined : () => void run(hideTurn(turnId))
-        // the call ended first: the answer goes to the chat as the Bot's message (its turn stays hidden)
-        const untold = answer === "" ? undefined : () =>
-          void run(conversations.appendEntry({
-            conversationId: bot.directConversationId,
-            kind: "message",
-            role: "bot",
-            author: { kind: "bot", botId: bot.id },
-            text: answer,
-            attachments: [],
-            streaming: false,
-          }).pipe(Effect.ignore))
-        if (outcome.status !== "completed") return { text: answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}`, turnId, untold }
-        return { text: answer === "" ? "Done." : answer.slice(-ANSWER_CHARS), turnId, told, untold }
-      }
 
       const transcribe = async (): Promise<Transcription> => {
         const { sessionId } = await run(speech.open)
@@ -278,33 +148,83 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           const outbox = yield* Queue.unbounded<Frame>()
           yield* Effect.forkScoped(Effect.forever(Effect.flatMap(Queue.take(outbox), (frame) => Effect.ignore(io.writer.write(frame)))))
           const sendJson = (message: unknown) => Queue.offerUnsafe(outbox, JSON.stringify(message))
-          const fail = (message: string) =>
-            Effect.gen(function*() {
-              yield* Effect.ignore(io.writer.write(JSON.stringify({ type: "error", message })))
-              yield* closeWriter(io.writer, 1011, message)
-            })
           sendJson({ type: "phase", phase: "connecting" })
-          const started = yield* Effect.tryPromise({ try: enginesForCall, catch: describeError }).pipe(Effect.result)
-          if (Result.isFailure(started)) return yield* fail(started.failure)
-          const { thinker, speaker } = started.success
-          const brief = yield* briefFor(bot)
+          const started = yield* Effect.tryPromise({ try: kokoroForCall, catch: describeError }).pipe(Effect.result)
+          if (Result.isFailure(started)) {
+            yield* Effect.ignore(io.writer.write(JSON.stringify({ type: "error", message: started.failure })))
+            return yield* closeWriter(io.writer, 1011, started.failure)
+          }
+          const kokoro = started.success
           const voice = defaultVoiceFor(bot.id)
-          // warm up: the voice model reads the brief now (it keeps it cached), so the first answer is quick
-          void fetch(`${thinker.url}/v1/chat/completions`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ messages: [{ role: "system", content: brief }, { role: "user", content: "Hello?" }], max_tokens: 1, ...manifest.model.requestExtras }),
-          }).catch(() => undefined)
+          const conversationId = bot.directConversationId
+
+          // the Bot's turns answering this call, and from when on their messages count
+          const answering = new Map<string, number>()
+          /** Deliveries whose turn has not ended (their answer goes to the chat if the call ends first). */
+          const unanswered = new Set<string>()
+          let ended = false
+
           const call = new VoiceCall({
             transcribe,
-            reply: (messages, signal) => streamReply({ url: thinker.url, messages, extras: manifest.model.requestExtras, signal }),
-            speak: (text) => speaker.speak(text, voice.sid),
-            delegate: delegate(bot),
-            systemPrompt: async () => brief,
+            speak: (text) => kokoro.speak(text, voice.sid),
+            ask: (words, first) => {
+              const askedAt = Date.now()
+              void run(orchestrator.deliver({
+                conversationId,
+                botId: bot.id,
+                kind: "user-message",
+                text: voiceText(words, first),
+                urgency: "urgent",
+                voice: true,
+              })).then((receipt) => {
+                // steered into a turn already running: its messages from now on answer this
+                if (receipt.turnId !== undefined && !answering.has(receipt.turnId)) answering.set(receipt.turnId, askedAt)
+                unanswered.add(receipt.deliveryId)
+                void run(orchestrator.awaitDelivery(receipt.deliveryId)).then((outcome) => {
+                  unanswered.delete(receipt.deliveryId)
+                  // the call ended before this was answered: the chat gets the answer
+                  const answer = outcome.lastBotMessage?.trim() ?? ""
+                  if (!ended || answer === "" || answer === "NO_REPLY") return
+                  void run(conversations.appendEntry({
+                    conversationId,
+                    kind: "message",
+                    role: "bot",
+                    author: { kind: "bot", botId: bot.id },
+                    text: answer,
+                    attachments: [],
+                    streaming: false,
+                  }).pipe(Effect.ignore))
+                }, () => void unanswered.delete(receipt.deliveryId))
+              }, (error) => {
+                void Effect.runFork(Effect.logWarning("voice call: could not reach the Bot", { error: describeError(error) }))
+                call.botDone(true)
+              })
+            },
             send: sendJson,
             sendAudio: (pcm) => Queue.offerUnsafe(outbox, pcm),
             log: (message, details) => void Effect.runFork(Effect.logInfo(message, { bot: bot.name, ...details })),
           })
+
+          // what the Bot writes in its turns for this call, as it streams
+          const apply = (change: KnownConversationChange) => {
+            if (change.type === "turn.upserted") {
+              const turn = change.turn
+              if (turn.voice === true && turn.botId === bot.id && !answering.has(turn.id)) answering.set(turn.id, turn.startedAt - TURN_CLOCK_SLACK_MS)
+              if (answering.has(turn.id) && isTerminalTurnStatus(turn.status)) call.botDone(turn.status === "failed")
+              return
+            }
+            if (change.type !== "entry.upserted") return
+            const entry = change.entry
+            if (entry.kind !== "message" || entry.role !== "bot" || entry.turnId === undefined) return
+            const since = answering.get(entry.turnId)
+            if (since === undefined || entry.createdAt < since) return
+            call.botText(entry.id, entry.text, !entry.streaming)
+          }
+          yield* hub.subscribeConversation({ conversationId }).pipe(
+            Stream.runForEach((item) => Effect.sync(() => item.kind === "change" && apply(item.change as KnownConversationChange))),
+            Effect.forkScoped,
+          )
+
           sendJson({ type: "ready", sampleRate: VOICE_OUTPUT_SAMPLE_RATE, voice: voice.label })
           call.start()
           yield* Effect.logInfo("voice call started", { bot: bot.name, voice: voice.id })
@@ -327,16 +247,22 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
                   else if (message.type === "hangup") call.hangup()
                 }
               })),
-          ).pipe(Effect.ensuring(Effect.sync(() => call.hangup())), Effect.ignore)
+          ).pipe(
+            Effect.ensuring(Effect.sync(() => {
+              ended = true
+              call.hangup()
+            })),
+            Effect.ignore,
+          )
           // the chat keeps the call as one line ("Voice chat · 00:31") that opens to what was said
           const summary = call.summary()
           if (summary.lines.length > 0) {
             yield* conversations.appendEvent({
-              conversationId: bot.directConversationId,
+              conversationId,
               event: { type: "voice-call", botId: bot.id, durationMs: Math.round(summary.durationMs), lines: [...summary.lines] },
             }).pipe(Effect.ignore)
           }
-          yield* Effect.logInfo("voice call ended", { bot: bot.name, seconds: Math.round(summary.durationMs / 1000) })
+          yield* Effect.logInfo("voice call ended", { bot: bot.name, seconds: Math.round(summary.durationMs / 1000), stillWorking: unanswered.size })
         })).pipe(Effect.catchCause((cause) => Effect.logDebug("voice call failed", { cause })))
 
       const call = (botId: string) =>
@@ -357,36 +283,36 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
 
       // ------------------------------------------------------------ install / remove
 
-      const runInstall = (archive: NonNullable<typeof runner>) =>
-        Effect.tryPromise({
-          try: (signal) =>
-            downloadVoice(layout, archive, manifest, (downloadedBytes, downloadBytes) => {
-              status = { state: "installing", model: label, downloadBytes, downloadedBytes }
-            }, signal),
-          catch: describeError,
-        }).pipe(
-          Effect.matchEffect({
-            onSuccess: () => Effect.sync(() => {
+      const runInstall = Effect.tryPromise({
+        try: (signal) =>
+          downloadVoice(layout, manifest, (downloadedBytes, downloadBytes) => {
+            status = { state: "installing", model: label, downloadBytes, downloadedBytes }
+          }, signal),
+        catch: describeError,
+      }).pipe(
+        Effect.matchEffect({
+          onSuccess: () =>
+            Effect.sync(() => {
               status = { state: "ready", model: label }
             }),
-            onFailure: (problem) =>
-              Effect.logWarning("Voice calls could not be installed", { problem }).pipe(Effect.andThen(Effect.sync(() => {
-                status = { state: "failed", model: label, problem }
-              }))),
-          }),
-        )
+          onFailure: (problem) =>
+            Effect.logWarning("Voice calls could not be installed", { problem }).pipe(Effect.andThen(Effect.sync(() => {
+              status = { state: "failed", model: label, problem }
+            }))),
+        }),
+      )
 
       const install = Effect.suspend(() => {
-        if (runner === undefined || platform === undefined || status.state === "installing" || status.state === "ready") return Effect.succeed(status)
+        if (platform === undefined || status.state === "installing" || status.state === "ready") return Effect.succeed(status)
         status = { state: "installing", model: label, downloadBytes: voiceDownloadBytes(manifest, platform)!, downloadedBytes: 0 }
-        return Effect.as(Effect.forkIn(runInstall(runner), layerScope), status)
+        return Effect.as(Effect.forkIn(runInstall, layerScope), status)
       })
 
       const remove = Effect.suspend(() => {
         if (status.state === "installing") return Effect.fail(new Conflict({ reason: "Voice calls are still installing." }))
         if (activeCalls > 0) return Effect.fail(new Conflict({ reason: "A call is still going." }))
         return Effect.promise(async () => {
-          await stopEngines()
+          await stopKokoro()
           await rm(layout.root, { recursive: true, force: true })
           status = restingStatus()
           return status

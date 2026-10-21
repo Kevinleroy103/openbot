@@ -124,7 +124,7 @@ export interface ToolStep {
 }
 
 const STT_DOWNLOAD_BYTES = 500 * 1024 * 1024
-const VOICE_DOWNLOAD_BYTES = 1_665 * 1024 * 1024
+const VOICE_DOWNLOAD_BYTES = 334 * 1024 * 1024
 const STT_DOWNLOAD_STEP_BYTES = 200 * 1024 * 1024
 
 export class MockBrain {
@@ -142,7 +142,7 @@ export class MockBrain {
   /** Slack (D3.4): any `xoxp-` token connects the mock to workspace "Acme". */
   slack: SlackStatus = { connected: false, events: "off" }
   stt: SttStatus = { state: "ready", model: "Parakeet TDT 0.6B v3" }
-  voice: VoiceCallStatus = { state: "absent", model: "Qwen3.5 2B · Kokoro", downloadBytes: VOICE_DOWNLOAD_BYTES }
+  voice: VoiceCallStatus = { state: "absent", model: "Kokoro", downloadBytes: VOICE_DOWNLOAD_BYTES }
   sttFailsAppend = false
   sttFinishDelayMs = 0
   sttDiscards = 0

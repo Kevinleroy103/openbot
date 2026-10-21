@@ -1,7 +1,7 @@
-// Voice calls (experiment) with the real models: Kokoro says a question, the brain hears it with
-// Parakeet over /ws/voice, the voice model answers and Kokoro speaks; then work is handed to the Bot
-// (Fake harness) and its answer is read back. Needs an installed voice folder (OPENBOT_LIVE_VOICE_DIR)
-// and voice input (OPENBOT_LIVE_STT_DIR). OPENBOT_LIVE_VOICE=1 to run.
+// Voice calls (experiment) with the real speech models: Kokoro says a question, the brain hears it
+// with Parakeet over /ws/voice, the Bot (Fake harness) answers and Kokoro speaks its answer; the chat
+// keeps one "Voice chat" line and shows none of the call's messages. Needs an installed voice folder
+// (OPENBOT_LIVE_VOICE_DIR) and voice input (OPENBOT_LIVE_STT_DIR). OPENBOT_LIVE_VOICE=1 to run.
 import { describe, expect, test } from "bun:test"
 import type { Bot, VoiceServerMessage } from "@openbot/contracts"
 import { Effect } from "effect"
@@ -32,7 +32,7 @@ const to16k = (samples: Float32Array): Float32Array => {
 }
 
 describe.skipIf(!LIVE)("a voice call with the real models", () => {
-  test("hears, answers out loud, hands work to the Bot and reads its answer", async () => {
+  test("hears, the Bot answers out loud, and the chat keeps only the call line", async () => {
     const speaker = await startSpeaker({
       layout: voiceLayout(VOICE_DIR),
       manifest: VOICE_MANIFEST,
@@ -87,39 +87,35 @@ describe.skipIf(!LIVE)("a voice call with the real models", () => {
       await waitFor(() => audio.length > 0, "the first answer")
       const heard = messages.find((m) => m.message.type === "you" && m.message.final)?.message
       const firstAudioMs = Math.round(audio[0]!.at - spoke)
-      await waitFor(() => messages.some((m) => m.message.type === "phase" && m.message.phase === "speaking"), "speaking")
-      await Bun.sleep(2_500)
+      await waitFor(() => messages.some((m) => m.message.type === "phase" && m.message.phase === "listening" && m.at > audio[0]!.at) || messages.filter((m) => m.message.type === "bot").length >= 2, "the answer spoken", 30_000)
+      await Bun.sleep(1_500)
       const said = messages.filter((m) => m.message.type === "bot").map((m) => (m.message as { text: string }).text)
       socket.send(JSON.stringify({ type: "played" }))
       console.log(`heard: ${JSON.stringify(heard)}\nsaid: ${JSON.stringify(said)}\nfirst audio ${firstAudioMs} ms after the question ended`)
       expect(heard).toMatchObject({ type: "you", final: true })
       expect((heard as { text: string }).text.toLowerCase()).toContain("going")
-      expect(said.length).toBeGreaterThan(0)
+      // the Fake harness repeats what it got: the Bot itself answered, as on a call
+      expect(said.join(" ")).toContain("Otto")
 
-      // work for the Bot
-      const before = messages.length
+      // a second question, answered the same way
+      const before = audio.length
       await stream(work)
       void stream(silence(2))
-      await waitFor(() => messages.slice(before).some((m) => m.message.type === "work" && !m.message.done), "work handed over")
-      const handed = messages.slice(before).find((m) => m.message.type === "work")!.message
-      await waitFor(() => messages.slice(before).some((m) => m.message.type === "work" && m.message.done), "the Bot's answer", 90_000)
+      await waitFor(() => audio.length > before, "the second answer", 60_000)
+      await Bun.sleep(1_500)
       socket.send(JSON.stringify({ type: "played" }))
-      const answerAt = messages.length
-      await waitFor(() => messages.slice(answerAt).some((m) => m.message.type === "bot"), "the answer read out")
-      await Bun.sleep(2_000)
-      const told = messages.slice(answerAt).filter((m) => m.message.type === "bot").map((m) => (m.message as { text: string }).text)
-      console.log(`handed over: ${JSON.stringify(handed)}\ntold: ${JSON.stringify(told)}`)
-      expect((handed as { instruction: string }).instruction.toLowerCase()).toContain("anthony")
-      // the exchange happened on the call: once told, the chat keeps nothing of it
+      socket.send(JSON.stringify({ type: "hangup" }))
+      socket.close()
+      // the call's exchange stays out of the chat: one "Voice chat" line instead
       const left = await server.run(Effect.gen(function*() {
         const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
         const convo = yield* watchConversation(client, bot.directConversationId)
-        const state = yield* eventually(Ref.get(convo.state), (s) => s.synchronized && !transcriptOf(s).some((e) => e.kind === "message"), { label: "no messages left", timeout: 10_000 })
-        return transcriptOf(state).map((e) => e.kind)
+        const state = yield* eventually(Ref.get(convo.state), (s) => s.synchronized && transcriptOf(s).some((e) => e.kind === "event" && e.event.type === "voice-call"), { label: "the call line", timeout: 10_000 })
+        const voiceTurns = new Set([...state.turns.values()].filter((t) => t.voice === true).map((t) => t.id))
+        return transcriptOf(state).filter((e) => !(e.turnId !== undefined && voiceTurns.has(e.turnId))).map((e) => (e.kind === "event" ? e.event.type : e.kind))
       }).pipe(Effect.scoped))
-      console.log(`left in the chat: ${JSON.stringify(left)}`)
-      socket.send(JSON.stringify({ type: "hangup" }))
-      socket.close()
+      console.log(`shown in the chat: ${JSON.stringify(left)}`)
+      expect(left).toEqual(["joined", "voice-call"])
     } finally {
       await server.close()
     }

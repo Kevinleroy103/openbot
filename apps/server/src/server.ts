@@ -100,6 +100,7 @@ import { setShutdownPhase } from "./shutdown.ts"
 import { SkillsShLive } from "./skillsSh.ts"
 import { SlackConnectorLive } from "./slack/connector.ts"
 import { type SpeechToText, SpeechToTextLive } from "./stt/service.ts"
+import { VoiceCallsLive } from "./voice/service.ts"
 import { HarkLive } from "./hark.ts"
 
 // ============================================================================ startup errors
@@ -336,6 +337,8 @@ export interface ServerOptions {
   /** Replaces skills.sh (tests). */
   readonly skillDirectory?: Layer.Layer<SkillDirectory> | undefined
   readonly speechToText?: Layer.Layer<SpeechToText> | undefined
+  /** Voice calls' folders (tests: an installed copy). */
+  readonly voiceCalls?: { readonly dir: string; readonly sttDir: string } | undefined
   readonly quiet?: boolean | undefined
 }
 
@@ -386,6 +389,8 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     Layer.provideMerge(BotServiceLive),
   ).pipe(
     Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive, SlackShortcutsLive)), // 10 (+ Slack's "Send to OpenBot")
+    // voice calls (experiment): <data>/voice, and voice input's Parakeet + sherpa-onnx
+    Layer.provideMerge(VoiceCallsLive(options?.voiceCalls ?? { dir: makeDataDir(config.dataDir).voice, sttDir: makeDataDir(config.dataDir).stt })),
     Layer.provideMerge(LocalNodeDaemonLive(options?.localNode)), // 9
     Layer.provideMerge(HarnessProfilesLayer(options?.profiles)), // 8b: added accounts (profiles.ts)
     Layer.provideMerge(options?.drivers ?? harnessDrivers(config)), // 8

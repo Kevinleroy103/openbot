@@ -85,6 +85,8 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "slack.discardDraft": [],
   "stt.install": [Keys.stt],
   "stt.remove": [Keys.stt],
+  "voice.install": [Keys.voice],
+  "voice.remove": [Keys.voice],
   "stt.open": [],
   "stt.append": [],
   "stt.finish": [],

@@ -33,6 +33,7 @@ import { Settings, SettingsPatch } from "./settings.ts"
 import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
 import { SlackConnectInput, SlackStatus } from "./slack.ts"
 import { SttSession, SttStatus, SttTranscription } from "./stt.ts"
+import { VoiceCallStatus } from "./voice.ts"
 import { HarkSends, HarkStatus } from "./hark.ts"
 import { ConversationStreamItem, ExchangePage, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
 import { Task, TaskDetail } from "./task.ts"
@@ -419,6 +420,11 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("stt.append", { payload: { sessionId: Schema.String, pcmBase64: Schema.String }, success: SttTranscription, error: errors(NotFound, InvalidInput, Unavailable, Conflict) }),
   Rpc.make("stt.finish", { payload: { sessionId: Schema.String, pcmBase64: Schema.String }, success: SttTranscription, error: errors(NotFound, InvalidInput, Unavailable, Conflict) }),
   Rpc.make("stt.discard", { payload: { sessionId: Schema.String }, error: errors() }),
+
+  // Voice calls (experiment): the call itself runs over /ws/voice/:botId
+  Rpc.make("voice.status", { success: VoiceCallStatus, error: errors() }),
+  Rpc.make("voice.install", { success: VoiceCallStatus, error: errors(Conflict) }),
+  Rpc.make("voice.remove", { success: VoiceCallStatus, error: errors(Conflict) }),
 
   // Hark: iPhone notifications (D3.5)
   Rpc.make("hark.status", { success: HarkStatus, error: errors() }),

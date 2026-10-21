@@ -92,6 +92,20 @@ describe("a voice call", () => {
     ])
   })
 
+  test("a sentence the Bot wrote before going quiet to work is said without waiting for the rest", async () => {
+    const { call, asked, spoken } = makeCall(["What's on tomorrow?"])
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    await until(() => asked.length === 1, "asked")
+    // "Let me look at your calendar." and then a tool runs: the message isn't final yet
+    call.botText("m1", "Let me look at your calendar.", false)
+    await until(() => spoken().length === 1, "said while it works", 1_000)
+    expect(spoken()).toEqual(["Let me look at your calendar."])
+    call.botText("m1", "Let me look at your calendar.", true)
+    await Bun.sleep(50)
+    expect(spoken()).toHaveLength(1)
+  })
+
   test("an unfinished sentence waits for the rest: a pause mid-thought sends it as one", async () => {
     const { call, asked, sent, spoken } = makeCall(["Uh can you", "message engineering?", "Thanks"])
     await say(call, tone(0.8))

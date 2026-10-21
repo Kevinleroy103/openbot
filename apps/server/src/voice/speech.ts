@@ -49,6 +49,15 @@ export class SentenceChunker {
     return out
   }
 
+  /** What is pending, if it is a whole sentence ("Let me check." before the Bot goes quiet to work). */
+  takeFinished(): string | undefined {
+    const rest = this.pending.trim()
+    if (!/[.!?…]["'”’)\]]*$/.test(rest)) return undefined
+    this.pending = ""
+    this.emitted++
+    return rest
+  }
+
   /** What is left once the text is complete. */
   flush(): string | undefined {
     const rest = this.pending.trim()

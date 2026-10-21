@@ -70,7 +70,7 @@ export const voiceText = (words: string, first: boolean, note: { readonly heard?
   const intro = first
     ? [
       "We're on a voice call now. You hear me through speech-to-text, so names and words may be misheard: go by what makes sense. What you write is read out to me as you write it.",
-      "Talk like on a call: short, plain sentences, no lists, markdown or links. When you need tools, first say a few words (\"Let me check.\") so I'm not left in silence, then give the answer.",
+      "Talk like on a call: short, plain sentences, no lists, markdown or links.",
       "",
     ]
     : []
@@ -80,7 +80,13 @@ export const voiceText = (words: string, first: boolean, note: { readonly heard?
       : [note.heard === "nothing yet" ? "(I cut you off before you said anything.)" : `(I cut you off. All I heard was: "${oneLine(note.heard)}" The rest wasn't said.)`]),
     ...(note.stopped === true ? ["(I stopped what you were working on.)"] : []),
   ]
-  return [...intro, ...notes, `${first ? "Me" : "Me (on the call)"}: ${oneLine(words)}`].join("\n")
+  return [
+    ...intro,
+    ...notes,
+    `${first ? "Me" : "Me (on the call)"}: ${oneLine(words)}`,
+    // every time: models go straight to their tools otherwise, and the call goes quiet
+    "(If this takes a tool, first write one short sentence saying what you're about to do, like \"Let me look at your calendar.\" It's read out right away so I'm not left in silence.)",
+  ].join("\n")
 }
 
 export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCalls, never, SpeechToText | Orchestrator | LiveHub | BotRepo | ConversationService> =>

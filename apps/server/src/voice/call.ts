@@ -33,6 +33,8 @@ const UNFINISHED_HOLD_MS = 1_200
 const FINISHED = /[.!?…]["'”’)\]]*$/
 /** A Bot reply that says nothing. */
 const SILENT = "NO_REPLY"
+/** The Bot's text stopped growing this long ago and ends a sentence: say it (it is probably working). */
+const SETTLED_TEXT_MS = 350
 /** How long it takes the app to start playing what it is sent. */
 const PLAYBACK_LATENCY_MS = 60
 /** At most this much of what the owner heard goes back to the Bot. */
@@ -138,6 +140,8 @@ interface BotMessage {
   dropped: boolean
   /** All of it has arrived. */
   final: boolean
+  /** Says a finished sentence still waiting when the text stops growing. */
+  settle?: ReturnType<typeof setTimeout> | undefined
   /** Its line in the call's transcript, once something was said. */
   line?: { who: "bot"; text: string } | undefined
 }
@@ -249,6 +253,15 @@ export class VoiceCall {
     const fresh = text.slice(message.seen)
     message.seen = Math.max(message.seen, text.length)
     for (const sentence of message.chunker.push(fresh)) this.say(sentence, message)
+    clearTimeout(message.settle)
+    if (!final) {
+      const waiting = message
+      waiting.settle = setTimeout(() => {
+        if (this.ended || waiting.dropped || waiting.final) return
+        const sentence = waiting.chunker.takeFinished()
+        if (sentence !== undefined) this.say(sentence, waiting)
+      }, SETTLED_TEXT_MS)
+    }
     if (final) {
       message.final = true
       const rest = message.chunker.flush()

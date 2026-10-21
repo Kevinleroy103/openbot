@@ -142,7 +142,9 @@ export const makeQuickSend = (input: { readonly origin: string; readonly preload
       ...(isMac ? { type: "panel" as const } : {}),
       webPreferences: { preload: input.preload, contextIsolation: true, sandbox: true, spellcheck: true },
     })
-    if (isMac) panel.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    // without skipTransformProcessType Electron turns OpenBot into a background app and back, and
+    // macOS then leaves it out of ⌘Tab until it is activated again; a panel floats without that
+    if (isMac) panel.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
     panel.setAlwaysOnTop(true, "pop-up-menu")
     panel.on("blur", () => {
       if (!shotting) panel?.hide()

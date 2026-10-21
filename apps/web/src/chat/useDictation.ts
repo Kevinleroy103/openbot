@@ -12,7 +12,7 @@ export interface DictationControls {
   readonly phase: DictationPhase
   readonly elapsedSeconds: number
   readonly start: () => void
-  readonly finish: () => void
+  readonly finish: () => Promise<string | undefined>
   readonly cancel: () => void
 }
 
@@ -23,6 +23,7 @@ export interface DictationCallbacks {
   readonly onDone: (text: string) => void
   readonly onCancel: () => void
   readonly onError: (message: string) => void
+  readonly onFinishing: (finishing: Promise<unknown>) => void
 }
 
 const PUMP_INTERVAL_MS = 120
@@ -39,6 +40,7 @@ interface Recording {
   sending: boolean
   latestText: string
   pump?: ReturnType<typeof setInterval>
+  finishing?: Promise<string | undefined>
 }
 
 const recordingSampleRate = (active: Recording) => active.microphone?.sampleRate ?? DICTATION_SAMPLE_RATE
@@ -105,23 +107,51 @@ export function useDictation(callbacks: DictationCallbacks): DictationControls {
     })
   }, [sendBuffered])
 
-  const finish = useCallback(async () => {
+  const cancel = useCallback(() => {
     const active = recording.current
-    if (active === undefined || active.microphone === undefined) return
+    attempt.current++
+    if (active === undefined) return
+    release(active)
+    void active.sessionId.then((sessionId) => {
+      if (sessionId !== undefined) void discardSession({ sessionId })
+    })
+    setPhase("idle")
+    latest.current.onCancel()
+  }, [discardSession, release])
+
+  const completeRecording = useCallback(async (active: Recording, microphone: Microphone): Promise<string | undefined> => {
     clearInterval(active.pump)
     setPhase("finishing")
-    await active.microphone.stop()
+    await microphone.stop()
     await active.inFlight
     const sessionId = await active.sessionId
-    if (sessionId === undefined || active.attempt !== attempt.current) return
+    if (sessionId === undefined || active.attempt !== attempt.current) return undefined
     const result = await finishSession({ sessionId, pcmBase64: takeBufferedAudio(active) })
-    if (active.attempt !== attempt.current) return
-    if (!result.ok) return fail(active, result.error)
+    if (active.attempt !== attempt.current) return undefined
+    if (!result.ok) {
+      fail(active, result.error)
+      return undefined
+    }
     release(active)
     latest.current.onText(result.value.text)
     latest.current.onDone(result.value.text)
     setPhase("idle")
+    return result.value.text
   }, [finishSession, fail, release])
+
+  const finish = useCallback((): Promise<string | undefined> => {
+    const active = recording.current
+    if (active === undefined) return Promise.resolve(undefined)
+    if (active.microphone === undefined) {
+      cancel()
+      return Promise.resolve("")
+    }
+    if (active.finishing === undefined) {
+      active.finishing = completeRecording(active, active.microphone)
+      latest.current.onFinishing(active.finishing)
+    }
+    return active.finishing
+  }, [completeRecording, cancel])
 
   const start = useCallback(async () => {
     if (recording.current !== undefined) return
@@ -148,17 +178,6 @@ export function useDictation(callbacks: DictationCallbacks): DictationControls {
     }
   }, [openSession, finish, pumpOnce, fail])
 
-  const cancel = useCallback(() => {
-    const active = recording.current
-    attempt.current++
-    if (active === undefined) return
-    release(active)
-    void active.sessionId.then((sessionId) => {
-      if (sessionId !== undefined) void discardSession({ sessionId })
-    })
-    setPhase("idle")
-    latest.current.onCancel()
-  }, [discardSession, release])
 
   useEffect(() => {
     if (phase !== "recording") return
@@ -178,14 +197,19 @@ export function useDictation(callbacks: DictationCallbacks): DictationControls {
     return () => window.removeEventListener("keydown", cancelOnEscape, true)
   }, [phase, cancel])
 
-  useEffect(() => cancel, [cancel])
+  useEffect(
+    () => () => {
+      if (recording.current?.finishing === undefined) cancel()
+    },
+    [cancel],
+  )
 
   return {
     available: status.value?.state === "ready" && microphoneAvailable(),
     phase,
     elapsedSeconds: phase === "recording" ? Math.floor((now - startedAt) / 1000) : 0,
     start: () => void start(),
-    finish: () => void finish(),
+    finish,
     cancel,
   }
 }

@@ -12,7 +12,7 @@
  */
 import type { VoiceCallPhase, VoiceServerMessage } from "@openbot/contracts"
 import { frameLevels, speechThreshold } from "../stt/segmenter.ts"
-import { type ChatMessage, type ReplyEvent, SentenceChunker, type VoiceReply } from "./reply.ts"
+import { type ChatMessage, type ReplyEvent, SentenceChunker, speakable, type VoiceReply } from "./reply.ts"
 
 export const CALL_INPUT_SAMPLE_RATE = 16_000
 const FRAME_SAMPLES = Math.round(CALL_INPUT_SAMPLE_RATE * 0.03)
@@ -25,6 +25,20 @@ const PARTIAL_EVERY_SAMPLES = Math.round(CALL_INPUT_SAMPLE_RATE * 0.4)
 const MAX_UTTERANCE_SAMPLES = CALL_INPUT_SAMPLE_RATE * 60
 const LEVEL_HISTORY_FRAMES = 1_000
 const HISTORY_MESSAGES = 24
+/**
+ * What the Bot says when it takes on work. The small model's own lines restate what it thinks it
+ * heard ("I'll accept the vendor's one") and get names wrong, so the acknowledgement comes from here.
+ */
+export const ACKNOWLEDGEMENTS = [
+  "Sure, one sec.",
+  "Let me take a look.",
+  "Give me a moment.",
+  "Yep, on it.",
+  "Sure thing.",
+  "One second.",
+  "Okay, let me check.",
+  "Alright, give me a sec.",
+]
 
 /** One utterance's transcription (voice input's dictation session). */
 export interface Transcription {
@@ -38,8 +52,8 @@ export interface CallDeps {
   readonly reply: (messages: ReadonlyArray<ChatMessage>, signal: AbortSignal) => AsyncIterable<ReplyEvent>
   /** Speech for `text` at the call's output rate. */
   readonly speak: (text: string) => Promise<Float32Array>
-  /** Hands work to the Bot; resolves with its answer (`told`: it was said on the call). */
-  readonly delegate: (work: { readonly instruction: string; readonly words: string }) => Promise<Answer>
+  /** Hands work to the Bot (the owner's words, the call so far); resolves with its answer. */
+  readonly delegate: (work: { readonly words: string; readonly call: ReadonlyArray<CallLine> }) => Promise<Answer>
   readonly systemPrompt: () => Promise<string>
   readonly send: (message: VoiceServerMessage) => void
   readonly sendAudio: (pcm16: Uint8Array) => void
@@ -87,8 +101,15 @@ interface Turn {
   said: string
 }
 
+export interface CallLine {
+  readonly who: "you" | "bot"
+  readonly text: string
+}
+
 export interface Answer {
   readonly text: string
+  /** The Bot's turn that answered: work steered into the same turn is answered once. */
+  readonly turnId?: string | undefined
   /** Called once the answer has been told on the call. */
   readonly told?: (() => void) | undefined
   /** Called when the call ended before it was told (the chat gets it instead). */
@@ -97,7 +118,7 @@ export interface Answer {
 
 interface Work {
   readonly id: string
-  readonly instruction: string
+  readonly words: string
   readonly answer: Answer
 }
 
@@ -120,6 +141,9 @@ export class VoiceCall {
   private startedAt = 0
   /** What was said, for the chat's "Voice chat" line. */
   private readonly lines: Array<{ who: "you" | "bot"; text: string }> = []
+  /** The Bot's turns already answered on this call. */
+  private readonly answeredTurns = new Set<string>()
+  private lastAcknowledgement = -1
 
   constructor(private readonly deps: CallDeps) {}
 
@@ -270,7 +294,7 @@ export class VoiceCall {
     const turn = this.turn
     this.turn = undefined
     turn?.abort.abort()
-    if (turn !== undefined && turn.said !== "") this.remember({ role: "assistant", content: JSON.stringify({ action: "talk", say: `${turn.said} …`, instruction: "" }) })
+    if (turn !== undefined && turn.said !== "") this.remember({ role: "assistant", content: JSON.stringify({ action: "talk", say: `${turn.said} …` }) })
     if (this.playing || turn !== undefined) this.deps.send({ type: "stop" })
     this.playing = false
   }
@@ -282,7 +306,8 @@ export class VoiceCall {
     if (this.history.length > HISTORY_MESSAGES) this.history.splice(0, this.history.length - HISTORY_MESSAGES)
   }
 
-  private async runTurn(words: string | undefined) {
+  /** One reply: the voice model's, or (`told`) the Bot's answer spoken as is. */
+  private async runTurn(words: string | undefined, told?: string) {
     if (this.ended) return
     const turn: Turn = { abort: new AbortController(), said: "" }
     this.turn?.abort.abort()
@@ -315,12 +340,27 @@ export class VoiceCall {
       })
     }
     let reply: VoiceReply | undefined
+    let acknowledged: string | undefined
     try {
-      const system = await this.deps.systemPrompt()
-      for await (const event of this.deps.reply([{ role: "system", content: system }, ...this.history], turn.abort.signal)) {
-        if (this.turn !== turn) return
-        if (event.type === "say") for (const sentence of chunker.push(event.text)) say(sentence)
-        else reply = event.reply
+      if (told !== undefined) {
+        for (const sentence of chunker.push(`${told} `)) say(sentence)
+        reply = { action: "talk", say: told }
+      } else {
+        const system = await this.deps.systemPrompt()
+        for await (const event of this.deps.reply([{ role: "system", content: system }, ...this.history], turn.abort.signal)) {
+          if (this.turn !== turn) return
+          // the work starts as soon as it is decided (talking over the acknowledgement doesn't lose it),
+          // and the acknowledgement is ours, not the model's reading of the request
+          if (event.type === "action") {
+            if (event.action === "delegate") {
+              if (words !== undefined) this.startWork(words)
+              acknowledged = this.acknowledgement()
+              say(acknowledged)
+            }
+          } else if (event.type === "say") {
+            if (acknowledged === undefined) for (const sentence of chunker.push(event.text)) say(sentence)
+          } else reply = acknowledged === undefined ? event.reply : { action: "delegate", say: acknowledged }
+        }
       }
       const rest = chunker.flush()
       if (rest !== undefined) say(rest)
@@ -336,37 +376,49 @@ export class VoiceCall {
       action: reply?.action,
       firstAudioMs: firstAudioAt === undefined ? undefined : Math.round(firstAudioAt - startedAt),
     })
-    if (reply !== undefined) {
-      this.remember({ role: "assistant", content: JSON.stringify(reply) })
-      if (reply.action === "delegate" && reply.instruction !== "") this.startWork(reply.instruction, words ?? "")
-    }
+    if (reply !== undefined) this.remember({ role: "assistant", content: JSON.stringify(reply) })
     if (this.utterance === undefined) this.setPhase(this.playing ? "speaking" : "listening")
     this.deliverResult()
   }
 
   // ---------------------------------------------------------------- work for the Bot
 
-  private startWork(instruction: string, words: string) {
+  private startWork(words: string) {
     const id = `work-${++this.nextWork}`
-    this.deps.send({ type: "work", id, instruction, done: false })
-    void this.deps.delegate({ instruction, words }).then(
+    this.deps.send({ type: "work", id, instruction: words, done: false })
+    // the call so far, up to the request (the Bot gets it as the request)
+    const asked = this.lines.findLastIndex((l) => l.who === "you" && l.text === words)
+    const call = this.lines.slice(Math.max(0, asked - 12), asked === -1 ? this.lines.length : asked).map((l) => ({ ...l }))
+    void this.deps.delegate({ words, call }).then(
       (answer) => answer,
       (error): Answer => ({ text: `It could not be done: ${error instanceof Error ? error.message : String(error)}` }),
     ).then((answer) => {
-      if (this.ended) return void answer.untold?.()
-      this.deps.send({ type: "work", id, instruction, done: true })
-      this.results.push({ id, instruction, answer })
+      // work steered into a turn already answered on this call: that answer covers it
+      const repeat = answer.turnId !== undefined && this.answeredTurns.has(answer.turnId)
+      if (answer.turnId !== undefined) this.answeredTurns.add(answer.turnId)
+      if (this.ended) return void (repeat ? undefined : answer.untold?.())
+      this.deps.send({ type: "work", id, instruction: words, done: true })
+      if (repeat) return
+      this.results.push({ id, words, answer })
       this.deliverResult()
     })
   }
 
-  /** A result is told at the next quiet moment (nobody speaking, nothing playing). */
+  /** A different acknowledgement from last time. */
+  private acknowledgement(): string {
+    let pick = Math.floor(Math.random() * ACKNOWLEDGEMENTS.length)
+    if (pick === this.lastAcknowledgement) pick = (pick + 1) % ACKNOWLEDGEMENTS.length
+    this.lastAcknowledgement = pick
+    return ACKNOWLEDGEMENTS[pick]!
+  }
+
+  /** A result is told at the next quiet moment (nobody speaking, nothing playing): the Bot's answer, as is. */
   private deliverResult() {
     if (this.ended || this.turn !== undefined || this.utterance !== undefined || this.playing) return
     const work = this.results.shift()
     if (work === undefined) return
-    this.remember({ role: "user", content: `RESULT from your full self (the work: "${work.instruction}"):\n${work.answer.text}` })
+    this.remember({ role: "user", content: `RESULT from your full self (for "${work.words}"), already told to the owner:\n${work.answer.text}` })
     work.answer.told?.()
-    void this.runTurn(undefined)
+    void this.runTurn(undefined, speakable(work.answer.text))
   }
 }

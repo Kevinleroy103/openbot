@@ -49,7 +49,7 @@ export function VoiceChatLine({ durationMs, lines }: VoiceChatLineProps): ReactN
         {title}
         <IconButton icon={X} label="Close" size={28} className="absolute end-3" onClick={() => setOpen(false)} />
       </div>
-      <div className="flex flex-col gap-2 p-4">
+      <div className="flex max-h-[min(60vh,560px)] flex-col gap-2 overflow-y-auto overscroll-contain p-4">
         {lines.map((line, i) => (
           <div key={i} className={line.who === "you" ? "flex justify-end" : "flex justify-start"}>
             <p

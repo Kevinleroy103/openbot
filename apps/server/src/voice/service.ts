@@ -26,7 +26,7 @@ import { access, rm } from "node:fs/promises"
 import path from "node:path"
 import { sttPlatformOf } from "../stt/manifest.ts"
 import { SpeechToText } from "../stt/service.ts"
-import { type Answer, CALL_INPUT_SAMPLE_RATE, toPcm16, type Transcription, VoiceCall } from "./call.ts"
+import { type Answer, CALL_INPUT_SAMPLE_RATE, type CallLine, toPcm16, type Transcription, VoiceCall } from "./call.ts"
 import { downloadVoice, isVoiceInstalled, type Speaker, startSpeaker, startThinker, type Thinker, voiceLayout } from "./engine.ts"
 import { VOICE_MANIFEST, type VoiceManifest, voiceDownloadBytes } from "./manifest.ts"
 import { streamReply } from "./reply.ts"
@@ -78,26 +78,34 @@ export const voiceBrief = (input: {
   const recent = input.recent.map((m) => `  - ${m.fromOwner ? owner : "You"}: ${oneLine(m.text, RECENT_MESSAGE_CHARS)}`)
   return `You are the voice of ${bot.name}, on a phone call with ${owner}, the person you work for. Speak as ${bot.name}, in first person.
 
-Every reply is JSON: {"action": "talk" or "delegate", "say": "...", "instruction": "..."}.
+Every reply is JSON: {"action": "talk" or "delegate", "say": "..."}.
 - "say" is spoken aloud: one or two short, plain sentences. No lists, no markdown, no emoji.
-- action "delegate" whenever ${owner} wants something done or found out that is not in WHAT YOU KNOW below: checking or searching anything (Slack, email, calendar, files, code, the web, the weather, news), sending or writing anything, reminders, scheduling, changes, research. "instruction" is the complete task for your full self, with every detail ${owner} gave (names, times, places, dates written out). "say" tells ${owner}, in your own words, what you are about to do for this request, the way a colleague would ("Let me pull up your calendar."). Say it differently every time; never just "On it". Don't repeat times, dates or numbers in it. Never pretend you did it.
-- action "talk" for small talk, answers from WHAT YOU KNOW, "never mind", and when the request is unclear: then "say" asks one short question. "instruction" is "".
-- When a RESULT arrives from your full self, action "talk": tell ${owner} the gist in one or two sentences.
+- action "delegate" whenever ${owner} wants something done or found out that is not in WHAT YOU KNOW below: checking or searching anything (Slack, email, calendar, files, code, the web, the weather, news), sending, writing, accepting or changing anything, reminders, scheduling, research, or a follow-up or correction to earlier work. Your full self gets ${owner}'s exact words and this call, does the work, and its answer is told to ${owner}. "say" is only a quick acknowledgement in your own words, different each time ("Sure, one sec.", "Yep, give me a moment.", "Let me take a look."). Never repeat what was asked: no names, dates, times, numbers or details (you may have misheard them). Never pretend it is done.
+- action "talk" for small talk, answers from WHAT YOU KNOW, and "never mind". If you didn't catch what ${owner} said, ask them to say it again.
+- When a RESULT has been told, keep talking from it: don't repeat it.
 
 WHAT YOU KNOW:
 - Now: ${when} (${input.timeZone}). Tomorrow is ${tomorrow}.${about === "" ? "" : `\n- About you: ${about}`}${input.activity === undefined ? "" : `\n- Right now you are: ${input.activity}`}${recent.length === 0 ? "" : `\n- Your latest messages with ${owner} (oldest first):\n${recent.join("\n")}`}
 
 Examples:
-${owner}: "Did Karl answer my email?" → {"action":"delegate","say":"Let me look through your inbox for Karl.","instruction":"Check ${owner}'s email for a reply from Karl and say what it says."}
-${owner}: "Book a table for two at eight." → {"action":"delegate","say":"Sure, I'll find you a table.","instruction":"Book a table for two at 20:00 tonight; ask ${owner} which restaurant if it isn't clear."}
-${owner}: "What's on my plate this week?" → {"action":"delegate","say":"Give me a second, I'll go through this week.","instruction":"List ${owner}'s meetings and deadlines from today to Sunday."}
-${owner}: "Thanks, that's all." → {"action":"talk","say":"Anytime. Talk soon.","instruction":""}
-${owner}: "Move it." → {"action":"talk","say":"Move what?","instruction":""}`
+${owner}: "Did Karl answer my email?" → {"action":"delegate","say":"Let me take a look."}
+${owner}: "Book a table for two at eight." → {"action":"delegate","say":"Sure, on it in a sec."}
+${owner}: "No, the other one." → {"action":"delegate","say":"Got it, one moment."}
+${owner}: "Thanks, that's all." → {"action":"talk","say":"Anytime. Talk soon."}`
 }
 
 /** What the Bot is given for work handed over on a call (it is not shown in the chat). */
-export const delegationText = (input: { readonly words: string; readonly instruction: string }): string =>
-  `On a voice call with you I said: "${oneLine(input.words, 600)}"\n(Your voice on the call took it as: ${input.instruction} If that doesn't match my words, go by my words.)\n\nDo it, then answer in a few short, plain sentences: your answer is read out to me on the call.`
+export const delegationText = (input: { readonly words: string; readonly call: ReadonlyArray<{ readonly who: "you" | "bot"; readonly text: string }> }): string => {
+  const call = input.call.map((l) => `${l.who === "you" ? "Me" : "You"}: ${oneLine(l.text, 300)}`)
+  return [
+    "We're on a voice call. You hear me through speech-to-text, so names and words may be misheard: go by what makes sense.",
+    ...(call.length === 0 ? [] : ["", "The call so far:", ...call]),
+    "",
+    `Just now I said: "${oneLine(input.words, 600)}"`,
+    "",
+    "Do what I'm asking, using the call for context. Then answer in two or three short sentences written to be spoken: no lists, no markdown, no links. Your answer is read out to me as is.",
+  ].join("\n")
+}
 
 interface Engines {
   readonly thinker: Thinker
@@ -221,7 +229,7 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           Effect.catch((error) => Effect.logWarning("voice call: could not hide the handed-over turn", { error: String(error) })),
         )
 
-      const delegate = (bot: Bot) => async (work: { readonly instruction: string; readonly words: string }): Promise<Answer> => {
+      const delegate = (bot: Bot) => async (work: { readonly words: string; readonly call: ReadonlyArray<CallLine> }): Promise<Answer> => {
         const receipt = await run(orchestrator.deliver({
           conversationId: bot.directConversationId,
           botId: bot.id,
@@ -249,8 +257,8 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
             attachments: [],
             streaming: false,
           }).pipe(Effect.ignore))
-        if (outcome.status !== "completed") return { text: answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}`, untold }
-        return { text: answer === "" ? "It finished without saying anything." : answer.slice(-ANSWER_CHARS), told, untold }
+        if (outcome.status !== "completed") return { text: answer === "" ? "It stopped before it could answer." : `It stopped partway. So far: ${answer.slice(-ANSWER_CHARS)}`, turnId, untold }
+        return { text: answer === "" ? "Done." : answer.slice(-ANSWER_CHARS), turnId, told, untold }
       }
 
       const transcribe = async (): Promise<Transcription> => {

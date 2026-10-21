@@ -1,13 +1,12 @@
 /**
- * The voice model's replies (experiment). Every reply is JSON `{action, say, instruction}`
- * (llama-server enforces the shape): `action` first so the decision is explicit, `say` next so it can
- * be spoken while the rest is still being written, then `instruction` (the work, when delegating).
+ * The voice model's replies (experiment). Every reply is JSON `{action, say}` (llama-server enforces
+ * the shape): `action` first so the decision is explicit, then `say`, spoken while it is written. On
+ * "delegate" the Bot gets the owner's own words and the call so far, not the small model's reading.
  */
 
 export interface VoiceReply {
   readonly action: "talk" | "delegate"
   readonly say: string
-  readonly instruction: string
 }
 
 export const REPLY_SCHEMA = {
@@ -15,9 +14,8 @@ export const REPLY_SCHEMA = {
   properties: {
     action: { type: "string", enum: ["talk", "delegate"] },
     say: { type: "string" },
-    instruction: { type: "string" },
   },
-  required: ["action", "say", "instruction"],
+  required: ["action", "say"],
 } as const
 
 const ESCAPES: Record<string, string> = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" }
@@ -56,11 +54,26 @@ export const parseReply = (json: string): VoiceReply | undefined => {
   try {
     const value = JSON.parse(json) as Partial<VoiceReply>
     if (value.action !== "talk" && value.action !== "delegate") return undefined
-    return { action: value.action, say: String(value.say ?? "").trim(), instruction: String(value.instruction ?? "").trim() }
+    return { action: value.action, say: String(value.say ?? "").trim() }
   } catch {
     return undefined
   }
 }
+
+/** The Bot's written answer as something to say: no markdown, links or list marks. */
+export const speakable = (text: string): string =>
+  text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[*_`#>]+/g, "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*(?:[-•]|\d+[.)])\s+/, "").trim())
+    .filter((line) => line !== "")
+    .map((line) => (/[.!?:;,]$/.test(line) ? line : `${line}.`))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
 
 const SENTENCE_END = /[.!?…]+["'”’)\]]*\s+/g
 /** A long first sentence starts at a comma so the first words are heard sooner. */
@@ -106,6 +119,8 @@ export class SentenceChunker {
 export type ChatMessage = { readonly role: "system" | "user" | "assistant"; readonly content: string }
 
 export type ReplyEvent =
+  /** The decision, as soon as it is written (before anything is said). */
+  | { readonly type: "action"; readonly action: VoiceReply["action"] }
   | { readonly type: "say"; readonly text: string }
   | { readonly type: "done"; readonly reply: VoiceReply }
 
@@ -138,32 +153,39 @@ export async function* streamReply(input: {
   let buffer = ""
   let json = ""
   let spoken = 0
-  /** New spoken text in one server-sent line, if any. */
-  const take = (line: string): string | undefined => {
-    if (!line.startsWith("data:")) return undefined
+  let decided = false
+  /** What one server-sent line adds: the decision, then spoken text. */
+  const take = (line: string): Array<ReplyEvent> => {
+    if (!line.startsWith("data:")) return []
     const data = line.slice(5).trim()
-    if (data === "[DONE]") return undefined
+    if (data === "[DONE]") return []
     const delta = (JSON.parse(data) as { choices?: Array<{ delta?: { content?: string | null } }> }).choices?.[0]?.delta?.content
-    if (delta === undefined || delta === null || delta === "") return undefined
+    if (delta === undefined || delta === null || delta === "") return []
     json += delta
+    const out: Array<ReplyEvent> = []
+    const action = decided ? null : /"action"\s*:\s*"(talk|delegate)"/.exec(json)
+    if (action !== null) {
+      decided = true
+      out.push({ type: "action", action: action[1] as VoiceReply["action"] })
+    }
     const say = sayFieldSoFar(json)
-    if (say === undefined || say.text.length <= spoken) return undefined
-    const added = say.text.slice(spoken)
-    spoken = say.text.length
-    return added
+    if (say !== undefined && say.text.length > spoken) {
+      out.push({ type: "say", text: say.text.slice(spoken) })
+      spoken = say.text.length
+    }
+    return out
   }
   for await (const chunk of response.body) {
     buffer += decoder.decode(chunk, { stream: true })
     let newline: number
     while ((newline = buffer.indexOf("\n")) !== -1) {
-      const added = take(buffer.slice(0, newline).trim())
+      const events = take(buffer.slice(0, newline).trim())
       buffer = buffer.slice(newline + 1)
-      if (added !== undefined) yield { type: "say", text: added }
+      yield* events
     }
   }
   // the last line may come without a newline
-  const added = take(buffer.trim())
-  if (added !== undefined) yield { type: "say", text: added }
+  yield* take(buffer.trim())
   const reply = parseReply(json)
   if (reply === undefined) throw new Error(`The voice model's reply was not readable: ${json.slice(0, 200)}`)
   yield { type: "done", reply }

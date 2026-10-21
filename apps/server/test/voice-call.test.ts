@@ -2,7 +2,7 @@
 // talked over, with stand-ins for Parakeet, the voice model and Kokoro.
 import { describe, expect, test } from "bun:test"
 import type { VoiceServerMessage } from "@openbot/contracts"
-import { CALL_INPUT_SAMPLE_RATE, type CallDeps, toPcm16, VoiceCall } from "../src/voice/call.ts"
+import { ACKNOWLEDGEMENTS, CALL_INPUT_SAMPLE_RATE, type CallDeps, toPcm16, VoiceCall } from "../src/voice/call.ts"
 import type { ChatMessage, ReplyEvent, VoiceReply } from "../src/voice/reply.ts"
 
 const tone = (seconds: number, amplitude = 0.3) => {
@@ -32,11 +32,12 @@ const makeCall = (script: {
   readonly speakMs?: number
   readonly answer?: Promise<string>
   readonly untold?: Array<string>
+  readonly turnId?: (words: string) => string | undefined
 }) => {
   const sent: Array<VoiceServerMessage> = []
   const audio: Array<number> = []
   const prompts: Array<ReadonlyArray<ChatMessage>> = []
-  const delegated: Array<{ instruction: string; words: string }> = []
+  const delegated: Array<{ words: string; call: ReadonlyArray<{ who: string; text: string }> }> = []
   const told: Array<string> = []
   let heard = 0
   let replied = 0
@@ -49,6 +50,7 @@ const makeCall = (script: {
       prompts.push(messages)
       const reply = script.replies[replied++]!
       return (async function*(): AsyncGenerator<ReplyEvent> {
+        yield { type: "action", action: reply.action }
         for (const word of reply.say.split(/(?<= )/)) {
           if (signal.aborted) return
           await Bun.sleep(5)
@@ -65,8 +67,9 @@ const makeCall = (script: {
       delegated.push(work)
       return {
         text: await (script.answer ?? Promise.resolve("done")),
-        told: () => void told.push(work.instruction),
-        untold: () => void script.untold?.push(work.instruction),
+        turnId: script.turnId?.(work.words),
+        told: () => void told.push(work.words),
+        untold: () => void script.untold?.push(work.words),
       }
     },
     systemPrompt: async () => "You are Otto's voice.",
@@ -83,7 +86,7 @@ describe("a voice call", () => {
   test("hears a sentence, answers sentence by sentence, then listens again", async () => {
     const { call, sent, audio, prompts } = makeCall({
       heard: ["How's it going?"],
-      replies: [{ action: "talk", say: "Pretty good. Just finished the roles plan.", instruction: "" }],
+      replies: [{ action: "talk", say: "Pretty good. Just finished the roles plan." }],
     })
     await say(call, quiet(0.5))
     await say(call, tone(1))
@@ -98,13 +101,13 @@ describe("a voice call", () => {
     expect(prompts[0]).toEqual([{ role: "system", content: "You are Otto's voice." }, { role: "user", content: "How's it going?" }])
   })
 
-  test("work goes to the Bot with the owner's words, and its answer is told at the next quiet moment", async () => {
+  test("work goes to the Bot with the owner's words and the call; its answer is spoken as is at the next quiet moment", async () => {
     let answer!: (text: string) => void
     const { call, sent, delegated, prompts, told } = makeCall({
-      heard: ["Did Anthony reply on Slack?"],
+      heard: ["Hi there.", "Did Anthony reply on Slack?"],
       replies: [
-        { action: "delegate", say: "On it.", instruction: "Check Slack for Anthony's reply." },
-        { action: "talk", say: "He says the plan looks good.", instruction: "" },
+        { action: "talk", say: "Hey." },
+        { action: "delegate", say: "Let me take a look." },
       ],
       answer: new Promise((resolve) => {
         answer = resolve
@@ -112,15 +115,46 @@ describe("a voice call", () => {
     })
     await say(call, tone(1))
     await say(call, quiet(0.8))
-    await until(() => delegated.length === 1, "the delegation")
-    expect(delegated).toEqual([{ instruction: "Check Slack for Anthony's reply.", words: "Did Anthony reply on Slack?" }])
-    expect(sent).toContainEqual({ type: "work", id: "work-1", instruction: "Check Slack for Anthony's reply.", done: false })
+    await until(() => sent.some((m) => m.type === "bot" && m.text === "Hey."), "the greeting")
     call.played()
-    answer("Anthony: plan looks good, ship Thursday.")
-    await until(() => sent.some((m) => m.type === "bot" && m.text === "He says the plan looks good."), "the result told")
-    expect(sent).toContainEqual({ type: "work", id: "work-1", instruction: "Check Slack for Anthony's reply.", done: true })
-    expect(told).toEqual(["Check Slack for Anthony's reply."])
-    expect(prompts[1]!.at(-1)).toEqual({ role: "user", content: "RESULT from your full self (the work: \"Check Slack for Anthony's reply.\"):\nAnthony: plan looks good, ship Thursday." })
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    await until(() => delegated.length === 1, "the delegation")
+    expect(delegated).toEqual([{ words: "Did Anthony reply on Slack?", call: [{ who: "you", text: "Hi there." }, { who: "bot", text: "Hey." }] }])
+    expect(sent).toContainEqual({ type: "work", id: "work-1", instruction: "Did Anthony reply on Slack?", done: false })
+    await until(() => sent.filter((m) => m.type === "bot").length === 2, "the acknowledgement")
+    // ours, not the model's restatement of the request
+    expect(ACKNOWLEDGEMENTS).toContain((sent.filter((m) => m.type === "bot")[1] as { text: string }).text)
+    call.played()
+    answer("**Anthony** replied:\n- the plan looks good\n- ship Thursday ([thread](https://x.slack.com/a))")
+    await until(() => sent.some((m) => m.type === "bot" && m.text.includes("ship Thursday")), "the answer told")
+    expect(sent.filter((m) => m.type === "bot").map((m) => m.type === "bot" && m.text).slice(2).join(" ")).toBe("Anthony replied: the plan looks good. ship Thursday (thread).")
+    expect(told).toEqual(["Did Anthony reply on Slack?"])
+    // the voice model was not asked to retell it, but knows it was told
+    expect(prompts).toHaveLength(2)
+  })
+
+  test("two requests answered by the same turn of the Bot are told once", async () => {
+    const { call, sent, delegated } = makeCall({
+      heard: ["Check my calendar.", "And my email."],
+      replies: [
+        { action: "delegate", say: "Sure, one sec." },
+        { action: "delegate", say: "Yep." },
+      ],
+      answer: Bun.sleep(300).then(() => "Two meetings and nothing new in email."),
+      turnId: () => "trn_same",
+    })
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    call.played()
+    await say(call, tone(1))
+    await say(call, quiet(0.8))
+    call.played()
+    await until(() => delegated.length === 2, "two delegations")
+    await until(() => sent.filter((m) => m.type === "work" && m.done).length === 2, "both answered")
+    call.played()
+    await Bun.sleep(100)
+    expect(sent.filter((m) => m.type === "bot" && m.text.includes("Two meetings"))).toHaveLength(1)
   })
 
   test("an answer the call never told goes to the chat instead", async () => {
@@ -128,7 +162,7 @@ describe("a voice call", () => {
     const untold: Array<string> = []
     const { call, delegated } = makeCall({
       heard: ["What's on tomorrow?"],
-      replies: [{ action: "delegate", say: "Let me look.", instruction: "List tomorrow's meetings." }],
+      replies: [{ action: "delegate", say: "Let me look." }],
       answer: new Promise((resolve) => {
         answer = resolve
       }),
@@ -140,15 +174,15 @@ describe("a voice call", () => {
     call.hangup()
     answer("Two meetings.")
     await until(() => untold.length === 1, "handed to the chat")
-    expect(untold).toEqual(["List tomorrow's meetings."])
+    expect(untold).toEqual(["What's on tomorrow?"])
   })
 
   test("talking over the Bot stops it; a quiet murmur while it speaks does not", async () => {
     const { call, sent } = makeCall({
       heard: ["Tell me everything.", "Wait, stop."],
       replies: [
-        { action: "talk", say: "First thing. Second thing. Third thing. Fourth thing.", instruction: "" },
-        { action: "talk", say: "Sure.", instruction: "" },
+        { action: "talk", say: "First thing. Second thing. Third thing. Fourth thing." },
+        { action: "talk", say: "Sure." },
       ],
       speakMs: 30,
     })

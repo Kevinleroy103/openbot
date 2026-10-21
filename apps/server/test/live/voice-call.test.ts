@@ -109,7 +109,7 @@ describe.skipIf(!LIVE)("a voice call with the real models", () => {
       await Bun.sleep(2_000)
       const told = messages.slice(answerAt).filter((m) => m.message.type === "bot").map((m) => (m.message as { text: string }).text)
       console.log(`handed over: ${JSON.stringify(handed)}\ntold: ${JSON.stringify(told)}`)
-      expect((handed as { instruction: string }).instruction.toLowerCase()).toContain("slack")
+      expect((handed as { instruction: string }).instruction.toLowerCase()).toContain("anthony")
       // the exchange happened on the call: once told, the chat keeps nothing of it
       const left = await server.run(Effect.gen(function*() {
         const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })

@@ -73,9 +73,18 @@ const waitFor = async (sink: { text: string }, pattern: RegExp, timeoutMs: numbe
   throw new Error(`${what} did not show up within ${timeoutMs} ms:\n${sink.text.slice(-4000)}`)
 }
 
-/** `env`: extra variables for the brain, e.g. `OPENBOT_SKILLS_SH_URL` (a fake skills.sh). */
-export const startBrain = async (options?: { readonly harnesses?: string; readonly args?: ReadonlyArray<string>; readonly env?: Record<string, string> }): Promise<Brain> => {
+/**
+ * `env`: extra variables for the brain, e.g. `OPENBOT_SKILLS_SH_URL` (a fake skills.sh). `prepare`
+ * runs on the empty data folder before the brain starts (e.g. links to installed models).
+ */
+export const startBrain = async (options?: {
+  readonly harnesses?: string
+  readonly args?: ReadonlyArray<string>
+  readonly env?: Record<string, string>
+  readonly prepare?: (dataDir: string) => void
+}): Promise<Brain> => {
   const dataDir = mkdtempSync(join(tmpdir(), "openbot-e2e-brain-"))
+  options?.prepare?.(dataDir)
   const child = Bun.spawn(
     [process.execPath, serverMain, "--data-dir", dataDir, "--port", "0", "--harness", options?.harnesses ?? "fake", ...(options?.args ?? [])],
     { cwd: repoRoot, stdout: "pipe", stderr: "pipe", env: childEnv(options?.env) },
@@ -104,7 +113,7 @@ export const startBrain = async (options?: { readonly harnesses?: string; readon
 
 // ---------------------------------------------------------------------------------- browser
 
-export const launchBrowser = (): Promise<Browser> => chromium.launch({ executablePath: chromiumPath })
+export const launchBrowser = (args?: ReadonlyArray<string>): Promise<Browser> => chromium.launch({ executablePath: chromiumPath, ...(args === undefined ? {} : { args: [...args] }) })
 
 export interface AppPage {
   readonly page: Page

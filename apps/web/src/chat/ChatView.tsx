@@ -17,7 +17,7 @@ import {
   type ConversationId,
   type Turn,
 } from "@openbot/contracts"
-import { commands, conversationAtom, discardOutboxItemAtom, loadOlderAtom, outboxAtom, retrySendAtom, retryTurnAtom, sendMessageAtom, interruptTurnAtom } from "@openbot/client"
+import { commands, conversationAtom, discardOutboxItemAtom, loadOlderAtom, outboxAtom, retrySendAtom, retryTurnAtom, sendMessageAtom, interruptTurnAtom, voiceStatusAtom } from "@openbot/client"
 import { ActivityRow, Avatar, AvatarStack, HeaderPill, Icon, IconButton, NewDivider, PillButton, Spinner, Timestamp, botTintStyle, cn, useToast } from "@openbot/ui"
 import { useRoster, valueOr } from "../app/data.ts"
 import { formatTimestamp } from "../app/format.ts"
@@ -36,6 +36,9 @@ import { failedTurnOf, layoutTranscript, messageIndex, positionIn, requestForCar
 import { AddresseeChip, MessageBubble, PendingBubble } from "./Message.tsx"
 import { MessageSheet } from "./MessageSheet.tsx"
 import { StepsDisclosure } from "./Steps.tsx"
+import { useQuery } from "../details/kit.tsx"
+import { useVoiceCall } from "../voice/CallBar.tsx"
+import { startCall } from "../voice/voiceCall.ts"
 
 const ACTIVE = new Set<Turn["status"]>(["queued", "running", "waiting"])
 
@@ -85,6 +88,8 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
     : ((summary?.botIds ?? []) as ReadonlyArray<BotId>)
   const members = botIds.map((id) => roster.botById(id)).filter((b): b is Bot => b !== undefined)
   const isGroup = (conversation?.kind ?? summary?.kind) === "group"
+  const voiceCalls = useQuery(voiceStatusAtom)
+  const call = useVoiceCall()
   const primary = members[0]
   const title = isGroup ? (conversation?.title || summary?.title || members.map((m) => m.name).join(", ")) : (primary?.name ?? summary?.title ?? "")
   const tint = settings.accent === "bot" && !isGroup && primary ? botTintStyle(primary.avatar.color) : {}
@@ -480,6 +485,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
           onCancelReply={() => setReplyTo(undefined)}
           context={contextUsage}
           autoFocus
+          onCall={!isGroup && primary !== undefined && voiceCalls.value?.state === "ready" && call.botId !== primary.id ? () => void startCall(primary.id) : undefined}
         />
       </div>
       {sheetEntry && (

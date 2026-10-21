@@ -20,6 +20,7 @@ import { isPhoneNow, useLayoutMode, useVisualViewport } from "./layout.ts"
 import { useBackDismiss } from "./nav.ts"
 import { useSystemNotifications } from "./notifications.ts"
 
+import { CallBar } from "../voice/CallBar.tsx"
 const ConnectAppsDialog = lazy(() => import("../connections/ConnectAppsDialog.tsx").then((m) => ({ default: m.ConnectAppsDialog })))
 import {
   isNewChatHash,
@@ -337,6 +338,7 @@ export function App(): ReactNode {
           <ConnectAppsDialog key={JSON.stringify(connectApps.view)} open view={connectApps.view} onClose={connectApps.hide} />
         </Suspense>
       )}
+      <CallBar />
       <ConnectionBanner />
     </>
   )

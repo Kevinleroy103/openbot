@@ -264,6 +264,12 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
           const { thinker, speaker } = started.success
           const brief = yield* briefFor(bot)
           const voice = defaultVoiceFor(bot.id)
+          // warm up: the voice model reads the brief now (it keeps it cached), so the first answer is quick
+          void fetch(`${thinker.url}/v1/chat/completions`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ messages: [{ role: "system", content: brief }, { role: "user", content: "Hello?" }], max_tokens: 1, ...manifest.model.requestExtras }),
+          }).catch(() => undefined)
           const call = new VoiceCall({
             transcribe,
             reply: (messages, signal) => streamReply({ url: thinker.url, messages, extras: manifest.model.requestExtras, signal }),

@@ -344,14 +344,14 @@ describe("Slack in the brain", () => {
       expect(transcriptOf(mentioned).filter((e) => e.kind === "message" && e.role === "user")[1]).toMatchObject({
         text: `From Slack, #general (Owner):\n> @OpenBot remind me of this later\nhttps://acme.slack.com/archives/C_GENERAL/p${ts.replace(".", "")}?thread_ts=1729340000.000100&cid=C_GENERAL`,
       })
-      yield* eventually(Effect.sync(() => slack.ephemeral.length), (n) => n === 1, { label: "the note in Slack" })
-      expect(slack.ephemeral).toEqual([{ channel: "C_GENERAL", user: "U_OWNER", text: "Sent to Inbox in OpenBot.", thread_ts: "1729340000.000100" }])
+      // nothing is posted in Slack for a mention
+      expect(slack.ephemeral).toEqual([])
       // mentions turned off (Connect apps › Slack): a mention does nothing
       yield* client["settings.update"]({ patch: { slackMentions: false } })
       slack.push(messageEnvelope({ channel: "C_GENERAL", user: "U_OWNER", text: "<@U_OPENBOT> and this one" }))
       yield* Effect.sleep("300 millis")
       expect(transcriptOf(yield* Ref.get(convo.state)).filter((e) => e.kind === "message" && e.role === "user")).toHaveLength(2)
-      expect(slack.ephemeral).toHaveLength(1)
+      expect(slack.ephemeral).toEqual([])
       yield* client["slack.disconnect"]()
     })), 60_000)
 })

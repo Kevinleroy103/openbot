@@ -10,8 +10,7 @@
  *   (not edits, joins or the owner's own) become `events`; the owner's "Send to OpenBot" clicks
  *   (message shortcut) become `shortcuts`, answered in Slack through the click's `response_url`
  *   (anyone else's click is told it isn't theirs). So do the owner's own messages that mention the
- *   app ("@OpenBot remind me later": its bot user, known by the app id), answered with a note only
- *   they see (`chat.postEphemeral`).
+ *   app ("@OpenBot remind me later": its bot user, known by the app id), with no note in Slack.
  */
 import {
   InvalidInput,
@@ -400,7 +399,7 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       if (event.hidden === true) return
       if (event.user === current.userId) {
         // the owner's own words start nothing, unless they mention the app: then it's a Send to OpenBot
-        if (await mentionsApp(String(event.text ?? ""))) await forwardMention(event, current)
+        if (await mentionsApp(String(event.text ?? ""))) await forwardMention(event)
         return
       }
       const channelId = String(event.channel)
@@ -421,17 +420,11 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       return ids.some((id) => users.get(id)?.appId === appId)
     }
 
-    /** The owner's message that mentions the app: handled like their "Send to OpenBot" click on it. */
-    const forwardMention = async (event: Record<string, any>, owner: Saved) => {
+    /** The owner's message that mentions the app: handled like their "Send to OpenBot" click on it, silently (nothing is posted in Slack). */
+    const forwardMention = async (event: Record<string, any>) => {
       const channelId = String(event.channel)
-      const threadTs = typeof event.thread_ts === "string" ? event.thread_ts : undefined
       const [where, messages] = await Promise.all([conversation(channelId), toMessages([event], channelId)])
-      const reply = (text: string): Promise<void> =>
-        call("chat.postEphemeral", { channel: channelId, user: owner.userId, text, thread_ts: threadTs }).then(
-          () => undefined,
-          (error) => console.warn("[slack] mention reply failed:", error),
-        )
-      PubSub.publishUnsafe(shortcuts, { via: "mention" as const, conversation: where, message: messages[0]!, reply: (text) => Effect.promise(() => reply(text)) })
+      PubSub.publishUnsafe(shortcuts, { via: "mention" as const, conversation: where, message: messages[0]!, reply: () => Effect.void })
     }
 
     /** "Send to OpenBot" on a message: the owner's click becomes a shortcut; anyone else is told no. */

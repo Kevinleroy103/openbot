@@ -1,9 +1,11 @@
 // Bot messages as Markdown, drawn natively: `marked`'s lexer (as on the web) → nested Text for
 // paragraphs, emphasis, code, links, lists, quotes, headings, tables and code blocks.
 import * as Linking from "expo-linking"
+import { Image } from "expo-image"
 import { type Token, type Tokens, marked } from "marked"
-import { type ReactNode, useMemo } from "react"
+import { type ReactNode, useMemo, useState } from "react"
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native"
+import { imageSrc, safeHref } from "@openbot/app-model"
 import type { Theme } from "../theme.ts"
 
 const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" })
@@ -12,6 +14,97 @@ interface Ctx {
   readonly theme: Theme
   readonly color: string
   readonly size: number
+}
+
+/** The body-text style every text line carries; block(), inlineRows() and MdImage's fallback share it. */
+const bodyText = (color: string, size: number) => ({ color, fontSize: size, lineHeight: Math.round(size * 1.36) })
+
+/** Images to render inline from a message: where relative attachment URLs point, and the session
+ * headers that only a same-origin request may carry. */
+export interface MarkdownImage {
+  readonly origin: string
+  readonly headers: Readonly<Record<string, string>>
+}
+
+/** `imageSrc` lets through https and the brain's attachment path; only the path is the brain's, so
+ * only it gets the origin and the session headers. */
+const uri = (href: string, origin: string): string => (href.startsWith("/") ? origin + href : href)
+
+/** An image is a block of its own: it holds its own failure state, never a shared one. The caller
+ * keys it by the address it loads (origin included), so every new source mounts fresh and gets its
+ * own try instead of inheriting an old failure. */
+function MdImage(props: {
+  readonly href: string
+  readonly alt: string
+  readonly origin: string
+  readonly headers: Readonly<Record<string, string>>
+  readonly theme: Theme
+  readonly size: number
+}): ReactNode {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return <Text style={bodyText(props.theme.fgSecondary, props.size)} selectable>{props.alt || props.href}</Text>
+  }
+  return (
+    <Image
+      source={{
+        uri: uri(props.href, props.origin),
+        ...(props.href.startsWith("/") ? { headers: props.headers } : {}),
+      }}
+      alt={props.alt}
+      onError={() => setFailed(true)}
+      style={{ width: "100%", maxWidth: 480, aspectRatio: 1, borderRadius: 12 }}
+      contentFit="contain"
+    />
+  )
+}
+
+/**
+ * Splits an inline token stream at top-level image tokens: text runs become <Text> (with the body
+ * style and selectable, exactly like a paragraph today), images become sibling <Image> rows.
+ * Without an image config, or without any loadable top-level image, it returns one plain <Text>.
+ */
+function inlineRows(
+  tokens: ReadonlyArray<Token>,
+  ctx: Ctx,
+  keyBase: string,
+  image: MarkdownImage | undefined,
+): ReactNode[] {
+  const textRow = (run: ReadonlyArray<Token>, key: string): ReactNode =>
+    <Text key={key} style={bodyText(ctx.color, ctx.size)} selectable>{inline(run, ctx, key)}</Text>
+  const src = (t: Token): string | undefined => (t.type === "image" && image !== undefined ? imageSrc((t as Tokens.Image).href, image.origin) : undefined)
+  const split = tokens.some((t) => src(t) !== undefined)
+  if (!split) return [textRow(tokens, `${keyBase}.t`)]
+  const rows: ReactNode[] = []
+  let run: Token[] = []
+  const flush = () => {
+    if (run.some((t) => ("raw" in t ? String(t.raw) : "").trim() !== "")) {
+      rows.push(textRow(run, `${keyBase}.t${rows.length}`))
+    }
+    run = []
+  }
+  tokens.forEach((t, i) => {
+    const href = src(t)
+    if (href === undefined || image === undefined) {
+      run.push(t)
+      return
+    }
+    flush()
+    const img = t as Tokens.Image
+    rows.push(
+      <MdImage
+        key={`${keyBase}.i${i}:${uri(href, image.origin)}`}
+        href={href}
+        alt={img.text || ""}
+        origin={image.origin}
+        headers={image.headers}
+        theme={ctx.theme}
+        size={ctx.size}
+      />,
+    )
+  })
+  flush()
+  return rows
 }
 
 const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: string): ReactNode[] =>
@@ -32,8 +125,12 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
         )
       case "link": {
         const link = t as Tokens.Link
+        const href = safeHref(link.href)
+        // A rejected protocol renders as text with no tap target at all (the same guard as
+        // the web renderer); an allowed one stays tappable exactly as before.
+        if (href === undefined) return <Text key={key}>{inline(link.tokens, ctx, key)}</Text>
         return (
-          <Text key={key} style={{ color: ctx.theme.accentFg }} onPress={() => void Linking.openURL(link.href)} suppressHighlighting>
+          <Text key={key} style={{ color: ctx.theme.accentFg }} onPress={() => void Linking.openURL(href)} suppressHighlighting>
             {inline(link.tokens, ctx, key)}
           </Text>
         )
@@ -47,12 +144,12 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
       case "escape":
         return <Text key={key}>{(t as Tokens.Escape).text}</Text>
       case "image": {
+        // Only images nested inside strong/em/del/link reach here — top-level ones are split out by
+        // inlineRows() into block rows, and a rejected protocol falls through from there. An image
+        // is not a link: degraded to text it stays text, with no tap target in any of the three
+        // cases (illegal protocol, legal-but-unloadable, legal-and-loadable).
         const img = t as Tokens.Image
-        return (
-          <Text key={key} style={{ color: ctx.theme.accentFg }} onPress={() => void Linking.openURL(img.href)}>
-            {img.text || img.href}
-          </Text>
-        )
+        return <Text key={key}>{img.text || img.href}</Text>
       }
       default:
         return <Text key={key}>{"raw" in t ? decode(String(t.raw)) : ""}</Text>
@@ -63,11 +160,13 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
 const decode = (s: string): string =>
   s.replace(/&(amp|lt|gt|quot|#39|#x27);/g, (_, e: string) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'" })[e] ?? _)
 
-const block = (t: Token, ctx: Ctx, key: string, depth = 0): ReactNode => {
-  const text = { color: ctx.color, fontSize: ctx.size, lineHeight: Math.round(ctx.size * 1.36) }
+const block = (t: Token, ctx: Ctx, key: string, depth = 0, image?: MarkdownImage): ReactNode => {
+  const text = bodyText(ctx.color, ctx.size)
   switch (t.type) {
-    case "paragraph":
-      return <Text key={key} style={text} selectable>{inline((t as Tokens.Paragraph).tokens, ctx, key)}</Text>
+    case "paragraph": {
+      const rows = inlineRows((t as Tokens.Paragraph).tokens, ctx, key, image)
+      return rows.length === 1 ? rows[0] : <View key={key} style={{ gap: 4 }}>{rows}</View>
+    }
     case "heading": {
       const h = t as Tokens.Heading
       const size = h.depth <= 1 ? ctx.size + 5 : h.depth === 2 ? ctx.size + 3 : ctx.size + 1
@@ -84,7 +183,7 @@ const block = (t: Token, ctx: Ctx, key: string, depth = 0): ReactNode => {
     case "blockquote":
       return (
         <View key={key} style={[styles.quote, { borderColor: ctx.theme.line }]}>
-          {(t as Tokens.Blockquote).tokens.map((c, i) => block(c, { ...ctx, color: ctx.theme.fgSecondary }, `${key}.${i}`, depth))}
+          {(t as Tokens.Blockquote).tokens.map((c, i) => block(c, { ...ctx, color: ctx.theme.fgSecondary }, `${key}.${i}`, depth, image))}
         </View>
       )
     case "list": {
@@ -94,13 +193,15 @@ const block = (t: Token, ctx: Ctx, key: string, depth = 0): ReactNode => {
         <View key={key} style={{ gap: 4, paddingLeft: depth > 0 ? 4 : 0 }}>
           {list.items.map((item, i) => (
             <View key={`${key}.${i}`} style={{ flexDirection: "row", gap: 6 }}>
-              <Text style={[text, { minWidth: list.ordered ? 20 : 12, color: ctx.theme.fgSecondary }]}>{list.ordered ? `${start + i}.` : "•"}</Text>
-              <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[text, { minWidth: list.ordered ? 20 : 12, color: ctx.theme.fgSecondary }]}>
+                {item.task ? (item.checked ? "☑" : "☐") : list.ordered ? `${start + i}.` : "•"}
+              </Text>
+              <View style={{ flex: 1, gap: 4, opacity: item.task && item.checked ? 0.65 : 1 }}>
                 {item.tokens.map((c, j) =>
                   c.type === "text" ? (
-                    <Text key={j} style={text} selectable>{inline((c as Tokens.Text).tokens ?? [c], ctx, `${key}.${i}.${j}`)}</Text>
+                    inlineRows((c as Tokens.Text).tokens ?? [c], ctx, `${key}.${i}.${j}`, image)
                   ) : (
-                    block(c, ctx, `${key}.${i}.${j}`, depth + 1)
+                    block(c, ctx, `${key}.${i}.${j}`, depth + 1, image)
                   ),
                 )}
               </View>
@@ -136,7 +237,7 @@ const block = (t: Token, ctx: Ctx, key: string, depth = 0): ReactNode => {
   }
 }
 
-export function Markdown({ text, theme, color, size = 17 }: { readonly text: string; readonly theme: Theme; readonly color?: string; readonly size?: number }): ReactNode {
+export function Markdown({ text, theme, color, size = 17, image }: { readonly text: string; readonly theme: Theme; readonly color?: string; readonly size?: number; readonly image?: MarkdownImage }): ReactNode {
   const tokens = useMemo(() => {
     try {
       return marked.lexer(text, { gfm: true, breaks: true })
@@ -145,7 +246,7 @@ export function Markdown({ text, theme, color, size = 17 }: { readonly text: str
     }
   }, [text])
   const ctx: Ctx = { theme, color: color ?? theme.fg, size }
-  return <View style={{ gap: 8 }}>{tokens.map((t, i) => block(t, ctx, String(i)))}</View>
+  return <View style={{ gap: 8 }}>{tokens.map((t, i) => block(t, ctx, String(i), 0, image))}</View>
 }
 
 const styles = StyleSheet.create({

@@ -33,7 +33,7 @@ import { Settings, SettingsPatch } from "./settings.ts"
 import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
 import { SlackConnectInput, SlackStatus } from "./slack.ts"
 import { SttSession, SttStatus, SttTranscription } from "./stt.ts"
-import { VoiceCallStatus } from "./voice.ts"
+import { VoiceCallStatus, VoicePreview } from "./voice.ts"
 import { HarkSends, HarkStatus } from "./hark.ts"
 import { ConversationStreamItem, ExchangePage, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
 import { Task, TaskDetail } from "./task.ts"
@@ -107,6 +107,8 @@ export const BotPatch = Schema.Struct({
   projectFolders: Schema.optionalKey(ProjectFolders),
   /** Replaces the bot's skills (library names; unknown names are refused). */
   skills: Schema.optionalKey(Schema.Array(SkillName)),
+  /** Its voice on calls (a Kokoro voice id); `null`: back to the one picked for it. */
+  voice: Schema.optionalKey(Schema.NullOr(Schema.String)),
 })
 export type BotPatch = typeof BotPatch.Type
 
@@ -425,6 +427,8 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("voice.status", { success: VoiceCallStatus, error: errors() }),
   Rpc.make("voice.install", { success: VoiceCallStatus, error: errors(Conflict) }),
   Rpc.make("voice.remove", { success: VoiceCallStatus, error: errors(Conflict) }),
+  /** A short sample of a voice ("Hi, I'm …"), as 24 kHz PCM16. */
+  Rpc.make("voice.preview", { payload: { voice: Schema.String, text: Schema.String }, success: VoicePreview, error: errors(InvalidInput, Unavailable) }),
 
   // Hark: iPhone notifications (D3.5)
   Rpc.make("hark.status", { success: HarkStatus, error: errors() }),

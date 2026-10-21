@@ -1449,6 +1449,7 @@ export class MockBrain {
           this.voice = { state: "ready", model: this.voice.model }
           return this.voice
         })(),
+      "voice.preview": () => sync(() => ({ pcmBase64: "", sampleRate: 24_000 }))(),
       "voice.remove": () =>
         sync(() => {
           this.voice = { state: "absent", model: this.voice.model, downloadBytes: VOICE_DOWNLOAD_BYTES }

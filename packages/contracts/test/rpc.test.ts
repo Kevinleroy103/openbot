@@ -116,6 +116,7 @@ const V1_RPCS = [
   "voice.status",
   "voice.install",
   "voice.remove",
+  "voice.preview",
   "hark.status",
   "hark.connect",
   "hark.disconnect",

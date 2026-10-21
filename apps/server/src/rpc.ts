@@ -314,6 +314,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(Effect.gen(function*() {
     "voice.status": () => edge("voice.status", voice.status),
     "voice.install": () => edge("voice.install", voice.install),
     "voice.remove": () => edge("voice.remove", voice.remove),
+    "voice.preview": ({ voice: id, text }) => edge("voice.preview", voice.preview(id, text)),
 
     // ---------------------------------------------------------------- sidebar (drag and drop)
     "sidebar.arrange": (input) => edge("sidebar.arrange", bots.arrangeSidebar(input)),

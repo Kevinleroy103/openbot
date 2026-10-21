@@ -22,29 +22,71 @@ export type VoiceCallStatus = typeof VoiceCallStatus.Type
 /** The Bot's voice, as the brain sends it. */
 export const VOICE_OUTPUT_SAMPLE_RATE = 24_000
 
-/** Kokoro v1.0's English voices (`sid`: its speaker number). */
-export const KOKORO_VOICES = [
-  { id: "af_heart", sid: 3, label: "Heart" },
-  { id: "af_bella", sid: 2, label: "Bella" },
-  { id: "af_nicole", sid: 6, label: "Nicole" },
-  { id: "af_sarah", sid: 9, label: "Sarah" },
-  { id: "am_michael", sid: 16, label: "Michael" },
-  { id: "am_fenrir", sid: 14, label: "Fenrir" },
-  { id: "am_puck", sid: 18, label: "Puck" },
-  { id: "am_eric", sid: 13, label: "Eric" },
-  { id: "bf_emma", sid: 21, label: "Emma" },
-  { id: "bf_isabella", sid: 22, label: "Isabella" },
-  { id: "bm_george", sid: 26, label: "George" },
-  { id: "bm_fable", sid: 25, label: "Fable" },
-] as const
-export type KokoroVoice = (typeof KOKORO_VOICES)[number]
+export interface KokoroVoice {
+  readonly id: string
+  /** Kokoro's speaker number. */
+  readonly sid: number
+  readonly label: string
+  readonly accent: "American" | "British"
+  readonly gender: "female" | "male"
+}
 
-/** A Bot's voice until it can be chosen: the same one every call, spread over the list. */
+const voice = (id: string, sid: number, label: string): KokoroVoice => ({
+  id,
+  sid,
+  label,
+  accent: id.startsWith("a") ? "American" : "British",
+  gender: id[1] === "f" ? "female" : "male",
+})
+
+/** Kokoro v1.0's English voices (its speaker numbers 0–27, the Santa voice aside). */
+export const KOKORO_VOICES: ReadonlyArray<KokoroVoice> = [
+  voice("af_heart", 3, "Heart"),
+  voice("af_bella", 2, "Bella"),
+  voice("af_nicole", 6, "Nicole"),
+  voice("af_sarah", 9, "Sarah"),
+  voice("af_alloy", 0, "Alloy"),
+  voice("af_aoede", 1, "Aoede"),
+  voice("af_jessica", 4, "Jessica"),
+  voice("af_kore", 5, "Kore"),
+  voice("af_nova", 7, "Nova"),
+  voice("af_river", 8, "River"),
+  voice("af_sky", 10, "Sky"),
+  voice("am_michael", 16, "Michael"),
+  voice("am_fenrir", 14, "Fenrir"),
+  voice("am_puck", 18, "Puck"),
+  voice("am_eric", 13, "Eric"),
+  voice("am_adam", 11, "Adam"),
+  voice("am_echo", 12, "Echo"),
+  voice("am_liam", 15, "Liam"),
+  voice("am_onyx", 17, "Onyx"),
+  voice("bf_emma", 21, "Emma"),
+  voice("bf_isabella", 22, "Isabella"),
+  voice("bf_alice", 20, "Alice"),
+  voice("bf_lily", 23, "Lily"),
+  voice("bm_george", 26, "George"),
+  voice("bm_fable", 25, "Fable"),
+  voice("bm_daniel", 24, "Daniel"),
+  voice("bm_lewis", 27, "Lewis"),
+]
+
+/** Voices a Bot gets when none was chosen (this order keeps every Bot's voice as it was). */
+const DEFAULT_VOICE_IDS = ["af_heart", "af_bella", "af_nicole", "af_sarah", "am_michael", "am_fenrir", "am_puck", "am_eric", "bf_emma", "bf_isabella", "bm_george", "bm_fable"]
+
+export const kokoroVoice = (id: string | undefined): KokoroVoice | undefined => KOKORO_VOICES.find((v) => v.id === id)
+
+/** A Bot's voice when none was chosen: the same one every call, spread over a few good ones. */
 export const defaultVoiceFor = (botId: string): KokoroVoice => {
   let hash = 0
   for (const char of botId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return KOKORO_VOICES[hash % KOKORO_VOICES.length]!
+  return kokoroVoice(DEFAULT_VOICE_IDS[hash % DEFAULT_VOICE_IDS.length])!
 }
+
+/** The voice a Bot speaks with on calls. */
+export const voiceOf = (bot: { readonly id: string; readonly voice?: string | undefined }): KokoroVoice => kokoroVoice(bot.voice) ?? defaultVoiceFor(bot.id)
+
+export const VoicePreview = Schema.Struct({ pcmBase64: Schema.String, sampleRate: NonNegativeInt })
+export type VoicePreview = typeof VoicePreview.Type
 
 /** What the call is doing (the call bar shows it). */
 export type VoiceCallPhase = "connecting" | "listening" | "hearing" | "thinking" | "speaking"

@@ -3,9 +3,10 @@
 // the transcript (what was said, and the work handed to the Bot), mute and hang up.
 import { useRoster } from "../app/data.ts"
 import { Avatar, IconButton, botTintStyle, cn } from "@openbot/ui"
-import { MessageCircle, Mic, MicOff, X } from "lucide-react"
+import { MessageCircle, Mic, MicOff, Settings, X } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { callLevel, callState, dismissCall, hangUp, setMuted, subscribeCall } from "./voiceCall.ts"
+import { VoicePicker } from "./VoicePicker.tsx"
 
 export const useVoiceCall = () => useSyncExternalStore(subscribeCall, callState)
 
@@ -52,7 +53,10 @@ const PHASE_LABEL: Record<string, string> = {
 export function CallBar(): ReactNode {
   const call = useVoiceCall()
   const roster = useRoster()
-  const [transcript, setTranscript] = useState(false)
+  /** Under the bar: what was said, or the Bot's voices. */
+  const [panel, setPanel] = useState<"transcript" | "voices" | undefined>()
+  const transcript = panel === "transcript"
+  const toggle = (next: "transcript" | "voices") => setPanel((open) => (open === next ? undefined : next))
   const end = useRef<HTMLDivElement>(null)
   // braces: newer browsers return a promise from scrollIntoView, which React would take for a cleanup
   useEffect(() => {
@@ -71,7 +75,8 @@ export function CallBar(): ReactNode {
         {bot !== undefined && <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={36} working={call.phase === "speaking"} />}
         <Waveform active={!ended && !call.muted} />
         <span className="w-20 text-xs text-fg-tertiary" data-testid="call-phase">{ended ? "Call ended" : call.muted ? "Muted" : PHASE_LABEL[call.phase]}</span>
-        <IconButton icon={MessageCircle} label={transcript ? "Hide transcript" : "Show transcript"} size={44} variant={transcript ? "secondary" : "ghost"} onClick={() => setTranscript((t) => !t)} />
+        {bot !== undefined && <IconButton icon={Settings} label="Voice" size={44} variant={panel === "voices" ? "secondary" : "ghost"} onClick={() => toggle("voices")} />}
+        <IconButton icon={MessageCircle} label={transcript ? "Hide transcript" : "Show transcript"} size={44} variant={transcript ? "secondary" : "ghost"} onClick={() => toggle("transcript")} />
         {!ended && <IconButton icon={call.muted ? MicOff : Mic} label={call.muted ? "Unmute" : "Mute"} size={44} variant={call.muted ? "secondary" : "ghost"} onClick={() => setMuted(!call.muted)} />}
         <button
           type="button"
@@ -84,6 +89,11 @@ export function CallBar(): ReactNode {
         </button>
       </div>
       {call.error !== undefined && <p className="pointer-events-auto rounded-full bg-elevated px-4 py-2 text-sm text-danger-fg shadow">{call.error}</p>}
+      {panel === "voices" && bot !== undefined && (
+        <div className="pointer-events-auto max-h-[50vh] w-full max-w-[360px] overflow-y-auto overscroll-contain rounded-3xl bg-elevated/95 p-3 shadow-lg backdrop-blur hairline border-line-tertiary">
+          <VoicePicker bot={bot} />
+        </div>
+      )}
       {transcript && call.lines.length > 0 && (
         <div className="pointer-events-auto max-h-[40vh] w-full max-w-[520px] overflow-y-auto rounded-3xl bg-elevated/95 p-4 text-sm shadow-lg backdrop-blur hairline border-line-tertiary" data-testid="call-transcript">
           {call.lines.map((line) => (

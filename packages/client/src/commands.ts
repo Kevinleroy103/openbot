@@ -87,6 +87,7 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "stt.remove": [Keys.stt],
   "voice.install": [Keys.voice],
   "voice.remove": [Keys.voice],
+  "voice.preview": [],
   "stt.open": [],
   "stt.append": [],
   "stt.finish": [],

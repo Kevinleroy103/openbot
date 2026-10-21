@@ -11,7 +11,7 @@ import { join } from "node:path"
 import type { Browser } from "playwright-core"
 import { startSpeaker, voiceLayout } from "../../../server/src/voice/engine.ts"
 import { VOICE_MANIFEST } from "../../../server/src/voice/manifest.ts"
-import { type AppPage, type Brain, connectRpc, hasChromium, launchBrowser, openApp, type Rpc, startBrain } from "./brain.ts"
+import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, startBrain } from "./brain.ts"
 
 const LIVE = process.env["OPENBOT_LIVE_VOICE"] === "1"
 const VOICE_DIR = process.env["OPENBOT_LIVE_VOICE_DIR"] ?? join(homedir(), ".cache", "openbot-live-voice")
@@ -110,6 +110,15 @@ describe.skipIf(!hasChromium || !LIVE)("e2e: a voice call with a Bot", () => {
     console.log(`phases: ${[...new Set(seen)].join(" → ")}\n${lines.join("\n")}`)
     console.log(brain.log().split("\n").filter((l) => /voice|rror|reply/i.test(l)).slice(-30).join("\n"))
     await app.shot("e2e-95-voice-call")
+    // the Bot's voice: a preview, then another one chosen
+    await bar.getByRole("button", { name: "Voice" }).click()
+    const picker = page.getByTestId("voice-picker")
+    await picker.getByRole("button", { name: "Hear Emma" }).click()
+    await picker.getByRole("button", { name: "Hear Emma" }).waitFor()
+    await picker.locator('[data-voice="bf_emma"]').click()
+    await eventually(() => rpc.call((c) => c["bots.get"]({ botId: otto.id })), (b) => b.voice === "bf_emma", { label: "Emma chosen" })
+    await app.shot("e2e-98-voice-picker")
+    await bar.getByRole("button", { name: "Show transcript" }).click()
     expect(lines.some((l) => l.startsWith("You: ") && /going/i.test(l))).toBe(true)
     expect(lines.some((l) => l.startsWith("Otto: "))).toBe(true)
     await bar.getByRole("button", { name: "End call" }).click()

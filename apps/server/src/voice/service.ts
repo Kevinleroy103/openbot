@@ -10,12 +10,16 @@ import {
   type Bot,
   type BotId,
   Conflict,
-  defaultVoiceFor,
+  InvalidInput,
   isTerminalTurnStatus,
+  kokoroVoice,
+  Unavailable,
   type KnownConversationChange,
   VOICE_OUTPUT_SAMPLE_RATE,
   type VoiceCallStatus,
   type VoiceClientMessage,
+  voiceOf,
+  type VoicePreview,
 } from "@openbot/contracts"
 import { BotRepo, ConversationService, LiveHub, Orchestrator } from "@openbot/core"
 import { closeWriter, type Frame, open } from "@openbot/brain-nodes"
@@ -34,6 +38,8 @@ export class VoiceCalls extends Context.Service<VoiceCalls, {
   readonly status: Effect.Effect<VoiceCallStatus>
   readonly install: Effect.Effect<VoiceCallStatus, Conflict>
   readonly remove: Effect.Effect<VoiceCallStatus, Conflict>
+  /** `text` in `voice` (24 kHz PCM16), for choosing a Bot's voice. */
+  readonly preview: (voice: string, text: string) => Effect.Effect<VoicePreview, InvalidInput | Unavailable>
   /** `/ws/voice/:botId`, after the route checked the owner's credentials. */
   readonly call: (botId: string) => Effect.Effect<HttpServerResponse.HttpServerResponse, never, HttpServerRequest.HttpServerRequest>
 }>()("openbot/server/VoiceCalls") {}
@@ -155,8 +161,10 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
             return yield* closeWriter(io.writer, 1011, started.failure)
           }
           const kokoro = started.success
-          const voice = defaultVoiceFor(bot.id)
+          const voice = voiceOf(bot)
           const conversationId = bot.directConversationId
+          // the Bot's voice as it is now: choosing another one mid-call changes the next sentence
+          const currentVoice = () => run(bots.get(bot.id).pipe(Effect.map((b) => voiceOf(Option.getOrElse(b, () => bot))), Effect.orElseSucceed(() => voice)))
 
           // the Bot's turns answering this call, and from when on their messages count
           const answering = new Map<string, number>()
@@ -166,7 +174,7 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
 
           const call = new VoiceCall({
             transcribe,
-            speak: (text) => kokoro.speak(text, voice.sid),
+            speak: async (text) => kokoro.speak(text, (await currentVoice()).sid),
             ask: (words, first) => {
               const askedAt = Date.now()
               void run(orchestrator.deliver({
@@ -319,7 +327,27 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
         })
       })
 
-      return VoiceCalls.of({ status: Effect.sync(() => status), install, remove, call })
+      const preview = (voiceId: string, text: string) =>
+        Effect.gen(function*() {
+          const chosen = kokoroVoice(voiceId)
+          if (chosen === undefined) return yield* new InvalidInput({ message: `There is no voice called "${voiceId}".` })
+          if (status.state !== "ready") return yield* new Unavailable({ message: "Voice calls aren't set up on this OpenBot." })
+          const samples = yield* Effect.tryPromise({
+            try: async () => {
+              const kokoro = await kokoroForCall()
+              // nothing else may be using it: stop it again later like after a call
+              if (activeCalls === 0) {
+                clearTimeout(idleTimer)
+                idleTimer = setTimeout(() => void stopKokoro(), SPEAKER_IDLE_MS)
+              }
+              return kokoro.speak(text.slice(0, 200), chosen.sid)
+            },
+            catch: (error) => new Unavailable({ message: describeError(error) }),
+          })
+          return { pcmBase64: Buffer.from(toPcm16(samples)).toString("base64"), sampleRate: VOICE_OUTPUT_SAMPLE_RATE }
+        })
+
+      return VoiceCalls.of({ status: Effect.sync(() => status), install, remove, call, preview })
     }),
   )
 

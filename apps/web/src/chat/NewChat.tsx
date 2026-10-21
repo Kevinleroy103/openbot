@@ -109,20 +109,21 @@ export function NewChatView({ onClose }: { readonly onClose?: (() => void) | und
     }
   }
 
-  const onSubmit = async (d: ComposerSubmit) => {
+  /** `false`: nobody picked yet, so the Composer keeps the message. */
+  const onSubmit = (d: ComposerSubmit): false | undefined | Promise<void> => {
     const targets = chips.length > 0 ? chips : options[active]?.kind === "bot" && query ? [(options[active] as { bot: Bot }).bot] : []
     if (targets.length === 0) {
       toast({ title: "Pick who to message first" })
       inputRef.current?.focus()
-      return
+      return false
     }
     if (targets.length === 1) {
       const conversationId = targets[0]!.directConversationId
       send({ conversationId, text: d.text, ...(d.attachmentIds.length ? { attachmentIds: d.attachmentIds } : {}) })
       showConversation(conversationId)
-      return
+      return undefined
     }
-    await openGroup(targets, d)
+    return openGroup(targets, d)
   }
 
   return (

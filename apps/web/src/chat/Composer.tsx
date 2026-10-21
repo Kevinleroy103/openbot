@@ -38,7 +38,8 @@ export interface ComposerProps {
   readonly allowEveryone?: boolean
   readonly working?: boolean
   readonly onStop?: () => void
-  readonly onSubmit: (draft: ComposerSubmit) => void | Promise<unknown>
+  /** `false` (returned at once): not sent, the draft stays (New chat with nobody picked). */
+  readonly onSubmit: (draft: ComposerSubmit) => void | false | Promise<unknown>
   readonly replyTo?: MessageEntry | undefined
   readonly replyAuthor?: string | undefined
   readonly onCancelReply?: () => void
@@ -219,11 +220,15 @@ export function Composer(props: ComposerProps): ReactNode {
 
   const ready = uploads.filter((u) => u.attachment)
   const dictating = dictation.phase !== "idle"
-  const canSend = !props.disabled && !uploading && !draftBusyElsewhere && (dictating || text.trim().length > 0 || ready.length > 0)
+  // while the microphone starts there is nothing spoken yet: Send sends what is typed, if anything
+  const speaking = dictation.phase === "recording" || dictation.phase === "finishing"
+  const canSend = !props.disabled && !uploading && !draftBusyElsewhere && (speaking || text.trim().length > 0 || ready.length > 0)
   const sendingDictation = useRef(false)
-  const current = useRef({ uploads, uploading, replyTo: props.replyTo })
+  // read when the send happens (after a transcript finishes, maybe after this Composer unmounted):
+  // the files, the reply and where it goes as they are then (New chat's recipients picked meanwhile)
+  const current = useRef({ uploads, uploading, replyTo: props.replyTo, onSubmit: props.onSubmit })
   useLayoutEffect(() => {
-    current.current = { uploads, uploading, replyTo: props.replyTo }
+    current.current = { uploads, uploading, replyTo: props.replyTo, onSubmit: props.onSubmit }
   })
 
   const submit = async () => {
@@ -240,25 +245,31 @@ export function Composer(props: ComposerProps): ReactNode {
   }
 
   const send = async (draft: string) => {
-    const { uploads: attached, uploading: stillUploading, replyTo } = current.current
-    if (stillUploading) return
+    const { uploads: attached, uploading: stillUploading, replyTo, onSubmit } = current.current
+    if (stillUploading) {
+      // a file was added while the transcript finished: the text stays here to send once it is up
+      toast({ title: "A file is still uploading: send again when it's done" })
+      return
+    }
     const sentUploads = attached.filter((u) => u.attachment)
     const body = draft.trim()
     if (body.length === 0 && sentUploads.length === 0) return
     const scope = members ?? []
     const addressed = scope.filter((b) => new RegExp(`(^|\\s)@${b.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$|[.,!?:;])`, "u").test(body)).map((b) => b.id)
     const everyone = allowEveryone && /(^|\s)@everyone\b/.test(body)
-    setText("")
-    drafts.delete(draftKey)
-    setUploads((all) => all.filter((u) => !sentUploads.includes(u)))
-    setMention(undefined)
-    await props.onSubmit({
+    const submitted = onSubmit({
       text: body,
       attachmentIds: sentUploads.map((u) => u.attachment!.id),
       addressedBotIds: addressed,
       addressEveryone: everyone,
       replyToId: replyTo?.id,
     })
+    if (submitted === false) return
+    setText("")
+    drafts.delete(draftKey)
+    setUploads((all) => all.filter((u) => !sentUploads.includes(u)))
+    setMention(undefined)
+    await submitted
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

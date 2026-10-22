@@ -21,7 +21,7 @@ import { RpcClient, type RpcClientError, RpcSerialization } from "effect/rpc"
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { type Browser, type BrowserContext, chromium, type Page } from "playwright-core"
+import { type Browser, type BrowserContext, type BrowserContextOptions, chromium, type Page } from "playwright-core"
 
 export const chromiumPath = process.env.OPENBOT_CHROMIUM ?? "/usr/bin/chromium"
 export const hasChromium = existsSync(chromiumPath)
@@ -123,10 +123,14 @@ export interface AppPage {
   readonly shot: (name: string) => Promise<void>
 }
 
-/** Opens the app logged in (login URL → cookie → `/`). */
-export const openApp = async (browser: Browser, brain: Brain, options?: { readonly theme?: "dark" | "light"; readonly route?: string }): Promise<AppPage> => {
+/** Opens the app logged in (login URL → cookie → `/`); `context` sets the window (a phone's, say). */
+export const openApp = async (
+  browser: Browser,
+  brain: Brain,
+  options?: { readonly theme?: "dark" | "light"; readonly route?: string; readonly context?: BrowserContextOptions },
+): Promise<AppPage> => {
   const theme = options?.theme ?? "dark"
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, colorScheme: theme })
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, colorScheme: theme, ...options?.context })
   const page = await context.newPage()
   page.setDefaultTimeout(15_000)
   const errors: Array<string> = []

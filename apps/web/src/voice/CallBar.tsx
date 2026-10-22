@@ -2,6 +2,7 @@
 // a Bot is on (whichever chat is open). The Bot's avatar (working while it speaks), a dotted waveform that follows whoever is talking,
 // the transcript (what was said, and the work handed to the Bot), mute and hang up.
 import { useRoster } from "../app/data.ts"
+import { useIsPhone } from "../app/layout.ts"
 import { Avatar, IconButton, botTintStyle, cn } from "@openbot/ui"
 import { MessageCircle, Mic, MicOff, Settings, X } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react"
@@ -13,7 +14,7 @@ export const useVoiceCall = () => useSyncExternalStore(subscribeCall, callState)
 const DOTS = 14
 
 /** Dots that rise with the level of whoever is talking (read every frame, outside React). */
-function Waveform({ active }: { readonly active: boolean }): ReactNode {
+function Waveform({ active, className }: { readonly active: boolean; readonly className?: string }): ReactNode {
   const dots = useRef<Array<HTMLSpanElement | null>>([])
   useEffect(() => {
     let frame = 0
@@ -34,7 +35,7 @@ function Waveform({ active }: { readonly active: boolean }): ReactNode {
     return () => cancelAnimationFrame(frame)
   }, [active])
   return (
-    <div className="flex h-8 w-28 items-center justify-between px-1" aria-hidden>
+    <div className={cn("flex items-center justify-between px-1", className)} aria-hidden>
       {Array.from({ length: DOTS }, (_, i) => (
         <span key={i} ref={(el) => void (dots.current[i] = el)} className="h-1 w-1 rounded-full bg-accent transition-transform duration-75" />
       ))}
@@ -53,6 +54,8 @@ const PHASE_LABEL: Record<string, string> = {
 export function CallBar(): ReactNode {
   const call = useVoiceCall()
   const roster = useRoster()
+  // a phone's width: smaller buttons, and the waveform takes what is left, the phase under it
+  const phone = useIsPhone()
   /** Under the bar: what was said, or the Bot's voices. */
   const [panel, setPanel] = useState<"transcript" | "voices" | undefined>()
   const transcript = panel === "transcript"
@@ -65,25 +68,42 @@ export function CallBar(): ReactNode {
   if (call.botId === undefined) return null
   const bot = roster.botById(call.botId)
   const ended = call.phase === "ended"
+  const button = phone ? 36 : 44
+  const phase = <span className={cn("text-fg-tertiary", phone ? "text-[11px] leading-3" : "w-20 text-xs")} data-testid="call-phase">{ended ? "Call ended" : call.muted ? "Muted" : PHASE_LABEL[call.phase]}</span>
   return (
     <div
       className="pointer-events-none absolute inset-x-0 top-14 z-40 flex flex-col items-center gap-2 px-3 pt-[env(safe-area-inset-top)]"
       style={bot === undefined ? undefined : botTintStyle(bot.avatar.color)}
       data-testid="call-bar"
     >
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-elevated py-2 ps-3 pe-2 shadow-xl hairline border-line-tertiary" aria-label={`Call with ${bot?.name ?? "Bot"}`}>
-        {bot !== undefined && <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={36} working={call.phase === "speaking"} />}
-        <Waveform active={!ended && !call.muted} />
-        <span className="w-20 text-xs text-fg-tertiary" data-testid="call-phase">{ended ? "Call ended" : call.muted ? "Muted" : PHASE_LABEL[call.phase]}</span>
-        {bot !== undefined && <IconButton icon={Settings} label="Voice" size={44} variant={panel === "voices" ? "secondary" : "ghost"} onClick={() => toggle("voices")} />}
-        <IconButton icon={MessageCircle} label={transcript ? "Hide transcript" : "Show transcript"} size={44} variant={transcript ? "secondary" : "ghost"} onClick={() => toggle("transcript")} />
-        {!ended && <IconButton icon={call.muted ? MicOff : Mic} label={call.muted ? "Unmute" : "Mute"} size={44} variant={call.muted ? "secondary" : "ghost"} onClick={() => setMuted(!call.muted)} />}
+      <div
+        className={cn(
+          "pointer-events-auto flex items-center rounded-full bg-elevated shadow-xl hairline border-line-tertiary",
+          phone ? "w-full max-w-[420px] gap-1 py-1.5 ps-2 pe-1.5" : "gap-2 py-2 ps-3 pe-2",
+        )}
+        aria-label={`Call with ${bot?.name ?? "Bot"}`}
+      >
+        {bot !== undefined && <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={phone ? 32 : 36} working={call.phase === "speaking"} />}
+        {phone ? (
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5">
+            <Waveform active={!ended && !call.muted} className="h-4 w-full max-w-28" />
+            {phase}
+          </div>
+        ) : (
+          <>
+            <Waveform active={!ended && !call.muted} className="h-8 w-28" />
+            {phase}
+          </>
+        )}
+        {bot !== undefined && <IconButton icon={Settings} label="Voice" size={button} variant={panel === "voices" ? "secondary" : "ghost"} onClick={() => toggle("voices")} />}
+        <IconButton icon={MessageCircle} label={transcript ? "Hide transcript" : "Show transcript"} size={button} variant={transcript ? "secondary" : "ghost"} onClick={() => toggle("transcript")} />
+        {!ended && <IconButton icon={call.muted ? MicOff : Mic} label={call.muted ? "Unmute" : "Mute"} size={button} variant={call.muted ? "secondary" : "ghost"} onClick={() => setMuted(!call.muted)} />}
         <button
           type="button"
           aria-label={ended ? "Close" : "End call"}
           title={ended ? "Close" : "End call"}
           onClick={ended ? dismissCall : hangUp}
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-danger text-white transition-opacity hover:opacity-85"
+          className={cn("inline-flex shrink-0 items-center justify-center rounded-full bg-danger text-white transition-opacity hover:opacity-85", phone ? "size-9" : "size-11")}
         >
           <X className="size-5" strokeWidth={2} />
         </button>

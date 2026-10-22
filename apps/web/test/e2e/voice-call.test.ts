@@ -11,6 +11,7 @@ import { join } from "node:path"
 import type { Browser } from "playwright-core"
 import { startSpeaker, voiceLayout } from "../../../server/src/voice/engine.ts"
 import { VOICE_MANIFEST } from "../../../server/src/voice/manifest.ts"
+import { IPHONE } from "../shoot-mobile.ts"
 import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, startBrain } from "./brain.ts"
 
 const LIVE = process.env["OPENBOT_LIVE_VOICE"] === "1"
@@ -134,4 +135,22 @@ describe.skipIf(!hasChromium || !LIVE)("e2e: a voice call with a Bot", () => {
     await app.shot("e2e-97-voice-chat-opened")
     expect(app.errors).toEqual([])
   }, 120_000)
+
+  test("on a phone the call bar fits the screen", async () => {
+    const phone = await openApp(browser, brain, { theme: "dark", route: `#/c/${otto.directConversationId}`, context: IPHONE.options })
+    await phone.context.grantPermissions(["microphone"])
+    try {
+      await phone.page.getByTestId("voice-call-button").click()
+      const pill = phone.page.getByLabel("Call with Otto")
+      await pill.waitFor()
+      const box = (await pill.boundingBox())!
+      expect(box.x).toBeGreaterThanOrEqual(0)
+      expect(box.x + box.width).toBeLessThanOrEqual(IPHONE.options.viewport!.width)
+      await phone.shot("e2e-99-voice-call-phone")
+      await phone.page.getByTestId("call-bar").getByRole("button", { name: "End call" }).click()
+      expect(phone.errors).toEqual([])
+    } finally {
+      await phone.context.close()
+    }
+  }, 60_000)
 })

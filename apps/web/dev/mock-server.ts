@@ -14,7 +14,7 @@ import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "e
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import * as Socket from "effect/socket/Socket"
 import indexHtml from "../index.html"
-import { faviconHost, makeFavicons } from "../../server/src/favicons.ts"
+import { faviconHost, makeFavicons, NO_ICON } from "../../server/src/favicons.ts"
 import { MockBrain } from "./mock/brain.ts"
 import { ACCENTS, desktopScene, RfbSession } from "./mock/rfb.ts"
 import { seed } from "./mock/seed.ts"
@@ -59,7 +59,8 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
       const request = yield* HttpServerRequest.HttpServerRequest
       const host = faviconHost(new URL(request.url, "http://mock").searchParams.get("host") ?? "")
       const icon = host === undefined ? undefined : yield* Effect.promise(() => favicons.get(host))
-      return icon ? HttpServerResponse.uint8Array(icon.bytes, { contentType: icon.type }) : HttpServerResponse.text("none", { status: 404 })
+      const answer = icon ?? NO_ICON
+      return HttpServerResponse.uint8Array(answer.bytes, { contentType: answer.type })
     }),
   )
   // `/ws/computer/:botId?mode=view|control`: a fake RFB desktop per viewer (dev/mock/rfb.ts), with the

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { faviconHost, iconLinks, imageType, makeFavicons, recolorMonoSvg } from "../src/favicons.ts"
+import { faviconHost, iconLinks, imageType, makeFavicons, NO_ICON, recolorMonoSvg } from "../src/favicons.ts"
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
 const ICO = new Uint8Array([0x00, 0x00, 0x01, 0x00, 1, 0, 16, 16])
@@ -62,6 +62,9 @@ describe("favicons", () => {
     expect(imageType(ICO)).toBe("image/x-icon")
     expect(imageType(SVG)).toBe("image/svg+xml")
     expect(imageType(new TextEncoder().encode("<!doctype html><html>404</html>"))).toBeUndefined()
+    // "no icon" is a 1×1 PNG (the apps show the globe for it)
+    const ihdr = new DataView(NO_ICON.bytes.buffer, NO_ICON.bytes.byteOffset + 16, 8)
+    expect([imageType(NO_ICON.bytes), ihdr.getUint32(0), ihdr.getUint32(4)]).toEqual(["image/png", 1, 1])
   })
 
   test("fetches the declared icon once, then serves it from the cache", async () => {

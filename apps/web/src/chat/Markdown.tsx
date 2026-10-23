@@ -304,7 +304,7 @@ const toneOf = (img: HTMLImageElement): Tone | undefined => {
   }
 }
 
-/** The site's icon in a small tile before a link; a globe while it has none (or it fails to load). */
+/** The site's icon in a small tile before a link; a globe when it has none (or it fails to load). */
 function SiteIcon({ host }: { readonly host: string | undefined }): ReactNode {
   const [failed, setFailed] = useState(false)
   const [tone, setTone] = useState<Tone | undefined>()
@@ -318,7 +318,8 @@ function SiteIcon({ host }: { readonly host: string | undefined }): ReactNode {
             alt=""
             loading="lazy"
             decoding="async"
-            onLoad={(e) => setTone(toneOf(e.currentTarget))}
+            // a 1-pixel image is the brain's "no icon"
+            onLoad={(e) => (e.currentTarget.naturalWidth <= 1 ? setFailed(true) : setTone(toneOf(e.currentTarget)))}
             onError={() => setFailed(true)}
           />
         )}

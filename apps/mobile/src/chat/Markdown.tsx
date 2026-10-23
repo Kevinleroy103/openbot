@@ -79,6 +79,8 @@ function SiteIcon({ href, site, theme }: { readonly href: string; readonly site:
             style={{ width: 13, height: 13 }}
             contentFit="contain"
             cachePolicy="disk"
+            // a 1-pixel image is the brain's "no icon"
+            onLoad={(e) => void (e.source.width <= 1 && setFailed(true))}
             onError={() => setFailed(true)}
           />
         )}

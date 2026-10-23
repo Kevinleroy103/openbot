@@ -29,7 +29,7 @@ import { Effect, Layer, Option } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import { WebAuth, searchParamsOf, sessionTokenOf } from "./auth.ts"
-import { faviconHost, makeFavicons, recolorMonoSvg } from "./favicons.ts"
+import { faviconHost, makeFavicons, NO_ICON, recolorMonoSvg } from "./favicons.ts"
 import { ServerConfig } from "./config.ts"
 import { PublicListener } from "./listeners.ts"
 import { VoiceCalls } from "./voice/service.ts"
@@ -395,7 +395,7 @@ export const AttachmentRoutes = routes(Effect.fnUntraced(function*(router) {
 
 // ============================================================================ favicons
 
-/** `GET /api/favicon?host=[&theme=dark|light]`: the icon shown before a link in chats (favicons.ts); 404 when the site has none. */
+/** `GET /api/favicon?host=[&theme=dark|light]`: the icon shown before a link in chats (favicons.ts); a 1-pixel image when the site has none. */
 export const FaviconRoutes = routes(Effect.fnUntraced(function*(router) {
   const auth = yield* WebAuth
   const dataDir = yield* DataDir
@@ -411,8 +411,8 @@ export const FaviconRoutes = routes(Effect.fnUntraced(function*(router) {
       const host = faviconHost(params.get("host") ?? "")
       if (host === undefined) return refusal(400, "not a host name")
       const icon = yield* Effect.promise(() => favicons.get(host))
-      // the browser keeps either answer for a day
-      if (icon === undefined) return HttpServerResponse.empty({ status: 404, headers: { "cache-control": "private, max-age=86400" } })
+      // none: a 1-pixel image, not a 404 (favicons.ts NO_ICON); the browser keeps either answer for a day
+      if (icon === undefined) return HttpServerResponse.uint8Array(NO_ICON.bytes, { contentType: NO_ICON.type, headers: { "cache-control": "private, max-age=86400" } })
       // `&theme=dark|light`: a one-colour SVG redrawn to show on that screen (the iPhone app)
       const screen = params.get("theme")
       const redrawn = icon.type === "image/svg+xml" && (screen === "dark" || screen === "light")

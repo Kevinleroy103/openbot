@@ -19,6 +19,13 @@ export interface Icon {
   readonly type: string
 }
 
+/** The answer for a site without an icon: a 1×1 transparent PNG. A 404 would show up as an error in
+ * the browser's console for every such link; the apps take a 1-pixel image as "no icon" (the globe). */
+export const NO_ICON: Icon = {
+  bytes: Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0)),
+  type: "image/png",
+}
+
 export interface FaviconsOptions {
   readonly dir: string
   readonly fetch?: (url: string, init: RequestInit) => Promise<Response>

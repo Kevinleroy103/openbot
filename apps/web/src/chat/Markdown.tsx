@@ -3,6 +3,8 @@
 // bare URLs, bullet and numbered lists, blockquotes, #-headings, GFM tables and @Bot mentions
 // (avatar + name in the Bot's colour, Grok style). Links only allow http(s), mailto and
 // same-origin relative URLs, images only https and attachments; anything else renders as plain text.
+// A link to a website starts with the site's icon (`/api/favicon`, fetched by the brain), or a globe
+// when the site has none.
 import { Globe } from "lucide-react"
 import { Fragment, type ReactNode, useState } from "react"
 import { Avatar } from "@openbot/ui"
@@ -250,7 +252,7 @@ const rules: ReadonlyArray<InlineRule> = [
   {
     re: /\bhttps?:\/\/[^\s<>()]+[^\s<>().,:;!?"'\]]/,
     render: (m, key) => (
-      <Link key={key} href={m[0]} bare>
+      <Link key={key} href={m[0]}>
         {m[0]}
       </Link>
     ),
@@ -262,12 +264,86 @@ const rules: ReadonlyArray<InlineRule> = [
   { re: /(?<![\w])_(?=\S)([^_\n]+?)_(?![\w])/, render: (m, key) => <em key={key}>{renderInline(m[1]!, `${key}i`)}</em> },
 ]
 
-function Link({ href, children, bare = false }: { readonly href: string; readonly children: ReactNode; readonly bare?: boolean }): ReactNode {
+const hostOf = (href: string): string | undefined => {
+  try {
+    return new URL(href).hostname || undefined
+  } catch {
+    return undefined
+  }
+}
+
+type Tone = "dark" | "light"
+
+/** "dark" or "light" for an icon drawn in black, white or grey on a transparent background (GitHub's
+ * octocat), which would vanish on a tile of its own tone; undefined for a full-square icon (it brings
+ * its own background) or a colourful one. */
+const toneOf = (img: HTMLImageElement): Tone | undefined => {
+  try {
+    const size = 16
+    const canvas = document.createElement("canvas")
+    canvas.width = canvas.height = size
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })
+    if (ctx === null) return undefined
+    ctx.drawImage(img, 0, 0, size, size)
+    const px = ctx.getImageData(0, 0, size, size).data
+    let opaque = 0
+    let light = 0
+    let colour = 0
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3]! < 128) continue
+      const [r, g, b] = [px[i]!, px[i + 1]!, px[i + 2]!]
+      opaque++
+      light += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+      colour += (Math.max(r, g, b) - Math.min(r, g, b)) / 255
+    }
+    if (opaque === 0 || opaque > size * size * 0.85 || colour / opaque > 0.2) return undefined
+    const average = light / opaque
+    return average < 0.3 ? "dark" : average > 0.75 ? "light" : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The site's icon in a small tile before a link; a globe while it has none (or it fails to load). */
+function SiteIcon({ host }: { readonly host: string | undefined }): ReactNode {
+  const [failed, setFailed] = useState(false)
+  const [tone, setTone] = useState<Tone | undefined>()
+  return (
+    <span className="ob-site-icon" data-tone={tone} aria-hidden>
+      {host === undefined || failed
+        ? <Globe size={13} strokeWidth={1.75} className="opacity-70" />
+        : (
+          <img
+            src={`/api/favicon?host=${encodeURIComponent(host)}`}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onLoad={(e) => setTone(toneOf(e.currentTarget))}
+            onError={() => setFailed(true)}
+          />
+        )}
+    </span>
+  )
+}
+
+/** The link text split for its icon: the first word (a URL's first 12 characters) goes with the icon
+ * on one line, so the icon never stays behind at a line's end; the rest wraps as usual. */
+const leadOf = (children: ReactNode): readonly [ReactNode, ReactNode] => {
+  const parts = Array.isArray(children) ? children : [children]
+  const [first, ...rest] = parts
+  if (typeof first !== "string") return [first, rest]
+  const space = first.search(/\s/)
+  const cut = space > 0 ? Math.min(space, 24) : Math.min(first.length, 12)
+  return [first.slice(0, cut), [first.slice(cut), ...rest]]
+}
+
+function Link({ href, children }: { readonly href: string; readonly children: ReactNode }): ReactNode {
   const external = /^https?:/i.test(href)
+  const [lead, rest] = external ? leadOf(children) : [undefined, children]
   return (
     <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})} className="break-words">
-      {external && !bare && <Globe size={15} strokeWidth={1.75} className="me-1 inline-block -translate-y-px align-middle opacity-70" aria-hidden />}
-      {children}
+      {external && <span className="whitespace-nowrap"><SiteIcon key={hostOf(href)} host={hostOf(href)} />{lead}</span>}
+      {rest}
     </a>
   )
 }

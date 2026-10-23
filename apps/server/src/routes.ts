@@ -11,6 +11,7 @@
  *   `{sessionToken}`, sent back as `Authorization: Bearer`) and `POST /api/auth/web-code` (a 60 s code
  *   that signs its in-app web view in, `GET /api/auth/login?code=&next=`).
  * - `GET /api/attachments/:id` (cookie + Origin).
+ * - `GET /api/favicon?host=` (cookie + Origin): a linked site's icon, fetched and cached by the brain.
  * - `/ws/computer/:botId`, `/ws/terminal/:botId` (brain-nodes viewers, same auth as `/rpc`).
  * - `/ws/voice/:botId`: a voice call with a Bot (experiment; same auth as `/rpc`).
  * - `/node`, `POST /node/pair`, `/node/stream/:id` (brain-nodes; node signatures, codes, one-time tokens).
@@ -22,12 +23,13 @@
 import { NodeInternalRoutes, NodePublicRoutes, ViewerRoutes } from "@openbot/brain-nodes"
 import { DesktopRoutes } from "./desktop.ts"
 import { type AttachmentId, OpenBotRpcs } from "@openbot/contracts"
-import { AttachmentStore } from "@openbot/core"
+import { AttachmentStore, DataDir } from "@openbot/core"
 import { McpGateway } from "@openbot/gateway"
 import { Effect, Layer, Option } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import { WebAuth, searchParamsOf, sessionTokenOf } from "./auth.ts"
+import { faviconHost, makeFavicons, recolorMonoSvg } from "./favicons.ts"
 import { ServerConfig } from "./config.ts"
 import { PublicListener } from "./listeners.ts"
 import { VoiceCalls } from "./voice/service.ts"
@@ -391,6 +393,44 @@ export const AttachmentRoutes = routes(Effect.fnUntraced(function*(router) {
   )
 }))
 
+// ============================================================================ favicons
+
+/** `GET /api/favicon?host=[&theme=dark|light]`: the icon shown before a link in chats (favicons.ts); 404 when the site has none. */
+export const FaviconRoutes = routes(Effect.fnUntraced(function*(router) {
+  const auth = yield* WebAuth
+  const dataDir = yield* DataDir
+  const favicons = makeFavicons({ dir: `${dataDir.root}/favicons` })
+  yield* router.add(
+    "GET",
+    "/api/favicon",
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const result = yield* auth.authenticate(request)
+      if (!result.ok) return refusal(result.status, result.reason)
+      const params = searchParamsOf(request)
+      const host = faviconHost(params.get("host") ?? "")
+      if (host === undefined) return refusal(400, "not a host name")
+      const icon = yield* Effect.promise(() => favicons.get(host))
+      // the browser keeps either answer for a day
+      if (icon === undefined) return HttpServerResponse.empty({ status: 404, headers: { "cache-control": "private, max-age=86400" } })
+      // `&theme=dark|light`: a one-colour SVG redrawn to show on that screen (the iPhone app)
+      const screen = params.get("theme")
+      const redrawn = icon.type === "image/svg+xml" && (screen === "dark" || screen === "light")
+        ? recolorMonoSvg(new TextDecoder().decode(icon.bytes), screen)
+        : undefined
+      return HttpServerResponse.uint8Array(redrawn === undefined ? icon.bytes : new TextEncoder().encode(redrawn), {
+        contentType: icon.type,
+        headers: {
+          "x-content-type-options": "nosniff",
+          // another site's SVG never runs as our origin
+          "content-security-policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+          "cache-control": "private, max-age=86400",
+        },
+      })
+    }),
+  )
+}))
+
 // ============================================================================ web app
 
 export const WebRoutes = routes(Effect.fnUntraced(function*(router) {
@@ -476,7 +516,7 @@ const VoiceRoute = routes(Effect.fnUntraced(function*(router) {
 }))
 
 /** Every public route. */
-export const PublicRoutes = Layer.mergeAll(RpcRoute, AuthRoutes, AttachmentRoutes, WebRoutes, ViewerRoutesLive, VoiceRoute, NodePublicRoutes, DesktopRoutes)
+export const PublicRoutes = Layer.mergeAll(RpcRoute, AuthRoutes, AttachmentRoutes, FaviconRoutes, WebRoutes, ViewerRoutesLive, VoiceRoute, NodePublicRoutes, DesktopRoutes)
 
 /** `/mcp/:botId` → `McpGateway.handle` (the gateway checks the bearer; cookies are ignored). */
 export const McpRoute = routes(Effect.fnUntraced(function*(router) {

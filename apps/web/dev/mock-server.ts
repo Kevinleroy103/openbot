@@ -14,6 +14,7 @@ import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "e
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import * as Socket from "effect/socket/Socket"
 import indexHtml from "../index.html"
+import { faviconHost, makeFavicons } from "../../server/src/favicons.ts"
 import { MockBrain } from "./mock/brain.ts"
 import { ACCENTS, desktopScene, RfbSession } from "./mock/rfb.ts"
 import { seed } from "./mock/seed.ts"
@@ -47,6 +48,18 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
       const { id } = yield* HttpRouter.params
       const a = id ? brain.attachments.get(id) : undefined
       return a ? HttpServerResponse.uint8Array(a.bytes, { contentType: a.mime }) : HttpServerResponse.text("not found", { status: 404 })
+    }),
+  )
+  // `/api/favicon?host=`: the brain's own favicon fetcher (real icons when online, the globe offline)
+  const favicons = makeFavicons({ dir: `${process.env.TMPDIR ?? "/tmp"}/openbot-mock-favicons` })
+  const Favicons = HttpRouter.add(
+    "GET",
+    "/api/favicon",
+    Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const host = faviconHost(new URL(request.url, "http://mock").searchParams.get("host") ?? "")
+      const icon = host === undefined ? undefined : yield* Effect.promise(() => favicons.get(host))
+      return icon ? HttpServerResponse.uint8Array(icon.bytes, { contentType: icon.type }) : HttpServerResponse.text("none", { status: 404 })
     }),
   )
   // `/ws/computer/:botId?mode=view|control`: a fake RFB desktop per viewer (dev/mock/rfb.ts), with the
@@ -109,7 +122,7 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
     ),
   )
   const development = options.development ?? process.env.NODE_ENV !== "production"
-  const ServerLive = HttpRouter.serve(Layer.mergeAll(RpcLive, Attachments, Desktop, DesktopInput, Takeover, SpeechToText), { disableLogger: true, disableListenLog: true }).pipe(
+  const ServerLive = HttpRouter.serve(Layer.mergeAll(RpcLive, Attachments, Favicons, Desktop, DesktopInput, Takeover, SpeechToText), { disableLogger: true, disableListenLog: true }).pipe(
     Layer.provideMerge(
       BunHttpServer.layer({
         port: options.port ?? 4321,

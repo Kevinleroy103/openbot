@@ -1,5 +1,6 @@
 // Bot messages as Markdown, drawn natively: `marked`'s lexer (as on the web) → nested Text for
-// paragraphs, emphasis, code, links, lists, quotes, headings, tables and code blocks.
+// paragraphs, emphasis, code, links, lists, quotes, headings, tables and code blocks. A link to a
+// website starts with the site's icon (`/api/favicon`, fetched by the brain), or a globe without one.
 import * as Linking from "expo-linking"
 import { Image } from "expo-image"
 import { type Token, type Tokens, marked } from "marked"
@@ -7,6 +8,7 @@ import { type ReactNode, useMemo, useState } from "react"
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native"
 import { imageSrc, safeHref } from "@openbot/app-model"
 import type { Theme } from "../theme.ts"
+import { Icon } from "../ui/Icon.tsx"
 
 const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" })
 
@@ -14,6 +16,8 @@ interface Ctx {
   readonly theme: Theme
   readonly color: string
   readonly size: number
+  /** The brain to ask for links' site icons (absent: links have none). */
+  readonly site?: MarkdownImage | undefined
 }
 
 /** The body-text style every text line carries; block(), inlineRows() and MdImage's fallback share it. */
@@ -56,6 +60,29 @@ function MdImage(props: {
       style={{ width: "100%", maxWidth: 480, aspectRatio: 1, borderRadius: 12 }}
       contentFit="contain"
     />
+  )
+}
+
+/** A website link's site icon in a small tile on the text line; a globe when the site has none. The
+ * brain redraws a one-colour icon to show on this screen (`&theme=`), since its pixels are not ours
+ * to look at here. */
+function SiteIcon({ href, site, theme }: { readonly href: string; readonly site: MarkdownImage; readonly theme: Theme }): ReactNode {
+  const host = /^https?:\/\/([^/?#:@]+)/i.exec(href)?.[1]?.toLowerCase()
+  const [failed, setFailed] = useState(false)
+  return (
+    <View style={[styles.siteIcon, { backgroundColor: theme.secondary }]}>
+      {host === undefined || failed
+        ? <Icon name="globe" size={11} color={theme.fgSecondary} />
+        : (
+          <Image
+            source={{ uri: `${site.origin}/api/favicon?host=${encodeURIComponent(host)}&theme=${theme.dark ? "dark" : "light"}`, headers: site.headers }}
+            style={{ width: 13, height: 13 }}
+            contentFit="contain"
+            cachePolicy="disk"
+            onError={() => setFailed(true)}
+          />
+        )}
+    </View>
   )
 }
 
@@ -131,6 +158,8 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
         if (href === undefined) return <Text key={key}>{inline(link.tokens, ctx, key)}</Text>
         return (
           <Text key={key} style={{ color: ctx.theme.accentFg }} onPress={() => void Linking.openURL(href)} suppressHighlighting>
+            {ctx.site !== undefined && /^https?:/i.test(href) && <SiteIcon key={`${key}.icon`} href={href} site={ctx.site} theme={ctx.theme} />}
+            {ctx.site !== undefined && /^https?:/i.test(href) ? "\u00a0" : null}
             {inline(link.tokens, ctx, key)}
           </Text>
         )
@@ -245,11 +274,13 @@ export function Markdown({ text, theme, color, size = 17, image }: { readonly te
       return [{ type: "paragraph", raw: text, text, tokens: [{ type: "text", raw: text, text }] } as Token]
     }
   }, [text])
-  const ctx: Ctx = { theme, color: color ?? theme.fg, size }
+  const ctx: Ctx = { theme, color: color ?? theme.fg, size, site: image }
   return <View style={{ gap: 8 }}>{tokens.map((t, i) => block(t, ctx, String(i), 0, image))}</View>
 }
 
 const styles = StyleSheet.create({
+  // sits on the text line like the web's (its bottom a little under the baseline)
+  siteIcon: { width: 17, height: 17, borderRadius: 5, alignItems: "center", justifyContent: "center", overflow: "hidden", transform: [{ translateY: 3 }] },
   code: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
   quote: { borderLeftWidth: 3, paddingLeft: 10, gap: 6 },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },

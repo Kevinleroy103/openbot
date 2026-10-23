@@ -104,6 +104,10 @@ describe("auth negatives", () => {
     expect((await fetch(`${server.base}/api/attachments/att_x`)).status).toBe(401)
     expect((await fetch(`${server.base}/api/attachments/att_x`, { headers: { cookie, origin: "https://evil.example" } })).status)
       .toBe(403)
+    expect((await fetch(`${server.base}/api/favicon?host=example.com`)).status).toBe(401)
+    expect((await fetch(`${server.base}/api/favicon?host=example.com`, { headers: { cookie, origin: "https://evil.example" } })).status).toBe(403)
+    // only domain names are looked up: never an address on the brain's network
+    expect((await fetch(`${server.base}/api/favicon?host=127.0.0.1`, { headers: { cookie } })).status).toBe(400)
     expect((await fetch(`${server.base}/api/auth/ws-ticket`, { method: "POST" })).status).toBe(401)
     expect(
       (await fetch(`${server.base}/api/auth/ws-ticket`, { method: "POST", headers: { cookie, origin: "https://evil.example" } }))

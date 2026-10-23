@@ -49,6 +49,16 @@
 .ob-md h1, .ob-md h2, .ob-md h3 { font-weight: 600; }
 .ob-md-hr { border: 0; border-top: 1px solid var(--ob-line); margin: 10px 0; }
 .ob-md-img { max-width: 100%; max-height: 360px; border-radius: 12px; object-fit: contain; }
+/* a link's site icon (Markdown.tsx SiteIcon): a small rounded tile that sits on the text line */
+.ob-site-icon {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: -3px;
+  width: 18px; height: 18px; margin-inline-end: 5px; border-radius: 5px; overflow: hidden;
+  background: var(--ob-secondary);
+}
+.ob-site-icon img { width: 14px; height: 14px; object-fit: contain; }
+/* a one-colour icon on a transparent background gets a tile it shows on (light-dark(LIGHT, DARK)) */
+.ob-site-icon[data-tone="dark"] { background: light-dark(var(--ob-secondary), #e9e9e9); }
+.ob-site-icon[data-tone="light"] { background: light-dark(#3a3a3a, var(--ob-secondary)); }
 /* The dashed border and padding are part of the criterion: a bare coloured word reads as body text,
  * so a failed image would look like ordinary copy instead of a visible placeholder. */
 .ob-md-img-fallback {

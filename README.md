@@ -1,21 +1,99 @@
-# OpenBot
+<h1 align="center">OpenBot</h1>
 
-A self-hosted take on Grok Bot. You create bots, chat with them one to one or in groups, and they
-work for you in the background: they run tasks, follow routines, remember things, and use real
-computers. Each bot runs on the coding agent of your choice: **Claude Code**, **Codex** or
-**OpenCode**.
+<p align="center">
+  <strong>A team of AI bots that work for you, from a server you own.</strong><br>
+  Give each bot a job, a coding agent and a computer, then chat with them like colleagues: one to one
+  or in groups, from your browser, your desktop or your phone.
+</p>
 
-- **Bots** with their own name, instructions, memory and skills. New bots introduce themselves and
-  ask what you want to do first.
-- **Direct messages and group chats.** Bots also message each other.
-- **Background tasks and routines** (scheduled or recurring work), with approvals for what you want
-  to sign off on.
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#why-openbot">Why OpenBot</a> ·
+  <a href="#how-it-fits-together">How it fits together</a> ·
+  <a href="#development">Development</a>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.webp">
+  <img alt="OpenBot: Bots in the sidebar, and a chat with Chief of Staff with a question, a routine, a table of Bots on Claude, Codex and OpenCode, and an approval" src="docs/images/chat-light.webp">
+</picture>
+
+## Why OpenBot
+
+OpenBot is a self-hosted take on Grok Bot, built around three ideas: many bots, the agents and
+subscriptions you already have, and real computers for them to work on.
+
+### A team of bots, not one chatbot
+
+Each bot has its own name, look, instructions, memory, skills and model. Chat with one directly, or put
+several in a group and @mention who should answer; bots also message each other and hand work off.
+They keep going when you leave: background tasks, routines on a schedule or on a Slack message, and a
+card in the chat when they need your approval or an answer. New bots introduce themselves and ask what
+you want to do first.
+
+<img alt="A group chat: Release Engineer and Data Analyst answer the owner's question about the launch" src="docs/images/group.webp">
+
+### Your agents, your subscriptions
+
+Every bot runs on a real coding agent: **Claude Code**, **Codex** or **OpenCode**, mixed however you
+like in one team. There are no API keys to paste: OpenBot uses the sign-ins the agents' own CLIs
+already have, so your bots run on the subscriptions you already pay for. Several Claude accounts, say a
+personal and a work one? Add them all, and pick per bot which one it uses and which model.
+
+<img alt="Settings › Harnesses: Claude with two accounts, Codex signed in with ChatGPT, and OpenCode" src="docs/images/harnesses.webp">
+
+### Many machines, real computers
+
+The brain runs on one always-on machine: a home server, a VPS, or the computer you're on. Bots do
+their work on any computer you pair with one command, Linux or macOS. Computers dial out to the brain,
+so they work behind NAT. Put each bot where its work is: the box with the GPU for the bot that makes
+videos, your laptop for the one that works in your repos.
+
+On Linux every bot gets its own desktop with a browser, terminal and editor. On a Mac, bots use the
+Mac's own screen while you're away from it. Watch any of them live, take over with your own mouse and
+keyboard, and hand it back.
+
+<img alt="Watching Chief of Staff's desktop live, with Take control" src="docs/images/computer.webp">
+
+### With you everywhere
+
+<img align="right" width="250" alt="A chat with Chief of Staff in the iPhone app" src="docs/images/phone.webp">
+
+- **Apps:** the web app works on desktop and phone; the desktop app (macOS, Linux, Windows) adds
+  notifications and a shortcut that sends whatever you're looking at to a bot; and there is a native
+  iPhone app.
+- **Voice:** dictate a message, or call a bot and just talk (experimental). Speech is heard and spoken
+  on your own server; the bot itself does the thinking and the talking.
+- **Search** every chat from ⌘K, jump to any old message, and find within a chat with ⌘F.
+- **Slack:** hand a thread to a bot from Slack, let bots read and search it, and send their drafts
+  yourself.
 - **Skills:** a shared library you assign to bots, with imports from [skills.sh](https://skills.sh).
-- **Computer use:** on Linux, every bot gets its own virtual desktop with a browser, terminal,
-  editor and file manager; on a Mac, bots use the Mac's own screen while you're away from it.
-  Watch it live, take over with your own mouse and keyboard, and hand it back. Bots also get a
-  shell and files on any computer you connect.
-- A web app that works on desktop and phone.
+
+<br clear="right">
+
+### Yours
+
+One owner, one server, your data in SQLite on it. Agent sign-ins and app tokens stay on that machine,
+and so does your voice. Updates deploy in seconds without cutting a bot off mid-task: running work gets
+time to finish, and anything left is saved and picked up by the new version.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  you["You<br/>web · desktop · iPhone · Slack"] <--> brain
+  subgraph brain["OpenBot brain, on one always-on machine"]
+    direction TB
+    bots["Bots, chats, tasks, routines, memory"] --> agents["Claude Code · Codex · OpenCode"]
+  end
+  brain <--> local["This machine"]
+  brain <--> laptop["Your laptop"]
+  brain <--> server["A GPU box or a server"]
+```
+
+The brain keeps the bots, their chats and memory, and runs each bot's agent with your sign-in. The
+agents' tools run on the computer the bot is set to use, through a small node program on each paired
+computer. You reach the brain over HTTPS from any of the apps.
 
 ## Requirements
 
@@ -71,6 +149,29 @@ bun run start -- --public-origin https://<machine>.<tailnet>.ts.net:8444
 ```
 
 Then open the printed login link on your phone.
+
+## Run it on a home server
+
+The brain doesn't have to live on the computer you work on. To keep it on an always-on machine (a home
+server, an LXC container, a VPS) and deploy to it from your own:
+
+1. On the server: install Bun and the agents, and sign them in there (`claude auth login`, `codex login
+   --device-auth`, and `gh auth login` if your bots use GitHub). Install
+   [`scripts/openbot.service`](scripts/openbot.service) as a user service (its header has the
+   steps). It starts OpenBot at boot and again after a crash.
+2. On your computer, point deploys at the server: `{ "host": "<ssh host>" }` in
+   `~/.config/openbot/deploy.json`, or `--to <ssh host>` each time. The first deploy also gives the
+   server's arguments:
+
+   ```sh
+   bun run deploy -- --port 7420 --host 0.0.0.0 --public-origin https://openbot.example.com
+   ```
+
+3. Put HTTPS in front of it (Caddy, Tailscale Serve, …), then pair the computers your bots should work
+   on, including the one you develop on ([Connect other computers](#connect-other-computers)).
+
+After that, `bun run deploy` copies only what changed to the server over SSH and updates OpenBot there
+as described below, in about ten seconds.
 
 ## Updating a running OpenBot
 
@@ -178,6 +279,14 @@ your phone. Install Hark on the iPhone, create a service called OpenBot in Hark'
 where a Bot needs you), grouped by Bot. Tapping one opens that chat, through the address you gave
 `--public-origin`.
 
+## Voice
+
+Settings › General has two switches. **Voice input** adds a mic button to the message box: you talk,
+OpenBot types (Parakeet). **Voice calls** (experimental) put a call button in an empty message box:
+you talk with the bot, it answers out loud (Kokoro, with a voice you choose per bot), and you can talk
+over it like you would with a person. Both download their speech models once, a few hundred MB each,
+and run on the brain: your voice never leaves your server.
+
 ## Desktop app
 
 OpenBot also runs in its own window on macOS, Linux and Windows, with your Bots' updates as the
@@ -245,6 +354,9 @@ bun run test
 | `packages/harness-*` | Claude, Codex and OpenCode adapters, plus a scripted fake for tests |
 | `packages/node-daemon`, `packages/node-protocol`, `packages/brain-nodes` | Computers: shell, files, browser, desktops, and how they talk to the brain |
 | `packages/client`, `packages/ui` | Web client state and UI components |
+
+The screenshots in this README come from the web app's dev mock (made-up bots and chats):
+`bun apps/web/test/shoot-readme.ts` takes them again after UI changes.
 
 Design notes are in [`docs/`](docs): [architecture](docs/architecture.md),
 [decisions](docs/decisions.md), [interfaces](docs/interfaces.md) and the

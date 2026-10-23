@@ -197,13 +197,13 @@ export const SCENES: ReadonlyArray<Shot> = [
 ]
 
 /** The full-desktop view's picture is live (noVNC connected to the mock's fake RFB desktop). */
-const desktopLive = async (page: Page, interactive = false) => {
+export const desktopLive = async (page: Page, interactive = false) => {
   await page.locator(`[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]${interactive ? "[data-interactive]" : ""}`).waitFor({ timeout: 10_000 })
   await page.waitForTimeout(400)
 }
 
 /** Details › Computer of the open chat's Bot. */
-const computerTab = async (page: Page) => {
+export const computerTab = async (page: Page) => {
   await page.getByRole("button", { name: "View conversation details" }).click()
   await page.getByRole("tab", { name: "Computer" }).click()
   await page.getByTestId("screen-thumbnail").waitFor()
@@ -312,7 +312,7 @@ export const COMPUTER_SCENES: ReadonlyArray<Shot> = [
 ]
 
 /** Settings › Computers (from the account menu). */
-const openComputers = async (page: Page) => {
+export const openComputers = async (page: Page) => {
   await page.getByRole("button", { name: "Account" }).click()
   await page.getByRole("menuitem", { name: "Computers" }).click()
 }

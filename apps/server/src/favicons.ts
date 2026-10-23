@@ -8,10 +8,14 @@
  * - Only `https://<hostname>/` is asked (no IP addresses, no ports), the page is read up to 512 KB and
  *   an icon up to 256 KB, 5 s each; only an image ever comes back (checked by its bytes, so a soft
  *   404 page at `/favicon.ico` is not one).
+ * - Redirects are followed by hand, at most 5; every host asked, the first and each redirect's, must
+ *   resolve only to public addresses, and the connection goes to the address that was checked.
  * - Cached in `<data>/favicons`: an icon for a week, "this site has none" for a day; a stale icon is
  *   served again when the site cannot be reached.
  */
+import { lookup as dnsLookup } from "node:dns/promises"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { BlockList, isIP } from "node:net"
 import { join } from "node:path"
 
 export interface Icon {
@@ -28,7 +32,9 @@ export const NO_ICON: Icon = {
 
 export interface FaviconsOptions {
   readonly dir: string
-  readonly fetch?: (url: string, init: RequestInit) => Promise<Response>
+  /** One request to `url`, connecting to `address` (already checked). */
+  readonly fetch?: (url: string, address: string, init: RequestInit) => Promise<Response>
+  readonly resolve?: (host: string) => Promise<ReadonlyArray<string>>
   readonly now?: () => number
 }
 
@@ -37,6 +43,7 @@ const NONE_TTL_MS = 24 * 60 * 60 * 1000
 const PAGE_BYTES = 512 * 1024
 const ICON_BYTES = 256 * 1024
 const TIMEOUT_MS = 5_000
+const MAX_REDIRECTS = 5
 /** Icon links tried (best first) before `/favicon.ico`. */
 const MAX_CANDIDATES = 3
 const HEADERS = {
@@ -52,6 +59,31 @@ export const faviconHost = (raw: string): string | undefined => {
   if (!HOST.test(host)) return undefined
   // a top-level domain has a letter: no IPv4 addresses
   return /[a-z]/.test(host.slice(host.lastIndexOf(".") + 1)) ? host : undefined
+}
+
+const BLOCKED = new BlockList()
+for (const [net, prefix] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["224.0.0.0", 4], ["240.0.0.0", 4]] as const) {
+  BLOCKED.addSubnet(net, prefix, "ipv4")
+}
+// ::/96 holds :: and ::1 and the IPv4-compatible forms; IPv4-mapped ones are checked against the IPv4 rules
+for (const [net, prefix] of [["::", 96], ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8]] as const) {
+  BLOCKED.addSubnet(net, prefix, "ipv6")
+}
+
+/** Whether the brain must not connect to `address`: loopback, private, link-local, CGNAT, multicast, reserved, or not an IP. */
+export const blockedAddress = (address: string): boolean => {
+  const ip = address.replace(/%.*$/, "")
+  const family = isIP(ip)
+  return family === 0 || BLOCKED.check(ip, family === 4 ? "ipv4" : "ipv6")
+}
+
+const resolveHost = async (host: string): Promise<ReadonlyArray<string>> => (await dnsLookup(host, { all: true })).map((a) => a.address)
+
+const pinnedFetch = (url: string, address: string, init: RequestInit): Promise<Response> => {
+  const target = new URL(url)
+  const serverName = target.hostname
+  target.hostname = isIP(address) === 6 ? `[${address}]` : address
+  return fetch(target, { ...init, tls: { serverName } })
 }
 
 // ---------------------------------------------------------------------------- picking the icon
@@ -193,17 +225,33 @@ const dataIcon = (href: string): Icon | undefined => {
 }
 
 export const makeFavicons = (options: FaviconsOptions) => {
-  const fetchFn = options.fetch ?? ((url: string, init: RequestInit) => fetch(url, init))
+  const fetchFn = options.fetch ?? pinnedFetch
+  const resolve = options.resolve ?? resolveHost
   const now = options.now ?? Date.now
   const inFlight = new Map<string, Promise<Icon | undefined>>()
 
-  const request = (url: string, accept: string) =>
-    fetchFn(url, { redirect: "follow", signal: AbortSignal.timeout(TIMEOUT_MS), headers: { ...HEADERS, accept } })
+  /** The response at `url` after its redirects, and the url it came from; throws for a host it must not ask. */
+  const request = async (url: string, accept: string): Promise<{ readonly response: Response; readonly url: string }> => {
+    const signal = AbortSignal.timeout(TIMEOUT_MS)
+    for (let hop = 0; ; hop++) {
+      const target = new URL(url)
+      if (target.protocol !== "https:" && target.protocol !== "http:") throw new Error(`not fetched: ${url}`)
+      const host = target.hostname.replace(/^\[(.*)\]$/, "$1")
+      const addresses = isIP(host) === 0 ? await resolve(host) : [host]
+      if (addresses.some(blockedAddress)) throw new Error(`not fetched: ${url}`)
+      const response = await fetchFn(url, addresses[0]!, { redirect: "manual", signal, headers: { ...HEADERS, accept, host: target.host } })
+      const location = response.headers.get("location")
+      if (response.status < 300 || response.status > 399 || location === null) return { response, url }
+      await response.body?.cancel().catch(() => {})
+      if (hop === MAX_REDIRECTS) throw new Error(`too many redirects: ${url}`)
+      url = new URL(location, url).href
+    }
+  }
 
   const fetchIcon = async (href: string): Promise<Icon | undefined> => {
     if (href.startsWith("data:")) return dataIcon(href)
     try {
-      const response = await request(href, "image/avif,image/webp,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
+      const { response } = await request(href, "image/avif,image/webp,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
       if (!response.ok) return undefined
       const bytes = await readCapped(response, ICON_BYTES, false)
       const type = bytes === undefined ? undefined : imageType(bytes)
@@ -217,10 +265,10 @@ export const makeFavicons = (options: FaviconsOptions) => {
   const fetchSite = async (host: string): Promise<Icon | undefined> => {
     let candidates: ReadonlyArray<IconLink> = []
     try {
-      const response = await request(`https://${host}/`, "text/html,application/xhtml+xml")
+      const { response, url } = await request(`https://${host}/`, "text/html,application/xhtml+xml")
       if (response.ok && (response.headers.get("content-type") ?? "text/html").includes("html")) {
         const page = await readCapped(response, PAGE_BYTES, true)
-        if (page !== undefined) candidates = iconLinks(new TextDecoder().decode(page), response.url || `https://${host}/`)
+        if (page !== undefined) candidates = iconLinks(new TextDecoder().decode(page), url)
       } else await response.body?.cancel().catch(() => {})
     } catch {}
     for (const link of candidates.slice(0, MAX_CANDIDATES)) {

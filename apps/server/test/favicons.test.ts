@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { faviconHost, iconLinks, imageType, makeFavicons, NO_ICON, recolorMonoSvg } from "../src/favicons.ts"
+import { blockedAddress, faviconHost, iconLinks, imageType, makeFavicons, NO_ICON, recolorMonoSvg } from "../src/favicons.ts"
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
 const ICO = new Uint8Array([0x00, 0x00, 0x01, 0x00, 1, 0, 16, 16])
@@ -10,22 +10,24 @@ const SVG = new TextEncoder().encode(`<svg xmlns="http://www.w3.org/2000/svg"><c
 const HTML = (head: string) => `<!doctype html><html><head><title>x</title>${head}</head><body>hi</body></html>`
 
 /** A fake web: url → response; records every url asked. */
-const fakeWeb = (pages: Record<string, { body: string | Uint8Array; type?: string; status?: number }>) => {
+const fakeWeb = (pages: Record<string, { body: string | Uint8Array; type?: string; status?: number; location?: string }>) => {
   const asked: Array<string> = []
   const fetch = async (url: string) => {
     asked.push(url)
     const page = pages[url]
     if (page === undefined) return new Response("not found", { status: 404 })
-    const response = new Response(page.body, { status: page.status ?? 200, headers: { "content-type": page.type ?? "text/html" } })
-    Object.defineProperty(response, "url", { value: url })
-    return response
+    const headers: Record<string, string> = { "content-type": page.type ?? "text/html" }
+    if (page.location !== undefined) headers.location = page.location
+    return new Response(page.body, { status: page.status ?? 200, headers })
   }
   return { fetch, asked }
 }
 
 const setup = (pages: Parameters<typeof fakeWeb>[0], clock = { now: 1_000_000 }) => {
   const web = fakeWeb(pages)
-  const favicons = makeFavicons({ dir: mkdtempSync(join(tmpdir(), "favicons-")), fetch: web.fetch, now: () => clock.now })
+  // *.internal.example resolves to a private address, everything else to a public one
+  const resolve = async (host: string) => [host.endsWith("internal.example") ? "10.0.0.5" : "203.0.113.10"]
+  const favicons = makeFavicons({ dir: mkdtempSync(join(tmpdir(), "favicons-")), fetch: web.fetch, resolve, now: () => clock.now })
   return { ...web, favicons, clock }
 }
 
@@ -37,6 +39,46 @@ describe("favicons", () => {
     for (const bad of ["127.0.0.1", "192.168.100.12", "localhost", "example.com:8080", "[::1]", "a b.com", "-x.com", "", "x..com"]) {
       expect(faviconHost(bad)).toBeUndefined()
     }
+  })
+
+  test("only public addresses are asked", () => {
+    for (const ip of ["8.8.8.8", "1.1.1.1", "9.255.255.255", "11.0.0.0", "100.63.255.255", "100.128.0.0", "172.15.255.255", "172.32.0.0", "192.169.0.0", "223.255.255.255"]) {
+      expect(blockedAddress(ip)).toBe(false)
+    }
+    for (const ip of ["0.0.0.0", "0.255.255.255", "10.0.0.0", "10.255.255.255", "100.64.0.0", "100.127.255.255", "127.0.0.1", "169.254.169.254", "172.16.0.0", "172.31.255.255", "192.0.0.170", "192.168.1.1", "224.0.0.1", "239.255.255.255", "240.0.0.1", "255.255.255.255"]) {
+      expect(blockedAddress(ip)).toBe(true)
+    }
+    for (const ip of ["2606:4700:4700::1111", "2001:4860:4860::8888", "fbff::1", "fe7f::1", "fe00::1", "::ffff:8.8.8.8", "::1:0:0:1"]) {
+      expect(blockedAddress(ip)).toBe(false)
+    }
+    for (const ip of ["::", "::1", "::ffff:127.0.0.1", "::ffff:7f00:1", "::ffff:169.254.169.254", "::ffff:10.0.0.1", "::127.0.0.1", "::a00:1", "fc00::1", "fdff:ffff::1", "fe80::1", "fe80::1%eth0", "febf::1", "fec0::1", "ff02::1", "not an ip", ""]) {
+      expect(blockedAddress(ip)).toBe(true)
+    }
+  })
+
+  test("a site that resolves to a private address, or redirects to one, is not asked", async () => {
+    const { favicons, asked } = setup({
+      "https://g.example/": { body: "", status: 302, location: "http://intranet.internal.example/" },
+      "https://g.example/favicon.ico": { body: "", status: 301, location: "http://169.254.169.254/latest/meta-data/" },
+      "https://h.example/": { body: "", status: 301, location: "https://[::ffff:127.0.0.1]:8080/" },
+      "https://h.example/favicon.ico": { body: "", status: 307, location: "https://h.example/favicon.ico" },
+    })
+    expect(await favicons.get("g.example")).toBeUndefined()
+    expect(await favicons.get("h.example")).toBeUndefined()
+    expect(await favicons.get("docs.internal.example")).toBeUndefined()
+    expect(asked.filter((url) => !/^https:\/\/[gh]\.example\//.test(url))).toEqual([])
+    // a redirect loop stops after 5 redirects
+    expect(asked.filter((url) => url === "https://h.example/favicon.ico").length).toBe(6)
+  })
+
+  test("redirects to public hosts are followed, and the page's links are read from where it ended", async () => {
+    const { favicons } = setup({
+      "https://k.example/": { body: "", status: 301, location: "https://www.k.example/home/" },
+      "https://www.k.example/home/": { body: HTML(`<link rel="icon" href="icon.png">`) },
+      "https://www.k.example/home/icon.png": { body: "", status: 302, location: "http://cdn.example/k.png" },
+      "http://cdn.example/k.png": { body: PNG, type: "image/png" },
+    })
+    expect((await favicons.get("k.example"))?.type).toBe("image/png")
   })
 
   test("the page's best icon: an SVG, then the size nearest 32 px, never a mask icon", () => {

@@ -352,6 +352,14 @@ const lineOf = (names: Names, entry: TranscriptEntry, full: boolean): string | u
           return `${time} [Form: ${oneLine(card.title)}${state}]`
         case "secret-request":
           return `${time} [Secret asked: ${oneLine(card.label)}${state}]`
+        case "ui": {
+          const answer = entry.state.answer
+          const chosen =
+            answer === undefined
+              ? state
+              : ` → chose "${card.actions?.find((a) => a.id === answer.actionId)?.label ?? answer.actionId}"`
+          return `${time} [Card${card.title === undefined ? "" : ` "${oneLine(card.title)}"`}: ${oneLine(card.fallback).slice(0, 600)}${chosen}]`
+        }
         default:
           return undefined
       }

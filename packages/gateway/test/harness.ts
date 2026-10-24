@@ -25,6 +25,7 @@ import {
   MessagingLive,
   SearchServiceLive,
   SkillService,
+  UiCardService,
 } from "@openbot/core"
 import {
   ApprovalServiceFake,
@@ -193,6 +194,14 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
         return { ...bot, ...(patch.name === undefined ? {} : { name: patch.name }) }
       }),
   })
+  const UiCardServiceTest = Layer.mock(UiCardService, {
+    show: (ctx, card) =>
+      Effect.sync(() => {
+        record("showUi", ctx, card)
+        return { entryId: "ent_ui" as EntryId }
+      }),
+    update: (ctx, entryId, card) => Effect.sync(() => void record("updateUi", ctx, { entryId, card })),
+  })
   const RoutineSchedulerTest = Layer.mock(RoutineScheduler, { list: () => Effect.succeed([]) })
   const SkillServiceTest = Layer.mock(SkillService, { list: Effect.succeed([]) })
 
@@ -221,6 +230,7 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
     BotServiceTest,
     RoutineSchedulerTest,
     SkillServiceTest,
+    UiCardServiceTest,
     SearchServiceLive,
     settings,
   ).pipe(Layer.provideMerge(ports))

@@ -26,7 +26,7 @@ export type MessageEntry = TranscriptEntryOf<"message">
 export type ToolCallEntry = TranscriptEntryOf<"tool-call">
 
 /** OpenBot tools whose card in the chat is their visible step (not repeated in "N steps"). */
-const CARD_TOOLS = new Set(["ask_user", "request_approval"])
+const CARD_TOOLS = new Set(["ask_user", "request_approval", "show_ui", "update_ui"])
 const shownAsCard = (entry: ToolCallEntry): boolean =>
   entry.mcp?.server === "openbot" &&
   CARD_TOOLS.has(entry.mcp.tool) &&

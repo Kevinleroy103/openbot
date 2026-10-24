@@ -62,6 +62,7 @@ import { NodeToolkit, type NodeToolkitServices } from "./toolkits/node.ts"
 import { SearchToolkit, type SearchToolkitServices } from "./toolkits/search.ts"
 import { SlackToolkit } from "./toolkits/slack.ts"
 import { TaskToolkit, type TaskToolkitServices } from "./toolkits/tasks.ts"
+import { UiToolkit, type UiToolkitServices } from "./toolkits/ui.ts"
 
 // ============================================================================ service
 
@@ -77,11 +78,13 @@ export interface McpGatewayShape {
 export class McpGateway extends Context.Service<McpGateway, McpGatewayShape>()("openbot/gateway/McpGateway") {}
 
 /** Every service the default toolkits need. */
-export type GatewayToolServices = BotToolkitServices | NodeToolkitServices | TaskToolkitServices | SearchToolkitServices
+export type GatewayToolServices =
+  BotToolkitServices | NodeToolkitServices | TaskToolkitServices | SearchToolkitServices | UiToolkitServices
 
-/** The default toolkits: bot, task, search, node, browser, screen (`computer`, `request_takeover`) and Slack tools. */
+/** The default toolkits: bot, ui cards, task, search, node, browser, screen (`computer`, `request_takeover`) and Slack tools. */
 export const DefaultToolkits: ReadonlyArray<AnyTool<GatewayToolServices>> = [
   ...BotToolkit,
+  ...UiToolkit,
   ...TaskToolkit,
   ...SearchToolkit,
   ...NodeToolkit,

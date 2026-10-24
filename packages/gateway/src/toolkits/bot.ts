@@ -67,7 +67,7 @@ export type BotToolkitServices =
   | Orchestrator
 
 /** Decodes `value` with an Effect schema; failures become a model-readable refusal. */
-const decodeOrRefuse = <S extends Schema.Top & { readonly DecodingServices: never }>(
+export const decodeOrRefuse = <S extends Schema.Top & { readonly DecodingServices: never }>(
   schema: S,
   value: unknown,
   what: string,

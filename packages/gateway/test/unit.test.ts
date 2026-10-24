@@ -93,6 +93,8 @@ describe("params", () => {
         "request_approval",
         "notify_user",
         "send_file",
+        "show_ui",
+        "update_ui",
         "remember",
         "forget",
         "recall_memory",

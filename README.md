@@ -97,7 +97,7 @@ computer. You reach the brain over HTTPS from any of the apps.
 
 ## Requirements
 
-- [Bun](https://bun.com) 1.4.2 or newer.
+- [Bun](https://bun.com) 1.4.4 or newer.
 - At least one coding agent, signed in on the machine that runs OpenBot:
   - **Claude:** `claude auth login` (Claude Code CLI). OpenBot uses the Claude Agent SDK.
   - **Codex:** install the `codex` CLI and run `codex login`.

@@ -6,7 +6,7 @@ Read first: `docs/decisions.md` (binding), `docs/architecture.md`, `docs/plan.md
 
 ## Rules
 
-- **Bun 1.4.2** for everything: `bun install`, `bun test`, `bun run`, `bunx tsc`. Workspaces use Bun's isolated linker, so a package can only import its **declared** dependencies.
+- **Bun 1.4.4** for everything: `bun install`, `bun test`, `bun run`, `bunx tsc`. Workspaces use Bun's isolated linker, so a package can only import its **declared** dependencies.
 - **Effect 4.0.4 only** (pinned via the root `catalog:` and `overrides`).
   - Use `Context.Service`, `Layer`, `Schema.TaggedError<Self>()(tag, fields)` (there is no `TaggedErrorClass` in 4.0.4), `Effect.fn`, and scoped resources (`Effect.acquireRelease`, `Layer.effect` with a scope).
   - The API reference is `vendor/effect-4.0.4` and the installed d.ts. `vendor/effect` is rc.117; do not trust it.

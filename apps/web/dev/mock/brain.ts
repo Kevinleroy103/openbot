@@ -3,8 +3,10 @@
 // tool steps, streamed replies), approvals / questions / forms / secrets resolved through
 // `requests.respond`, interrupts, group routing, bot-to-bot messages, routines, memory, skills,
 // rules, nodes and settings. Not a reference for server semantics; see docs/architecture.md.
+import { readFileSync } from "node:fs"
 import { Effect, Stream } from "effect"
 import {
+  AlreadyAnswered,
   type ApprovalRule,
   type Attachment,
   type AttachmentId,
@@ -66,6 +68,7 @@ import {
   type Turn,
   type TurnFailure,
   type TurnId,
+  type UiValues,
   Unavailable,
   applySettingsPatch,
   memoryFactIdFromTitle,
@@ -73,6 +76,7 @@ import {
 import { ConversationReplica, RosterReplica, subscribeTo } from "./replica.ts"
 import { around, historyBefore, positions, search, type SearchSource } from "./search.ts"
 import { parseSkillMd, SKILLS_SH } from "./skillsSh.ts"
+import { UI_GALLERY_IMAGE, UI_SCENARIOS, uiAnswerReply, type UiScenario } from "./uiCards.ts"
 
 export const OWNER: Author = { kind: "user", userId: OWNER_USER_ID }
 export const botAuthor = (botId: string): Author => ({ kind: "bot", botId: botId as BotId })
@@ -155,7 +159,15 @@ export class MockBrain {
   sttDiscards = 0
   /** Hark (D3.5): any `whk_` webhook connects the mock. */
   hark: HarkStatus = { connected: false, sends: "all" }
-  readonly attachments = new Map<string, { readonly mime: string; readonly bytes: Uint8Array }>()
+  readonly attachments = new Map<string, { readonly mime: string; readonly bytes: Uint8Array }>([
+    [
+      UI_GALLERY_IMAGE,
+      Object.assign(
+        { mime: "image/png", bytes: readFileSync(new URL("../../public/apple-touch-icon.png", import.meta.url)) },
+        { name: "openbot-icon.png" },
+      ),
+    ],
+  ])
   readonly sends = new Map<string, SendResult>()
   readonly usage = new Map<string, BotUsage>()
   harnesses: HarnessStatus[] = []
@@ -660,6 +672,8 @@ export class MockBrain {
     const lower = text.toLowerCase()
     const bot = this.bot(botId)
     const name = bot?.name ?? "Bot"
+    const ui = UI_SCENARIOS[/\bui-[a-z]+\b/.exec(lower)?.[0] ?? ""]
+    if (ui) return this.showUi(conversationId, botId, ui, inputEntryId)
     if (/\bfail|\bbreak\b|\berror\b/.test(lower)) {
       return this.startTurn(
         conversationId,
@@ -906,6 +920,45 @@ export class MockBrain {
       },
       inputEntryId,
     )
+  }
+
+  /** A `ui` card after a short reply; `updates` replace it in place like update_ui. */
+  showUi(conversationId: string, botId: string, scenario: UiScenario, inputEntryId?: string): TurnId {
+    return this.startTurn(
+      conversationId,
+      botId,
+      "user",
+      async (turn, signal) => {
+        await this.wait(500, signal)
+        await this.stream(turn, scenario.reply, signal)
+        const state: CardState = { status: scenario.card.actions ? "pending" : "info" }
+        let entry = this.put(this.card(conversationId, botId, scenario.card, state, this.now(), turn.id))
+        this.touchActivity(conversationId, entry.createdAt, preview(scenario.card.fallback), true)
+        for (const card of scenario.updates ?? []) {
+          await this.wait(1200, signal)
+          entry = this.put({ ...entry, card, updatedAt: this.now() })
+          this.touchActivity(conversationId, entry.updatedAt, preview(card.fallback))
+        }
+        if (scenario.closing) await this.stream(turn, scenario.closing, signal)
+      },
+      inputEntryId,
+    )
+  }
+
+  /** `cards.act`: answers a pending `ui` card once, then the Bot replies with what was chosen. */
+  actCard(entryId: string, actionId: string, values: UiValues) {
+    const conv = [...this.convs.values()].find((c) => c.state.entries.has(entryId as EntryId))
+    const entry = conv?.state.entries.get(entryId as EntryId)
+    if (entry?.kind !== "card" || entry.card.type !== "ui" || entry.author.kind !== "bot")
+      throw new NotFound({ entity: "ui card", id: entryId })
+    if (entry.state.status !== "pending") throw new AlreadyAnswered({ entryId: entry.id })
+    const answer = { actionId, values, at: this.now() }
+    this.put({ ...entry, state: { status: "resolved", answer }, updatedAt: answer.at })
+    const card = entry.card
+    this.startTurn(entry.conversationId, entry.author.botId, "user", async (turn, signal) => {
+      await this.wait(500, signal)
+      await this.stream(turn, uiAnswerReply(card, answer), signal)
+    })
   }
 
   /** Follow-up after an async (non-blocking) request is answered. */
@@ -2081,6 +2134,7 @@ export class MockBrain {
         })(),
       "slack.sendDraft": ({ entryId, text }) => sync(() => this.answerSlackDraft(entryId, text))(),
       "slack.discardDraft": ({ entryId }) => sync(() => this.answerSlackDraft(entryId, undefined))(),
+      "cards.act": ({ entryId, actionId, values }) => sync(() => this.actCard(entryId, actionId, values))(),
       "stt.status": () => sync(() => this.advanceSttInstall())(),
       "stt.install": () =>
         sync(() => {

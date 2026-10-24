@@ -241,6 +241,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
   useEffect(() => {
     if (find?.current !== undefined)
       setTarget({ entryId: find.current, nonce: -find.step, terms: find.terms, link: false, openExchange: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [find?.current, find?.step, find?.terms])
   useEffect(() => {
     if (!findOpen) setFind(undefined)
@@ -418,6 +419,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
         loadingOlder.current = false
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.hasMoreBefore, loadOlder, conversationId, windowCursors?.before, windowCursors?.after, loadWindow])
   useLayoutEffect(() => {
     const el = scrollRef.current

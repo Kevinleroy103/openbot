@@ -3,7 +3,7 @@
 // Back button and the iOS edge swipe close the sheet instead of leaving the chat. Closing the sheet
 // in the UI pops that entry again. Sheets nest (Settings › a page › an editor): each entry knows its
 // depth, and a sheet closes only when Back goes below its own entry. Tablet and desktop are unaffected.
-import { useEffect, useRef } from "react"
+import { useEffect, useEffectEvent, useRef } from "react"
 import { useIsPhone } from "./layout.ts"
 import { historyMark } from "./uiState.ts"
 
@@ -15,8 +15,7 @@ const sheetDepth = (): number => {
 
 export function useBackDismiss(open: boolean, onClose: () => void, key: string): void {
   const phone = useIsPhone()
-  const close = useRef(onClose)
-  close.current = onClose
+  const close = useEffectEvent(onClose)
   // A pending "pop our entry" from the previous cleanup. React StrictMode re-runs effects at once in
   // development: the re-run cancels it and keeps the entry instead of pushing a second one.
   const pendingPop = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -35,7 +34,7 @@ export function useBackDismiss(open: boolean, onClose: () => void, key: string):
       // still on our entry or a nested sheet's (one closed above us): stay open
       if (sheetDepth() >= depth.current) return
       popped = true
-      close.current()
+      close()
     }
     window.addEventListener("popstate", onPop)
     return () => {

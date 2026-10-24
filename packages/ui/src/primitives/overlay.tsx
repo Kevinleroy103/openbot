@@ -27,13 +27,7 @@ import { Icon } from "../Icon.tsx"
  * measure themselves in a layout effect and would otherwise measure a panel that doesn't exist yet.
  */
 export function Portal({ children }: { readonly children: ReactNode }): ReactNode {
-  const [target, setTarget] = useState<HTMLElement | null>(() =>
-    typeof document === "undefined" ? null : document.body,
-  )
-  useEffect(() => {
-    if (target === null) setTarget(document.body)
-  }, [target])
-  return target ? createPortal(children, target) : null
+  return typeof document === "undefined" ? null : createPortal(children, document.body)
 }
 
 // ------------------------------------------------------------------------------- Anchored position
@@ -255,6 +249,7 @@ export function Popover({
             style={style}
             className={cn(popoverSurface, className)}
           >
+            {/* eslint-disable-next-line react/refs -- close reads the anchor ref only when called */}
             {typeof children === "function" ? children(close) : children}
           </div>
         </Portal>
@@ -356,6 +351,13 @@ export function MenuLabel({ children }: { readonly children: ReactNode }): React
   return <div className="px-2 pt-1.5 pb-1 text-xs text-fg-tertiary">{children}</div>
 }
 
+const menuKeys: Partial<Record<string, 1 | -1 | "first" | "last">> = {
+  ArrowDown: 1,
+  ArrowUp: -1,
+  Home: "first",
+  End: "last",
+}
+
 const focusItem = (root: HTMLElement | null, dir: 1 | -1 | "first" | "last") => {
   if (!root) return
   const items = Array.from(root.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)'))
@@ -392,11 +394,11 @@ export function Menu({ children, panelClassName, label, ...popover }: MenuProps)
               if (el) requestAnimationFrame(() => focusItem(el, "first"))
             }}
             onKeyDown={(e: ReactKeyboardEvent) => {
-              if (e.key === "ArrowDown") (e.preventDefault(), focusItem(panelRef.current, 1))
-              else if (e.key === "ArrowUp") (e.preventDefault(), focusItem(panelRef.current, -1))
-              else if (e.key === "Home") (e.preventDefault(), focusItem(panelRef.current, "first"))
-              else if (e.key === "End") (e.preventDefault(), focusItem(panelRef.current, "last"))
-              else if (e.key === "Tab") close()
+              const dir = menuKeys[e.key]
+              if (dir !== undefined) {
+                e.preventDefault()
+                focusItem(panelRef.current, dir)
+              } else if (e.key === "Tab") close()
             }}
             className={cn("flex min-w-[200px] flex-col gap-px p-1.5", panelClassName)}
           >
@@ -689,8 +691,13 @@ export function Dialog({
       if (items.length === 0) return e.preventDefault()
       const first = items[0]!
       const last = items[items.length - 1]!
-      if (e.shiftKey && document.activeElement === first) (e.preventDefault(), last.focus())
-      else if (!e.shiftKey && document.activeElement === last) (e.preventDefault(), first.focus())
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
   }
   return (
@@ -881,7 +888,11 @@ export function CommandPaletteBody({
   const [active, setActive] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const listId = useId()
-  useEffect(() => setActive(0), [q])
+  const [activeQuery, setActiveQuery] = useState(q)
+  if (activeQuery !== q) {
+    setActiveQuery(q)
+    setActive(0)
+  }
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView?.({ block: "nearest" })
   }, [active])
@@ -891,9 +902,16 @@ export function CommandPaletteBody({
     onOpenChange(false)
   }
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") (e.preventDefault(), setActive((a) => Math.min(a + 1, shown.length - 1)))
-    else if (e.key === "ArrowUp") (e.preventDefault(), setActive((a) => Math.max(a - 1, 0)))
-    else if (e.key === "Enter") (e.preventDefault(), choose(shown[active]))
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setActive((a) => Math.min(a + 1, shown.length - 1))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setActive((a) => Math.max(a - 1, 0))
+    } else if (e.key === "Enter") {
+      e.preventDefault()
+      choose(shown[active])
+    }
   }
   let lastGroup: string | undefined
   return (

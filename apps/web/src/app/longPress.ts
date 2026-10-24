@@ -2,7 +2,14 @@
 // `contextmenu` on a long press, so this watches touch/pen pointers itself: hold ~450 ms without
 // moving (a scroll cancels it) → `onLongPress`. The click that follows the release is swallowed so
 // the row / link under the finger doesn't also activate. Mouse pointers are ignored.
-import { type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, useEffect, useRef } from "react"
+import {
+  type PointerEvent as ReactPointerEvent,
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
 
 export interface LongPressPoint {
   readonly x: number
@@ -12,7 +19,10 @@ export interface LongPressPoint {
 const DELAY = 450
 const SLOP = 10
 
-const createTracker = (fire: (target: Element, point: LongPressPoint) => boolean) => {
+type Fire = (target: Element, point: LongPressPoint) => boolean
+
+const createTracker = () => {
+  let fire: Fire = () => false
   let timer: ReturnType<typeof setTimeout> | undefined
   let origin: LongPressPoint | undefined
   let fired = false
@@ -21,6 +31,9 @@ const createTracker = (fire: (target: Element, point: LongPressPoint) => boolean
     timer = undefined
   }
   return {
+    setFire: (f: Fire) => {
+      fire = f
+    },
     down: (pointerType: string, target: Element, x: number, y: number) => {
       cancel()
       fired = false
@@ -52,11 +65,8 @@ const createTracker = (fire: (target: Element, point: LongPressPoint) => boolean
 
 /** Long-press handlers for one element (spread them on it). */
 export function useLongPress(onLongPress: (point: LongPressPoint) => void) {
-  const cb = useRef(onLongPress)
-  cb.current = onLongPress
-  const tracker = useRef<ReturnType<typeof createTracker> | null>(null)
-  tracker.current ??= createTracker((_, p) => (cb.current(p), true))
-  const t = tracker.current
+  const [t] = useState(createTracker)
+  useLayoutEffect(() => t.setFire((_, p) => (onLongPress(p), true)))
   useEffect(() => () => t.dispose(), [t])
   return {
     onPointerDown: (e: ReactPointerEvent) => t.down(e.pointerType, e.currentTarget, e.clientX, e.clientY),
@@ -82,17 +92,16 @@ export function useLongPressWithin<T>(
   onLongPress: (item: T, point: LongPressPoint) => void,
 ) {
   const matchRef = useRef(match)
-  matchRef.current = match
-  const cb = useRef(onLongPress)
-  cb.current = onLongPress
-  const tracker = useRef<ReturnType<typeof createTracker> | null>(null)
-  tracker.current ??= createTracker((target, p) => {
-    const item = matchRef.current(target)
-    if (item === undefined) return false
-    cb.current(item, p)
-    return true
+  const [t] = useState(createTracker)
+  useLayoutEffect(() => {
+    matchRef.current = match
+    t.setFire((target, p) => {
+      const item = match(target)
+      if (item === undefined) return false
+      onLongPress(item, p)
+      return true
+    })
   })
-  const t = tracker.current
   useEffect(() => () => t.dispose(), [t])
   return {
     onPointerDown: (e: ReactPointerEvent) => {

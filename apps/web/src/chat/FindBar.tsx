@@ -5,7 +5,7 @@
 // to it and highlights them. Enter / ↑ go to the older hit, Shift+Enter / ↓ to the newer one, Esc
 // closes.
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react"
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
+import { type ReactNode, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react"
 import type { ConversationId, SearchKind } from "@openbot/contracts"
 import { findLabel, findStart, findStep, type FindPosition } from "@openbot/app-model"
@@ -59,18 +59,19 @@ export function FindBar({ conversationId, focusNonce, kinds, layout, onChange, o
   const searching = settled !== query.trim() || (settled !== "" && (AsyncResult.isInitial(result) || result.waiting))
 
   // new hits: start at the newest
-  useEffect(() => {
+  const [positionOf, setPositionOf] = useState<typeof value | null>(null)
+  if (positionOf !== value) {
+    setPositionOf(value)
     setPosition(findStart(value === undefined ? [] : value.hits.map((h) => h.entryId)))
     setStep((s) => s + 1)
-  }, [value])
+  }
 
-  const report = useRef(onChange)
-  report.current = onChange
+  const report = useEffectEvent(onChange)
   useEffect(() => {
-    if (settled === "" || value === undefined) return report.current(undefined)
-    report.current({ hits: position.hits, current: position.hits[position.index], step, terms: value.terms })
+    if (settled === "" || value === undefined) return report(undefined)
+    report({ hits: position.hits, current: position.hits[position.index], step, terms: value.terms })
   }, [position, step, value, settled])
-  useEffect(() => () => report.current(undefined), [])
+  useEffect(() => () => report(undefined), [])
 
   useEffect(() => {
     inputRef.current?.focus()

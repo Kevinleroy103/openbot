@@ -19,7 +19,7 @@ import {
   Sun,
   Users,
 } from "lucide-react"
-import { type ReactNode, useEffect, useMemo, useState } from "react"
+import { type ReactNode, useMemo, useState } from "react"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -75,9 +75,11 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
   const settings = roster.state.settings ?? DEFAULT_SETTINGS
   const phone = useIsPhone()
   const [query, setQuery] = useState("")
-  useEffect(() => {
+  const [wasOpen, setWasOpen] = useState(open)
+  if (wasOpen !== open) {
+    setWasOpen(open)
     if (!open) setQuery("")
-  }, [open])
+  }
   const settled = useDebouncedValue(query.trim(), 150)
   const searching = open && isSearchable(settled)
   const hitsResult = useAtomValue(

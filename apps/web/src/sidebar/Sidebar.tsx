@@ -134,6 +134,7 @@ function RowContextMenu({
   const [pos, setPos] = useState({ left: target.x, top: target.y })
   const [confirm, setConfirm] = useState(false)
   const [renaming, setRenaming] = useState<string | undefined>(undefined)
+  const isRenaming = renaming !== undefined
   useEffect(() => {
     const el = ref.current
     if (!el || phone) return
@@ -152,7 +153,7 @@ function RowContextMenu({
       document.removeEventListener("pointerdown", down, true)
       document.removeEventListener("keydown", key)
     }
-  }, [target, onClose, confirm, renaming === undefined, phone])
+  }, [target, onClose, confirm, isRenaming, phone])
   const run = (f: () => void) => () => {
     f()
     onClose()

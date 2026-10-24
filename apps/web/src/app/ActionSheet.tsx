@@ -1,7 +1,7 @@
 // Bottom action sheet (phone): the touch counterpart of context menus and small popovers. A scrim,
 // a panel that rises from the bottom edge (grabber, optional header, safe-area padding), Esc /
 // scrim tap / browser Back close it. Menu rows inside get 44 px touch targets (app.css .ob-sheet).
-import { type ReactNode, useEffect, useRef } from "react"
+import { type ReactNode, useEffect, useEffectEvent, useRef } from "react"
 import { Portal, cn } from "@openbot/ui"
 import { isTouchNow } from "./layout.ts"
 import { useArmedClicks } from "./longPress.ts"
@@ -19,8 +19,7 @@ export interface ActionSheetProps {
 
 export function ActionSheet({ onClose, label, header, children, className, testId }: ActionSheetProps): ReactNode {
   const panel = useRef<HTMLDivElement>(null)
-  const close = useRef(onClose)
-  close.current = onClose
+  const close = useEffectEvent(onClose)
   const armed = useArmedClicks()
   const scrimArmed = useRef(false)
   useBackDismiss(true, onClose, `action:${label}`)
@@ -30,7 +29,7 @@ export function ActionSheet({ onClose, label, header, children, className, testI
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault()
-        close.current()
+        close()
       }
     }
     document.addEventListener("keydown", key)

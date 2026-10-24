@@ -24,7 +24,7 @@ import {
   Users,
   Wrench,
 } from "lucide-react"
-import { type ReactNode, useEffect, useState } from "react"
+import { type ReactNode, useState } from "react"
 import { Icon, cn } from "@openbot/ui"
 import type { EventEntry, MessageEntry, ReasoningEntry, ToolCallEntry } from "./grouping.ts"
 
@@ -342,9 +342,11 @@ export function StepsDisclosure({
   readonly reveal?: number | undefined
 }): ReactNode {
   const [open, setOpen] = useState(reveal !== undefined)
-  useEffect(() => {
+  const [revealed, setRevealed] = useState(reveal)
+  if (revealed !== reveal) {
+    setRevealed(reveal)
     if (reveal !== undefined) setOpen(true)
-  }, [reveal])
+  }
   const items = stepItems(steps, decisions)
   const n = items.length
   const auto = items.filter((i) => i.kind === "decision" || (i.kind === "step" && i.decision !== undefined)).length

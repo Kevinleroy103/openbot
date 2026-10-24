@@ -189,6 +189,7 @@ function Filters({
       : types.length === SEARCH_TYPES.length
         ? "Everything"
         : `${types.length} types`
+  const [today] = useState(() => dayOf(Date.now()))
   const [range, setRange] = useState<{ from: string; to: string }>(() =>
     typeof filters.date === "object"
       ? { from: filters.date.from ?? "", to: filters.date.to ?? "" }
@@ -329,7 +330,7 @@ function Filters({
                   type="date"
                   aria-label="From day"
                   value={range.from}
-                  max={range.to || dayOf(Date.now())}
+                  max={range.to || today}
                   onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
                   className="h-8 min-w-0 flex-1 rounded-md bg-secondary px-2 text-sm text-fg outline-none"
                 />
@@ -451,14 +452,18 @@ export function SearchView({
   useEffect(() => {
     if (settled !== filters.q) openSearch({ ...filters, q: settled })
   }, [settled]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => setText((t) => (t === filters.q ? t : filters.q)), [filters.q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [textQuery, setTextQuery] = useState(filters.q)
+  if (textQuery !== filters.q) {
+    setTextQuery(filters.q)
+    setText(filters.q)
+  }
 
   const groupIds = useMemo(
     () => [...roster.state.conversations.values()].filter((c) => c.kind === "group").map((c) => c.id),
     [roster.state.conversations],
   )
   // `now` is fixed per search, so a page's query stays the same while it is open
-  const now = useMemo(() => Date.now(), [filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  const now = useMemo(() => Date.now(), [filters]) // eslint-disable-line react-hooks/exhaustive-deps, react/purity
   const input = useMemo(
     () => ({ ...searchQueryOf(filters, { now, groupIds }), limit: SEARCH_PAGE_SIZE }),
     [filters, now, groupIds],
@@ -472,10 +477,12 @@ export function SearchView({
   // the first page, then the pages after it
   const [results, setResults] = useState<SearchResults | undefined>(undefined)
   const [moreFailed, setMoreFailed] = useState(false)
-  useEffect(() => {
+  const [resultsOf, setResultsOf] = useState<typeof first | undefined>(undefined)
+  if (resultsOf !== first) {
+    setResultsOf(first)
     setResults(AsyncResult.isSuccess(first) ? appendPage(undefined, first.value) : undefined)
     setMoreFailed(false)
-  }, [first])
+  }
   const loading = useRef(false)
   const loadMore = useCallback(() => {
     if (loading.current || results?.nextCursor == null) return

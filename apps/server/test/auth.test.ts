@@ -70,4 +70,21 @@ describe("auth.json", () => {
       expect(yield* reloaded.session(signedIn.sessionToken)).toBeUndefined()
     }))
   })
+
+  test("logins and logouts at the same moment keep every session that should be kept, on disk too", async () => {
+    const options = { path: join(dir, "concurrent", "auth.json"), allowedOrigins: [], publicOrigins: [] }
+    await Effect.runPromise(Effect.gen(function*() {
+      const { service: auth } = yield* makeWebAuth(options)
+      const leaving = (yield* auth.login(auth.ownerToken))!
+      const [first, , ...rest] = yield* Effect.all([
+        auth.login(auth.ownerToken),
+        auth.logout(leaving.sessionToken),
+        auth.login(auth.ownerToken),
+        auth.login(auth.ownerToken),
+      ], { concurrency: "unbounded" })
+      const { service: reloaded } = yield* makeWebAuth(options)
+      expect(yield* reloaded.session(leaving.sessionToken)).toBeUndefined()
+      for (const signedIn of [first, ...rest]) expect(yield* reloaded.session(signedIn!.sessionToken)).toBeDefined()
+    }))
+  })
 })

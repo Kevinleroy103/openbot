@@ -193,13 +193,11 @@ export const makeWebAuth = (options: WebAuthOptions) =>
     const webCodes = new Map<string, { readonly sessionToken: string; readonly expiresAt: number }>()
     const revocations = new Map<string, Deferred.Deferred<void>>()
 
-    const persist = (next: AuthFile) =>
+    const persist = (update: (current: AuthFile) => AuthFile) =>
       lock.withPermits(1)(Effect.promise(async () => {
-        file = next
-        await writeAuthFile(options.path, next)
+        file = update(file)
+        await writeAuthFile(options.path, file)
       }))
-
-    const live = (now: number) => file.sessions.filter((s) => s.expiresAt > now)
 
     const session: WebAuthShape["session"] = (token) =>
       Effect.gen(function*() {
@@ -213,8 +211,10 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       const now = yield* Clock.currentTimeMillis
       const sessionToken = randomToken(32)
       const created: Session = { id: yield* sha256Hex(sessionToken), createdAt: now, expiresAt: now + SESSION_TTL_MS }
-      const kept = live(now).slice(-(MAX_SESSIONS - 1))
-      yield* persist({ ...file, sessions: [...kept, created] })
+      yield* persist((current) => ({
+        ...current,
+        sessions: [...current.sessions.filter((s) => s.expiresAt > now).slice(-(MAX_SESSIONS - 1)), created],
+      }))
       return { sessionToken, session: created }
     })
 
@@ -275,7 +275,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       Effect.gen(function*() {
         const found = yield* session(token)
         if (found === undefined) return
-        yield* persist({ ...file, sessions: file.sessions.filter((s) => s.id !== found.id) })
+        yield* persist((current) => ({ ...current, sessions: current.sessions.filter((s) => s.id !== found.id) }))
         yield* revoke(found.id)
       })
 

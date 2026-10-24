@@ -2,7 +2,14 @@
 // the live tail, and the message(s) a clicked line stands for.
 import { describe, expect, test } from "bun:test"
 import type { BotId, ConversationId, EntryId, ExchangePage } from "@openbot/contracts"
-import { anchorIdIn, applyPage, type ExchangeWindow, mergeMessages, targetIdsIn, withLive } from "../src/chat/exchange.ts"
+import {
+  anchorIdIn,
+  applyPage,
+  type ExchangeWindow,
+  mergeMessages,
+  targetIdsIn,
+  withLive,
+} from "../src/chat/exchange.ts"
 import type { MessageEntry } from "../src/chat/grouping.ts"
 
 /** A bot-to-bot message `id` from → to at `at` (seconds). */
@@ -21,7 +28,11 @@ const m = (id: string, at: number, from = "bot_a", to = "bot_b", revision = 0): 
   toBotId: to as BotId,
 })
 const ids = (items: ReadonlyArray<MessageEntry>): Array<string> => items.map((e) => e.id)
-const page = (entries: ReadonlyArray<MessageEntry>, beforeCursor: string | null, afterCursor: string | null): ExchangePage => ({ entries, beforeCursor, afterCursor })
+const page = (
+  entries: ReadonlyArray<MessageEntry>,
+  beforeCursor: string | null,
+  afterCursor: string | null,
+): ExchangePage => ({ entries, beforeCursor, afterCursor })
 
 describe("exchange dialog model", () => {
   test("pages: the first starts the window, older / newer ones extend their side and move only its cursor", () => {
@@ -30,11 +41,18 @@ describe("exchange dialog model", () => {
     win = applyPage(win, page([m("e2", 2), m("e3", 3)], "c2", "c3"), "older")
     expect([ids(win.items), win.beforeCursor, win.afterCursor]).toEqual([["e2", "e3", "e4", "e5", "e6"], "c2", "c6"])
     win = applyPage(win, page([m("e7", 7), m("e6", 6)], "c6", null), "newer")
-    expect([ids(win.items), win.beforeCursor, win.afterCursor]).toEqual([["e2", "e3", "e4", "e5", "e6", "e7"], "c2", null])
+    expect([ids(win.items), win.beforeCursor, win.afterCursor]).toEqual([
+      ["e2", "e3", "e4", "e5", "e6", "e7"],
+      "c2",
+      null,
+    ])
   })
 
   test("merging keeps one copy per id (the higher revision) in (createdAt, id) order", () => {
-    const merged = mergeMessages([m("e2", 2), m("e1", 1, "bot_a", "bot_b", 1)], [m("e1", 1, "bot_a", "bot_b", 0), m("e0", 2)])
+    const merged = mergeMessages(
+      [m("e2", 2), m("e1", 1, "bot_a", "bot_b", 1)],
+      [m("e1", 1, "bot_a", "bot_b", 0), m("e0", 2)],
+    )
     expect(ids(merged)).toEqual(["e1", "e0", "e2"])
     expect(merged[0]!.revision).toBe(1)
   })

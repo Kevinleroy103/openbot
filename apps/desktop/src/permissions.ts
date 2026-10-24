@@ -25,6 +25,7 @@ const originOf = (url: string): string | undefined => {
 /** Whether a page may have `ask.permission`, given the brain's `https://host[:port]`. */
 export const permits = (brainOrigin: string, ask: PermissionAsk): boolean => {
   if (ask.from === undefined || originOf(ask.from) !== originOf(brainOrigin)) return false
-  if (ask.permission === "media") return ask.mediaTypes !== undefined && ask.mediaTypes.length > 0 && ask.mediaTypes.every((type) => type === "audio")
+  if (ask.permission === "media")
+    return ask.mediaTypes !== undefined && ask.mediaTypes.length > 0 && ask.mediaTypes.every((type) => type === "audio")
   return PAGE_PERMISSIONS.has(ask.permission)
 }

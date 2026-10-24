@@ -6,7 +6,8 @@ import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useMemo } from "react"
 
-export const valueOr = <A, E>(result: AsyncResult.AsyncResult<A, E>, fallback: A): A => (AsyncResult.isSuccess(result) ? result.value : fallback)
+export const valueOr = <A, E>(result: AsyncResult.AsyncResult<A, E>, fallback: A): A =>
+  AsyncResult.isSuccess(result) ? result.value : fallback
 
 export interface RosterView {
   readonly state: RosterState
@@ -20,12 +21,16 @@ export const useRoster = (): RosterView => {
   const result = useAtomValue(rosterAtom)
   const state = valueOr(result, emptyRosterState)
   const loaded = AsyncResult.isSuccess(result) && state.cursor !== undefined
-  return useMemo(() => ({ state, loaded, botById: (id) => (id === undefined ? undefined : state.bots.get(id as BotId)) }), [state, loaded])
+  return useMemo(
+    () => ({ state, loaded, botById: (id) => (id === undefined ? undefined : state.bots.get(id as BotId)) }),
+    [state, loaded],
+  )
 }
 
 export const failureText = (exit: Exit.Exit<unknown, unknown>): string => {
   if (Exit.isSuccess(exit)) return ""
-  const failure = exit.cause.reasons.find((r) => r._tag === "Fail") as { readonly error?: { _tag?: string; message?: string; status?: string } } | undefined
+  const failure = exit.cause.reasons.find((r) => r._tag === "Fail") as
+    { readonly error?: { _tag?: string; message?: string; status?: string } } | undefined
   const e = failure?.error
   if (e?._tag === "RequestNotPending") return `This request is already ${e.status ?? "closed"}.`
   return e?.message || "Couldn't reach OpenBot. Check your connection and try again."

@@ -53,9 +53,12 @@ export const parseAuth = (account: unknown): HarnessStatus["auth"] => {
   const hasApiKey = apiKeySource !== undefined && apiKeySource !== "none"
   if (tokenSource === "none" && !hasApiKey && !email && !subscription) return { state: "signed-out" }
   const who = email ?? organization
-  const label = who !== undefined
-    ? subscription !== undefined ? `${who} (${subscription})` : who
-    : subscription ?? (hasApiKey ? "API key" : undefined)
+  const label =
+    who !== undefined
+      ? subscription !== undefined
+        ? `${who} (${subscription})`
+        : who
+      : (subscription ?? (hasApiKey ? "API key" : undefined))
   if (label === undefined && tokenSource === undefined && !hasApiKey) return { state: "unknown" }
   return { state: "signed-in", ...(label !== undefined ? { label } : {}) }
 }
@@ -85,12 +88,14 @@ export const parseModels = (models: unknown): ReadonlyArray<ModelInfo> => {
     const efforts = Array.isArray(entry.supportedEffortLevels)
       ? entry.supportedEffortLevels.filter((e): e is string => typeof e === "string")
       : []
-    return [{
-      id,
-      label: str(entry.displayName) ?? id,
-      ...(id === "default" ? { default: true } : {}),
-      ...(efforts.length > 0 ? { efforts } : {}),
-    }]
+    return [
+      {
+        id,
+        label: str(entry.displayName) ?? id,
+        ...(id === "default" ? { default: true } : {}),
+        ...(efforts.length > 0 ? { efforts } : {}),
+      },
+    ]
   })
 }
 
@@ -103,7 +108,8 @@ export const parseInitialization = (init: unknown): ParsedInitialization => {
     auth,
     account: auth.state === "signed-out" ? undefined : parseAccountInfo(i.account),
     models: parseModels(i.models),
-    problems: auth.state === "signed-out" ? ["Claude is not signed in. Run `claude auth login` on the brain machine."] : [],
+    problems:
+      auth.state === "signed-out" ? ["Claude is not signed in. Run `claude auth login` on the brain machine."] : [],
   }
 }
 
@@ -132,7 +138,12 @@ export const readCliVersion = async (
   const childEnv: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) if (value !== undefined) childEnv[key] = value
   try {
-    const proc = Bun.spawn([executable, "--version"], { stdin: "ignore", stdout: "pipe", stderr: "ignore", env: childEnv })
+    const proc = Bun.spawn([executable, "--version"], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+      env: childEnv,
+    })
     const timer = setTimeout(() => proc.kill("SIGKILL"), timeoutMs)
     try {
       const text = await new Response(proc.stdout).text()
@@ -163,11 +174,13 @@ export interface ProbeResult {
 }
 
 const waitForAbort = (signal: AbortSignal): Promise<void> =>
-  signal.aborted ? Promise.resolve() : new Promise((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
+  signal.aborted
+    ? Promise.resolve()
+    : new Promise((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
 
 /** Never fails; never calls the model. */
 export const runProbe = (input: ProbeInput): Effect.Effect<ProbeResult> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const timeoutMs = input.timeoutMs ?? PROBE_TIMEOUT_MS
     type Outcome = { readonly init?: unknown; readonly error?: unknown }
     const outcome: Outcome = yield* Effect.callback<Outcome>((resume) => {
@@ -185,7 +198,7 @@ export const runProbe = (input: ProbeInput): Effect.Effect<ProbeResult> =>
         handle = input.query({
           // Never yields: no prompt reaches the API.
           // oxlint-disable-next-line require-yield
-          prompt: (async function*(): AsyncGenerator<never> {
+          prompt: (async function* (): AsyncGenerator<never> {
             await waitForAbort(abort.signal)
           })(),
           options: {
@@ -219,7 +232,8 @@ export const runProbe = (input: ProbeInput): Effect.Effect<ProbeResult> =>
     }).pipe(
       Effect.timeoutOrElse({
         duration: timeoutMs,
-        orElse: (): Effect.Effect<Outcome> => Effect.succeed({ error: new Error(`Claude did not answer within ${Math.round(timeoutMs / 1000)} s`) }),
+        orElse: (): Effect.Effect<Outcome> =>
+          Effect.succeed({ error: new Error(`Claude did not answer within ${Math.round(timeoutMs / 1000)} s`) }),
       }),
     )
     const checkedAt = yield* Clock.currentTimeMillis
@@ -229,10 +243,14 @@ export const runProbe = (input: ProbeInput): Effect.Effect<ProbeResult> =>
       return { status: { ...base, installed, auth: { state: "unknown" }, problems: [problem] }, models: undefined }
     }
     const parsed = parseInitialization(outcome.init)
-    const fallback = input.cliVersion ??
+    const fallback =
+      input.cliVersion ??
       (input.executable !== undefined ? () => readCliVersion(input.executable!, input.env) : undefined)
-    const version = parsed.version ??
-      (fallback ? yield* Effect.promise(fallback).pipe(Effect.timeoutOption(5000), Effect.map(Option.getOrUndefined)) : undefined)
+    const version =
+      parsed.version ??
+      (fallback
+        ? yield* Effect.promise(fallback).pipe(Effect.timeoutOption(5000), Effect.map(Option.getOrUndefined))
+        : undefined)
     return {
       status: {
         ...base,

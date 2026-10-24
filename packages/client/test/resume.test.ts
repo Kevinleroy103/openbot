@@ -40,7 +40,10 @@ const change = (sequence: number, id: string, text: string): ConversationStreamI
   cursor: { epoch: "e1", sequence },
   change: { type: "entry.upserted", entry: messageFixture("cnv_1", id, 100 + sequence, text) },
 })
-const synced = (sequence: number): ConversationStreamItem => ({ kind: "synchronized", cursor: { epoch: "e1", sequence } })
+const synced = (sequence: number): ConversationStreamItem => ({
+  kind: "synchronized",
+  cursor: { epoch: "e1", sequence },
+})
 
 class Transport {
   readonly _tag = "Transport"
@@ -70,23 +73,24 @@ const spec = (
 
 /** Collects emitted states until `until` holds (or the stream ends/fails). */
 const collect = (stream: Stream.Stream<ConversationState, unknown>, until: (s: ConversationState) => boolean) =>
-  Effect.runPromiseExit(
-    stream.pipe(
-      Stream.takeUntil(until),
-      Stream.runCollect,
-      Effect.timeout("2 seconds"),
-    ),
-  )
+  Effect.runPromiseExit(stream.pipe(Stream.takeUntil(until), Stream.runCollect, Effect.timeout("2 seconds")))
 
 describe("replicaStream", () => {
   test("transport failure → stale state, resubscribe from the cursor, replay continues", async () => {
     const holder = makeReplicaHolder(emptyConversationState)
     const log: Array<StreamCursor | undefined> = []
     const s = replicaStream(
-      spec(holder, [
-        () => Stream.fromIterable([snapshot(2, ["a", "b"]), synced(2), change(3, "ent_c", "c")]).pipe(Stream.concat(Stream.fail(new Transport()))),
-        () => Stream.fromIterable([change(4, "ent_d", "d"), synced(4)]).pipe(Stream.concat(Stream.never)),
-      ], log),
+      spec(
+        holder,
+        [
+          () =>
+            Stream.fromIterable([snapshot(2, ["a", "b"]), synced(2), change(3, "ent_c", "c")]).pipe(
+              Stream.concat(Stream.fail(new Transport())),
+            ),
+          () => Stream.fromIterable([change(4, "ent_d", "d"), synced(4)]).pipe(Stream.concat(Stream.never)),
+        ],
+        log,
+      ),
     )
     const exit = await collect(s, (st) => st.synchronized && st.cursor?.sequence === 4)
     expect(Exit.isSuccess(exit)).toBe(true)
@@ -102,10 +106,20 @@ describe("replicaStream", () => {
     const holder = makeReplicaHolder(emptyConversationState)
     const log: Array<StreamCursor | undefined> = []
     const s = replicaStream(
-      spec(holder, [
-        () => Stream.fromIterable([snapshot(1, ["a"]), synced(1), change(3, "ent_x", "skipped one")]).pipe(Stream.concat(Stream.never)),
-        () => Stream.fromIterable([change(2, "ent_b", "b"), change(3, "ent_c", "c"), synced(3)]).pipe(Stream.concat(Stream.never)),
-      ], log),
+      spec(
+        holder,
+        [
+          () =>
+            Stream.fromIterable([snapshot(1, ["a"]), synced(1), change(3, "ent_x", "skipped one")]).pipe(
+              Stream.concat(Stream.never),
+            ),
+          () =>
+            Stream.fromIterable([change(2, "ent_b", "b"), change(3, "ent_c", "c"), synced(3)]).pipe(
+              Stream.concat(Stream.never),
+            ),
+        ],
+        log,
+      ),
     )
     const exit = await collect(s, (st) => st.synchronized && st.cursor?.sequence === 3)
     expect(log).toEqual([undefined, { epoch: "e1", sequence: 1 }])
@@ -125,7 +139,9 @@ describe("replicaStream", () => {
     const s = replicaStream(spec(holder, [() => Stream.make(synced(5)).pipe(Stream.concat(Stream.never))], log))
     const result = await Effect.runPromise(
       Effect.gen(function* () {
-        const fiber = yield* Stream.runCollect(Stream.takeUntil(s, (st) => st.hasMoreBefore)).pipe(Effect.forkChild({ startImmediately: true }))
+        const fiber = yield* Stream.runCollect(Stream.takeUntil(s, (st) => st.hasMoreBefore)).pipe(
+          Effect.forkChild({ startImmediately: true }),
+        )
         yield* Effect.sleep(20)
         updateReplica(holder, (st) => ({ ...st, hasMoreBefore: true }))
         return yield* Fiber.join(fiber)
@@ -156,14 +172,21 @@ describe("helpers", () => {
 
   test("live events invalidate the right query keys", () => {
     const event = (e: object) =>
-      keysForConversationChange({ type: "entry.upserted", entry: { ...messageFixture("cnv_1", "ent_e", 1, ""), kind: "event", event: e } as any })
-    expect(event({ type: "routine-run", routineId: "r", routineName: "n", runId: "x", status: "succeeded" })).toEqual([Keys.routines])
+      keysForConversationChange({
+        type: "entry.upserted",
+        entry: { ...messageFixture("cnv_1", "ent_e", 1, ""), kind: "event", event: e } as any,
+      })
+    expect(event({ type: "routine-run", routineId: "r", routineName: "n", runId: "x", status: "succeeded" })).toEqual([
+      Keys.routines,
+    ])
     expect(event({ type: "memory-updated", botId: "bot_1", action: "remembered" })).toContain(Keys.memory)
     expect(event({ type: "joined", botId: "bot_1", name: "n" })).toEqual([])
   })
 
   test("there is one command atom per unary RPC", () => {
-    const unary = [...OpenBotRpcs.requests.keys()].filter((t) => t !== "roster.subscribe" && t !== "conversations.subscribe").sort()
+    const unary = [...OpenBotRpcs.requests.keys()]
+      .filter((t) => t !== "roster.subscribe" && t !== "conversations.subscribe")
+      .sort()
     expect(Object.keys(commands).sort()).toEqual(unary)
     for (const tag of Object.keys(COMMAND_INVALIDATES)) expect(unary).toContain(tag as CommandTag)
   })

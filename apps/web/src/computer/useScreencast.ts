@@ -46,7 +46,13 @@ export interface UseScreencastOptions {
   readonly onTrouble?: () => void
 }
 
-const initial: ScreencastState = { phase: "idle", meta: undefined, holder: undefined, page: undefined, message: undefined }
+const initial: ScreencastState = {
+  phase: "idle",
+  meta: undefined,
+  holder: undefined,
+  page: undefined,
+  message: undefined,
+}
 
 const backoffMs = (attempt: number) => Math.min(10_000, 500 * 2 ** Math.max(0, attempt - 1))
 
@@ -100,9 +106,19 @@ export function useScreencast({ botId, enabled, mode, viewPath, canvasRef, onTro
           }
           canvas.getContext("2d")?.drawImage(bitmap, 0, 0)
           bitmap.close()
-          const next = { width: canvas.width, height: canvas.height, viewportWidth: frame.meta.viewportWidth, viewportHeight: frame.meta.viewportHeight }
+          const next = {
+            width: canvas.width,
+            height: canvas.height,
+            viewportWidth: frame.meta.viewportWidth,
+            viewportHeight: frame.meta.viewportHeight,
+          }
           const prev = metaRef.current
-          const sizeChanged = !prev || prev.width !== next.width || prev.height !== next.height || prev.viewportWidth !== next.viewportWidth || prev.viewportHeight !== next.viewportHeight
+          const sizeChanged =
+            !prev ||
+            prev.width !== next.width ||
+            prev.height !== next.height ||
+            prev.viewportWidth !== next.viewportWidth ||
+            prev.viewportHeight !== next.viewportHeight
           if (sizeChanged) metaRef.current = next
           if (!painted || sizeChanged) {
             painted = true
@@ -193,12 +209,18 @@ export function useScreencast({ botId, enabled, mode, viewPath, canvasRef, onTro
   const reconnect = useCallback(() => setGeneration((g) => g + 1), [])
 
   // disabled: report idle (the last frame size and lease stay known)
-  const shown = useMemo<ScreencastState>(() => (enabled || state.phase === "idle" ? state : { ...state, phase: "idle" }), [enabled, state])
+  const shown = useMemo<ScreencastState>(
+    () => (enabled || state.phase === "idle" ? state : { ...state, phase: "idle" }),
+    [enabled, state],
+  )
   return { state: shown, send, reconnect, metaRef }
 }
 
 /** Contain-fit a `aspect` (w/h) box inside an element; returns the fitted CSS size. */
-export function useContainFit(containerRef: RefObject<HTMLElement | null>, aspect: number): { readonly width: number; readonly height: number } {
+export function useContainFit(
+  containerRef: RefObject<HTMLElement | null>,
+  aspect: number,
+): { readonly width: number; readonly height: number } {
   const [size, setSize] = useState({ width: 0, height: 0 })
   useEffect(() => {
     const el = containerRef.current

@@ -30,7 +30,18 @@
  * Claude Code session must not inherit its account).
  */
 import { Database } from "bun:sqlite"
-import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+} from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 
@@ -120,7 +131,9 @@ const runningBrain = (): Brain | undefined => {
   if (!existsSync(pidFile)) return undefined
   const pid = Number(readFileSync(pidFile, "utf8").trim())
   if (!Number.isInteger(pid) || pid <= 0 || !alive(pid)) return undefined
-  const cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter((part) => part !== "")
+  const cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf8")
+    .split("\0")
+    .filter((part) => part !== "")
   const main = cmdline.findIndex((part) => part.endsWith("apps/server/src/main.ts"))
   if (main < 0) return fail(`pid ${pid} in ${pidFile} is not an OpenBot brain: ${cmdline.join(" ")}`)
   return { pid, cwd: readlinkSync(`/proc/${pid}/cwd`), args: cmdline.slice(main + 1) }
@@ -242,9 +255,14 @@ const stopBrain = async (brain: Brain) => {
 const systemctl = (...args: ReadonlyArray<string>) => run(["systemctl", "--user", ...args])
 
 /** Starts the brain: the service on `<releases>/current` (pointed at `cwd`), else a detached process. */
-const launch = async (cwd: string, args: ReadonlyArray<string>, log: number): Promise<{ readonly ended: () => boolean; readonly stop: () => Promise<void> } | undefined> => {
+const launch = async (
+  cwd: string,
+  args: ReadonlyArray<string>,
+  log: number,
+): Promise<{ readonly ended: () => boolean; readonly stop: () => Promise<void> } | undefined> => {
   if (asService) {
-    if (args.some((arg) => /\s/.test(arg))) fail(`server arguments with spaces cannot go in brain.env: ${args.join(" ")}`)
+    if (args.some((arg) => /\s/.test(arg)))
+      fail(`server arguments with spaces cannot go in brain.env: ${args.join(" ")}`)
     await Bun.write(join(dataDir, "brain.env"), `OPENBOT_ARGS=${args.join(" ")}\n`)
     pointCurrent(cwd)
     const started = systemctl("restart", SERVICE)
@@ -292,7 +310,7 @@ const startBrain = async (cwd: string, args: ReadonlyArray<string>): Promise<boo
       return false
     }
   }
-  say("no \"OpenBot started\" in time: stopping it")
+  say('no "OpenBot started" in time: stopping it')
   await brain.stop()
   return false
 }
@@ -310,7 +328,10 @@ const backupDatabase = (release: string) => {
   } finally {
     db.close()
   }
-  const old = readdirSync(dir).filter((name) => name.startsWith("pre-deploy-") && name.endsWith(".sqlite")).sort().slice(0, -KEEP_BACKUPS)
+  const old = readdirSync(dir)
+    .filter((name) => name.startsWith("pre-deploy-") && name.endsWith(".sqlite"))
+    .sort()
+    .slice(0, -KEEP_BACKUPS)
   for (const name of old) rmSync(join(dir, name), { force: true })
   say(`database backed up to ${target}`)
 }
@@ -343,7 +364,16 @@ const quote = (arg: string) => `'${arg.replaceAll("'", "'\\''")}'`
 const shipTo = (host: string): never => {
   const ssh = ["ssh", "-o", "BatchMode=yes"]
   say(`copying the repo to ${host}`)
-  const copied = run(["rsync", "-az", "--delete", "-e", ssh.join(" "), ...EXCLUDES.flatMap((pattern) => ["--exclude", pattern]), `${repo}/`, `${host}:${STAGING}/`])
+  const copied = run([
+    "rsync",
+    "-az",
+    "--delete",
+    "-e",
+    ssh.join(" "),
+    ...EXCLUDES.flatMap((pattern) => ["--exclude", pattern]),
+    `${repo}/`,
+    `${host}:${STAGING}/`,
+  ])
   if (!copied.ok) fail(`copying to ${host} failed:\n${copied.out}`)
   const forwarded = own.filter((arg, i) => arg !== "--local" && arg !== "--to" && own[i - 1] !== "--to")
   const command = [
@@ -362,8 +392,14 @@ if (host !== undefined) shipTo(host)
 
 const savedArgsPath = join(dataDir, "deploy.json")
 const brain = runningBrain()
-const args = passed ?? brain?.args ?? (existsSync(savedArgsPath) ? (JSON.parse(readFileSync(savedArgsPath, "utf8")) as { args: Array<string> }).args : undefined)
-if (args === undefined) fail("OpenBot is not running and no earlier deploy is known: pass the server arguments after --")
+const args =
+  passed ??
+  brain?.args ??
+  (existsSync(savedArgsPath)
+    ? (JSON.parse(readFileSync(savedArgsPath, "utf8")) as { args: Array<string> }).args
+    : undefined)
+if (args === undefined)
+  fail("OpenBot is not running and no earlier deploy is known: pass the server arguments after --")
 
 const current = existsSync(join(releases, "current")) ? readlinkSync(join(releases, "current")) : undefined
 const release = prepareRelease(current ?? brain?.cwd)
@@ -377,8 +413,10 @@ if (await startBrain(release, args)) {
   say("done: OpenBot runs the new release; cut-off work resumes on its own")
 } else {
   const previous = brain?.cwd ?? current
-  if (previous === undefined || !existsSync(previous)) fail("the new release did not start and there is no previous one to go back to")
+  if (previous === undefined || !existsSync(previous))
+    fail("the new release did not start and there is no previous one to go back to")
   say(`the new release did not start: going back to ${previous}`)
-  if (!(await startBrain(previous, brain?.args ?? args))) fail("the previous release did not start either: see server.log")
+  if (!(await startBrain(previous, brain?.args ?? args)))
+    fail("the previous release did not start either: see server.log")
   fail("rolled back to the previous release; see server.log for why the new one failed")
 }

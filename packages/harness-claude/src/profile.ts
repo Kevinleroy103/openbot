@@ -58,7 +58,8 @@ export const claudeStateFile = (configDir: string, home: string = homedir()): st
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
-const str = (value: unknown): string | undefined => (typeof value === "string" && value.trim() !== "" ? value.trim() : undefined)
+const str = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() !== "" ? value.trim() : undefined
 
 /** The account in a `.claude.json` (`oauthAccount`), or `undefined`. Never touches credentials. */
 export const parseClaudeState = (state: unknown): HarnessAccount | undefined => {
@@ -71,7 +72,10 @@ export const parseClaudeState = (state: unknown): HarnessAccount | undefined => 
 }
 
 /** Reads the account of a config dir from its `.claude.json` (cheap, no CLI). */
-export const readClaudeAccount = async (configDir: string, home: string = homedir()): Promise<HarnessAccount | undefined> => {
+export const readClaudeAccount = async (
+  configDir: string,
+  home: string = homedir(),
+): Promise<HarnessAccount | undefined> => {
   try {
     const file = Bun.file(claudeStateFile(configDir, home))
     if (!(await file.exists())) return undefined
@@ -134,9 +138,12 @@ export const discoverClaudeConfigDirs = async (options?: {
   for (const configDir of dirs) {
     const account = await readClaudeAccount(configDir, home)
     const who = account?.email ?? account?.organization
-    const suggestedLabel = who !== undefined
-      ? account?.email !== undefined && account.organization !== undefined ? `${account.email} (${account.organization})` : who
-      : basename(configDir).replace(/^\./, "")
+    const suggestedLabel =
+      who !== undefined
+        ? account?.email !== undefined && account.organization !== undefined
+          ? `${account.email} (${account.organization})`
+          : who
+        : basename(configDir).replace(/^\./, "")
     out.push({ configDir, isDefault: configDir === defaultDir, ...(account ? { account } : {}), suggestedLabel })
   }
   return out

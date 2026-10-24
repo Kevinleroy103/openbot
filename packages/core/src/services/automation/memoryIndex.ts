@@ -20,7 +20,8 @@ export const indexLine = (fact: Pick<MemoryFact, "id" | "title" | "description">
 
 const linksFact = (line: string, id: MemoryFactId): boolean => line.includes(`](${id}.md)`)
 
-const splitLines = (index: string): Array<string> => (index.length === 0 ? [] : index.replace(/\r\n/g, "\n").split("\n"))
+const splitLines = (index: string): Array<string> =>
+  index.length === 0 ? [] : index.replace(/\r\n/g, "\n").split("\n")
 
 const joinLines = (lines: ReadonlyArray<string>): string => {
   const trimmed = [...lines]

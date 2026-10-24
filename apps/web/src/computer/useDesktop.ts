@@ -7,7 +7,16 @@
 // noVNC is loaded on first use (dynamic import) so the app shell never pays for it.
 import type RFB from "@novnc/novnc"
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react"
-import { backoffMs, classifyClose, type DesktopConn, desktopReducer, initialDesktopConn, keysymsOf, KEYSYM, type ViewMode } from "./desktop.ts"
+import {
+  backoffMs,
+  classifyClose,
+  type DesktopConn,
+  desktopReducer,
+  initialDesktopConn,
+  keysymsOf,
+  KEYSYM,
+  type ViewMode,
+} from "./desktop.ts"
 import { computerSocketUrl } from "./protocol.ts"
 
 type RfbClass = typeof RFB
@@ -97,7 +106,17 @@ export interface DesktopHandle {
   readonly pressKey: (key: keyof typeof KEYSYM) => void
 }
 
-export function useDesktop({ botId, enabled, mode, viewPath, targetRef, quality = 6, passive = false, onTrouble, onLeaseLost }: UseDesktopOptions): DesktopHandle {
+export function useDesktop({
+  botId,
+  enabled,
+  mode,
+  viewPath,
+  targetRef,
+  quality = 6,
+  passive = false,
+  onTrouble,
+  onLeaseLost,
+}: UseDesktopOptions): DesktopHandle {
   const [state, dispatch] = useReducer(desktopReducer, initialDesktopConn)
   const [generation, setGeneration] = useState(0)
   const rfbRef = useRef<RFB | undefined>(undefined)

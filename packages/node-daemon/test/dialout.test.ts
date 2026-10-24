@@ -71,7 +71,10 @@ const awaitState = (dialOut: DialOut["Service"], pred: (s: DialState) => boolean
     Stream.take(1),
     Stream.runHead,
     Effect.flatMap((o) => (o._tag === "Some" ? Effect.succeed(o.value) : Effect.die(new Error("state stream ended")))),
-    Effect.timeoutOrElse({ duration: timeoutMs, orElse: () => Effect.flatMap(dialOut.state, (s) => Effect.die(new Error(`state is ${JSON.stringify(s)}`))) }),
+    Effect.timeoutOrElse({
+      duration: timeoutMs,
+      orElse: () => Effect.flatMap(dialOut.state, (s) => Effect.die(new Error(`state is ${JSON.stringify(s)}`))),
+    }),
   )
 
 describe("DialOut", () => {
@@ -82,7 +85,16 @@ describe("DialOut", () => {
         yield* awaitState(dialOut, (s) => s._tag === "Verified")
         const conn = yield* brain.awaitConnection(1)
         expect(conn.hello?._tag).toBe("Success")
-        const hello = (conn.hello as { success: { nodeId: string; brainVerified: boolean; roots: ReadonlyArray<{ path: string }>; capabilities: ReadonlyArray<string> } }).success
+        const hello = (
+          conn.hello as {
+            success: {
+              nodeId: string
+              brainVerified: boolean
+              roots: ReadonlyArray<{ path: string }>
+              capabilities: ReadonlyArray<string>
+            }
+          }
+        ).success
         expect(hello.nodeId).toBe(NODE_ID)
         expect(hello.brainVerified).toBe(true)
         expect(hello.roots[0]?.path).toBe(root)
@@ -96,7 +108,12 @@ describe("DialOut", () => {
 
         // streaming RPC with chunk acks through the mux
         const events = yield* Stream.runCollect(
-          client["shell.exec"]({ inv: inv(), command: "for i in 1 2 3 4 5; do echo n$i; done", cwd: root, timeoutMs: 5000 }),
+          client["shell.exec"]({
+            inv: inv(),
+            command: "for i in 1 2 3 4 5; do echo n$i; done",
+            cwd: root,
+            timeoutMs: 5000,
+          }),
         )
         const out = events.flatMap((e) => (e._tag === "Output" ? [e.data] : [])).join("")
         expect(out).toBe("n1\nn2\nn3\nn4\nn5\n")
@@ -119,7 +136,9 @@ describe("DialOut", () => {
         const read = yield* Effect.flip(conn.peer.client["fs.read"]({ inv: inv(), path: "remote.txt" }))
         expect(read._tag).toBe("NotAuthenticated")
         const exec = yield* Effect.flip(
-          Stream.runCollect(conn.peer.client["shell.exec"]({ inv: inv(), command: "touch pwned", cwd: root, timeoutMs: 1000 })),
+          Stream.runCollect(
+            conn.peer.client["shell.exec"]({ inv: inv(), command: "touch pwned", cwd: root, timeoutMs: 1000 }),
+          ),
         )
         expect(exec._tag).toBe("NotAuthenticated")
         const lease = yield* Effect.flip(conn.peer.client["lease.set"]({ botId: "bot_1", holder: "user" }))
@@ -184,7 +203,14 @@ describe("DialOut", () => {
         yield* awaitState(dialOut, (s) => s._tag === "Verified")
         const client = (yield* brain.awaitConnection(1)).peer.client
         const ticket = brain.mintStream()
-        const { pid } = yield* client["pty.open"]({ inv: inv(), cols: 100, rows: 30, cwd: root, shell: "/bin/sh", ...ticket })
+        const { pid } = yield* client["pty.open"]({
+          inv: inv(),
+          cols: 100,
+          rows: 30,
+          cwd: root,
+          shell: "/bin/sh",
+          ...ticket,
+        })
         expect(pid).toBeGreaterThan(0)
         const end = yield* brain.awaitStream(ticket.streamId)
         yield* end.writer.write(new TextEncoder().encode("stty size; echo wire-$((6*7))\n"))
@@ -193,7 +219,9 @@ describe("DialOut", () => {
         expect(text()).toContain("30 100")
         expect(text()).toContain("wire-42")
         // a reused ticket is refused by the brain: pty.open fails with TunnelFailed
-        const reuse = yield* Effect.flip(client["pty.open"]({ inv: inv(), cols: 80, rows: 24, cwd: root, shell: "/bin/sh", ...ticket }))
+        const reuse = yield* Effect.flip(
+          client["pty.open"]({ inv: inv(), cols: 80, rows: 24, cwd: root, shell: "/bin/sh", ...ticket }),
+        )
         expect(reuse._tag).toBe("TunnelFailed")
         yield* end.writer.write(new TextEncoder().encode("exit\n"))
       }),
@@ -222,7 +250,12 @@ describe("DialOut", () => {
         yield* awaitState(dialOut, (s) => s._tag === "Verified")
         const conn = yield* brain.awaitConnection(1)
         const out: Array<string> = []
-        yield* conn.peer.client["shell.exec"]({ inv: inv(), command: "sleep 60 & echo bg=$! leader=$$; sleep 60", cwd: root, timeoutMs: 120_000 }).pipe(
+        yield* conn.peer.client["shell.exec"]({
+          inv: inv(),
+          command: "sleep 60 & echo bg=$! leader=$$; sleep 60",
+          cwd: root,
+          timeoutMs: 120_000,
+        }).pipe(
           Stream.runForEach((e) => Effect.sync(() => void (e._tag === "Output" && out.push(e.data)))),
           Effect.ignore,
           Effect.forkScoped({ startImmediately: true }),

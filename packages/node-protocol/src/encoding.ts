@@ -52,7 +52,9 @@ export const randomToken = (bytes = 16): string => base64UrlEncode(randomBytes(b
 /** SHA-256 of a string (UTF-8) or bytes, lowercase hex. */
 export const sha256Hex = (input: string | Uint8Array<ArrayBuffer>): Effect.Effect<string> =>
   Effect.promise(async () =>
-    hexEncode(new Uint8Array(await crypto.subtle.digest("SHA-256", typeof input === "string" ? utf8Encode(input) : input))),
+    hexEncode(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", typeof input === "string" ? utf8Encode(input) : input)),
+    ),
   )
 
 /** Constant-time string comparison (length is not hidden). */

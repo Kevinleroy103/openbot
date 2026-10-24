@@ -74,7 +74,7 @@ describe("GroupRouter (pure)", () => {
 
 // ============================================================================ through the Orchestrator
 
-const makeTeam = Effect.gen(function*() {
+const makeTeam = Effect.gen(function* () {
   const ada = yield* createBot("Ada")
   const bob = yield* createBot("Bob")
   const cy = yield* createBot("Cy")
@@ -92,7 +92,7 @@ const botsOfTurns = (conversation: ConversationId, ids: ReadonlyArray<string>) =
 describe("group routing (D5.1)", () => {
   test("lead, mentions, @everyone, reply and explicit addressing pick the responders", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const team = yield* makeTeam
         const { group } = team
         const plain = yield* send(group, "hello team")
@@ -101,7 +101,9 @@ describe("group routing (D5.1)", () => {
         yield* settled(group, 2)
         const everyone = yield* send(group, "@everyone status?")
         yield* settled(group, 5)
-        const adaReply = messagesOf(yield* transcript(group)).filter((m) => m.author.kind === "bot" && m.author.botId === team.ada.id).at(-1)!
+        const adaReply = messagesOf(yield* transcript(group))
+          .filter((m) => m.author.kind === "bot" && m.author.botId === team.ada.id)
+          .at(-1)!
         const reply = yield* send(group, "thanks!", { replyToId: adaReply.id })
         yield* settled(group, 6)
         const explicit = yield* send(group, "you two", { addressedBotIds: [team.ada.id, team.cy.id] })
@@ -154,11 +156,17 @@ describe("group routing (D5.1)", () => {
 
   test("a bot reply that mentions another member wakes it; chains stop at the hop limit", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const team = yield* makeTeam
-        yield* driver.setBehavior(team.ada.id, replyBehavior(() => "@Bob ping"))
-        yield* driver.setBehavior(team.bob.id, replyBehavior(() => "@Ada pong"))
+        yield* driver.setBehavior(
+          team.ada.id,
+          replyBehavior(() => "@Bob ping"),
+        )
+        yield* driver.setBehavior(
+          team.bob.id,
+          replyBehavior(() => "@Ada pong"),
+        )
         yield* send(team.group, "@Ada start a rally")
         yield* eventually(
           Effect.map(transcript(team.group), (entries) => eventsOf(entries).some((e) => e.type === "hop-limit")),
@@ -179,16 +187,22 @@ describe("group routing (D5.1)", () => {
 
   test("retry: a bot that failed on a teammate's message answers it again; nobody else wakes", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const driver = yield* TestDriver
         const team = yield* makeTeam
-        yield* driver.setBehavior(team.ada.id, replyBehavior(() => "@Bob take the CPU side"))
+        yield* driver.setBehavior(
+          team.ada.id,
+          replyBehavior(() => "@Bob take the CPU side"),
+        )
         yield* driver.setBehavior(team.bob.id, (turn) => turn.crash("Codex went away"))
         yield* send(team.group, "@Ada plan it")
         yield* settled(team.group, 2)
         const failed = (yield* turnsOf(team.group)).find((t) => t.status === "failed")!
-        yield* driver.setBehavior(team.bob.id, replyBehavior(() => "on it"))
+        yield* driver.setBehavior(
+          team.bob.id,
+          replyBehavior(() => "on it"),
+        )
         yield* orchestrator.retry({ conversationId: team.group, turnId: failed.id })
         yield* settled(team.group, 3)
         return { team, failed, turns: yield* turnsOf(team.group), handles: yield* driver.turns }
@@ -206,13 +220,18 @@ describe("group routing (D5.1)", () => {
 
   test("createGroup validates 2–6 members and setMembers emits member events", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conversations = yield* ConversationService
         const team = yield* makeTeam
         const tooSmall = yield* Effect.flip(conversations.createGroup({ title: "x", memberBotIds: [team.ada.id] }))
-        const dupes = yield* Effect.flip(conversations.createGroup({ title: "x", memberBotIds: [team.ada.id, team.ada.id] }))
+        const dupes = yield* Effect.flip(
+          conversations.createGroup({ title: "x", memberBotIds: [team.ada.id, team.ada.id] }),
+        )
         const created = yield* conversations.get(team.group)
-        const updated = yield* conversations.setMembers({ conversationId: team.group, memberBotIds: [team.ada.id, team.cy.id] })
+        const updated = yield* conversations.setMembers({
+          conversationId: team.group,
+          memberBotIds: [team.ada.id, team.cy.id],
+        })
         return { tooSmall, dupes, created, updated, entries: yield* transcript(team.group), team }
       }),
       appLayer(),

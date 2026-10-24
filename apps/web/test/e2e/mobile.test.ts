@@ -7,14 +7,25 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import type { Browser, BrowserContext, Locator, Page } from "playwright-core"
 import type { Bot } from "@openbot/contracts"
-import { type Brain, connectRpc, eventually, hasChromium, launchBrowser, type Rpc, shotsDir, startBrain, waitIdle } from "./brain.ts"
+import {
+  type Brain,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  type Rpc,
+  shotsDir,
+  startBrain,
+  waitIdle,
+} from "./brain.ts"
 
 const IPHONE = {
   viewport: { width: 393, height: 852 },
   deviceScaleFactor: 3,
   isMobile: true,
   hasTouch: true,
-  userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+  userAgent:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
 } as const
 
 /** Touch long-press (CDP touch events, so the app sees real touch pointers). */
@@ -43,8 +54,12 @@ describe.skipIf(!hasChromium)("e2e: phone layout", () => {
   }
   const home = () => page.getByRole("navigation", { name: "Bots" })
   const onHome = async () => {
-    await home().locator('[data-row], [data-bot]').first().waitFor()
-    await eventually(async () => page.evaluate(() => location.hash), (h) => !/^#\/(c\/|new)/.test(h), { label: "the Home hash" })
+    await home().locator("[data-row], [data-bot]").first().waitFor()
+    await eventually(
+      async () => page.evaluate(() => location.hash),
+      (h) => !/^#\/(c\/|new)/.test(h),
+      { label: "the Home hash" },
+    )
     expect(await page.getByRole("button", { name: "Back", exact: true }).count()).toBe(0)
   }
 
@@ -53,7 +68,15 @@ describe.skipIf(!hasChromium)("e2e: phone layout", () => {
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
     for (const name of ["Ada", "Bea"]) {
-      bots[name] = await rpc.call((c) => c["bots.create"]({ name, harness: { kind: "fake" }, autonomy: "ask", clientNonce: `e2e-mobile-${name}`, introduce: false }))
+      bots[name] = await rpc.call((c) =>
+        c["bots.create"]({
+          name,
+          harness: { kind: "fake" },
+          autonomy: "ask",
+          clientNonce: `e2e-mobile-${name}`,
+          introduce: false,
+        }),
+      )
     }
     context = await browser.newContext({ ...IPHONE, colorScheme: "dark" })
     page = await context.newPage()
@@ -106,10 +129,15 @@ describe.skipIf(!hasChromium)("e2e: phone layout", () => {
     await waitIdle(page)
     const conv = await eventually(
       () => rpc.conversation(bots["Ada"]!.directConversationId),
-      (s) => [...s.entries.values()].some((e) => e.kind === "message" && e.author.kind === "bot" && e.text === "hello from"),
+      (s) =>
+        [...s.entries.values()].some((e) => e.kind === "message" && e.author.kind === "bot" && e.text === "hello from"),
       { label: "Ada's reply" },
     )
-    expect([...conv.entries.values()].some((e) => e.kind === "message" && e.role === "user" && e.text === "echo: hello from\nthe phone")).toBe(true)
+    expect(
+      [...conv.entries.values()].some(
+        (e) => e.kind === "message" && e.role === "user" && e.text === "echo: hello from\nthe phone",
+      ),
+    ).toBe(true)
     await shot("02-dm-reply")
   }, 60_000)
 

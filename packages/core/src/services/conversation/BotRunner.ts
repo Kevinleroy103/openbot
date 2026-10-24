@@ -47,7 +47,13 @@ import type {
 } from "@openbot/contracts"
 import { Conflict, HarnessUnavailable, NotFound } from "@openbot/contracts"
 import { Cause, Clock, Deferred, Duration, Effect, Exit, Fiber, Option, Queue, Scope, Semaphore, Stream } from "effect"
-import type { HarnessDriver, HarnessRegistryShape, HarnessSession, TurnAttachment, TurnInput } from "../../ports/Harness.ts"
+import type {
+  HarnessDriver,
+  HarnessRegistryShape,
+  HarnessSession,
+  TurnAttachment,
+  TurnInput,
+} from "../../ports/Harness.ts"
 import { sessionKeyOf } from "../../ports/Harness.ts"
 import type { IdGenShape } from "../../ports/IdGen.ts"
 import type { McpBindingIssuer, McpClaims } from "../../ports/Mcp.ts"
@@ -121,7 +127,8 @@ const GROUP_FIRST_TURN_ENTRIES = 100
 export const DM_ORIGIN_TAG = "[DM with the owner]"
 
 /** Leads a turn of teammates' messages in the owner's DM (like the group header's reply hint). */
-export const BOT_DM_HINT = "[From teammates · your reply is posted to the owner, not sent to them (answer a teammate with message_bot) · nothing new the owner needs to know or decide → NO_REPLY]"
+export const BOT_DM_HINT =
+  "[From teammates · your reply is posted to the owner, not sent to them (answer a teammate with message_bot) · nothing new the owner needs to know or decide → NO_REPLY]"
 
 /** Delivery outcome registry (owned by the Orchestrator). */
 export interface DeliveryOutcomes {
@@ -340,7 +347,7 @@ export const SIGNED_OUT_NOTIFY_MS = 30 * 60_000
 const quoted = (title: string) => `"${title.replace(/["\r\n]+/g, " ").trim()}"`
 
 export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const lock = yield* Semaphore.make(1)
     const signal = yield* Queue.unbounded<void>()
     const state = {
@@ -370,19 +377,23 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
     // ------------------------------------------------------------------ small writers
 
     const writeTurn = (turn: Turn) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* orDie(deps.turns.upsert(turn))
         yield* deps.hub.publishConversation(turn.conversationId, { type: "turn.upserted", turn })
       })
 
-    const setActivity = (activity: Parameters<typeof deps.hub.setActivity>[0]) => deps.hub.setActivity(compact(activity))
+    const setActivity = (activity: Parameters<typeof deps.hub.setActivity>[0]) =>
+      deps.hub.setActivity(compact(activity))
 
     const setTurnStatus = (active: ActiveTurn, status: "running" | "waiting") =>
-      locked(Effect.gen(function*() {
-        if (state.active !== active || active.ending || active.turn === undefined || active.turn.status === status) return
-        active.turn = { ...active.turn, status }
-        yield* writeTurn(active.turn)
-      }))
+      locked(
+        Effect.gen(function* () {
+          if (state.active !== active || active.ending || active.turn === undefined || active.turn.status === status)
+            return
+          active.turn = { ...active.turn, status }
+          yield* writeTurn(active.turn)
+        }),
+      )
 
     const botName = (id: BotId | undefined) =>
       id === undefined
@@ -397,7 +408,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
 
     /** Writes cursors / the last conversation into the session record when one exists. */
     const syncRecord = (record: BotSessionRecord) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const seen: Record<string, EntryId> = { ...record.seen }
         for (const [conversationId, entryId] of state.seen) seen[conversationId] = entryId
         const next = compact({
@@ -409,20 +420,20 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         yield* orDie(deps.bots.setSession({ ...next, updatedAt: yield* Clock.currentTimeMillis }))
       })
 
-    const persistCursors = Effect.gen(function*() {
+    const persistCursors = Effect.gen(function* () {
       const record = yield* sessionRecord
       if (Option.isSome(record)) yield* syncRecord(record.value)
     })
 
     const seenOf = (conversationId: ConversationId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const local = state.seen.get(conversationId)
         if (local !== undefined) return local
         const record = yield* sessionRecord
         return Option.isSome(record) ? record.value.seen?.[conversationId] : undefined
       })
 
-    const lastConversationOf = Effect.gen(function*() {
+    const lastConversationOf = Effect.gen(function* () {
       if (state.lastConversationId !== undefined) return state.lastConversationId
       const record = yield* sessionRecord
       return Option.isSome(record) ? record.value.lastConversationId : undefined
@@ -444,8 +455,12 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
 
     // ------------------------------------------------------------------ approvals
 
-    const markWaiting = (active: ActiveTurn | undefined, conversationId: ConversationId | undefined, request: RuntimeRequest) =>
-      Effect.gen(function*() {
+    const markWaiting = (
+      active: ActiveTurn | undefined,
+      conversationId: ConversationId | undefined,
+      request: RuntimeRequest,
+    ) =>
+      Effect.gen(function* () {
         if (active !== undefined) yield* setTurnStatus(active, "waiting")
         yield* setActivity({
           botId,
@@ -463,7 +478,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
     }
 
     const approve = (request: HarnessRequest, workspace?: ApprovalWorkspace): Effect.Effect<HarnessRequestResolution> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const found = yield* orDie(deps.bots.get(botId))
         if (Option.isNone(found)) return denyAll
         const bot = found.value
@@ -492,13 +507,15 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         }
         return resolution
       }).pipe(
-        Effect.catchCause((cause) => Effect.logError("BotRunner: approval failed; denying", cause).pipe(Effect.as(denyAll))),
+        Effect.catchCause((cause) =>
+          Effect.logError("BotRunner: approval failed; denying", cause).pipe(Effect.as(denyAll)),
+        ),
       )
 
     // ------------------------------------------------------------------ the session
 
     const dropSession = (reason: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const open = state.session
         if (open === undefined) return
         state.session = undefined
@@ -507,14 +524,14 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       })
 
     const openOnce = (bot: Bot, driver: HarnessDriver, signature: string, resumeId: string | undefined) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const scope = yield* Scope.fork(deps.scope, "sequential")
         const home = bot.directConversationId
         const sessionKey = sessionKeyOf(bot.id, home)
-        const opened = Effect.gen(function*() {
-          const placement = yield* deps.placement.resolve({ bot, driver }).pipe(
-            Effect.mapError((e) => fail(`placement-${e.reason}`, e.message, e.reason === "node-unavailable")),
-          )
+        const opened = Effect.gen(function* () {
+          const placement = yield* deps.placement
+            .resolve({ bot, driver })
+            .pipe(Effect.mapError((e) => fail(`placement-${e.reason}`, e.message, e.reason === "node-unavailable")))
           // One binding for the bot's one session: the gateway resolves each call's conversation.
           const claims: McpClaims = {
             botId: bot.id,
@@ -546,23 +563,29 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
             onHarnessTurn: (nativeTurnId, self) =>
               adoptHarnessTurn({ nativeTurnId, ingest: self, home, closed, displayName: driver.displayName }),
           })
-          const session = yield* driver.openSession({
-            bot,
-            conversationId: home,
-            sessionKey,
-            nativeSessionId: resumeId,
-            placement,
-            instructions,
-            mcp: [binding],
-            model: bot.harness.model,
-            effort: bot.harness.effort,
-            // The placement is known here even before `state.session` is set.
-            onRequest: (request) => approve(request, { nodeId: placement.hostNodeId, path: placement.workspacePath }),
-          }).pipe(Effect.mapError((e) => fail(e.code === "unsupported" ? "open-failed" : e.code, e.message, e.retryable ?? false)))
+          const session = yield* driver
+            .openSession({
+              bot,
+              conversationId: home,
+              sessionKey,
+              nativeSessionId: resumeId,
+              placement,
+              instructions,
+              mcp: [binding],
+              model: bot.harness.model,
+              effort: bot.harness.effort,
+              // The placement is known here even before `state.session` is set.
+              onRequest: (request) => approve(request, { nodeId: placement.hostNodeId, path: placement.workspacePath }),
+            })
+            .pipe(
+              Effect.mapError((e) =>
+                fail(e.code === "unsupported" ? "open-failed" : e.code, e.message, e.retryable ?? false),
+              ),
+            )
           yield* Effect.forkIn(
             Stream.runForEach(session.events, ingest.handle).pipe(
               Effect.catchCause((cause) =>
-                Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("BotRunner: event stream failed", cause)
+                Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("BotRunner: event stream failed", cause),
               ),
               Effect.ensuring(Deferred.succeed(closed, "the harness event stream ended")),
             ),
@@ -587,11 +610,12 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       })
 
     const openSession = (bot: Bot, driver: HarnessDriver, signature: string, noticeIn: ConversationId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const native = yield* sessionRecord
-        const resumeId = Option.isSome(native) && native.value.driver === driver.kind && driver.capabilities.resume
-          ? native.value.nativeSessionId
-          : undefined
+        const resumeId =
+          Option.isSome(native) && native.value.driver === driver.kind && driver.capabilities.resume
+            ? native.value.nativeSessionId
+            : undefined
         const first = yield* Effect.result(openOnce(bot, driver, signature, resumeId))
         let open: OpenSession
         if (first._tag === "Success") {
@@ -600,12 +624,14 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           // The stored native session cannot be resumed: start a fresh one (and say so).
           yield* orDie(deps.bots.clearSession(botId))
           forgetCursors()
-          yield* Effect.ignore(deps.conversationService.appendNotice({
-            conversationId: noticeIn,
-            level: "warning",
-            code: "resume-failed",
-            text: `Couldn't resume the previous ${driver.displayName} session (${first.failure.message}). Started a new one.`,
-          }))
+          yield* Effect.ignore(
+            deps.conversationService.appendNotice({
+              conversationId: noticeIn,
+              level: "warning",
+              code: "resume-failed",
+              text: `Couldn't resume the previous ${driver.displayName} session (${first.failure.message}). Started a new one.`,
+            }),
+          )
           open = yield* openOnce(bot, driver, signature, undefined)
         } else {
           return yield* Effect.fail(first.failure)
@@ -623,15 +649,18 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           yield* persistCursors
         }
         yield* updateSessionRow(deps.store, bot.directConversationId, botId, (row, now) =>
-          row?.active === true ? undefined : compact({ botId, active: true, contextUsage: row?.contextUsage, updatedAt: now }))
+          row?.active === true
+            ? undefined
+            : compact({ botId, active: true, contextUsage: row?.contextUsage, updatedAt: now }),
+        )
         return open
       })
 
     const ensureSession = (bot: Bot, noticeIn: ConversationId): Effect.Effect<OpenSession, TurnFailure> =>
-      Effect.gen(function*() {
-        const driver = yield* deps.registry.get(bot.harness.kind, bot.harness.profileId).pipe(
-          Effect.mapError((e) => fail("harness-unavailable", e.message)),
-        )
+      Effect.gen(function* () {
+        const driver = yield* deps.registry
+          .get(bot.harness.kind, bot.harness.profileId)
+          .pipe(Effect.mapError((e) => fail("harness-unavailable", e.message)))
         const signature = signatureOf(bot)
         const current = state.session
         if (current !== undefined) {
@@ -649,7 +678,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
 
     /** Stored records of attachment ids (unknown ids are skipped), in order, without duplicates. */
     const recordsOf = (ids: ReadonlyArray<AttachmentId>) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const out: Array<AttachmentRecord> = []
         for (const id of new Set(ids)) {
           const record = yield* orDie(deps.attachments.get(id))
@@ -665,7 +694,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
      * brain path.
      */
     const receivedFilesOf = (open: OpenSession, conversationId: ConversationId, ids: ReadonlyArray<AttachmentId>) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const records = yield* recordsOf(ids)
         if (records.length === 0) return { line: "", attachments: [] as ReadonlyArray<TurnAttachment> }
         const received = yield* receiveFiles(
@@ -673,14 +702,18 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           { botId, conversationId, placement: open.placement, records },
         )
         const attachments: Array<TurnAttachment> = received
-          .filter((file) => (open.driver.capabilities.images && INLINE_IMAGE.test(file.record.mime)) || file.relativePath === undefined)
+          .filter(
+            (file) =>
+              (open.driver.capabilities.images && INLINE_IMAGE.test(file.record.mime)) ||
+              file.relativePath === undefined,
+          )
           .map((file) => ({ path: file.record.path, mime: file.record.mime, name: file.record.name }))
         return { line: attachmentsLine(received), attachments }
       })
 
     /** One delivery as the bot reads it: group lines carry `[@Name]:`, bot DMs `[Direct message from @Name]:`. */
     const renderDelivery = (delivery: Delivery, kind: Conversation["kind"]) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (delivery.kind === "bot-message") {
           const name = yield* botName(delivery.fromBotId)
           return kind === "group" ? `[@${name}]: ${delivery.text}` : `[Direct message from @${name}]: ${delivery.text}`
@@ -690,16 +723,20 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       })
 
     const renderDeliveries = (deliveries: ReadonlyArray<Delivery>, kind: Conversation["kind"]) =>
-      Effect.map(Effect.forEach(deliveries, (d) => renderDelivery(d, kind)), (parts) => parts.join("\n\n"))
+      Effect.map(
+        Effect.forEach(deliveries, (d) => renderDelivery(d, kind)),
+        (parts) => parts.join("\n\n"),
+      )
 
     /**
      * One compact line framing a group turn: where the bot is, who is in it, that its reply is posted
      * here and that coordination happens here (with @mentions), not in direct messages.
      */
     const groupHeader = (conversation: Extract<Conversation, { kind: "group" }>) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const members: Array<string> = []
-        for (const id of conversation.memberBotIds) members.push(`@${yield* botName(id)}${id === botId ? " (you)" : ""}`)
+        for (const id of conversation.memberBotIds)
+          members.push(`@${yield* botName(id)}${id === botId ? " (you)" : ""}`)
         return `[Group chat ${quoted(conversation.title)} · members: ${members.join(", ")} · your reply is posted here; @mention a teammate in it only when you need them to act or answer (not to thank) · nothing for you to add → react or reply NO_REPLY · new messages since your last turn here]`
       })
 
@@ -712,17 +749,18 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
      *   carries only teammates' messages.
      */
     const renderTurnText = (bot: Bot, conversation: Conversation, deliveries: ReadonlyArray<Delivery>) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conversationId = conversation.id
         if (conversation.kind !== "group") {
           const body = yield* renderDeliveries(deliveries, conversation.kind)
           const previous = (yield* lastConversationOf) ?? bot.directConversationId
           const fromBotsOnly = deliveries.every((d) => d.kind === "bot-message")
-          const tag = previous === conversationId || (conversation.kind === "direct" && fromBotsOnly)
-            ? undefined
-            : conversation.kind === "direct"
-            ? DM_ORIGIN_TAG
-            : `[Routine run ${quoted(conversation.title)} · your reply is posted there]`
+          const tag =
+            previous === conversationId || (conversation.kind === "direct" && fromBotsOnly)
+              ? undefined
+              : conversation.kind === "direct"
+                ? DM_ORIGIN_TAG
+                : `[Routine run ${quoted(conversation.title)} · your reply is posted there]`
           // Teammates writing in the owner's DM: the reply lands with the owner, so it should be rare.
           const lead = conversation.kind === "direct" && fromBotsOnly ? [tag, BOT_DM_HINT] : [tag]
           const prefix = lead.filter((line) => line !== undefined).join("\n")
@@ -734,9 +772,10 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         }
         const header = yield* groupHeader(conversation)
         const seen = yield* seenOf(conversationId)
-        let window = seen === undefined
-          ? (yield* orDie(deps.entries.page({ conversationId, limit: GROUP_FIRST_TURN_ENTRIES }))).entries
-          : yield* orDie(deps.entries.listAfter(conversationId, seen, GROUP_CATCH_UP_ENTRIES))
+        let window =
+          seen === undefined
+            ? (yield* orDie(deps.entries.page({ conversationId, limit: GROUP_FIRST_TURN_ENTRIES }))).entries
+            : yield* orDie(deps.entries.listAfter(conversationId, seen, GROUP_CATCH_UP_ENTRIES))
         if (window.length >= GROUP_CATCH_UP_ENTRIES) {
           window = (yield* orDie(deps.entries.page({ conversationId, limit: GROUP_FIRST_TURN_ENTRIES }))).entries
         }
@@ -753,7 +792,12 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
             rendered.add(entry.id)
             continue
           }
-          if (entry.kind !== "message" || (entry.text.trim() === "" && entry.attachments.length === 0) || entry.streaming) continue
+          if (
+            entry.kind !== "message" ||
+            (entry.text.trim() === "" && entry.attachments.length === 0) ||
+            entry.streaming
+          )
+            continue
           const text = messageWithAttachments(entry.text, entry.attachments)
           if (entry.author.kind === "bot") {
             // Its own messages are in its memory already (one mind).
@@ -772,7 +816,8 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         const extra = deliveries.filter((d) => d.sourceEntryId === undefined || !rendered.has(d.sourceEntryId))
         for (const delivery of extra) lines.push(yield* renderDelivery(delivery, "group"))
         const lastSeen = window[window.length - 1]?.id ?? seen
-        if (lines.length === 0) return { text: `${header}\n${yield* renderDeliveries(deliveries, "group")}`, lastSeen, attachmentIds }
+        if (lines.length === 0)
+          return { text: `${header}\n${yield* renderDeliveries(deliveries, "group")}`, lastSeen, attachmentIds }
         // Keep the newest whole lines within the budget.
         const kept: Array<string> = []
         let budget = GROUP_CATCH_UP_BYTES
@@ -794,15 +839,21 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       Effect.forEach(
         deliveries.filter((d) => d.kind === "user-message" && d.sourceEntryId !== undefined),
         (d) =>
-          Effect.ignore(deps.conversationService.updateEntry(d.sourceEntryId!, (entry) =>
-            entry.kind === "message" && entry.role === "user" && entry.delivery !== "delivered" && entry.delivery !== delivery
-              ? { ...entry, delivery }
-              : entry)),
+          Effect.ignore(
+            deps.conversationService.updateEntry(d.sourceEntryId!, (entry) =>
+              entry.kind === "message" &&
+              entry.role === "user" &&
+              entry.delivery !== "delivered" &&
+              entry.delivery !== delivery
+                ? { ...entry, delivery }
+                : entry,
+            ),
+          ),
         { discard: true },
       )
 
     const executeTurn = (active: ActiveTurn): Effect.Effect<TurnTerminal> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conversationId = active.conversationId
         const now = yield* Clock.currentTimeMillis
         const first = active.deliveries.find(isWaking) ?? active.deliveries[0]!
@@ -821,11 +872,17 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         yield* setActivity({ botId, conversationId, state: "thinking", since: now })
 
         const found = yield* orDie(deps.bots.get(botId))
-        if (Option.isNone(found)) return { _tag: "failed", code: "bot-missing", message: "This bot was deleted.", retryable: false }
+        if (Option.isNone(found))
+          return { _tag: "failed", code: "bot-missing", message: "This bot was deleted.", retryable: false }
         const bot = found.value
         const conversation = yield* Effect.result(deps.store.get(conversationId))
         if (conversation._tag === "Failure") {
-          return { _tag: "failed", code: "conversation-missing", message: "This conversation was deleted.", retryable: false }
+          return {
+            _tag: "failed",
+            code: "conversation-missing",
+            message: "This conversation was deleted.",
+            retryable: false,
+          }
         }
 
         const opened = yield* Effect.result(ensureSession(bot, conversationId))
@@ -861,10 +918,12 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
             retryable: started.failure.retryable ?? false,
           }
         }
-        const interruptNow = yield* locked(Effect.sync(() => {
-          active.accepted = true
-          return active.interruptRequested
-        }))
+        const interruptNow = yield* locked(
+          Effect.sync(() => {
+            active.accepted = true
+            return active.interruptRequested
+          }),
+        )
         if (interruptNow) yield* requestHarnessInterrupt(active, open)
         if (note !== undefined && state.carryNote === note) state.carryNote = undefined
         yield* markUserMessages(active.deliveries, "delivered")
@@ -882,7 +941,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       closed: Deferred.Deferred<string>,
       displayName: string,
     ): Effect.Effect<TurnTerminal> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const outcome = yield* Effect.raceFirst(
           Deferred.await(terminal),
           Effect.map(Deferred.await(closed), (reason): TurnTerminal => ({
@@ -898,13 +957,15 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
 
     /** Calls `session.interrupt` and forces the turn to end if the harness never confirms. */
     const requestHarnessInterrupt = (active: ActiveTurn, open: OpenSession) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* open.session.interrupt.pipe(
           Effect.catchCause((cause) => Effect.logWarning("BotRunner: interrupt failed", cause)),
         )
         yield* Effect.forkIn(
           Effect.sleep(deps.options.interruptGrace).pipe(
-            Effect.andThen(Deferred.succeed(active.cancel, { _tag: "interrupted", reason: "no confirmation from the harness" })),
+            Effect.andThen(
+              Deferred.succeed(active.cancel, { _tag: "interrupted", reason: "no confirmation from the harness" }),
+            ),
           ),
           deps.scope,
           { startImmediately: true },
@@ -917,11 +978,13 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
      * again ("I asked @Bob to …") must not wake them a second time.
      */
     const addressedDuringTurn = (active: ActiveTurn) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const addressed = new Set<BotId>()
         const since = active.deliveries.find((d) => d.sourceEntryId !== undefined)?.sourceEntryId
         if (since === undefined) return addressed
-        for (const entry of yield* orDie(deps.entries.listAfter(active.conversationId, since, GROUP_CATCH_UP_ENTRIES))) {
+        for (const entry of yield* orDie(
+          deps.entries.listAfter(active.conversationId, since, GROUP_CATCH_UP_ENTRIES),
+        )) {
           if (entry.kind !== "message" || entry.author.kind !== "bot" || entry.author.botId !== botId) continue
           for (const id of entry.addressedBotIds ?? []) addressed.add(id)
         }
@@ -941,23 +1004,31 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       active: ActiveTurn,
       messages: ReadonlyArray<{ readonly id: EntryId; readonly text: string; readonly commentary: boolean }>,
     ) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (conversation.kind !== "group") return
-        const members = (yield* Effect.forEach(conversation.memberBotIds, (id) => orDie(deps.bots.get(id))))
-          .flatMap((b) => (Option.isSome(b) ? [b.value] : []))
+        const members = (yield* Effect.forEach(conversation.memberBotIds, (id) => orDie(deps.bots.get(id)))).flatMap(
+          (b) => (Option.isSome(b) ? [b.value] : []),
+        )
         const hops = active.chain.hops + 1
         let limited = false
         const delivered = yield* addressedDuringTurn(active)
         const targets = new Map<BotId, { readonly id: EntryId; readonly text: string; readonly commentary: boolean }>()
         for (const message of messages) {
-          for (const target of routeBotMessage({ group: conversation, members, text: message.text, senderBotId: bot.id })) {
+          for (const target of routeBotMessage({
+            group: conversation,
+            members,
+            text: message.text,
+            senderBotId: bot.id,
+          })) {
             const previous = targets.get(target)
             if (previous === undefined || !(message.commentary && !previous.commentary)) targets.set(target, message)
           }
         }
         // Noted members the reply does not @mention: their message_bot / handoff_task text is posted
         // as its own message (the reply was not for them, so this is no duplicate).
-        const leftovers = active.noted.filter((note) => !targets.has(note.recipientBotId) && !delivered.has(note.recipientBotId))
+        const leftovers = active.noted.filter(
+          (note) => !targets.has(note.recipientBotId) && !delivered.has(note.recipientBotId),
+        )
         for (const [target, message] of targets) {
           if (delivered.has(target)) continue
           if (hops > MAX_BOT_HOPS) {
@@ -978,57 +1049,74 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         }
         yield* postNoted(bot, conversation.id, leftovers, delivered)
         if (limited) {
-          yield* Effect.ignore(deps.conversationService.appendEvent({
-            conversationId: conversation.id,
-            event: { type: "hop-limit", hops: active.chain.hops },
-          }))
+          yield* Effect.ignore(
+            deps.conversationService.appendEvent({
+              conversationId: conversation.id,
+              event: { type: "hop-limit", hops: active.chain.hops },
+            }),
+          )
         }
       })
 
     /** Posts noted message_bot / handoff_task texts that no reply carried, and wakes their recipients. */
-    const postNoted = (bot: Bot, conversationId: ConversationId, notes: ReadonlyArray<NotedAddress>, delivered: Set<BotId>) =>
-      Effect.forEach(notes, (note) =>
-        Effect.gen(function*() {
-          if (delivered.has(note.recipientBotId)) return
-          delivered.add(note.recipientBotId)
-          const posted = yield* Effect.result(deps.conversationService.appendEntry({
-            kind: "message",
-            conversationId,
-            author: { kind: "bot", botId: bot.id },
-            role: "bot",
-            text: note.text,
-            attachments: [],
-            streaming: false,
-            addressedBotIds: [note.recipientBotId],
-          }))
-          if (posted._tag === "Failure") return
-          yield* deps.followUp({
-            conversationId,
-            botId: note.recipientBotId,
-            kind: "bot-message",
-            text: note.text,
-            fromBotId: bot.id,
-            sourceEntryId: posted.success.id,
-            causalChain: note.causalChain,
-            urgency: "urgent",
-          })
-        }), { discard: true })
+    const postNoted = (
+      bot: Bot,
+      conversationId: ConversationId,
+      notes: ReadonlyArray<NotedAddress>,
+      delivered: Set<BotId>,
+    ) =>
+      Effect.forEach(
+        notes,
+        (note) =>
+          Effect.gen(function* () {
+            if (delivered.has(note.recipientBotId)) return
+            delivered.add(note.recipientBotId)
+            const posted = yield* Effect.result(
+              deps.conversationService.appendEntry({
+                kind: "message",
+                conversationId,
+                author: { kind: "bot", botId: bot.id },
+                role: "bot",
+                text: note.text,
+                attachments: [],
+                streaming: false,
+                addressedBotIds: [note.recipientBotId],
+              }),
+            )
+            if (posted._tag === "Failure") return
+            yield* deps.followUp({
+              conversationId,
+              botId: note.recipientBotId,
+              kind: "bot-message",
+              text: note.text,
+              fromBotId: bot.id,
+              sourceEntryId: posted.success.id,
+              causalChain: note.causalChain,
+              urgency: "urgent",
+            })
+          }),
+        { discard: true },
+      )
 
     /** A signed-out harness's failure, in plain words with the fix. */
     const explainFailure = (terminal: TurnTerminal) =>
       terminal._tag !== "failed" || terminal.code !== "auth"
         ? Effect.succeed(terminal)
         : Effect.map(orDie(deps.bots.get(botId)), (bot): TurnTerminal =>
-          Option.isNone(bot) ? terminal : { ...terminal, message: signedOutText(bot.value.harness.kind, bot.value.name, terminal.message) }
-        )
+            Option.isNone(bot)
+              ? terminal
+              : { ...terminal, message: signedOutText(bot.value.harness.kind, bot.value.name, terminal.message) },
+          )
 
     const finishTurn = (active: ActiveTurn, reported: TurnTerminal) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const terminal = yield* explainFailure(reported)
         const conversationId = active.conversationId
-        yield* locked(Effect.sync(() => {
-          active.ending = true
-        }))
+        yield* locked(
+          Effect.sync(() => {
+            active.ending = true
+          }),
+        )
         const conversation0 = yield* Effect.result(deps.store.get(conversationId))
         const status = terminal._tag
         const finalized = yield* finalizeTurnEntries(
@@ -1056,10 +1144,16 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           ...base,
           status,
           endedAt: now,
-          stopReason: terminal._tag === "completed" ? terminal.stopReason : terminal._tag === "interrupted" ? terminal.reason : undefined,
-          failure: terminal._tag === "failed"
-            ? { code: terminal.code, message: terminal.message, retryable: terminal.retryable }
-            : undefined,
+          stopReason:
+            terminal._tag === "completed"
+              ? terminal.stopReason
+              : terminal._tag === "interrupted"
+                ? terminal.reason
+                : undefined,
+          failure:
+            terminal._tag === "failed"
+              ? { code: terminal.code, message: terminal.message, retryable: terminal.retryable }
+              : undefined,
           sourceEntryIds: terminal._tag === "failed" ? sourcesOf(active.deliveries) : undefined,
           usage: usage ?? base.usage,
         })
@@ -1067,23 +1161,30 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         yield* writeTurn(turn)
         if (terminal._tag === "failed") {
           if (!active.accepted) yield* markUserMessages(active.deliveries, "failed")
-          yield* Effect.ignore(deps.conversationService.appendNotice({
-            conversationId,
-            level: "error",
-            code: terminal.code === "usage-limit" ? "usage-limit" : "turn-failed",
-            text: terminal.message,
-            turnId: active.turnId,
-          }))
+          yield* Effect.ignore(
+            deps.conversationService.appendNotice({
+              conversationId,
+              level: "error",
+              code: terminal.code === "usage-limit" ? "usage-limit" : "turn-failed",
+              text: terminal.message,
+              turnId: active.turnId,
+            }),
+          )
         }
         yield* deps.approvals.cancelPending({ turnId: active.turnId, reason: "turn-ended" })
         const requeued = terminal._tag === "completed" ? [] : yield* requeueSteered(active)
         // a signed-out harness never ran the turn: nothing for the bot to pick up
-        if (terminal._tag !== "completed" && active.accepted && !(terminal._tag === "failed" && terminal.code === "auth")) {
-          const where = conversation0._tag === "Success" && conversation0.success.kind === "group"
-            ? ` in the group ${quoted(conversation0.success.title)}`
-            : conversation0._tag === "Success" && conversation0.success.kind === "direct"
-            ? " in your DM with the owner"
-            : ""
+        if (
+          terminal._tag !== "completed" &&
+          active.accepted &&
+          !(terminal._tag === "failed" && terminal.code === "auth")
+        ) {
+          const where =
+            conversation0._tag === "Success" && conversation0.success.kind === "group"
+              ? ` in the group ${quoted(conversation0.success.title)}`
+              : conversation0._tag === "Success" && conversation0.success.kind === "direct"
+                ? " in your DM with the owner"
+                : ""
           state.carryNote = active.interruptRequested
             ? `[Note: your previous turn${where} was stopped by the owner before you finished; only what was already posted reached them.]`
             : `[Note: your previous turn${where} ended early (${terminal._tag === "failed" ? terminal.message : "cut off"}); only what was already posted reached the conversation — repeat anything important.]`
@@ -1103,13 +1204,19 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         if (Option.isSome(bot)) {
           // The bot's report of finished background work (D5.7, or a harness-initiated turn: its own
           // background command finished) is news too.
-          const reported = active.deliveries.some((d) => d.kind === "task-result") ||
+          const reported =
+            active.deliveries.some((d) => d.kind === "task-result") ||
             (active.nativeTurnId !== undefined && finalized.lastBotMessage !== undefined)
           // Only with something to read: a turn that ended quietly (NO_REPLY, a reaction, only steps)
           // is not news.
           const said = finalized.lastBotMessage?.trim()
           // a voice call's work is told on the call: no notification
-          if (terminal._tag === "completed" && said && turn.voice !== true && (turn.trigger === "user" || turn.trigger === "routine" || reported)) {
+          if (
+            terminal._tag === "completed" &&
+            said &&
+            turn.voice !== true &&
+            (turn.trigger === "user" || turn.trigger === "routine" || reported)
+          ) {
             yield* deps.notifier.notify({
               kind: "finished",
               botId,
@@ -1132,7 +1239,13 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
               })
             }
           } else if (terminal._tag === "failed") {
-            yield* deps.notifier.notify({ kind: "error", botId, conversationId, title: bot.value.name, body: previewOf(terminal.message) })
+            yield* deps.notifier.notify({
+              kind: "error",
+              botId,
+              conversationId,
+              title: bot.value.name,
+              body: previewOf(terminal.message),
+            })
           }
         }
         // The runner is idle from here on: waiters and follow-ups see it ready for the next turn.
@@ -1164,56 +1277,66 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
      * those deliveries run again as turns of their own, first in line (once each; never dropped).
      */
     const requeueSteered = (active: ActiveTurn) =>
-      locked(Effect.gen(function*() {
-        if (active.interruptRequested || state.closed) return [] as Array<string>
-        const again = active.steered.filter((d) => !state.requeued.has(d.id))
-        const items: Array<Queued> = []
-        for (const delivery of again) {
-          state.requeued.add(delivery.id)
-          if (delivery.sourceEntryId !== undefined) state.shown.get(delivery.conversationId)?.delete(delivery.sourceEntryId)
-          const turnId = yield* deps.ids.turnId
-          items.push({ arrival: 0, delivery, turnId })
-          yield* writeTurn({
-            id: turnId,
-            conversationId: delivery.conversationId,
-            botId,
-            status: "queued",
-            trigger: triggerOf(delivery),
-            ...(delivery.voice === true ? { voice: true } : {}),
-            startedAt: yield* Clock.currentTimeMillis,
-          })
-        }
-        if (state.requeued.size > 500) state.requeued.clear()
-        state.queue = [...items, ...state.queue]
-        if (items.length > 0) yield* Queue.offer(signal, undefined)
-        return again.map((d) => d.id)
-      }))
+      locked(
+        Effect.gen(function* () {
+          if (active.interruptRequested || state.closed) return [] as Array<string>
+          const again = active.steered.filter((d) => !state.requeued.has(d.id))
+          const items: Array<Queued> = []
+          for (const delivery of again) {
+            state.requeued.add(delivery.id)
+            if (delivery.sourceEntryId !== undefined)
+              state.shown.get(delivery.conversationId)?.delete(delivery.sourceEntryId)
+            const turnId = yield* deps.ids.turnId
+            items.push({ arrival: 0, delivery, turnId })
+            yield* writeTurn({
+              id: turnId,
+              conversationId: delivery.conversationId,
+              botId,
+              status: "queued",
+              trigger: triggerOf(delivery),
+              ...(delivery.voice === true ? { voice: true } : {}),
+              startedAt: yield* Clock.currentTimeMillis,
+            })
+          }
+          if (state.requeued.size > 500) state.requeued.clear()
+          state.queue = [...items, ...state.queue]
+          if (items.length > 0) yield* Queue.offer(signal, undefined)
+          return again.map((d) => d.id)
+        }),
+      )
 
     const release = (active: ActiveTurn) =>
-      locked(Effect.gen(function*() {
-        if (state.active === active) state.active = undefined
-        yield* Deferred.succeed(active.done, undefined)
-      }))
+      locked(
+        Effect.gen(function* () {
+          if (state.active === active) state.active = undefined
+          yield* Deferred.succeed(active.done, undefined)
+        }),
+      )
 
     const runTurn = (active: ActiveTurn, work: Effect.Effect<TurnTerminal> = executeTurn(active)) =>
       Effect.uninterruptibleMask((restore) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const exit = yield* Effect.exit(restore(Effect.raceFirst(work, Deferred.await(active.cancel))))
           const terminal: TurnTerminal = Exit.isSuccess(exit)
             ? exit.value
             : Cause.hasInterruptsOnly(exit.cause)
-            ? { _tag: "interrupted", reason: "stopped" }
-            : { _tag: "failed", code: "internal", message: "Internal error while running the turn.", retryable: false }
+              ? { _tag: "interrupted", reason: "stopped" }
+              : {
+                  _tag: "failed",
+                  code: "internal",
+                  message: "Internal error while running the turn.",
+                  retryable: false,
+                }
           if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) {
             yield* Effect.logError(`BotRunner ${botId}: turn crashed`, exit.cause)
           }
           yield* finishTurn(active, terminal)
-        })
+        }),
       )
 
     /** A harness-initiated turn's conversation: the session's latest turn's (if it still exists), else the DM. */
     const harnessTurnConversation = (home: ConversationId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const last = yield* lastConversationOf
         if (last === undefined || last === home) return home
         const exists = yield* Effect.result(deps.store.get(last))
@@ -1236,50 +1359,57 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       readonly closed: Deferred.Deferred<string>
       readonly displayName: string
     }): Effect.Effect<HarnessTurnRoute | undefined> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         for (;;) {
-          const decision = yield* locked(Effect.gen(function*() {
-            if (state.closed) return { _tag: "none" as const }
-            const running = state.active
-            if (running !== undefined) {
-              const over = running.ending || input.ingest.hasEnded(running.turnId) || (yield* Deferred.isDone(running.cancel))
-              if (over) return { _tag: "wait" as const, done: running.done }
-              const route: HarnessTurnRoute = { turnId: running.turnId, conversationId: running.conversationId, joined: true }
+          const decision = yield* locked(
+            Effect.gen(function* () {
+              if (state.closed) return { _tag: "none" as const }
+              const running = state.active
+              if (running !== undefined) {
+                const over =
+                  running.ending || input.ingest.hasEnded(running.turnId) || (yield* Deferred.isDone(running.cancel))
+                if (over) return { _tag: "wait" as const, done: running.done }
+                const route: HarnessTurnRoute = {
+                  turnId: running.turnId,
+                  conversationId: running.conversationId,
+                  joined: true,
+                }
+                return { _tag: "route" as const, route }
+              }
+              const now = yield* Clock.currentTimeMillis
+              const conversationId = yield* harnessTurnConversation(input.home)
+              const turnId = yield* deps.ids.turnId
+              const active: ActiveTurn = {
+                turnId,
+                nativeTurnId: input.nativeTurnId,
+                conversationId,
+                deliveries: [],
+                steered: [],
+                chain: { rootId: turnId, hops: 0 },
+                noted: [],
+                cancel: yield* Deferred.make<TurnTerminal>(),
+                done: yield* Deferred.make<void>(),
+                turn: { id: turnId, conversationId, botId, status: "running", trigger: "system", startedAt: now },
+                accepted: true,
+                ending: false,
+                interruptRequested: false,
+              }
+              state.active = active
+              const terminal = yield* input.ingest.beginTurn(turnId, conversationId)
+              yield* writeTurn(active.turn!)
+              yield* setActivity({ botId, conversationId, state: "thinking", since: now })
+              yield* Effect.forkIn(
+                runTurn(active, awaitTerminal(terminal, input.closed, input.displayName)).pipe(
+                  // The loop sleeps while a turn it did not take runs: wake it for what queued meanwhile.
+                  Effect.ensuring(Queue.offer(signal, undefined)),
+                ),
+                deps.scope,
+                { startImmediately: true },
+              )
+              const route: HarnessTurnRoute = { turnId, conversationId, joined: false }
               return { _tag: "route" as const, route }
-            }
-            const now = yield* Clock.currentTimeMillis
-            const conversationId = yield* harnessTurnConversation(input.home)
-            const turnId = yield* deps.ids.turnId
-            const active: ActiveTurn = {
-              turnId,
-              nativeTurnId: input.nativeTurnId,
-              conversationId,
-              deliveries: [],
-              steered: [],
-              chain: { rootId: turnId, hops: 0 },
-              noted: [],
-              cancel: yield* Deferred.make<TurnTerminal>(),
-              done: yield* Deferred.make<void>(),
-              turn: { id: turnId, conversationId, botId, status: "running", trigger: "system", startedAt: now },
-              accepted: true,
-              ending: false,
-              interruptRequested: false,
-            }
-            state.active = active
-            const terminal = yield* input.ingest.beginTurn(turnId, conversationId)
-            yield* writeTurn(active.turn!)
-            yield* setActivity({ botId, conversationId, state: "thinking", since: now })
-            yield* Effect.forkIn(
-              runTurn(active, awaitTerminal(terminal, input.closed, input.displayName)).pipe(
-                // The loop sleeps while a turn it did not take runs: wake it for what queued meanwhile.
-                Effect.ensuring(Queue.offer(signal, undefined)),
-              ),
-              deps.scope,
-              { startImmediately: true },
-            )
-            const route: HarnessTurnRoute = { turnId, conversationId, joined: false }
-            return { _tag: "route" as const, route }
-          }))
+            }),
+          )
           if (decision._tag === "none") return undefined
           if (decision._tag === "route") return decision.route
           yield* Deferred.await(decision.done)
@@ -1292,66 +1422,79 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
      * The next turn: the oldest queued delivery, plus every queued BACKGROUND delivery of the same
      * conversation (batched with attribution lines). Other conversations wait their turn.
      */
-    const takeNext = locked(Effect.gen(function*() {
-      if (state.closed) return "exit" as const
-      if (state.active !== undefined || state.control || deps.held()) return undefined
-      const head = state.queue[0]
-      if (head === undefined) return undefined
-      const conversationId = head.delivery.conversationId
-      const taken = state.queue.filter((q) =>
-        q === head || (q.turnId === undefined && q.delivery.conversationId === conversationId)
-      )
-      state.queue = state.queue.filter((q) => !taken.includes(q))
-      const active: ActiveTurn = {
-        turnId: head.turnId ?? (yield* deps.ids.turnId),
-        conversationId,
-        deliveries: taken.sort((a, b) => a.arrival - b.arrival).map((q) => q.delivery),
-        chain: head.delivery.causalChain,
-        noted: [],
-        steered: [],
-        cancel: yield* Deferred.make<TurnTerminal>(),
-        done: yield* Deferred.make<void>(),
-        turn: undefined,
-        accepted: false,
-        ending: false,
-        interruptRequested: false,
-      }
-      state.active = active
-      return active
-    }))
+    const takeNext = locked(
+      Effect.gen(function* () {
+        if (state.closed) return "exit" as const
+        if (state.active !== undefined || state.control || deps.held()) return undefined
+        const head = state.queue[0]
+        if (head === undefined) return undefined
+        const conversationId = head.delivery.conversationId
+        const taken = state.queue.filter(
+          (q) => q === head || (q.turnId === undefined && q.delivery.conversationId === conversationId),
+        )
+        state.queue = state.queue.filter((q) => !taken.includes(q))
+        const active: ActiveTurn = {
+          turnId: head.turnId ?? (yield* deps.ids.turnId),
+          conversationId,
+          deliveries: taken.sort((a, b) => a.arrival - b.arrival).map((q) => q.delivery),
+          chain: head.delivery.causalChain,
+          noted: [],
+          steered: [],
+          cancel: yield* Deferred.make<TurnTerminal>(),
+          done: yield* Deferred.make<void>(),
+          turn: undefined,
+          accepted: false,
+          ending: false,
+          interruptRequested: false,
+        }
+        state.active = active
+        return active
+      }),
+    )
 
-    const tryEvict = locked(Effect.sync(() => {
-      if (state.active !== undefined || state.control || state.queue.length > 0) return "busy" as const
-      state.closed = true
-      return "evict" as const
-    }))
+    const tryEvict = locked(
+      Effect.sync(() => {
+        if (state.active !== undefined || state.control || state.queue.length > 0) return "busy" as const
+        state.closed = true
+        return "evict" as const
+      }),
+    )
 
     let self: Runner | undefined
 
     /** Going idle with a large context: compact now, while the harness's prompt cache is warm. */
-    const compactBeforeSleep = Effect.gen(function*() {
+    const compactBeforeSleep = Effect.gen(function* () {
       const open = state.session
-      if (open === undefined || deps.held() || !open.driver.capabilities.compact || (yield* Deferred.isDone(open.closed))) return
+      if (
+        open === undefined ||
+        deps.held() ||
+        !open.driver.capabilities.compact ||
+        (yield* Deferred.isDone(open.closed))
+      )
+        return
       if (!(yield* Effect.map(deps.settings.get, (s) => s.compactIdleBots))) return
       const usage = yield* open.session.contextUsage
       if (usage === undefined || usage.usedTokens < deps.options.idleCompactMinTokens) return
       yield* Effect.logInfo("compacting an idle bot's context", { botId, usedTokens: usage.usedTokens })
       // Defined below; a delivery arriving meanwhile waits for it (or makes it a Conflict: skipped).
       const compacted = yield* Effect.result(Effect.suspend(() => compactSession))
-      if (compacted._tag === "Failure") return yield* Effect.logWarning(`BotRunner ${botId}: idle compaction skipped`, compacted.failure)
+      if (compacted._tag === "Failure")
+        return yield* Effect.logWarning(`BotRunner ${botId}: idle compaction skipped`, compacted.failure)
       const bot = yield* orDie(deps.bots.get(botId))
       if (Option.isNone(bot)) return
-      yield* Effect.ignore(deps.conversationService.appendEvent({
-        conversationId: bot.value.directConversationId,
-        event: { type: "session-changed", botId, action: "compacted" },
-      }))
+      yield* Effect.ignore(
+        deps.conversationService.appendEvent({
+          conversationId: bot.value.directConversationId,
+          event: { type: "session-changed", botId, action: "compacted" },
+        }),
+      )
     })
 
     const idleMs = Duration.toMillis(Duration.fromInputUnsafe(deps.options.idleTimeout))
     const compactMs = Math.min(Duration.toMillis(Duration.fromInputUnsafe(deps.options.idleCompactAfter)), idleMs)
     const waitForWork = (ms: number) => Effect.timeoutOption(Queue.take(signal), Duration.millis(ms))
 
-    const loop: Effect.Effect<void> = Effect.gen(function*() {
+    const loop: Effect.Effect<void> = Effect.gen(function* () {
       for (;;) {
         const next = yield* takeNext
         if (next === "exit") return
@@ -1375,68 +1518,84 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
     // ------------------------------------------------------------------ public API
 
     const deliver = (delivery: Delivery, capabilities: HarnessCapabilities) =>
-      locked(Effect.gen(function*() {
-        if (state.closed) return "closed" as const
-        const arrival = ++state.arrivals
-        const idle = state.active === undefined && !state.control && state.queue.length === 0 && !deps.held()
-        // `background` only means "don't interrupt a busy bot": an idle recipient wakes immediately.
-        if (!isWaking(delivery) && !idle) {
-          state.queue.push({ arrival, delivery, turnId: undefined })
-          yield* deps.outcomes.register(delivery.id)
-          const receipt: DeliveryReceipt = { deliveryId: delivery.id, disposition: "batched" }
-          return receipt
-        }
-        const active = state.active
-        const open = state.session
-        // Steer only into a running turn of the SAME conversation: a turn belongs to one conversation.
-        if (
-          active !== undefined && active.conversationId === delivery.conversationId && active.accepted && !active.ending &&
-          open !== undefined && capabilities.steer && isSteerable(delivery) && delivery.attachmentIds.length === 0
-        ) {
-          // (files are copied into the workspace before a turn starts, so deliveries with files queue)
-          const conversation = yield* Effect.result(deps.store.get(delivery.conversationId))
-          const kind = conversation._tag === "Success" ? conversation.success.kind : "direct"
-          const steered = yield* Effect.result(open.session.steer({
-            turnId: active.nativeTurnId ?? active.turnId,
-            conversationId: active.conversationId,
-            text: `${yield* renderDelivery(delivery, kind)}${delivery.kind === "user-message" ? STEER_NOTE : ""}`,
-            attachments: [],
-          }))
-          if (steered._tag === "Success") {
-            active.deliveries.push(delivery)
-            active.steered.push(delivery)
-            if (kind === "group") markShown(delivery.conversationId, delivery.sourceEntryId)
+      locked(
+        Effect.gen(function* () {
+          if (state.closed) return "closed" as const
+          const arrival = ++state.arrivals
+          const idle = state.active === undefined && !state.control && state.queue.length === 0 && !deps.held()
+          // `background` only means "don't interrupt a busy bot": an idle recipient wakes immediately.
+          if (!isWaking(delivery) && !idle) {
+            state.queue.push({ arrival, delivery, turnId: undefined })
             yield* deps.outcomes.register(delivery.id)
-            yield* markUserMessages([delivery], "delivered")
-            const receipt: DeliveryReceipt = { deliveryId: delivery.id, disposition: "steered", turnId: active.turnId }
+            const receipt: DeliveryReceipt = { deliveryId: delivery.id, disposition: "batched" }
             return receipt
           }
-          yield* Effect.logWarning(`BotRunner ${botId}: steer failed; queueing`, steered.failure)
-        }
-        const turnId = delivery.turnId ?? (yield* deps.ids.turnId)
-        state.queue.push({ arrival, delivery, turnId })
-        yield* deps.outcomes.register(delivery.id)
-        if (!idle) {
-          yield* writeTurn({
-            id: turnId,
-            conversationId: delivery.conversationId,
-            botId,
-            status: "queued",
-            trigger: triggerOf(delivery),
-            ...(delivery.voice === true ? { voice: true } : {}),
-            ...(delivery.kind === "user-message" && delivery.sourceEntryId !== undefined ? { inputEntryId: delivery.sourceEntryId } : {}),
-            startedAt: yield* Clock.currentTimeMillis,
-          })
-          yield* markUserMessages([delivery], "queued")
-        }
-        yield* Queue.offer(signal, undefined)
-        const receipt: DeliveryReceipt = { deliveryId: delivery.id, disposition: idle ? "started" : "queued", turnId }
-        return receipt
-      }))
+          const active = state.active
+          const open = state.session
+          // Steer only into a running turn of the SAME conversation: a turn belongs to one conversation.
+          if (
+            active !== undefined &&
+            active.conversationId === delivery.conversationId &&
+            active.accepted &&
+            !active.ending &&
+            open !== undefined &&
+            capabilities.steer &&
+            isSteerable(delivery) &&
+            delivery.attachmentIds.length === 0
+          ) {
+            // (files are copied into the workspace before a turn starts, so deliveries with files queue)
+            const conversation = yield* Effect.result(deps.store.get(delivery.conversationId))
+            const kind = conversation._tag === "Success" ? conversation.success.kind : "direct"
+            const steered = yield* Effect.result(
+              open.session.steer({
+                turnId: active.nativeTurnId ?? active.turnId,
+                conversationId: active.conversationId,
+                text: `${yield* renderDelivery(delivery, kind)}${delivery.kind === "user-message" ? STEER_NOTE : ""}`,
+                attachments: [],
+              }),
+            )
+            if (steered._tag === "Success") {
+              active.deliveries.push(delivery)
+              active.steered.push(delivery)
+              if (kind === "group") markShown(delivery.conversationId, delivery.sourceEntryId)
+              yield* deps.outcomes.register(delivery.id)
+              yield* markUserMessages([delivery], "delivered")
+              const receipt: DeliveryReceipt = {
+                deliveryId: delivery.id,
+                disposition: "steered",
+                turnId: active.turnId,
+              }
+              return receipt
+            }
+            yield* Effect.logWarning(`BotRunner ${botId}: steer failed; queueing`, steered.failure)
+          }
+          const turnId = delivery.turnId ?? (yield* deps.ids.turnId)
+          state.queue.push({ arrival, delivery, turnId })
+          yield* deps.outcomes.register(delivery.id)
+          if (!idle) {
+            yield* writeTurn({
+              id: turnId,
+              conversationId: delivery.conversationId,
+              botId,
+              status: "queued",
+              trigger: triggerOf(delivery),
+              ...(delivery.voice === true ? { voice: true } : {}),
+              ...(delivery.kind === "user-message" && delivery.sourceEntryId !== undefined
+                ? { inputEntryId: delivery.sourceEntryId }
+                : {}),
+              startedAt: yield* Clock.currentTimeMillis,
+            })
+            yield* markUserMessages([delivery], "queued")
+          }
+          yield* Queue.offer(signal, undefined)
+          const receipt: DeliveryReceipt = { deliveryId: delivery.id, disposition: idle ? "started" : "queued", turnId }
+          return receipt
+        }),
+      )
 
     /** Marks dropped queued work as interrupted (waking) or dropped (background). */
     const abandon = (dropped: ReadonlyArray<Queued>, reason: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const affected: Array<Turn> = []
         for (const work of dropped) {
@@ -1449,13 +1608,13 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
             ...(Option.isSome(stored)
               ? stored.value
               : {
-                id: work.turnId,
-                conversationId: work.delivery.conversationId,
-                botId,
-                trigger: triggerOf(work.delivery),
-                ...(work.delivery.voice === true ? { voice: true } : {}),
-                startedAt: now,
-              }),
+                  id: work.turnId,
+                  conversationId: work.delivery.conversationId,
+                  botId,
+                  trigger: triggerOf(work.delivery),
+                  ...(work.delivery.voice === true ? { voice: true } : {}),
+                  startedAt: now,
+                }),
             status: "interrupted" as const,
             endedAt: now,
             stopReason: reason,
@@ -1474,15 +1633,17 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         : Effect.asVoid(Deferred.succeed(hit.cancel, { _tag: "interrupted", reason: "interrupted before start" }))
 
     const interruptTurn = (turnId: TurnId) =>
-      Effect.gen(function*() {
-        const decision = yield* locked(Effect.sync(() => {
-          const active = state.active
-          const hit = active !== undefined && !active.ending && active.turnId === turnId ? active : undefined
-          if (hit !== undefined) hit.interruptRequested = true
-          const removed = state.queue.filter((q) => q.turnId === turnId)
-          if (removed.length > 0) state.queue = state.queue.filter((q) => q.turnId !== turnId)
-          return { hit, open: hit?.accepted ? state.session : undefined, removed }
-        }))
+      Effect.gen(function* () {
+        const decision = yield* locked(
+          Effect.sync(() => {
+            const active = state.active
+            const hit = active !== undefined && !active.ending && active.turnId === turnId ? active : undefined
+            if (hit !== undefined) hit.interruptRequested = true
+            const removed = state.queue.filter((q) => q.turnId === turnId)
+            if (removed.length > 0) state.queue = state.queue.filter((q) => q.turnId !== turnId)
+            return { hit, open: hit?.accepted ? state.session : undefined, removed }
+          }),
+        )
         const affected: Array<Turn> = []
         if (decision.hit !== undefined) {
           if (decision.hit.turn !== undefined) affected.push(decision.hit.turn)
@@ -1493,19 +1654,24 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       })
 
     const interruptConversation = (conversationId: ConversationId) =>
-      Effect.gen(function*() {
-        const decision = yield* locked(Effect.sync(() => {
-          const active = state.active
-          const hit = active !== undefined && !active.ending && active.conversationId === conversationId ? active : undefined
-          if (hit !== undefined) {
-            hit.interruptRequested = true
-            return { hit, open: hit.accepted ? state.session : undefined, removed: [] as Array<Queued> }
-          }
-          // Busy elsewhere (or idle): Stop here cancels this conversation's queued turns.
-          const removed = state.queue.filter((q) => q.turnId !== undefined && q.delivery.conversationId === conversationId)
-          state.queue = state.queue.filter((q) => !removed.includes(q))
-          return { hit: undefined, open: undefined, removed }
-        }))
+      Effect.gen(function* () {
+        const decision = yield* locked(
+          Effect.sync(() => {
+            const active = state.active
+            const hit =
+              active !== undefined && !active.ending && active.conversationId === conversationId ? active : undefined
+            if (hit !== undefined) {
+              hit.interruptRequested = true
+              return { hit, open: hit.accepted ? state.session : undefined, removed: [] as Array<Queued> }
+            }
+            // Busy elsewhere (or idle): Stop here cancels this conversation's queued turns.
+            const removed = state.queue.filter(
+              (q) => q.turnId !== undefined && q.delivery.conversationId === conversationId,
+            )
+            state.queue = state.queue.filter((q) => !removed.includes(q))
+            return { hit: undefined, open: undefined, removed }
+          }),
+        )
         const affected: Array<Turn> = []
         if (decision.hit !== undefined) {
           if (decision.hit.turn !== undefined) affected.push(decision.hit.turn)
@@ -1516,45 +1682,56 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       })
 
     const cancelConversation = (conversationId: ConversationId) =>
-      Effect.gen(function*() {
-        const decision = yield* locked(Effect.sync(() => {
-          const active = state.active
-          const hit = active !== undefined && !active.ending && active.conversationId === conversationId ? active : undefined
-          if (hit !== undefined) hit.interruptRequested = true
-          const removed = state.queue.filter((q) => q.delivery.conversationId === conversationId)
-          state.queue = state.queue.filter((q) => !removed.includes(q))
-          state.seen.delete(conversationId)
-          const running = active !== undefined && active.conversationId === conversationId ? active : undefined
-          return { hit, open: hit?.accepted ? state.session : undefined, removed, running }
-        }))
+      Effect.gen(function* () {
+        const decision = yield* locked(
+          Effect.sync(() => {
+            const active = state.active
+            const hit =
+              active !== undefined && !active.ending && active.conversationId === conversationId ? active : undefined
+            if (hit !== undefined) hit.interruptRequested = true
+            const removed = state.queue.filter((q) => q.delivery.conversationId === conversationId)
+            state.queue = state.queue.filter((q) => !removed.includes(q))
+            state.seen.delete(conversationId)
+            const running = active !== undefined && active.conversationId === conversationId ? active : undefined
+            return { hit, open: hit?.accepted ? state.session : undefined, removed, running }
+          }),
+        )
         if (decision.hit !== undefined) yield* interruptActive(decision.hit, decision.open)
         yield* abandon(decision.removed, "conversation deleted")
         if (decision.running !== undefined) {
           yield* Deferred.await(decision.running.done).pipe(
-            Effect.timeoutOption(Duration.sum(Duration.fromInputUnsafe(deps.options.interruptGrace), Duration.seconds(1))),
+            Effect.timeoutOption(
+              Duration.sum(Duration.fromInputUnsafe(deps.options.interruptGrace), Duration.seconds(1)),
+            ),
           )
         }
         // Forget the deleted conversation's cursor in the stored record too.
         const record = yield* sessionRecord
         if (Option.isSome(record) && record.value.seen?.[conversationId] !== undefined) {
           const { [conversationId]: _drop, ...rest } = record.value.seen
-          yield* orDie(deps.bots.setSession(compact({
-            ...record.value,
-            seen: Object.keys(rest).length === 0 ? undefined : rest,
-            updatedAt: yield* Clock.currentTimeMillis,
-          })))
+          yield* orDie(
+            deps.bots.setSession(
+              compact({
+                ...record.value,
+                seen: Object.keys(rest).length === 0 ? undefined : rest,
+                updatedAt: yield* Clock.currentTimeMillis,
+              }),
+            ),
+          )
         }
       })
 
     const stop = (reason: string) =>
-      Effect.gen(function*() {
-        const taken = yield* locked(Effect.sync(() => {
-          state.closed = true
-          const active = state.active
-          if (active !== undefined) active.interruptRequested = true
-          const queued = state.queue.splice(0)
-          return { active, open: active?.accepted ? state.session : undefined, queued }
-        }))
+      Effect.gen(function* () {
+        const taken = yield* locked(
+          Effect.sync(() => {
+            state.closed = true
+            const active = state.active
+            if (active !== undefined) active.interruptRequested = true
+            const queued = state.queue.splice(0)
+            return { active, open: active?.accepted ? state.session : undefined, queued }
+          }),
+        )
         if (taken.open !== undefined) {
           yield* taken.open.session.interrupt.pipe(
             Effect.timeoutOption(Duration.seconds(5)),
@@ -1569,26 +1746,32 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
 
     const isWorking = locked(Effect.sync(() => state.active !== undefined || state.control))
 
-    const takeOver = Effect.gen(function*() {
-      const taken = yield* locked(Effect.sync(() => {
-        state.closed = true
-        const active = state.active
-        const queued = state.queue.splice(0)
-        // A turn its harness has not accepted yet is still queued work: it runs again under its id.
-        const unaccepted = active !== undefined && !active.accepted
-          ? active.deliveries.map((delivery, i) => (i === 0 ? { ...delivery, turnId: active.turnId } : delivery))
-          : []
-        const cutOff = active !== undefined && active.accepted && !active.ending
-          ? [{ botId, conversationId: active.conversationId, turnId: active.turnId }]
-          : []
-        return { queued, unaccepted, cutOff }
-      }))
+    const takeOver = Effect.gen(function* () {
+      const taken = yield* locked(
+        Effect.sync(() => {
+          state.closed = true
+          const active = state.active
+          const queued = state.queue.splice(0)
+          // A turn its harness has not accepted yet is still queued work: it runs again under its id.
+          const unaccepted =
+            active !== undefined && !active.accepted
+              ? active.deliveries.map((delivery, i) => (i === 0 ? { ...delivery, turnId: active.turnId } : delivery))
+              : []
+          const cutOff =
+            active !== undefined && active.accepted && !active.ending
+              ? [{ botId, conversationId: active.conversationId, turnId: active.turnId }]
+              : []
+          return { queued, unaccepted, cutOff }
+        }),
+      )
       // Nobody waits on these any more in this process; the next boot delivers them afresh.
       for (const work of taken.queued) yield* deps.outcomes.resolve(work.delivery.id, { status: "dropped" })
       const carried: Carryover = {
         deliveries: [
           ...taken.unaccepted,
-          ...taken.queued.map((work) => (work.turnId === undefined ? work.delivery : { ...work.delivery, turnId: work.turnId })),
+          ...taken.queued.map((work) =>
+            work.turnId === undefined ? work.delivery : { ...work.delivery, turnId: work.turnId },
+          ),
         ],
         cutOff: taken.cutOff,
       }
@@ -1596,41 +1779,53 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
     })
 
     const noteAddress = (input: NotedAddress & { readonly conversationId: ConversationId }) =>
-      locked(Effect.sync(() => {
-        const active = state.active
-        if (active === undefined || active.ending || active.conversationId !== input.conversationId) return false
-        if (!active.noted.some((n) => n.recipientBotId === input.recipientBotId)) {
-          active.noted.push({ recipientBotId: input.recipientBotId, text: input.text, causalChain: input.causalChain })
-        }
-        return true
-      }))
+      locked(
+        Effect.sync(() => {
+          const active = state.active
+          if (active === undefined || active.ending || active.conversationId !== input.conversationId) return false
+          if (!active.noted.some((n) => n.recipientBotId === input.recipientBotId)) {
+            active.noted.push({
+              recipientBotId: input.recipientBotId,
+              text: input.text,
+              causalChain: input.causalChain,
+            })
+          }
+          return true
+        }),
+      )
 
     const busyConflict = () =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const where = state.active?.conversationId ?? state.queue[0]?.delivery.conversationId
         const conversation = where === undefined ? undefined : yield* Effect.option(deps.store.get(where))
-        const title = conversation !== undefined && Option.isSome(conversation) && conversation.value.kind === "group"
-          ? ` in "${conversation.value.title}"`
-          : ""
+        const title =
+          conversation !== undefined && Option.isSome(conversation) && conversation.value.kind === "group"
+            ? ` in "${conversation.value.title}"`
+            : ""
         return new Conflict({ reason: `The bot is working${title}. Stop it first.` })
       })
 
     const resetSession = (afterDrop: Effect.Effect<void>) =>
-      locked(Effect.gen(function*() {
-        if (state.active !== undefined || state.control || state.queue.length > 0) return yield* (yield* busyConflict())
-        forgetCursors()
-        yield* dropSession("new session")
-        yield* afterDrop
-      }))
+      locked(
+        Effect.gen(function* () {
+          if (state.active !== undefined || state.control || state.queue.length > 0) return yield* yield* busyConflict()
+          forgetCursors()
+          yield* dropSession("new session")
+          yield* afterDrop
+        }),
+      )
 
-    const compactSession = Effect.gen(function*() {
-      yield* locked(Effect.gen(function*() {
-        if (state.active !== undefined || state.control || state.queue.length > 0) return yield* (yield* busyConflict())
-        state.control = true
-      }))
-      return yield* Effect.gen(function*() {
+    const compactSession = Effect.gen(function* () {
+      yield* locked(
+        Effect.gen(function* () {
+          if (state.active !== undefined || state.control || state.queue.length > 0) return yield* yield* busyConflict()
+          state.control = true
+        }),
+      )
+      return yield* Effect.gen(function* () {
         const bot = yield* Effect.flatMap(orDie(deps.bots.get(botId)), (b) =>
-          Option.isSome(b) ? Effect.succeed(b.value) : Effect.fail(new NotFound({ entity: "bot", id: botId })))
+          Option.isSome(b) ? Effect.succeed(b.value) : Effect.fail(new NotFound({ entity: "bot", id: botId })),
+        )
         const open = yield* ensureSession(bot, bot.directConversationId).pipe(
           Effect.mapError((e) => new HarnessUnavailable({ harness: bot.harness.kind, message: e.message })),
         )
@@ -1647,10 +1842,14 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           }))
         }
       }).pipe(
-        Effect.ensuring(locked(Effect.gen(function*() {
-          state.control = false
-          if (state.queue.length > 0) yield* Queue.offer(signal, undefined)
-        }))),
+        Effect.ensuring(
+          locked(
+            Effect.gen(function* () {
+              state.control = false
+              if (state.queue.length > 0) yield* Queue.offer(signal, undefined)
+            }),
+          ),
+        ),
       )
     })
 

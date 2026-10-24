@@ -4,12 +4,29 @@
 // asked for) — and Relevant / Newest. The filters live in the URL, so reload and Back keep them.
 // Results are one flat list paged as it scrolls; a hit opens its chat at that message
 // (`#/c/<id>/e/<entryId>`). On a phone it is a full screen of its own with a back button.
-import { Calendar, Check, ChevronDown, ChevronLeft, MessageSquare, Search, SlidersHorizontal, User, Users, X } from "lucide-react"
+import {
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  MessageSquare,
+  Search,
+  SlidersHorizontal,
+  User,
+  Users,
+  X,
+} from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { type ConversationId, SEARCH_QUERY_MAX_CHARS, SEARCH_TOTAL_CAP, type SearchHit, type SearchSender } from "@openbot/contracts"
+import {
+  type ConversationId,
+  SEARCH_QUERY_MAX_CHARS,
+  SEARCH_TOTAL_CAP,
+  type SearchHit,
+  type SearchSender,
+} from "@openbot/contracts"
 import {
   appendPage,
   dayOf,
@@ -38,7 +55,13 @@ import { chatLabel, HitLeading, HitMeta, Snippet } from "./hits.tsx"
 /** How often a search asks again while the brain is still indexing. */
 const INDEXING_RETRY_MS = 3_000
 
-const TYPE_LABEL: Readonly<Record<SearchType, string>> = { messages: "Messages", cards: "Cards", events: "Events", tasks: "Task results", steps: "Steps" }
+const TYPE_LABEL: Readonly<Record<SearchType, string>> = {
+  messages: "Messages",
+  cards: "Cards",
+  events: "Events",
+  tasks: "Task results",
+  steps: "Steps",
+}
 const DATE_LABEL = { any: "Any time", "24h": "Last 24 hours", "7d": "Last 7 days", "30d": "Last 30 days" } as const
 
 const dateLabel = (date: SearchDate): string => {
@@ -49,7 +72,19 @@ const dateLabel = (date: SearchDate): string => {
 }
 
 /** A filter chip: its label, highlighted when set, opening a panel. */
-function Chip({ label, active, icon, children, testId }: { readonly label: string; readonly active: boolean; readonly icon: typeof User; readonly children: (close: () => void) => ReactNode; readonly testId: string }): ReactNode {
+function Chip({
+  label,
+  active,
+  icon,
+  children,
+  testId,
+}: {
+  readonly label: string
+  readonly active: boolean
+  readonly icon: typeof User
+  readonly children: (close: () => void) => ReactNode
+  readonly testId: string
+}): ReactNode {
   return (
     <Popover
       role="menu"
@@ -64,7 +99,9 @@ function Chip({ label, active, icon, children, testId }: { readonly label: strin
           data-active={active || undefined}
           className={cn(
             "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full ps-2.5 pe-2 text-sm whitespace-nowrap transition-colors duration-100",
-            active ? "bg-accent-soft text-accent-fg hover:bg-accent-soft-hover" : "bg-secondary text-fg hover:bg-secondary-hover",
+            active
+              ? "bg-accent-soft text-accent-fg hover:bg-accent-soft-hover"
+              : "bg-secondary text-fg hover:bg-secondary-hover",
           )}
         >
           <Icon icon={icon} size="sm" className={active ? "text-accent-fg" : "text-icon-secondary"} />
@@ -73,13 +110,27 @@ function Chip({ label, active, icon, children, testId }: { readonly label: strin
         </button>
       )}
     >
-      {(close) => <div className="flex max-h-[min(420px,70vh)] min-w-[220px] flex-col gap-px overflow-y-auto p-1.5 scrollbar-thin">{children(close)}</div>}
+      {(close) => (
+        <div className="flex max-h-[min(420px,70vh)] min-w-[220px] flex-col gap-px overflow-y-auto p-1.5 scrollbar-thin">
+          {children(close)}
+        </div>
+      )}
     </Popover>
   )
 }
 
 /** One row of a chip's panel; checked rows show a check. Multi-select rows keep the panel open. */
-function Option({ children, checked, onSelect, leading }: { readonly children: ReactNode; readonly checked: boolean; readonly onSelect: () => void; readonly leading?: ReactNode }): ReactNode {
+function Option({
+  children,
+  checked,
+  onSelect,
+  leading,
+}: {
+  readonly children: ReactNode
+  readonly checked: boolean
+  readonly onSelect: () => void
+  readonly leading?: ReactNode
+}): ReactNode {
   return (
     <button
       type="button"
@@ -97,21 +148,59 @@ function Option({ children, checked, onSelect, leading }: { readonly children: R
 
 const Separator = () => <div role="separator" className="mx-2 my-1 h-0 border-t-[0.5px] border-line-secondary" />
 
-function Filters({ roster, filters, onChange }: { readonly roster: RosterView; readonly filters: SearchFilters; readonly onChange: (f: SearchFilters) => void }): ReactNode {
+function Filters({
+  roster,
+  filters,
+  onChange,
+}: {
+  readonly roster: RosterView
+  readonly filters: SearchFilters
+  readonly onChange: (f: SearchFilters) => void
+}): ReactNode {
   const bots = roster.bots.filter((b) => !b.hidden || filters.botIds.includes(b.id))
-  const groups = [...roster.state.conversations.values()].filter((c) => c.kind === "group").sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+  const groups = [...roster.state.conversations.values()]
+    .filter((c) => c.kind === "group")
+    .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
   const botLabel =
-    filters.botIds.length === 0 ? "Bot" : filters.botIds.length === 1 ? (roster.botById(filters.botIds[0])?.name ?? "1 Bot") : `${filters.botIds.length} Bots`
-  const chatName = filters.chat === undefined ? "Chat" : filters.chat === "groups" ? "Group chats" : chatLabel(roster, { conversationId: filters.chat })
+    filters.botIds.length === 0
+      ? "Bot"
+      : filters.botIds.length === 1
+        ? (roster.botById(filters.botIds[0])?.name ?? "1 Bot")
+        : `${filters.botIds.length} Bots`
+  const chatName =
+    filters.chat === undefined
+      ? "Chat"
+      : filters.chat === "groups"
+        ? "Group chats"
+        : chatLabel(roster, { conversationId: filters.chat })
   const fromLabel =
-    filters.sender === undefined ? "From" : filters.sender === "owner" ? "From you" : filters.sender === "system" ? "From OpenBot" : `From ${roster.botById(filters.sender)?.name ?? "a Bot"}`
+    filters.sender === undefined
+      ? "From"
+      : filters.sender === "owner"
+        ? "From you"
+        : filters.sender === "system"
+          ? "From OpenBot"
+          : `From ${roster.botById(filters.sender)?.name ?? "a Bot"}`
   const types = normalizeTypes(filters.types)
-  const typeLabel = isDefaultTypes(types) ? "Type" : types.length === 1 ? TYPE_LABEL[types[0]!] : types.length === SEARCH_TYPES.length ? "Everything" : `${types.length} types`
-  const [range, setRange] = useState<{ from: string; to: string }>(() => (typeof filters.date === "object" ? { from: filters.date.from ?? "", to: filters.date.to ?? "" } : { from: "", to: "" }))
+  const typeLabel = isDefaultTypes(types)
+    ? "Type"
+    : types.length === 1
+      ? TYPE_LABEL[types[0]!]
+      : types.length === SEARCH_TYPES.length
+        ? "Everything"
+        : `${types.length} types`
+  const [range, setRange] = useState<{ from: string; to: string }>(() =>
+    typeof filters.date === "object"
+      ? { from: filters.date.from ?? "", to: filters.date.to ?? "" }
+      : { from: "", to: "" },
+  )
   const toggle = <A,>(list: ReadonlyArray<A>, x: A) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x])
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]" data-testid="search-filters">
+    <div
+      className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]"
+      data-testid="search-filters"
+    >
       <Chip label={botLabel} active={filters.botIds.length > 0} icon={Users} testId="filter-bot">
         {() => (
           <>
@@ -124,7 +213,12 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
               </>
             )}
             {bots.map((b) => (
-              <Option key={b.id} checked={filters.botIds.includes(b.id)} onSelect={() => onChange({ ...filters, botIds: toggle(filters.botIds, b.id) })} leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={18} />}>
+              <Option
+                key={b.id}
+                checked={filters.botIds.includes(b.id)}
+                onSelect={() => onChange({ ...filters, botIds: toggle(filters.botIds, b.id) })}
+                leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={18} />}
+              >
                 {b.name}
               </Option>
             ))}
@@ -150,13 +244,23 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
               {roster.bots
                 .filter((b) => !b.hidden)
                 .map((b) => (
-                  <Option key={b.id} checked={filters.chat === b.directConversationId} onSelect={() => set(b.directConversationId)} leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={18} />}>
+                  <Option
+                    key={b.id}
+                    checked={filters.chat === b.directConversationId}
+                    onSelect={() => set(b.directConversationId)}
+                    leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={18} />}
+                  >
                     {b.name}
                   </Option>
                 ))}
               {groups.length > 0 && <Separator />}
               {groups.map((g) => (
-                <Option key={g.id} checked={filters.chat === g.id} onSelect={() => set(g.id)} leading={<Icon icon={Users} size="sm" className="text-icon-secondary" />}>
+                <Option
+                  key={g.id}
+                  checked={filters.chat === g.id}
+                  onSelect={() => set(g.id)}
+                  leading={<Icon icon={Users} size="sm" className="text-icon-secondary" />}
+                >
                   {g.title || chatLabel(roster, { conversationId: g.id })}
                 </Option>
               ))}
@@ -184,7 +288,12 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
               </Option>
               <Separator />
               {bots.map((b) => (
-                <Option key={b.id} checked={filters.sender === b.id} onSelect={() => set(b.id)} leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={18} />}>
+                <Option
+                  key={b.id}
+                  checked={filters.sender === b.id}
+                  onSelect={() => set(b.id)}
+                  leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={18} />}
+                >
                   {b.name}
                 </Option>
               ))}
@@ -192,7 +301,12 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
           )
         }}
       </Chip>
-      <Chip label={filters.date === "any" ? "Date" : dateLabel(filters.date)} active={filters.date !== "any"} icon={Calendar} testId="filter-date">
+      <Chip
+        label={filters.date === "any" ? "Date" : dateLabel(filters.date)}
+        active={filters.date !== "any"}
+        icon={Calendar}
+        testId="filter-date"
+      >
         {(close) => (
           <>
             {(["any", "24h", "7d", "30d"] as const).map((d) => (
@@ -233,7 +347,10 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
                 type="button"
                 disabled={range.from === "" && range.to === ""}
                 onClick={() => {
-                  onChange({ ...filters, date: { ...(range.from ? { from: range.from } : {}), ...(range.to ? { to: range.to } : {}) } })
+                  onChange({
+                    ...filters,
+                    date: { ...(range.from ? { from: range.from } : {}), ...(range.to ? { to: range.to } : {}) },
+                  })
                   close()
                 }}
                 className="mt-0.5 h-8 rounded-full bg-primary text-sm text-fg-inverted hover:bg-primary-hover disabled:opacity-40"
@@ -263,7 +380,11 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
           </>
         )}
       </Chip>
-      <div className="ms-auto flex shrink-0 items-center rounded-full bg-secondary p-0.5 text-sm" role="radiogroup" aria-label="Sort">
+      <div
+        className="ms-auto flex shrink-0 items-center rounded-full bg-secondary p-0.5 text-sm"
+        role="radiogroup"
+        aria-label="Sort"
+      >
         {(["relevance", "newest"] as const).map((sort) => (
           <button
             key={sort}
@@ -271,7 +392,10 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
             role="radio"
             aria-checked={filters.sort === sort}
             onClick={() => onChange({ ...filters, sort })}
-            className={cn("h-7 rounded-full px-2.5 transition-colors duration-100", filters.sort === sort ? "bg-elevated text-fg shadow-control" : "text-fg-secondary hover:text-fg")}
+            className={cn(
+              "h-7 rounded-full px-2.5 transition-colors duration-100",
+              filters.sort === sort ? "bg-elevated text-fg shadow-control" : "text-fg-secondary hover:text-fg",
+            )}
             data-testid={`sort-${sort}`}
           >
             {sort === "relevance" ? "Relevant" : "Newest"}
@@ -282,7 +406,15 @@ function Filters({ roster, filters, onChange }: { readonly roster: RosterView; r
   )
 }
 
-function HitRow({ roster, hit, onOpen }: { readonly roster: RosterView; readonly hit: SearchHit; readonly onOpen: (hit: SearchHit) => void }): ReactNode {
+function HitRow({
+  roster,
+  hit,
+  onOpen,
+}: {
+  readonly roster: RosterView
+  readonly hit: SearchHit
+  readonly onOpen: (hit: SearchHit) => void
+}): ReactNode {
   return (
     <button
       type="button"
@@ -302,7 +434,13 @@ function HitRow({ roster, hit, onOpen }: { readonly roster: RosterView; readonly
   )
 }
 
-export function SearchView({ filters, onClose }: { readonly filters: SearchFilters; readonly onClose: () => void }): ReactNode {
+export function SearchView({
+  filters,
+  onClose,
+}: {
+  readonly filters: SearchFilters
+  readonly onClose: () => void
+}): ReactNode {
   const roster = useRoster()
   const { select, openSearch } = useSelection()
   const mode = useLayoutMode()
@@ -315,10 +453,16 @@ export function SearchView({ filters, onClose }: { readonly filters: SearchFilte
   }, [settled]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setText((t) => (t === filters.q ? t : filters.q)), [filters.q]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const groupIds = useMemo(() => [...roster.state.conversations.values()].filter((c) => c.kind === "group").map((c) => c.id), [roster.state.conversations])
+  const groupIds = useMemo(
+    () => [...roster.state.conversations.values()].filter((c) => c.kind === "group").map((c) => c.id),
+    [roster.state.conversations],
+  )
   // `now` is fixed per search, so a page's query stays the same while it is open
   const now = useMemo(() => Date.now(), [filters]) // eslint-disable-line react-hooks/exhaustive-deps
-  const input = useMemo(() => ({ ...searchQueryOf(filters, { now, groupIds }), limit: SEARCH_PAGE_SIZE }), [filters, now, groupIds])
+  const input = useMemo(
+    () => ({ ...searchQueryOf(filters, { now, groupIds }), limit: SEARCH_PAGE_SIZE }),
+    [filters, now, groupIds],
+  )
   const searchable = isSearchable(filters.q)
   const firstAtom = searchable ? searchFirstPageAtom(input) : searchIdleAtom
   const first = useAtomValue(firstAtom)
@@ -354,7 +498,9 @@ export function SearchView({ filters, onClose }: { readonly filters: SearchFilte
   useEffect(() => {
     const el = sentinel.current
     if (!el || results?.nextCursor == null || moreFailed) return
-    const io = new IntersectionObserver((seen) => seen.some((s) => s.isIntersecting) && loadMore(), { rootMargin: "400px" })
+    const io = new IntersectionObserver((seen) => seen.some((s) => s.isIntersecting) && loadMore(), {
+      rootMargin: "400px",
+    })
     io.observe(el)
     return () => io.disconnect()
   }, [results, loadMore, moreFailed])
@@ -370,9 +516,27 @@ export function SearchView({ filters, onClose }: { readonly filters: SearchFilte
 
   return (
     <main className="relative flex h-full min-w-0 flex-col bg-chrome" aria-label="Search" data-testid="search-view">
-      <div className={cn("mx-auto flex w-full max-w-[992px] shrink-0 flex-col gap-2.5 px-4 pb-2.5", phone ? "pt-[calc(6px+env(safe-area-inset-top))]" : mode === "tablet" ? "pt-[calc(12px+env(safe-area-inset-top))]" : "pt-4")}>
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-[992px] shrink-0 flex-col gap-2.5 px-4 pb-2.5",
+          phone
+            ? "pt-[calc(6px+env(safe-area-inset-top))]"
+            : mode === "tablet"
+              ? "pt-[calc(12px+env(safe-area-inset-top))]"
+              : "pt-4",
+        )}
+      >
         <div className="flex items-center gap-2">
-          {phone && <IconButton icon={ChevronLeft} label="Back" size={44} className="-ms-2" onClick={onClose} data-testid="search-back" />}
+          {phone && (
+            <IconButton
+              icon={ChevronLeft}
+              label="Back"
+              size={44}
+              className="-ms-2"
+              onClick={onClose}
+              data-testid="search-back"
+            />
+          )}
           <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-secondary ps-3.5 pe-1.5">
             <Icon icon={Search} size="md" className="shrink-0 text-icon-tertiary" />
             <input
@@ -391,7 +555,10 @@ export function SearchView({ filters, onClose }: { readonly filters: SearchFilte
               aria-label="Search messages"
               enterKeyHint="search"
               spellCheck={false}
-              className={cn("min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-fg-tertiary focus-visible:outline-none", phone ? "text-[17px]" : "text-lg")}
+              className={cn(
+                "min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-fg-tertiary focus-visible:outline-none",
+                phone ? "text-[17px]" : "text-lg",
+              )}
               data-testid="search-input"
             />
             {text !== "" && (
@@ -406,16 +573,22 @@ export function SearchView({ filters, onClose }: { readonly filters: SearchFilte
               />
             )}
           </div>
-          {!phone && <IconButton icon={X} label="Close search" size={36} onClick={onClose} data-testid="search-close" />}
+          {!phone && (
+            <IconButton icon={X} label="Close search" size={36} onClick={onClose} data-testid="search-close" />
+          )}
         </div>
         <Filters roster={roster} filters={filters} onChange={openSearch} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin" data-testid="search-results">
         <div className="mx-auto flex w-full max-w-[992px] flex-col px-2 pb-8">
           {!searchable ? (
-            <p className="px-3 py-16 text-center text-sm text-fg-tertiary">Search every chat: words, or "an exact phrase"; -word leaves it out.</p>
+            <p className="px-3 py-16 text-center text-sm text-fg-tertiary">
+              Search every chat: words, or "an exact phrase"; -word leaves it out.
+            </p>
           ) : failed && results === undefined ? (
-            <p className="px-3 py-16 text-center text-sm text-fg-secondary">Search didn't work. Check the words and try again.</p>
+            <p className="px-3 py-16 text-center text-sm text-fg-secondary">
+              Search didn't work. Check the words and try again.
+            </p>
           ) : results === undefined ? (
             <div className="flex justify-center py-16 text-fg-tertiary">
               <Spinner size={18} label="Searching" />
@@ -423,12 +596,20 @@ export function SearchView({ filters, onClose }: { readonly filters: SearchFilte
           ) : (
             <>
               {results.indexing && (
-                <div role="status" className="mx-1 mt-1 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm text-fg-secondary" data-testid="search-indexing">
+                <div
+                  role="status"
+                  className="mx-1 mt-1 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm text-fg-secondary"
+                  data-testid="search-indexing"
+                >
                   <Spinner size={14} />
                   Still indexing your chats. Some results may be missing for a minute.
                 </div>
               )}
-              <div className="flex h-8 items-center gap-2 px-3 text-xs text-fg-tertiary" aria-live="polite" data-testid="search-count">
+              <div
+                className="flex h-8 items-center gap-2 px-3 text-xs text-fg-tertiary"
+                aria-live="polite"
+                data-testid="search-count"
+              >
                 {results.hits.length === 0 ? "No results" : resultCount(results.totalCapped, SEARCH_TOTAL_CAP)}
                 {busy && <Spinner size={12} label="Searching" />}
               </div>
@@ -438,7 +619,11 @@ export function SearchView({ filters, onClose }: { readonly filters: SearchFilte
               {results.nextCursor !== null && (
                 <div ref={sentinel} className="flex justify-center py-4 text-fg-tertiary">
                   {moreFailed ? (
-                    <button type="button" className="text-sm text-fg-secondary hover:text-fg" onClick={() => (setMoreFailed(false), loadMore())}>
+                    <button
+                      type="button"
+                      className="text-sm text-fg-secondary hover:text-fg"
+                      onClick={() => (setMoreFailed(false), loadMore())}
+                    >
                       Couldn't load more. Try again
                     </button>
                   ) : (

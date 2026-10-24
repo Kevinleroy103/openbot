@@ -6,7 +6,18 @@
 import { useAtomValue } from "@effect/atom-react"
 import { harnessModelsAtom, harnessStatusAtom, nodesAtom, settingsAtom } from "@openbot/client"
 import type { BotAutonomy, HarnessStatus, NodeId, NodeSummary } from "@openbot/contracts"
-import { Avatar, Icon, IconButton, PillButton, Select, type SelectOption, TextArea, TextField, cn, defaultBotAvatar } from "@openbot/ui"
+import {
+  Avatar,
+  Icon,
+  IconButton,
+  PillButton,
+  Select,
+  type SelectOption,
+  TextArea,
+  TextField,
+  cn,
+  defaultBotAvatar,
+} from "@openbot/ui"
 import { Settings2, Shuffle } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import type { NewBotFormProps } from "../contracts.ts"
@@ -46,7 +57,15 @@ export function NewBotForm(props: NewBotFormProps): ReactNode {
   return <NewBotFormBody {...props} />
 }
 
-export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot", hideCancel = false, className, initialName = "", showSetupLinks = true }: NewBotFormBodyProps): ReactNode {
+export function NewBotFormBody({
+  onCreated,
+  onCancel,
+  submitLabel = "Create Bot",
+  hideCancel = false,
+  className,
+  initialName = "",
+  showSetupLinks = true,
+}: NewBotFormBodyProps): ReactNode {
   const statuses = useQuery(harnessStatusAtom)
   const settings = useAtomValue(settingsAtom)
   const nodes = useRosterValue<ReadonlyArray<NodeSummary>>(nodesAtom, [])
@@ -71,18 +90,29 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
     () =>
       [...(statuses.value ?? [])]
         .filter(harnessReady)
-        .sort((a, b) => (ORDER.includes(a.kind) ? ORDER.indexOf(a.kind) : 9) - (ORDER.includes(b.kind) ? ORDER.indexOf(b.kind) : 9)),
+        .sort(
+          (a, b) =>
+            (ORDER.includes(a.kind) ? ORDER.indexOf(a.kind) : 9) - (ORDER.includes(b.kind) ? ORDER.indexOf(b.kind) : 9),
+        ),
     [statuses.value],
   )
   const readyKinds = new Set(ready.map((s) => s.kind))
-  const notReady = [...new Map((statuses.value ?? []).filter((s) => !readyKinds.has(s.kind)).map((s) => [s.kind, s] as const)).values()]
+  const notReady = [
+    ...new Map((statuses.value ?? []).filter((s) => !readyKinds.has(s.kind)).map((s) => [s.kind, s] as const)).values(),
+  ]
   const kindChoices = [...new Map(ready.map((s) => [s.kind, s] as const)).values()]
   // fake is always offered, even before the status probe answers
-  const choices: ReadonlyArray<Pick<HarnessStatus, "kind"> & Partial<HarnessStatus>> = kindChoices.some((s) => s.kind === "fake") ? kindChoices : [...kindChoices, { kind: "fake" }]
+  const choices: ReadonlyArray<Pick<HarnessStatus, "kind"> & Partial<HarnessStatus>> = kindChoices.some(
+    (s) => s.kind === "fake",
+  )
+    ? kindChoices
+    : [...kindChoices, { kind: "fake" }]
 
   // default harness: Settings default when ready, else the first real ready harness, else Demo
   const preferred =
-    settings.defaultHarness && choices.some((c) => c.kind === settings.defaultHarness) ? settings.defaultHarness : (choices.find((c) => c.kind !== "fake") ?? choices[0])?.kind
+    settings.defaultHarness && choices.some((c) => c.kind === settings.defaultHarness)
+      ? settings.defaultHarness
+      : (choices.find((c) => c.kind !== "fake") ?? choices[0])?.kind
   const selected = kind ?? preferred ?? "fake"
   const accounts = ready.filter((s) => s.kind === selected)
   const preferredAccount = accounts.find((s) => statusProfileId(s) === "default") ?? accounts[0]
@@ -95,7 +125,10 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
     setModel(DEFAULT)
     setEffort(DEFAULT)
   }
-  const accountOptions: ReadonlyArray<SelectOption<string>> = accounts.map((s) => ({ value: statusProfileId(s), label: accountChoiceLabel(s) }))
+  const accountOptions: ReadonlyArray<SelectOption<string>> = accounts.map((s) => ({
+    value: statusProfileId(s),
+    label: accountChoiceLabel(s),
+  }))
   const models = useQuery(harnessModelsAtom(selected, profileId))
   const modelOptions: ReadonlyArray<SelectOption<string>> = [
     {
@@ -109,7 +142,8 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
     ...(models.value ?? []).map((m) => ({ value: m.id, label: m.label || m.id })),
   ]
   // effort levels come from the chosen model (or the harness default model when "Default")
-  const effectiveModel = model === DEFAULT ? models.value?.find((m) => m.default) : models.value?.find((m) => m.id === model)
+  const effectiveModel =
+    model === DEFAULT ? models.value?.find((m) => m.default) : models.value?.find((m) => m.id === model)
   const efforts = effectiveModel?.efforts ?? []
   const effortOptions: ReadonlyArray<SelectOption<string>> = [
     { value: DEFAULT, label: "Default" },
@@ -133,7 +167,12 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
       name: trimmed,
       ...(label.trim() ? { label: label.trim() } : {}),
       avatar,
-      harness: { kind: selected, ...(profileId !== "default" ? { profileId } : {}), ...(model !== DEFAULT ? { model } : {}), ...(effortValue !== DEFAULT ? { effort: effortValue } : {}) },
+      harness: {
+        kind: selected,
+        ...(profileId !== "default" ? { profileId } : {}),
+        ...(model !== DEFAULT ? { model } : {}),
+        ...(effortValue !== DEFAULT ? { effort: effortValue } : {}),
+      },
       ...(hostValue ? { hostNodeId: hostValue as NodeId } : {}),
       ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
       autonomy,
@@ -167,8 +206,23 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
             />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <TextField aria-label="Name" placeholder="New Bot" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} data-autofocus data-testid="new-bot-name" />
-            <TextField aria-label="Label" placeholder="Add a label (e.g. Research)" value={label} maxLength={64} onChange={(e) => setLabel(e.target.value)} size="sm" />
+            <TextField
+              aria-label="Name"
+              placeholder="New Bot"
+              value={name}
+              maxLength={64}
+              onChange={(e) => setName(e.target.value)}
+              data-autofocus
+              data-testid="new-bot-name"
+            />
+            <TextField
+              aria-label="Label"
+              placeholder="Add a label (e.g. Research)"
+              value={label}
+              maxLength={64}
+              onChange={(e) => setLabel(e.target.value)}
+              size="sm"
+            />
           </div>
         </div>
 
@@ -176,7 +230,11 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
           <div className="flex items-center gap-2">
             <span className="flex-1 text-xs text-fg-secondary">Brain</span>
             {showSetupLinks && (
-              <button type="button" onClick={() => settingsDialog.show("harnesses")} className="inline-flex items-center gap-1 text-xs text-fg-tertiary hover:text-fg-secondary">
+              <button
+                type="button"
+                onClick={() => settingsDialog.show("harnesses")}
+                className="inline-flex items-center gap-1 text-xs text-fg-tertiary hover:text-fg-secondary"
+              >
                 <Icon icon={Settings2} size="xs" />
                 Set up harnesses
               </button>
@@ -203,7 +261,9 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
                   >
                     <Icon icon={harnessGlyph(s.kind)} size="sm" />
                     {harnessName(s.kind, s)}
-                    {s.kind === "fake" && <span className={cn("text-xs", on ? "text-fg-inverted/70" : "text-fg-tertiary")}>offline</span>}
+                    {s.kind === "fake" && (
+                      <span className={cn("text-xs", on ? "text-fg-inverted/70" : "text-fg-tertiary")}>offline</span>
+                    )}
                   </button>
                 )
               })}
@@ -211,9 +271,14 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
           )}
           {notReady.length > 0 && !statuses.loading && (
             <p className="text-xs text-fg-tertiary">
-              {notReady.map((s) => harnessName(s.kind, s)).join(", ")} {notReady.length === 1 ? "isn't" : "aren't"} ready on the server yet.{" "}
+              {notReady.map((s) => harnessName(s.kind, s)).join(", ")} {notReady.length === 1 ? "isn't" : "aren't"}{" "}
+              ready on the server yet.{" "}
               {showSetupLinks && (
-                <button type="button" className="underline-offset-2 hover:text-fg-secondary hover:underline" onClick={() => settingsDialog.show("harnesses")}>
+                <button
+                  type="button"
+                  className="underline-offset-2 hover:text-fg-secondary hover:underline"
+                  onClick={() => settingsDialog.show("harnesses")}
+                >
                   Set up
                 </button>
               )}
@@ -251,13 +316,25 @@ export function NewBotFormBody({ onCreated, onCancel, submitLabel = "Create Bot"
             {efforts.length > 0 && (
               <>
                 <span className="ms-2 text-sm text-fg-secondary">Effort</span>
-                <Select label="Effort" value={effortValue} options={effortOptions} onValueChange={setEffort} align="start" />
+                <Select
+                  label="Effort"
+                  value={effortValue}
+                  options={effortOptions}
+                  onValueChange={setEffort}
+                  align="start"
+                />
               </>
             )}
             {nodeOptions.length > 1 && (
               <>
                 <span className="ms-2 text-sm text-fg-secondary">Runs on</span>
-                <Select label="Runs on" value={hostValue ?? ""} options={nodeOptions} onValueChange={setHost} align="start" />
+                <Select
+                  label="Runs on"
+                  value={hostValue ?? ""}
+                  options={nodeOptions}
+                  onValueChange={setHost}
+                  align="start"
+                />
               </>
             )}
           </div>

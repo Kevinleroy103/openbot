@@ -25,7 +25,15 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { harnessDrivers } from "../../src/server.ts"
-import { login, type OpenBotClient, rpcClient, startServer, testConfig, type TestServer, watchConversation } from "../helpers.ts"
+import {
+  login,
+  type OpenBotClient,
+  rpcClient,
+  startServer,
+  testConfig,
+  type TestServer,
+  watchConversation,
+} from "../helpers.ts"
 
 export const LIVE = process.env["OPENBOT_LIVE"] === "1"
 
@@ -33,7 +41,11 @@ export const LIVE = process.env["OPENBOT_LIVE"] === "1"
 export const CHEAP = {
   claude: { kind: "claude", model: process.env["OPENBOT_LIVE_CLAUDE_MODEL"] ?? "haiku", effort: "low" },
   codex: { kind: "codex", model: process.env["OPENBOT_LIVE_CODEX_MODEL"] ?? "gpt-5.6-luna", effort: "low" },
-  opencode: { kind: "opencode", model: process.env["OPENBOT_LIVE_OPENCODE_MODEL"] ?? "openai/gpt-5.6-luna", effort: "low" },
+  opencode: {
+    kind: "opencode",
+    model: process.env["OPENBOT_LIVE_OPENCODE_MODEL"] ?? "openai/gpt-5.6-luna",
+    effort: "low",
+  },
 } as const satisfies Record<string, { kind: HarnessKindName; model: string; effort: string }>
 export type CheapHarness = keyof typeof CHEAP
 
@@ -62,21 +74,32 @@ export const startLiveBrain = async (options?: { readonly dataDir?: string }): P
   const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) => Effect.runPromise(Effect.scoped(effect))
   // the auto-approver: allow-once every pending approval (questions are left alone)
   const stop = new AbortController()
-  void run(Effect.gen(function*() {
-    const client = yield* connect(server, cookie)
-    yield* Effect.gen(function*() {
-      const pending = yield* client["requests.listPending"]({})
-      for (const request of pending) {
-        if (request.kind === "question" || request.kind === "form" || request.kind === "secret") continue
-        approvals.push(request)
-        log("approve", request.kind, JSON.stringify(request.subject).slice(0, 300))
-        yield* client["requests.respond"]({ requestId: request.id, response: { type: "decision", decision: "allow-once" } })
-          .pipe(Effect.ignore)
-      }
-    }).pipe(Effect.catchCause(() => Effect.void), Effect.repeat(Schedule.spaced("300 millis")))
-  }).pipe(Effect.raceFirst(Effect.callback<void>((resume) => {
-    stop.signal.addEventListener("abort", () => resume(Effect.void))
-  }))))
+  void run(
+    Effect.gen(function* () {
+      const client = yield* connect(server, cookie)
+      yield* Effect.gen(function* () {
+        const pending = yield* client["requests.listPending"]({})
+        for (const request of pending) {
+          if (request.kind === "question" || request.kind === "form" || request.kind === "secret") continue
+          approvals.push(request)
+          log("approve", request.kind, JSON.stringify(request.subject).slice(0, 300))
+          yield* client["requests.respond"]({
+            requestId: request.id,
+            response: { type: "decision", decision: "allow-once" },
+          }).pipe(Effect.ignore)
+        }
+      }).pipe(
+        Effect.catchCause(() => Effect.void),
+        Effect.repeat(Schedule.spaced("300 millis")),
+      )
+    }).pipe(
+      Effect.raceFirst(
+        Effect.callback<void>((resume) => {
+          stop.signal.addEventListener("abort", () => resume(Effect.void))
+        }),
+      ),
+    ),
+  )
   return {
     server,
     cookie,
@@ -109,7 +132,8 @@ export const createBot = (
     clientNonce: nextNonce(`bot-${name}`),
   })
 
-const terminal = (turn: Turn) => turn.status === "completed" || turn.status === "failed" || turn.status === "interrupted"
+const terminal = (turn: Turn) =>
+  turn.status === "completed" || turn.status === "failed" || turn.status === "interrupted"
 
 /** Waits until `predicate(state)` holds and no turn of the conversation is active. */
 export const settle = (
@@ -117,7 +141,7 @@ export const settle = (
   predicate: (s: ConversationState) => boolean,
   options?: { readonly timeout?: number; readonly label?: string },
 ) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const deadline = Date.now() + (options?.timeout ?? 180_000)
     while (Date.now() < deadline) {
       const s = yield* Ref.get(state)
@@ -126,7 +150,9 @@ export const settle = (
       yield* Effect.sleep("250 millis")
     }
     const s = yield* Ref.get(state)
-    log(`TIMEOUT ${options?.label ?? ""}\n${describe(transcriptOf(s))}\n turns: ${JSON.stringify([...s.turns.values()])}`)
+    log(
+      `TIMEOUT ${options?.label ?? ""}\n${describe(transcriptOf(s))}\n turns: ${JSON.stringify([...s.turns.values()])}`,
+    )
     return yield* Effect.fail(new Error(`timed out waiting for ${options?.label ?? "condition"}`))
   })
 
@@ -141,7 +167,7 @@ export const converse = (
     readonly until?: (s: ConversationState) => boolean
   },
 ) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const convo = yield* watchConversation(client, conversationId)
     yield* settleSync(convo.state)
     const sent = yield* client["messages.send"]({
@@ -152,15 +178,23 @@ export const converse = (
     })
     log("sent", JSON.stringify(text).slice(0, 120), sent.disposition, sent.turnIds)
     const turnIds = new Set<TurnId>(sent.turnIds)
-    const final = yield* settle(convo.state, (s) => {
-      const mine = [...s.turns.values()].filter((t) => turnIds.has(t.id))
-      return mine.length === turnIds.size && mine.every(terminal) && (options?.until?.(s) ?? true)
-    }, { timeout: options?.timeout, label: `turns ${[...turnIds].join(",")}` })
-    return { state: final, entries: transcriptOf(final), turns: [...final.turns.values()].filter((t) => turnIds.has(t.id)) }
+    const final = yield* settle(
+      convo.state,
+      (s) => {
+        const mine = [...s.turns.values()].filter((t) => turnIds.has(t.id))
+        return mine.length === turnIds.size && mine.every(terminal) && (options?.until?.(s) ?? true)
+      },
+      { timeout: options?.timeout, label: `turns ${[...turnIds].join(",")}` },
+    )
+    return {
+      state: final,
+      entries: transcriptOf(final),
+      turns: [...final.turns.values()].filter((t) => turnIds.has(t.id)),
+    }
   })
 
 const settleSync = (state: Ref.Ref<ConversationState>) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     for (let i = 0; i < 200; i++) {
       if ((yield* Ref.get(state)).synchronized) return
       yield* Effect.sleep("25 millis")
@@ -169,7 +203,7 @@ const settleSync = (state: Ref.Ref<ConversationState>) =>
 
 /** Current transcript of a conversation (one subscribe). */
 export const snapshot = (client: OpenBotClient, conversationId: ConversationId) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const convo = yield* watchConversation(client, conversationId)
     yield* settleSync(convo.state)
     return yield* Ref.get(convo.state)
@@ -177,7 +211,7 @@ export const snapshot = (client: OpenBotClient, conversationId: ConversationId) 
 
 /** Watches a conversation for the whole scope (bot-to-bot waits). */
 export const watch = (client: OpenBotClient, conversationId: ConversationId) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const convo = yield* watchConversation(client, conversationId)
     yield* settleSync(convo.state)
     return convo.state
@@ -190,32 +224,37 @@ const short = (value: unknown, max = 160) => {
 
 /** One line per entry: what a reviewer needs as evidence. */
 export const describe = (entries: ReadonlyArray<TranscriptEntry>): string =>
-  entries.map((e) => {
-    switch (e.kind) {
-      case "message":
-        return `  [${e.role}${e.author.kind === "bot" ? ` ${e.author.botId}` : ""}] ${short(e.text, 300)}`
-      case "tool-call":
-        return `  [tool ${e.status}] ${e.name}${e.nodeId !== undefined ? ` @${e.nodeId}` : ""} ${short(e.inputSummary ?? e.input)}${
-          e.error !== undefined ? ` ERROR ${short(e.error)}` : ""
-        }${e.output !== undefined ? ` → ${short(e.output, 200)}` : ""}`
-      case "card":
-        return `  [card ${e.card.type} ${e.state.status}] ${short(e.card)}`
-      case "event":
-        return `  [event] ${short(e.event, 300)}`
-      case "notice":
-        return `  [notice ${e.level}] ${e.code}: ${short(e.text, 300)}`
-      case "reasoning":
-        return `  [reasoning] ${short(e.text, 80)}`
-      default:
-        return `  [${e.kind}]`
-    }
-  }).join("\n")
+  entries
+    .map((e) => {
+      switch (e.kind) {
+        case "message":
+          return `  [${e.role}${e.author.kind === "bot" ? ` ${e.author.botId}` : ""}] ${short(e.text, 300)}`
+        case "tool-call":
+          return `  [tool ${e.status}] ${e.name}${e.nodeId !== undefined ? ` @${e.nodeId}` : ""} ${short(e.inputSummary ?? e.input)}${
+            e.error !== undefined ? ` ERROR ${short(e.error)}` : ""
+          }${e.output !== undefined ? ` → ${short(e.output, 200)}` : ""}`
+        case "card":
+          return `  [card ${e.card.type} ${e.state.status}] ${short(e.card)}`
+        case "event":
+          return `  [event] ${short(e.event, 300)}`
+        case "notice":
+          return `  [notice ${e.level}] ${e.code}: ${short(e.text, 300)}`
+        case "reasoning":
+          return `  [reasoning] ${short(e.text, 80)}`
+        default:
+          return `  [${e.kind}]`
+      }
+    })
+    .join("\n")
 
 export const botTexts = (entries: ReadonlyArray<TranscriptEntry>, botId?: Bot["id"]) =>
   entries.flatMap((e) =>
-    e.kind === "message" && e.role === "bot" && !e.streaming && (botId === undefined || (e.author.kind === "bot" && e.author.botId === botId))
+    e.kind === "message" &&
+    e.role === "bot" &&
+    !e.streaming &&
+    (botId === undefined || (e.author.kind === "bot" && e.author.botId === botId))
       ? [e.text]
-      : []
+      : [],
   )
 
 export const toolCalls = (entries: ReadonlyArray<TranscriptEntry>) =>
@@ -227,14 +266,16 @@ export const report = (label: string, entries: ReadonlyArray<TranscriptEntry>, t
   log(`=== ${label}\n${describe(entries)}`)
   if (turns !== undefined) {
     for (const t of turns) {
-      log(`  turn ${t.id} ${t.status}${t.failure !== undefined ? ` ${JSON.stringify(t.failure)}` : ""} usage=${JSON.stringify(t.usage)}`)
+      log(
+        `  turn ${t.id} ${t.status}${t.failure !== undefined ? ` ${JSON.stringify(t.failure)}` : ""} usage=${JSON.stringify(t.usage)}`,
+      )
     }
   }
 }
 
 /** Collects roster activity labels (for "computer.status shows a screen" style checks). */
 export const rosterLog = (client: OpenBotClient) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const items = yield* Ref.make<ReadonlyArray<string>>([])
     yield* client["roster.subscribe"]({}).pipe(
       Stream.runForEach((item) => Ref.update(items, (all) => [...all, short(item, 400)])),

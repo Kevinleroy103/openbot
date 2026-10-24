@@ -22,13 +22,17 @@ export const INBOX_DIR = "inbox"
 
 /** A file name usable as one path segment on any node (no separators, controls, `.`/`..`). */
 export const safeFileName = (name: string): string => {
-  const cleaned = [...name].map((c) => (c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f || '\\/:*?"<>|'.includes(c) ? "_" : c))
-    .join("").trim().replace(/^\.+$/, "")
+  const cleaned = [...name]
+    .map((c) => (c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f || '\\/:*?"<>|'.includes(c) ? "_" : c))
+    .join("")
+    .trim()
+    .replace(/^\.+$/, "")
   return cleaned === "" ? "file" : cleaned.length > 180 ? cleaned.slice(cleaned.length - 180) : cleaned
 }
 
 /** `inbox/<attachmentId>/<name>`: where a received file lands in the workspace. */
-export const inboxPath = (record: Pick<AttachmentRecord, "id" | "name">): string => `${INBOX_DIR}/${record.id}/${safeFileName(record.name)}`
+export const inboxPath = (record: Pick<AttachmentRecord, "id" | "name">): string =>
+  `${INBOX_DIR}/${record.id}/${safeFileName(record.name)}`
 
 /** Model-readable reason a file transfer failed (node, transfer, store or validation failure). */
 export const describeFileFailure = (error: NodeDownloadError | InvalidInput | RepoError): string => {
@@ -76,7 +80,7 @@ export const receiveFiles = (
   Effect.forEach(
     input.records,
     (record): Effect.Effect<ReceivedFile> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (record.byteSize > deps.maxFileBytes) {
           return { record, error: `it is larger than the ${formatBytes(deps.maxFileBytes)} limit` }
         }
@@ -86,13 +90,15 @@ export const receiveFiles = (
           botId: input.botId,
           runId: sessionKeyOf(input.botId, input.conversationId),
         }
-        const copied = yield* Effect.result(deps.nodeFiles.upload({
-          nodeId: input.placement.hostNodeId,
-          inv,
-          path: joinWorkspace(input.placement.workspacePath, relativePath),
-          size: record.byteSize,
-          chunks: deps.attachments.stream(record.id),
-        }))
+        const copied = yield* Effect.result(
+          deps.nodeFiles.upload({
+            nodeId: input.placement.hostNodeId,
+            inv,
+            path: joinWorkspace(input.placement.workspacePath, relativePath),
+            size: record.byteSize,
+            chunks: deps.attachments.stream(record.id),
+          }),
+        )
         if (copied._tag === "Success") return { record, relativePath }
         yield* Effect.logWarning(`Inbox: ${record.id} not copied for ${input.botId}`, copied.failure)
         return { record, error: describeFileFailure(copied.failure) }

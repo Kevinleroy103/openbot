@@ -65,7 +65,12 @@ if (tts === null) {
 }
 
 const speak = (request: SpeakerRequest): Float32Array => {
-  const audio = sherpa.SherpaOnnxOfflineTtsGenerate(tts, ptr(new TextEncoder().encode(`${request.text}\0`)), request.sid, request.speed) as Pointer | null
+  const audio = sherpa.SherpaOnnxOfflineTtsGenerate(
+    tts,
+    ptr(new TextEncoder().encode(`${request.text}\0`)),
+    request.sid,
+    request.speed,
+  ) as Pointer | null
   if (audio === null) throw new Error("sherpa-onnx returned no audio.")
   try {
     const header = new DataView(toArrayBuffer(audio, 0, AUDIO_HEADER_BYTES))

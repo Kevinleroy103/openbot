@@ -174,7 +174,9 @@ export const renderTaskTurn = (input: {
   }
   const parts: Array<string> = []
   if (kept.length > 0) {
-    parts.push(`[Recent messages of ${input.where}, where this work was started (oldest first, for context)]\n${kept.join("\n")}`)
+    parts.push(
+      `[Recent messages of ${input.where}, where this work was started (oldest first, for context)]\n${kept.join("\n")}`,
+    )
   }
   parts.push(`[The brief]\n${input.brief.trim()}`)
   for (const update of input.updates ?? []) parts.push(renderTaskUpdate(update))
@@ -195,7 +197,10 @@ const capText = (text: string, max: number) => (text.length <= max ? text : `${t
  */
 export const taskResultText = (task: Task, partial?: string | undefined): string => {
   const head = `[Result of ${quoted(task.title)}]`
-  const sofar = partial !== undefined && partial.trim() !== "" ? `\nWhat it had so far:\n${capText(partial.trim(), PARTIAL_CHARS)}` : ""
+  const sofar =
+    partial !== undefined && partial.trim() !== ""
+      ? `\nWhat it had so far:\n${capText(partial.trim(), PARTIAL_CHARS)}`
+      : ""
   switch (task.status) {
     case "succeeded":
       return `${head}\n${task.result !== undefined && task.result.trim() !== "" ? task.result : "(It finished without a written result.)"}`
@@ -231,7 +236,10 @@ const makeTaskIngest = (deps: {
   readonly repo: TaskRepo["Service"]
   readonly usage: UsageService["Service"]
   /** Activity label / step count changed. */
-  readonly onProgress: (progress: { readonly label?: string | undefined; readonly steps: number }) => Effect.Effect<void>
+  readonly onProgress: (progress: {
+    readonly label?: string | undefined
+    readonly steps: number
+  }) => Effect.Effect<void>
   readonly onClosed: (reason: string) => Effect.Effect<void>
 }): Effect.Effect<TaskIngest> =>
   Effect.sync(() => {
@@ -245,13 +253,13 @@ const makeTaskIngest = (deps: {
     let label: string | undefined
 
     const put = (entry: KnownTranscriptEntry) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         steps.set(entry.id, entry)
         yield* orDie(deps.repo.putStep(deps.task.id, entry))
       })
 
     const upsertItem = (key: string, item: HarnessItem) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const id = keys.get(key) ?? (yield* deps.ids.entryId)
         keys.set(key, id)
@@ -297,20 +305,27 @@ const makeTaskIngest = (deps: {
             return deps.onProgress({ label, steps: tools.size })
           })
         case "Usage":
-          return Effect.gen(function*() {
+          return Effect.gen(function* () {
             usage = usage === undefined ? event.usage : addUsage(usage, event.usage)
-            yield* deps.usage.record(compact({
-              botId: deps.task.botId,
-              conversationId: deps.task.conversationId,
-              harness: deps.harness,
-              model: deps.model,
-              usage: event.usage,
-            }))
+            yield* deps.usage.record(
+              compact({
+                botId: deps.task.botId,
+                conversationId: deps.task.conversationId,
+                harness: deps.harness,
+                model: deps.model,
+                usage: event.usage,
+              }),
+            )
           })
         case "TurnCompleted":
           return complete(event.turnId, { _tag: "completed", stopReason: event.stopReason })
         case "TurnFailed":
-          return complete(event.turnId, { _tag: "failed", code: event.error.code, message: event.error.message, retryable: event.error.retryable })
+          return complete(event.turnId, {
+            _tag: "failed",
+            code: event.error.code,
+            message: event.error.message,
+            retryable: event.error.retryable,
+          })
         case "TurnInterrupted":
           return complete(event.turnId, { _tag: "interrupted" })
         case "SessionClosed":
@@ -322,36 +337,47 @@ const makeTaskIngest = (deps: {
 
     return {
       begin: (id) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           turnId = id
           const deferred = yield* Deferred.make<TurnTerminal>()
           terminals.set(id, deferred)
           return deferred
         }),
-      handle: (event) => handle(event).pipe(Effect.catchCause((cause) => Effect.logError(`BackgroundTasks: ${event._tag} failed`, cause))),
+      handle: (event) =>
+        handle(event).pipe(
+          Effect.catchCause((cause) => Effect.logError(`BackgroundTasks: ${event._tag} failed`, cause)),
+        ),
       recordDecision: (event) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis
-          yield* put(compact({
-            id: yield* deps.ids.entryId,
-            conversationId: deps.task.conversationId,
-            revision: 0,
-            createdAt: now,
-            updatedAt: now,
-            author: { kind: "system" as const },
-            turnId,
-            kind: "event" as const,
-            event,
-          }) as KnownTranscriptEntry)
+          yield* put(
+            compact({
+              id: yield* deps.ids.entryId,
+              conversationId: deps.task.conversationId,
+              revision: 0,
+              createdAt: now,
+              updatedAt: now,
+              author: { kind: "system" as const },
+              turnId,
+              kind: "event" as const,
+              event,
+            }) as KnownTranscriptEntry,
+          )
         }),
       finalize: (completed) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis
           for (const step of [...steps.values()]) {
             let next: KnownTranscriptEntry | undefined
             if ((step.kind === "message" || step.kind === "reasoning") && step.streaming) {
-              next = step.kind === "message" && !completed ? { ...step, streaming: false, aborted: true } : { ...step, streaming: false }
-            } else if (step.kind === "tool-call" && (step.status === "pending" || step.status === "running" || step.status === "awaiting-approval")) {
+              next =
+                step.kind === "message" && !completed
+                  ? { ...step, streaming: false, aborted: true }
+                  : { ...step, streaming: false }
+            } else if (
+              step.kind === "tool-call" &&
+              (step.status === "pending" || step.status === "running" || step.status === "awaiting-approval")
+            ) {
               next = { ...step, status: completed ? "completed" : "interrupted", completedAt: now }
             }
             if (next !== undefined) yield* put({ ...next, revision: step.revision + 1, updatedAt: now })
@@ -404,7 +430,7 @@ type Outcome =
 const failed = (error: string): Outcome => ({ _tag: "failed", error })
 
 const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const scope = yield* Effect.scope
     const hub = yield* LiveHub
     const approvals = yield* ApprovalService
@@ -440,7 +466,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
     /** Persists and publishes a task (and keeps the live copy in sync). */
     const save = (task: Task) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const live = lives.get(task.id)
         if (live !== undefined) {
           live.task = task
@@ -452,7 +478,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
     /** Updates a live task's progress; publishes at most once per throttle window (trailing). */
     const touch = (taskId: TaskId, f: (task: Task) => Task) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const live = lives.get(taskId)
         if (live === undefined || live.task.status !== "running") return
         const next = f(live.task)
@@ -467,10 +493,12 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         live.flushing = true
         yield* Effect.forkIn(
           Effect.sleep(Duration.millis(throttleMs - (now - live.publishedAt))).pipe(
-            Effect.andThen(Effect.suspend(() => {
-              live.flushing = false
-              return lives.get(taskId) === live && live.task.status === "running" ? save(live.task) : Effect.void
-            })),
+            Effect.andThen(
+              Effect.suspend(() => {
+                live.flushing = false
+                return lives.get(taskId) === live && live.task.status === "running" ? save(live.task) : Effect.void
+              }),
+            ),
           ),
           scope,
           { startImmediately: true },
@@ -478,7 +506,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
       })
 
     const read = (taskId: TaskId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const live = lives.get(taskId)
         if (live !== undefined) return live.task
         const stored = yield* orDie(repo.get(taskId))
@@ -492,7 +520,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
     /** Where a task's result goes: its origin while the bot is still there, else the bot's DM. */
     const reportTo = (task: Task) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bot = yield* orDie(bots.get(task.botId))
         if (Option.isNone(bot)) return undefined
         const members = yield* orDie(conversations.members(task.conversationId))
@@ -500,7 +528,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
       })
 
     const report = (task: Task, partial: string | undefined) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conversationId = yield* reportTo(task)
         if (conversationId === undefined) return
         const onCall = fromCall.delete(task.id) && presence?.onCall(task.botId) === true
@@ -520,13 +548,14 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
     const denyAll: HarnessRequestResolution = { decision: "deny" }
 
     const approve = (taskId: TaskId, request: HarnessRequest, workspace?: ApprovalWorkspace) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const live = lives.get(taskId)
         if (live === undefined || live.task.status !== "running") return denyAll
         if (request.kind === "question") {
           return {
             decision: "deny",
-            message: "You cannot ask the owner from here. Finish with what you have and say in your result what you need from them.",
+            message:
+              "You cannot ask the owner from here. Finish with what you have and say in your result what you need from them.",
           } satisfies HarnessRequestResolution
         }
         const found = yield* orDie(bots.get(live.task.botId))
@@ -541,12 +570,17 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
             harness: bot.harness.kind,
             ...(where === undefined ? {} : { workspace: where }),
             task: { id: taskId, title: live.task.title },
-            recordDecision: (event) => live.ingest === undefined ? Effect.void : live.ingest.recordDecision(event),
+            recordDecision: (event) => (live.ingest === undefined ? Effect.void : live.ingest.recordDecision(event)),
             onPending: (pending) => {
               waited = true
-              return Effect.gen(function*() {
+              return Effect.gen(function* () {
                 if (lives.get(taskId) !== live) return
-                live.task = { ...live.task, waiting: true, progress: `Waiting for you: ${pending.title}`, updatedAt: yield* Clock.currentTimeMillis }
+                live.task = {
+                  ...live.task,
+                  waiting: true,
+                  progress: `Waiting for you: ${pending.title}`,
+                  updatedAt: yield* Clock.currentTimeMillis,
+                }
                 yield* save(live.task)
               })
             },
@@ -560,7 +594,9 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         }
         return resolution
       }).pipe(
-        Effect.catchCause((cause) => Effect.logError("BackgroundTasks: approval failed; denying", cause).pipe(Effect.as(denyAll))),
+        Effect.catchCause((cause) =>
+          Effect.logError("BackgroundTasks: approval failed; denying", cause).pipe(Effect.as(denyAll)),
+        ),
       )
 
     // ------------------------------------------------------------------ the first turn
@@ -570,26 +606,36 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
      * stay short), the brief, and updates that arrived while it waited to start.
      */
     const firstTurnText = (task: Task, updates: ReadonlyArray<string>) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const found = yield* orDie(conversations.get(task.conversationId))
         const conversation = Option.getOrUndefined(found)
-        const where = conversation === undefined || conversation.kind === "direct"
-          ? "your direct chat with the owner"
-          : conversation.kind === "group"
-          ? `the group chat ${quoted(conversation.title)}`
-          : `the routine run ${quoted(conversation.title)}`
+        const where =
+          conversation === undefined || conversation.kind === "direct"
+            ? "your direct chat with the owner"
+            : conversation.kind === "group"
+              ? `the group chat ${quoted(conversation.title)}`
+              : `the routine run ${quoted(conversation.title)}`
         const page = yield* orDie(entries.page({ conversationId: task.conversationId, limit: TASK_CONTEXT_SCAN }))
         const names = new Map<BotId, string>()
         const messages: Array<ContextMessage> = []
         for (const entry of page.entries) {
-          if (entry.kind !== "message" || entry.streaming || (entry.text.trim() === "" && entry.attachments.length === 0)) continue
+          if (
+            entry.kind !== "message" ||
+            entry.streaming ||
+            (entry.text.trim() === "" && entry.attachments.length === 0)
+          )
+            continue
           let speaker: string
           if (entry.author.kind === "user") speaker = "Owner"
           else if (entry.author.kind !== "bot") continue
           else if (entry.author.botId === task.botId) speaker = "You"
           else {
             const id = entry.author.botId
-            if (!names.has(id)) names.set(id, Option.match(yield* orDie(bots.get(id)), { onNone: () => "a teammate", onSome: (b) => b.name }))
+            if (!names.has(id))
+              names.set(
+                id,
+                Option.match(yield* orDie(bots.get(id)), { onNone: () => "a teammate", onSome: (b) => b.name }),
+              )
             speaker = `@${names.get(id)!}`
           }
           messages.push({ speaker, text: messageWithAttachments(entry.text, entry.attachments) })
@@ -599,142 +645,169 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
-            : Effect.logWarning("BackgroundTasks: could not read the origin conversation; the brief goes alone", cause).pipe(
-              Effect.as(renderTaskTurn({ where: "", messages: [], brief: task.brief, updates })),
-            )
+            : Effect.logWarning(
+                "BackgroundTasks: could not read the origin conversation; the brief goes alone",
+                cause,
+              ).pipe(Effect.as(renderTaskTurn({ where: "", messages: [], brief: task.brief, updates }))),
         ),
       )
 
     // ------------------------------------------------------------------ running one task
 
     const execute = (live: Live): Effect.Effect<Outcome> =>
-      Effect.scoped(Effect.gen(function*() {
-        const task = live.task
-        const found = yield* orDie(bots.get(task.botId))
-        if (Option.isNone(found)) return failed("its bot was deleted")
-        const bot: Bot = found.value
-        const driver = yield* Effect.result(registry.get(bot.harness.kind, bot.harness.profileId))
-        if (driver._tag === "Failure") return failed(driver.failure.message)
-        const resolved = yield* Effect.result(placement.resolve({ bot, driver: driver.success }))
-        if (resolved._tag === "Failure") return failed(resolved.failure.message)
-        const where = resolved.success
-        live.workspace = { nodeId: where.hostNodeId, path: where.workspacePath }
-        const claims: McpClaims = {
-          botId: bot.id,
-          conversationId: task.conversationId,
-          sessionKey: sessionKeyOf(bot.id, task.conversationId),
-          toolsets: [...where.toolsets],
-          hostNodeId: where.hostNodeId,
-          workspacePath: where.workspacePath,
-          boundNodeIds: [...bot.boundNodeIds],
-          taskId: task.id,
-        }
-        const binding = yield* issuer.issue(claims)
-        const instructions = withTaskSection(yield* renderer.render({ bot, placement: where }), task.title)
-        const closed = yield* Deferred.make<string>()
-        const ingest = yield* makeTaskIngest({
-          task,
-          harness: driver.success.kind,
-          model: bot.harness.model,
-          ids,
-          repo,
-          usage: usageService,
-          onProgress: ({ label, steps }) =>
-            touch(task.id, (t) => compact({ ...t, progress: t.waiting === true ? t.progress : label, stepCount: steps })),
-          onClosed: (reason) => Effect.asVoid(Deferred.succeed(closed, reason)),
-        })
-        live.ingest = ingest
-        const open = (nativeSessionId: string | undefined) =>
-          Effect.result(driver.success.openSession({
-            purpose: "task",
-            bot,
+      Effect.scoped(
+        Effect.gen(function* () {
+          const task = live.task
+          const found = yield* orDie(bots.get(task.botId))
+          if (Option.isNone(found)) return failed("its bot was deleted")
+          const bot: Bot = found.value
+          const driver = yield* Effect.result(registry.get(bot.harness.kind, bot.harness.profileId))
+          if (driver._tag === "Failure") return failed(driver.failure.message)
+          const resolved = yield* Effect.result(placement.resolve({ bot, driver: driver.success }))
+          if (resolved._tag === "Failure") return failed(resolved.failure.message)
+          const where = resolved.success
+          live.workspace = { nodeId: where.hostNodeId, path: where.workspacePath }
+          const claims: McpClaims = {
+            botId: bot.id,
             conversationId: task.conversationId,
-            sessionKey: taskSessionKeyOf(bot.id, task.id),
-            nativeSessionId,
-            placement: where,
-            instructions,
-            mcp: [binding],
+            sessionKey: sessionKeyOf(bot.id, task.conversationId),
+            toolsets: [...where.toolsets],
+            hostNodeId: where.hostNodeId,
+            workspacePath: where.workspacePath,
+            boundNodeIds: [...bot.boundNodeIds],
+            taskId: task.id,
+          }
+          const binding = yield* issuer.issue(claims)
+          const instructions = withTaskSection(yield* renderer.render({ bot, placement: where }), task.title)
+          const closed = yield* Deferred.make<string>()
+          const ingest = yield* makeTaskIngest({
+            task,
+            harness: driver.success.kind,
             model: bot.harness.model,
-            effort: bot.harness.effort,
-            onRequest: (request) => approve(task.id, request, { nodeId: where.hostNodeId, path: where.workspacePath }),
-          }))
-        // Cut off by a restart: its own session again when the harness can resume it.
-        const resumeId = live.restarted ? task.nativeSessionId : undefined
-        let opened = yield* open(resumeId)
-        const resumed = resumeId !== undefined && opened._tag === "Success"
-        if (opened._tag === "Failure" && resumeId !== undefined) {
-          yield* Effect.logWarning(`BackgroundTasks: could not resume task ${task.id}; starting it over`, opened.failure)
-          opened = yield* open(undefined)
-        }
-        if (opened._tag === "Failure") return failed(`could not start: ${opened.failure.message}`)
-        const session = opened.success
-        /** Saved at once (not throttled): a crash right after must still find it. */
-        const remember = (event: HarnessEvent) =>
-          event._tag !== "SessionBound" || live.task.nativeSessionId === event.nativeSessionId
-            ? Effect.void
-            : save({ ...live.task, nativeSessionId: event.nativeSessionId })
-        yield* Effect.forkScoped(
-          Stream.runForEach(session.events, (event) => Effect.andThen(remember(event), ingest.handle(event))).pipe(
-            Effect.catchCause((cause) => Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("BackgroundTasks: event stream failed", cause)),
-            Effect.ensuring(Deferred.succeed(closed, "the harness event stream ended")),
-          ),
-          { startImmediately: true },
-        )
-        const steerable = driver.success.capabilities.steer
-        // The first turn: the origin conversation's recent messages, the brief, early updates.
-        let text = resumed
-          ? TASK_RESUME_TEXT
-          : live.restarted
-          ? `${yield* firstTurnText(task, live.pending.splice(0))}\n\n${TASK_RESTART_NOTE}`
-          : yield* firstTurnText(task, live.pending.splice(0))
-        type Ended = { readonly kind: "terminal"; readonly terminal: TurnTerminal } | { readonly kind: "closed"; readonly reason: string } | { readonly kind: "stop"; readonly stop: Stop }
-        for (;;) {
-          const turnId = yield* ids.turnId
-          const terminal = yield* ingest.begin(turnId)
-          if (live.stopped !== undefined) return { _tag: "cancelled", stop: live.stopped } satisfies Outcome
-          const started = yield* Effect.result(session.startTurn({ turnId, conversationId: task.conversationId, text, attachments: [] }))
-          if (started._tag === "Failure") return failed(started.failure.message)
-          if (steerable) live.turn = { session, turnId }
-          const ended = yield* Effect.raceAllFirst([
-            Effect.map(Deferred.await(terminal), (t): Ended => ({ kind: "terminal", terminal: t })),
-            Effect.map(Deferred.await(closed), (reason): Ended => ({ kind: "closed", reason })),
-            Effect.map(Deferred.await(live.stop), (stop): Ended => ({ kind: "stop", stop })),
-          ])
-          // From here on, until the next turn starts, updates wait in `pending` (synchronously:
-          // an update either landed in the turn that just ended or is picked up below).
-          live.turn = undefined
-          if (ended.kind === "stop") {
-            live.ending = true
-            yield* session.interrupt.pipe(Effect.timeoutOption(Duration.seconds(5)), Effect.catchCause(() => Effect.void))
-            yield* Deferred.await(terminal).pipe(Effect.timeoutOption(options.interruptGrace))
-            return { _tag: "cancelled", stop: ended.stop } satisfies Outcome
+            ids,
+            repo,
+            usage: usageService,
+            onProgress: ({ label, steps }) =>
+              touch(task.id, (t) =>
+                compact({ ...t, progress: t.waiting === true ? t.progress : label, stepCount: steps }),
+              ),
+            onClosed: (reason) => Effect.asVoid(Deferred.succeed(closed, reason)),
+          })
+          live.ingest = ingest
+          const open = (nativeSessionId: string | undefined) =>
+            Effect.result(
+              driver.success.openSession({
+                purpose: "task",
+                bot,
+                conversationId: task.conversationId,
+                sessionKey: taskSessionKeyOf(bot.id, task.id),
+                nativeSessionId,
+                placement: where,
+                instructions,
+                mcp: [binding],
+                model: bot.harness.model,
+                effort: bot.harness.effort,
+                onRequest: (request) =>
+                  approve(task.id, request, { nodeId: where.hostNodeId, path: where.workspacePath }),
+              }),
+            )
+          // Cut off by a restart: its own session again when the harness can resume it.
+          const resumeId = live.restarted ? task.nativeSessionId : undefined
+          let opened = yield* open(resumeId)
+          const resumed = resumeId !== undefined && opened._tag === "Success"
+          if (opened._tag === "Failure" && resumeId !== undefined) {
+            yield* Effect.logWarning(
+              `BackgroundTasks: could not resume task ${task.id}; starting it over`,
+              opened.failure,
+            )
+            opened = yield* open(undefined)
           }
-          if (ended.kind === "closed") return failed(`the session closed: ${ended.reason}`)
-          switch (ended.terminal._tag) {
-            case "completed": {
-              // Updates that arrived during that turn: the work goes on with them in its next turn.
-              const updates = live.pending.splice(0)
-              if (updates.length > 0) {
-                text = updates.map((u) => renderTaskUpdate(u, { afterAnswer: true })).join("\n\n")
-                continue
-              }
+          if (opened._tag === "Failure") return failed(`could not start: ${opened.failure.message}`)
+          const session = opened.success
+          /** Saved at once (not throttled): a crash right after must still find it. */
+          const remember = (event: HarnessEvent) =>
+            event._tag !== "SessionBound" || live.task.nativeSessionId === event.nativeSessionId
+              ? Effect.void
+              : save({ ...live.task, nativeSessionId: event.nativeSessionId })
+          yield* Effect.forkScoped(
+            Stream.runForEach(session.events, (event) => Effect.andThen(remember(event), ingest.handle(event))).pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.void
+                  : Effect.logError("BackgroundTasks: event stream failed", cause),
+              ),
+              Effect.ensuring(Deferred.succeed(closed, "the harness event stream ended")),
+            ),
+            { startImmediately: true },
+          )
+          const steerable = driver.success.capabilities.steer
+          // The first turn: the origin conversation's recent messages, the brief, early updates.
+          let text = resumed
+            ? TASK_RESUME_TEXT
+            : live.restarted
+              ? `${yield* firstTurnText(task, live.pending.splice(0))}\n\n${TASK_RESTART_NOTE}`
+              : yield* firstTurnText(task, live.pending.splice(0))
+          type Ended =
+            | { readonly kind: "terminal"; readonly terminal: TurnTerminal }
+            | { readonly kind: "closed"; readonly reason: string }
+            | { readonly kind: "stop"; readonly stop: Stop }
+          for (;;) {
+            const turnId = yield* ids.turnId
+            const terminal = yield* ingest.begin(turnId)
+            if (live.stopped !== undefined) return { _tag: "cancelled", stop: live.stopped } satisfies Outcome
+            const started = yield* Effect.result(
+              session.startTurn({ turnId, conversationId: task.conversationId, text, attachments: [] }),
+            )
+            if (started._tag === "Failure") return failed(started.failure.message)
+            if (steerable) live.turn = { session, turnId }
+            const ended = yield* Effect.raceAllFirst([
+              Effect.map(Deferred.await(terminal), (t): Ended => ({ kind: "terminal", terminal: t })),
+              Effect.map(Deferred.await(closed), (reason): Ended => ({ kind: "closed", reason })),
+              Effect.map(Deferred.await(live.stop), (stop): Ended => ({ kind: "stop", stop })),
+            ])
+            // From here on, until the next turn starts, updates wait in `pending` (synchronously:
+            // an update either landed in the turn that just ended or is picked up below).
+            live.turn = undefined
+            if (ended.kind === "stop") {
               live.ending = true
-              return { _tag: "succeeded", result: ingest.lastText() ?? "" } satisfies Outcome
+              yield* session.interrupt.pipe(
+                Effect.timeoutOption(Duration.seconds(5)),
+                Effect.catchCause(() => Effect.void),
+              )
+              yield* Deferred.await(terminal).pipe(Effect.timeoutOption(options.interruptGrace))
+              return { _tag: "cancelled", stop: ended.stop } satisfies Outcome
             }
-            case "failed":
-              return failed(ended.terminal.message)
-            case "interrupted":
-              return failed("it was cut off")
+            if (ended.kind === "closed") return failed(`the session closed: ${ended.reason}`)
+            switch (ended.terminal._tag) {
+              case "completed": {
+                // Updates that arrived during that turn: the work goes on with them in its next turn.
+                const updates = live.pending.splice(0)
+                if (updates.length > 0) {
+                  text = updates.map((u) => renderTaskUpdate(u, { afterAnswer: true })).join("\n\n")
+                  continue
+                }
+                live.ending = true
+                return { _tag: "succeeded", result: ingest.lastText() ?? "" } satisfies Outcome
+              }
+              case "failed":
+                return failed(ended.terminal.message)
+              case "interrupted":
+                return failed("it was cut off")
+            }
           }
-        }
-      }).pipe(Effect.ensuring(Effect.sync(() => {
-        live.ending = true
-        live.turn = undefined
-      }))))
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              live.ending = true
+              live.turn = undefined
+            }),
+          ),
+        ),
+      )
 
     /** Records how a task ended, reports it to the bot unless silent, and frees its slot. */
     const finish = (live: Live, outcome: Outcome) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const ingest = live.ingest
         if (ingest !== undefined) yield* ingest.finalize(outcome._tag === "succeeded")
@@ -746,7 +819,8 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
           endedAt: now,
           updatedAt: now,
           result: outcome._tag === "succeeded" ? capText(outcome.result, TASK_RESULT_MAX_CHARS) : undefined,
-          error: outcome._tag === "failed" ? outcome.error : outcome._tag === "cancelled" ? outcome.stop.reason : undefined,
+          error:
+            outcome._tag === "failed" ? outcome.error : outcome._tag === "cancelled" ? outcome.stop.reason : undefined,
           stoppedBy: outcome._tag === "cancelled" ? outcome.stop.by : undefined,
           usage: usage ?? base.usage,
           stepCount: ingest?.stepCount() ?? base.stepCount,
@@ -761,7 +835,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
       })
 
     const runTask = (live: Live) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         yield* save({ ...live.task, status: "running", startedAt: now, updatedAt: now })
         const exit = yield* Effect.exit(execute(live))
@@ -775,17 +849,21 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         yield* finish(live, exit.value)
       }).pipe(
         Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("BackgroundTasks: finishing a task failed", cause)
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logError("BackgroundTasks: finishing a task failed", cause),
         ),
-        Effect.ensuring(Effect.suspend(() => {
-          if (lives.get(live.task.id) === live) lives.delete(live.task.id)
-          return Effect.andThen(Deferred.succeed(live.done, undefined), pump(live.task.botId))
-        })),
+        Effect.ensuring(
+          Effect.suspend(() => {
+            if (lives.get(live.task.id) === live) lives.delete(live.task.id)
+            return Effect.andThen(Deferred.succeed(live.done, undefined), pump(live.task.botId))
+          }),
+        ),
       )
 
     /** Starts the bot's oldest queued tasks while fewer than `maxPerBot` run. */
     const pump = (botId: BotId): Effect.Effect<void> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         for (;;) {
           if (held) return
           const mine = [...lives.values()].filter((l) => l.task.botId === botId)
@@ -802,19 +880,29 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
     // ------------------------------------------------------------------ API
 
-    const start = Effect.fn("BackgroundTasks.start")(function*(ctx: ToolContext, input: { readonly title: string; readonly brief: string }) {
+    const start = Effect.fn("BackgroundTasks.start")(function* (
+      ctx: ToolContext,
+      input: { readonly title: string; readonly brief: string },
+    ) {
       if (ctx.taskId !== undefined) {
-        return yield* new InvalidInput({ message: "Starting more parallel work is not available here; do it yourself as part of this work." })
+        return yield* new InvalidInput({
+          message: "Starting more parallel work is not available here; do it yourself as part of this work.",
+        })
       }
       const title = input.title.replace(/\s+/g, " ").trim()
       const brief = input.brief.trim()
       if (title === "") return yield* new InvalidInput({ message: "Give the work a short title." })
       if (title.length > TASK_TITLE_MAX_CHARS) {
-        return yield* new InvalidInput({ message: `The title is longer than ${TASK_TITLE_MAX_CHARS} characters; shorten it.` })
+        return yield* new InvalidInput({
+          message: `The title is longer than ${TASK_TITLE_MAX_CHARS} characters; shorten it.`,
+        })
       }
-      if (brief === "") return yield* new InvalidInput({ message: "Write the brief: what to do and what result to bring back." })
+      if (brief === "")
+        return yield* new InvalidInput({ message: "Write the brief: what to do and what result to bring back." })
       if (brief.length > TASK_BRIEF_MAX_CHARS) {
-        return yield* new InvalidInput({ message: `The brief is longer than ${TASK_BRIEF_MAX_CHARS} characters; shorten it or put details in a file and name its path.` })
+        return yield* new InvalidInput({
+          message: `The brief is longer than ${TASK_BRIEF_MAX_CHARS} characters; shorten it or put details in a file and name its path.`,
+        })
       }
       const key = ctx.callId === undefined ? undefined : `${ctx.claims.botId}:${ctx.callId}`
       const again = key === undefined ? undefined : startedBy.get(key)
@@ -863,7 +951,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
     /** Stops one task; waits (bounded) until a running one has ended. */
     const stopTask = (taskId: TaskId, stop: Stop) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const live = lives.get(taskId)
         if (live === undefined) return yield* read(taskId)
         if (live.stopped === undefined) live.stopped = stop
@@ -879,7 +967,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         return yield* read(taskId)
       })
 
-    const cancel = Effect.fn("BackgroundTasks.cancel")(function*(taskId: TaskId, by: TaskStoppedBy) {
+    const cancel = Effect.fn("BackgroundTasks.cancel")(function* (taskId: TaskId, by: TaskStoppedBy) {
       const task = yield* read(taskId)
       if (isTerminalTaskStatus(task.status)) return task
       return yield* stopTask(taskId, {
@@ -891,46 +979,65 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
     /** One update as a step of the task (the Tasks tab shows it among the steps). */
     const recordUpdate = (task: Task, message: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
-        yield* orDie(repo.putStep(task.id, {
-          id: yield* ids.entryId,
-          conversationId: task.conversationId,
-          revision: 0,
-          createdAt: now,
-          updatedAt: now,
-          author: { kind: "bot", botId: task.botId },
-          kind: "message",
-          role: "user",
-          text: message,
-          attachments: [],
-          streaming: false,
-        }))
+        yield* orDie(
+          repo.putStep(task.id, {
+            id: yield* ids.entryId,
+            conversationId: task.conversationId,
+            revision: 0,
+            createdAt: now,
+            updatedAt: now,
+            author: { kind: "bot", botId: task.botId },
+            kind: "message",
+            role: "user",
+            text: message,
+            attachments: [],
+            streaming: false,
+          }),
+        )
       })
 
-    const update = Effect.fn("BackgroundTasks.update")(function*(ctx: ToolContext, input: { readonly taskId: TaskId; readonly message: string }) {
+    const update = Effect.fn("BackgroundTasks.update")(function* (
+      ctx: ToolContext,
+      input: { readonly taskId: TaskId; readonly message: string },
+    ) {
       if (ctx.taskId !== undefined) {
         return yield* new InvalidInput({ message: "Passing updates to parallel work is not available here." })
       }
       const message = input.message.trim()
-      if (message === "") return yield* new InvalidInput({ message: "Write the update: what to change or take into account." })
+      if (message === "")
+        return yield* new InvalidInput({ message: "Write the update: what to change or take into account." })
       if (message.length > TASK_BRIEF_MAX_CHARS) {
-        return yield* new InvalidInput({ message: `The update is longer than ${TASK_BRIEF_MAX_CHARS} characters; shorten it or put details in a file and name its path.` })
+        return yield* new InvalidInput({
+          message: `The update is longer than ${TASK_BRIEF_MAX_CHARS} characters; shorten it or put details in a file and name its path.`,
+        })
       }
       const task = yield* read(input.taskId)
       if (task.botId !== ctx.claims.botId) return yield* new NotFound({ entity: "task", id: input.taskId })
       const live = lives.get(task.id)
       const over = (current: Task) => ({ task: current, delivery: "finished" as TaskUpdateDelivery })
-      if (live === undefined || live.ending || live.stopped !== undefined || isTerminalTaskStatus(live.task.status)) return over(yield* read(task.id))
+      if (live === undefined || live.ending || live.stopped !== undefined || isTerminalTaskStatus(live.task.status))
+        return over(yield* read(task.id))
       const at = live.turn
       if (at !== undefined) {
-        const steered = yield* Effect.result(at.session.steer({ turnId: at.turnId, conversationId: live.task.conversationId, text: renderTaskUpdate(message), attachments: [] }))
+        const steered = yield* Effect.result(
+          at.session.steer({
+            turnId: at.turnId,
+            conversationId: live.task.conversationId,
+            text: renderTaskUpdate(message),
+            attachments: [],
+          }),
+        )
         if (steered._tag === "Success") {
           yield* recordUpdate(live.task, message)
           yield* save({ ...live.task, updatedAt: yield* Clock.currentTimeMillis })
           return { task: live.task, delivery: "steered" as TaskUpdateDelivery }
         }
-        yield* Effect.logWarning(`BackgroundTasks: steering an update into ${task.id} failed; it waits for the next turn`, steered.failure)
+        yield* Effect.logWarning(
+          `BackgroundTasks: steering an update into ${task.id} failed; it waits for the next turn`,
+          steered.failure,
+        )
       }
       // (synchronous from the check to the push: the run loop reads `pending` when a turn ends)
       if (live.ending || lives.get(task.id) !== live) return over(yield* read(task.id))
@@ -943,12 +1050,16 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
     const list = (input: { readonly botId: BotId; readonly limit?: number | undefined }) =>
       Effect.map(orDie(repo.list({ botId: input.botId, limit: input.limit ?? LIST_LIMIT })), overlay)
 
-    const find = Effect.fn("BackgroundTasks.find")(function*(botId: BotId, ref: string) {
+    const find = Effect.fn("BackgroundTasks.find")(function* (botId: BotId, ref: string) {
       const want = ref.trim()
       const all = overlay(yield* orDie(repo.list({ botId, limit: 200 })))
       const byId = all.find((t) => t.id === want)
       if (byId !== undefined) return byId
-      const key = want.replace(/^["“”']+|["“”']+$/g, "").replace(/\s+/g, " ").trim().toLowerCase()
+      const key = want
+        .replace(/^["“”']+|["“”']+$/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
       const rank = (t: Task) => (isTerminalTaskStatus(t.status) ? 1 : 0)
       const ordered = [...all].sort((a, b) => rank(a) - rank(b) || b.createdAt - a.createdAt)
       const exact = ordered.find((t) => t.title.toLowerCase() === key)
@@ -960,19 +1071,23 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
       return yield* new NotFound({ entity: "task", id: want })
     })
 
-    const get = Effect.fn("BackgroundTasks.get")(function*(taskId: TaskId) {
+    const get = Effect.fn("BackgroundTasks.get")(function* (taskId: TaskId) {
       const task = yield* read(taskId)
       const steps: ReadonlyArray<TranscriptEntry> = yield* orDie(repo.steps(taskId))
       return { task, steps }
     })
 
     const removeBot = (botId: BotId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const mine = [...lives.values()].filter((l) => l.task.botId === botId)
-        yield* Effect.forEach(mine, (l) => stopTask(l.task.id, { by: "system", reason: "its bot was deleted", silent: true }), {
-          concurrency: "unbounded",
-          discard: true,
-        })
+        yield* Effect.forEach(
+          mine,
+          (l) => stopTask(l.task.id, { by: "system", reason: "its bot was deleted", silent: true }),
+          {
+            concurrency: "unbounded",
+            discard: true,
+          },
+        )
         for (const task of yield* orDie(repo.list({ botId }))) yield* orDie(repo.delete(task.id))
       }).pipe(Effect.catchCause((cause) => Effect.logError("BackgroundTasks.removeBot failed", cause)))
 
@@ -985,7 +1100,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
     /** Runs a task a restart cut off again, under its id (`restarts` + 1). */
     const restart = (task: Task) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const next = compact<Task>({
           ...task,
@@ -1015,17 +1130,24 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
       })
 
     const recover = (bootReport: BootRecoveryReport) =>
-      Effect.forEach(bootReport.interruptedTasks, (task) =>
-        Effect.gen(function*() {
-          const bot = yield* orDie(bots.get(task.botId))
-          if (Option.isSome(bot) && (task.restarts ?? 0) < MAX_TASK_RESTARTS) return yield* restart(task)
-          yield* publish(task)
-          const steps = yield* orDie(repo.steps(task.id))
-          const last = [...steps].reverse().find((s): s is Extract<TranscriptEntry, { kind: "message" }> =>
-            s.kind === "message" && s.role === "bot" && s.text.trim() !== ""
-          )
-          yield* report(task, last?.text)
-        }), { discard: true }).pipe(Effect.catchCause((cause) => Effect.logError("BackgroundTasks.recover failed", cause)))
+      Effect.forEach(
+        bootReport.interruptedTasks,
+        (task) =>
+          Effect.gen(function* () {
+            const bot = yield* orDie(bots.get(task.botId))
+            if (Option.isSome(bot) && (task.restarts ?? 0) < MAX_TASK_RESTARTS) return yield* restart(task)
+            yield* publish(task)
+            const steps = yield* orDie(repo.steps(task.id))
+            const last = [...steps]
+              .reverse()
+              .find(
+                (s): s is Extract<TranscriptEntry, { kind: "message" }> =>
+                  s.kind === "message" && s.role === "bot" && s.text.trim() !== "",
+              )
+            yield* report(task, last?.text)
+          }),
+        { discard: true },
+      ).pipe(Effect.catchCause((cause) => Effect.logError("BackgroundTasks.recover failed", cause)))
 
     // Running tasks stop with the layer (shutdown): boot recovery reports them next time.
     yield* Effect.addFinalizer(() => Effect.sync(() => lives.clear()))
@@ -1035,9 +1157,11 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
      * (a Codex task's app-server belongs to its driver: closing it first would end the task as
      * failed). Interrupted, they stay `running`; the next boot runs them again (`recover`).
      */
-    const handOff = Effect.gen(function*() {
+    const handOff = Effect.gen(function* () {
       held = true
-      const running = [...lives.values()].flatMap((l) => (l.task.status === "running" && l.fiber !== undefined ? [l.fiber] : []))
+      const running = [...lives.values()].flatMap((l) =>
+        l.task.status === "running" && l.fiber !== undefined ? [l.fiber] : [],
+      )
       if (running.length > 0) yield* Effect.logInfo("handing running tasks to the next boot", { tasks: running.length })
       yield* Fiber.interruptAll(running)
     })
@@ -1064,7 +1188,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
 
 /** The roster snapshot's tasks: every active task plus each bot's most recent finished ones. */
 export const rosterTasks = (repo: TaskRepo["Service"]) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const active = yield* repo.list({ statuses: ["queued", "running"] })
     const finished = yield* repo.list({ statuses: ["succeeded", "failed", "cancelled"], limit: 500 })
     const perBot = new Map<BotId, number>()

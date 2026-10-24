@@ -14,9 +14,12 @@ export interface SkillDownload {
   readonly hash?: string | undefined
 }
 
-export class SkillDirectory extends Context.Service<SkillDirectory, {
-  /** Best matches first. */
-  readonly search: (query: string) => Effect.Effect<ReadonlyArray<SkillSearchResult>, Unavailable>
-  /** `id` is `owner/repo/skill`. */
-  readonly download: (id: string) => Effect.Effect<SkillDownload, NotFound | Unavailable>
-}>()("openbot/core/SkillDirectory") {}
+export class SkillDirectory extends Context.Service<
+  SkillDirectory,
+  {
+    /** Best matches first. */
+    readonly search: (query: string) => Effect.Effect<ReadonlyArray<SkillSearchResult>, Unavailable>
+    /** `id` is `owner/repo/skill`. */
+    readonly download: (id: string) => Effect.Effect<SkillDownload, NotFound | Unavailable>
+  }
+>()("openbot/core/SkillDirectory") {}

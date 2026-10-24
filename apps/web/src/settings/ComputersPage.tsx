@@ -21,18 +21,40 @@ import {
   Switch,
   cn,
 } from "@openbot/ui"
-import { Check, ChevronDown, Ellipsis, Laptop, Monitor, Pencil, Plus, RefreshCw, Server, ShieldCheck, Trash2 } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  Ellipsis,
+  Laptop,
+  Monitor,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
 import { nodeDesktopState, nodeScreenState } from "../computer/desktop.ts"
 import { DesktopSetupNote } from "../computer/DesktopSetupNote.tsx"
 import { ScreenPermissionsNote } from "../computer/ScreenPermissionsNote.tsx"
 import { InlineEdit } from "../details/InlineEdit.tsx"
-import { CommandBlock, ConfirmDialog, ErrorLine, capabilityInfo, capabilityName, formatAgo, useCommand, useRosterValue } from "../details/kit.tsx"
+import {
+  CommandBlock,
+  ConfirmDialog,
+  ErrorLine,
+  capabilityInfo,
+  capabilityName,
+  formatAgo,
+  useCommand,
+  useRosterValue,
+} from "../details/kit.tsx"
 import { GroupLabel, PageHeader, SettingsCard } from "./layout.tsx"
 import { AsyncResult } from "effect/reactivity"
 
 /** Capabilities the node declared but the owner has not approved yet. */
-const unapproved = (n: NodeSummary): ReadonlyArray<string> => n.declaredCapabilities.filter((c) => !n.capabilities.includes(c))
+const unapproved = (n: NodeSummary): ReadonlyArray<string> =>
+  n.declaredCapabilities.filter((c) => !n.capabilities.includes(c))
 
 export function ComputersPage(): ReactNode {
   const nodesResult = useAtomValue(nodesAtom)
@@ -46,7 +68,13 @@ export function ComputersPage(): ReactNode {
         title="Computers"
         description="Your Bots think on this server and work on these computers. Each one dials in to OpenBot, so it can sit behind NAT."
         actions={
-          <PillButton variant="primary" size="card" leadingIcon={Plus} onClick={() => setPairing(true)} data-testid="pair-computer">
+          <PillButton
+            variant="primary"
+            size="card"
+            leadingIcon={Plus}
+            onClick={() => setPairing(true)}
+            data-testid="pair-computer"
+          >
             Pair a computer
           </PillButton>
         }
@@ -58,16 +86,26 @@ export function ComputersPage(): ReactNode {
             <Spinner size={14} /> Loading…
           </div>
         ) : nodes.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-fg-secondary">No computers yet. Pair one to give your Bots hands.</p>
+          <p className="px-4 py-6 text-center text-sm text-fg-secondary">
+            No computers yet. Pair one to give your Bots hands.
+          </p>
         ) : (
           nodes.map((n, i) => (
             <div key={n.id} className={cn(i > 0 && "border-t-[0.5px] border-line-tertiary")}>
-              <NodeRow node={n} bots={bots} expanded={expanded === n.id} onToggle={() => setExpanded(expanded === n.id ? undefined : n.id)} />
+              <NodeRow
+                node={n}
+                bots={bots}
+                expanded={expanded === n.id}
+                onToggle={() => setExpanded(expanded === n.id ? undefined : n.id)}
+              />
             </div>
           ))
         )}
       </SettingsCard>
-      <p className="mt-3 px-1 text-2xs text-fg-quaternary">Each computer also enforces its own limits: allowed folders, a deny-list and an approval ceiling that OpenBot cannot raise.</p>
+      <p className="mt-3 px-1 text-2xs text-fg-quaternary">
+        Each computer also enforces its own limits: allowed folders, a deny-list and an approval ceiling that OpenBot
+        cannot raise.
+      </p>
       {pairing && <PairDialog knownIds={nodes.map((n) => n.id)} onClose={() => setPairing(false)} />}
     </div>
   )
@@ -99,14 +137,26 @@ function statusPill(n: NodeSummary): ReactNode {
   )
 }
 
-function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummary; readonly bots: ReadonlyArray<Bot>; readonly expanded: boolean; readonly onToggle: () => void }): ReactNode {
+function NodeRow({
+  node,
+  bots,
+  expanded,
+  onToggle,
+}: {
+  readonly node: NodeSummary
+  readonly bots: ReadonlyArray<Bot>
+  readonly expanded: boolean
+  readonly onToggle: () => void
+}): ReactNode {
   const rename = useCommand("nodes.rename", node.id)
   const revoke = useCommand("nodes.revoke", node.id)
   const [renaming, setRenaming] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const pendingCaps = unapproved(node)
   const using = bots.filter((b) => b.hostNodeId === node.id || b.boundNodeIds.includes(node.id))
-  const desc = [node.platform, node.hostname, node.version ? `node ${node.version}` : undefined].filter(Boolean).join(" · ")
+  const desc = [node.platform, node.hostname, node.version ? `node ${node.version}` : undefined]
+    .filter(Boolean)
+    .join(" · ")
   return (
     <div className="flex flex-col" data-testid="node-row">
       <div className="flex min-h-14 items-center gap-3 px-4 py-2">
@@ -145,7 +195,11 @@ function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummar
           <span className="max-w-full truncate text-sm text-fg-secondary">{desc}</span>
         </div>
         {pendingCaps.length > 0 && node.capabilities.length > 0 && (
-          <button type="button" onClick={onToggle} className="shrink-0 text-xs font-medium text-warn-fg hover:underline">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="shrink-0 text-xs font-medium text-warn-fg hover:underline"
+          >
             {pendingCaps.length} to approve
           </button>
         )}
@@ -157,13 +211,22 @@ function NodeRow({ node, bots, expanded, onToggle }: { readonly node: NodeSummar
           onClick={onToggle}
           className="inline-flex size-7 items-center justify-center rounded-full text-icon-secondary hover:bg-secondary"
         >
-          <Icon icon={ChevronDown} size="sm" className={cn("transition-transform duration-200", expanded && "rotate-180")} />
+          <Icon
+            icon={ChevronDown}
+            size="sm"
+            className={cn("transition-transform duration-200", expanded && "rotate-180")}
+          />
         </button>
         <Menu
           label={`${node.label} actions`}
           align="end"
           trigger={(p) => (
-            <button {...p} type="button" aria-label={`${node.label} actions`} className="inline-flex size-7 items-center justify-center rounded-full text-icon-secondary hover:bg-secondary aria-expanded:bg-secondary">
+            <button
+              {...p}
+              type="button"
+              aria-label={`${node.label} actions`}
+              className="inline-flex size-7 items-center justify-center rounded-full text-icon-secondary hover:bg-secondary aria-expanded:bg-secondary"
+            >
               <Icon icon={Ellipsis} size="sm" />
             </button>
           )}
@@ -266,7 +329,9 @@ function NodeDesktop({ node }: { readonly node: NodeSummary }): ReactNode {
           Each Bot that works here gets its own screen to watch and take over.
         </span>
       ) : state === "unapproved" ? (
-        <span className="text-sm text-fg-secondary">This computer offers full desktops. Turn on Full desktop above to use them.</span>
+        <span className="text-sm text-fg-secondary">
+          This computer offers full desktops. Turn on Full desktop above to use them.
+        </span>
       ) : (
         <DesktopSetupNote
           missing={node.desktopMissing ?? []}
@@ -280,7 +345,15 @@ function NodeDesktop({ node }: { readonly node: NodeSummary }): ReactNode {
 }
 
 /** Switch per declared capability; approved = the effective set (declared ∩ approved). */
-function CapabilityEditor({ node, onDone, confirmLabel }: { readonly node: NodeSummary; readonly onDone?: () => void; readonly confirmLabel?: string }): ReactNode {
+function CapabilityEditor({
+  node,
+  onDone,
+  confirmLabel,
+}: {
+  readonly node: NodeSummary
+  readonly onDone?: () => void
+  readonly confirmLabel?: string
+}): ReactNode {
   const set = useCommand("nodes.setCapabilities", node.id)
   // first approval defaults to everything the node declared; afterwards the effective set
   const initial = () => new Set(node.capabilities.length > 0 ? node.capabilities : node.declaredCapabilities)
@@ -291,7 +364,9 @@ function CapabilityEditor({ node, onDone, confirmLabel }: { readonly node: NodeS
     setDraft(initial())
   }
   const dirty = draft.size !== node.capabilities.length || node.capabilities.some((c) => !draft.has(c))
-  const declared = [...new Set([...node.declaredCapabilities, ...node.capabilities])].sort((a, b) => capabilityName(a).localeCompare(capabilityName(b)))
+  const declared = [...new Set([...node.declaredCapabilities, ...node.capabilities])].sort((a, b) =>
+    capabilityName(a).localeCompare(capabilityName(b)),
+  )
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs text-fg-secondary">Capabilities</span>
@@ -302,7 +377,13 @@ function CapabilityEditor({ node, onDone, confirmLabel }: { readonly node: NodeS
           {declared.map((cap, i) => {
             const info = capabilityInfo(cap)
             return (
-              <label key={cap} className={cn("flex min-h-[52px] cursor-pointer items-center gap-3 px-3 py-2", i > 0 && "border-t-[0.5px] border-line-tertiary")}>
+              <label
+                key={cap}
+                className={cn(
+                  "flex min-h-[52px] cursor-pointer items-center gap-3 px-3 py-2",
+                  i > 0 && "border-t-[0.5px] border-line-tertiary",
+                )}
+              >
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="text-sm text-fg">
                     {info.title} <span className="font-mono text-2xs text-fg-quaternary">{cap}</span>
@@ -360,7 +441,13 @@ function useCountdown(until: number | undefined): string | undefined {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
 }
 
-function PairDialog({ knownIds, onClose }: { readonly knownIds: ReadonlyArray<string>; readonly onClose: () => void }): ReactNode {
+function PairDialog({
+  knownIds,
+  onClose,
+}: {
+  readonly knownIds: ReadonlyArray<string>
+  readonly onClose: () => void
+}): ReactNode {
   const create = useCommand("nodes.createPairingCode")
   const nodes = useRosterValue<ReadonlyArray<NodeSummary>>(nodesAtom, [])
   const known = useRef(new Set(knownIds))
@@ -383,7 +470,11 @@ function PairDialog({ knownIds, onClose }: { readonly knownIds: ReadonlyArray<st
     <Dialog open onOpenChange={(o) => !o && onClose()} width={560} label="Pair a computer">
       {arrived ? (
         <>
-          <DialogHeader title={`Approve ${arrived.label}?`} description="It paired with OpenBot. Choose what your Bots may do on it." onClose={onClose} />
+          <DialogHeader
+            title={`Approve ${arrived.label}?`}
+            description="It paired with OpenBot. Choose what your Bots may do on it."
+            onClose={onClose}
+          />
           <DialogBody className="flex flex-col gap-4">
             <div className="flex flex-col rounded-xl bg-elevated hairline border-line-secondary">
               {[
@@ -392,7 +483,13 @@ function PairDialog({ knownIds, onClose }: { readonly knownIds: ReadonlyArray<st
                 ["Node version", arrived.version ?? "Unknown"],
                 ["Allowed folders", arrived.roots.join(", ") || "Default"],
               ].map(([k, v], i) => (
-                <div key={k} className={cn("flex min-h-9 items-center gap-3 px-3 text-sm", i > 0 && "border-t-[0.5px] border-line-tertiary")}>
+                <div
+                  key={k}
+                  className={cn(
+                    "flex min-h-9 items-center gap-3 px-3 text-sm",
+                    i > 0 && "border-t-[0.5px] border-line-tertiary",
+                  )}
+                >
                   <span className="w-32 shrink-0 text-fg">{k}</span>
                   <span className="min-w-0 flex-1 truncate text-fg-secondary">{v}</span>
                 </div>
@@ -410,22 +507,47 @@ function PairDialog({ knownIds, onClose }: { readonly knownIds: ReadonlyArray<st
         </>
       ) : (
         <>
-          <DialogHeader title="Pair a computer" description="Give your Bots hands on another machine: a laptop, a VPS or a container." onClose={onClose} />
+          <DialogHeader
+            title="Pair a computer"
+            description="Give your Bots hands on another machine: a laptop, a VPS or a container."
+            onClose={onClose}
+          />
           <DialogBody className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
               <span className="text-sm text-fg">1. On that computer, run</span>
-              {code ? <CommandBlock command={code.command} /> : <div className="h-9 animate-pulse rounded-lg bg-quaternary" />}
+              {code ? (
+                <CommandBlock command={code.command} />
+              ) : (
+                <div className="h-9 animate-pulse rounded-lg bg-quaternary" />
+              )}
               <span className="text-xs text-fg-tertiary">
-                {installs
-                  ? "Linux or macOS. It installs the OpenBot node, pairs it and keeps it running. That computer needs to reach this server."
-                  : <>It needs the OpenBot node daemon (<code className="font-mono">openbot-node</code>) and network access to this server.</>}
+                {installs ? (
+                  "Linux or macOS. It installs the OpenBot node, pairs it and keeps it running. That computer needs to reach this server."
+                ) : (
+                  <>
+                    It needs the OpenBot node daemon (<code className="font-mono">openbot-node</code>) and network
+                    access to this server.
+                  </>
+                )}
               </span>
             </div>
             <div className="flex flex-col gap-2">
-              <span className="text-sm text-fg">{installs ? "2. The code it pairs with" : "2. Or enter this code when it asks"}</span>
-              <div className="flex h-16 items-center justify-center rounded-2xl bg-secondary" data-testid="pairing-code">
+              <span className="text-sm text-fg">
+                {installs ? "2. The code it pairs with" : "2. Or enter this code when it asks"}
+              </span>
+              <div
+                className="flex h-16 items-center justify-center rounded-2xl bg-secondary"
+                data-testid="pairing-code"
+              >
                 {code ? (
-                  <span className={cn("text-3xl font-medium tracking-[.12em] tabular-nums", expired ? "text-fg-quaternary line-through" : "text-fg")}>{code.code}</span>
+                  <span
+                    className={cn(
+                      "text-3xl font-medium tracking-[.12em] tabular-nums",
+                      expired ? "text-fg-quaternary line-through" : "text-fg",
+                    )}
+                  >
+                    {code.code}
+                  </span>
                 ) : create.error ? (
                   <span className="text-sm text-danger-fg">{create.error}</span>
                 ) : (
@@ -434,7 +556,11 @@ function PairDialog({ knownIds, onClose }: { readonly knownIds: ReadonlyArray<st
               </div>
               <div className="flex items-center gap-2 text-xs text-fg-secondary">
                 <span>{code ? (expired ? "This code expired." : `Single use · expires in ${left}`) : " "}</span>
-                <button type="button" onClick={() => void newCode()} className="ms-auto inline-flex items-center gap-1 text-fg-secondary hover:text-fg">
+                <button
+                  type="button"
+                  onClick={() => void newCode()}
+                  className="ms-auto inline-flex items-center gap-1 text-fg-secondary hover:text-fg"
+                >
                   <Icon icon={RefreshCw} size="xs" />
                   New code
                 </button>

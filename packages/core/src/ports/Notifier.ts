@@ -13,7 +13,10 @@ export interface NotificationInput {
   readonly body: string
 }
 
-export class Notifier extends Context.Service<Notifier, {
-  /** Allocates id/at, honors the bot's `notify` preference (all | mentions | none), publishes. */
-  readonly notify: (input: NotificationInput) => Effect.Effect<Notification | undefined>
-}>()("openbot/core/Notifier") {}
+export class Notifier extends Context.Service<
+  Notifier,
+  {
+    /** Allocates id/at, honors the bot's `notify` preference (all | mentions | none), publishes. */
+    readonly notify: (input: NotificationInput) => Effect.Effect<Notification | undefined>
+  }
+>()("openbot/core/Notifier") {}

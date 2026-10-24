@@ -18,22 +18,22 @@ export type Block =
   | { readonly kind: "paragraph"; readonly text: string }
   | { readonly kind: "code"; readonly lang: string; readonly text: string }
   | {
-    readonly kind: "list"
-    readonly ordered: boolean
-    readonly start: number
-    readonly items: ReadonlyArray<string>
-    /** One entry per item when this is a task list; undefined once an item has no `[ ]`/`[x]` prefix. */
-    readonly checked?: ReadonlyArray<boolean | undefined>
-  }
+      readonly kind: "list"
+      readonly ordered: boolean
+      readonly start: number
+      readonly items: ReadonlyArray<string>
+      /** One entry per item when this is a task list; undefined once an item has no `[ ]`/`[x]` prefix. */
+      readonly checked?: ReadonlyArray<boolean | undefined>
+    }
   | { readonly kind: "quote"; readonly text: string }
   | { readonly kind: "heading"; readonly level: number; readonly text: string }
   | { readonly kind: "rule" }
   | {
-    readonly kind: "table"
-    readonly header: ReadonlyArray<string>
-    readonly align: ReadonlyArray<"left" | "center" | "right" | undefined>
-    readonly rows: ReadonlyArray<ReadonlyArray<string>>
-  }
+      readonly kind: "table"
+      readonly header: ReadonlyArray<string>
+      readonly align: ReadonlyArray<"left" | "center" | "right" | undefined>
+      readonly rows: ReadonlyArray<ReadonlyArray<string>>
+    }
 
 const BULLET = /^\s{0,3}[-*+]\s+(.*)$/
 const ORDERED = /^\s{0,3}(\d{1,9})[.)]\s+(.*)$/
@@ -83,7 +83,8 @@ export const parseBlocks = (source: string): ReadonlyArray<Block> => {
       flush()
       const body: string[] = []
       i++
-      while (i < lines.length && !new RegExp(`^\\s{0,3}${fence[1] === "```" ? "```" : "~~~"}\\s*$`).test(lines[i]!)) body.push(lines[i++]!)
+      while (i < lines.length && !new RegExp(`^\\s{0,3}${fence[1] === "```" ? "```" : "~~~"}\\s*$`).test(lines[i]!))
+        body.push(lines[i++]!)
       blocks.push({ kind: "code", lang: fence[2] ?? "", text: body.join("\n") })
       continue
     }
@@ -94,7 +95,13 @@ export const parseBlocks = (source: string): ReadonlyArray<Block> => {
     if (line.includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1]!) && lines[i + 1]!.includes("-")) {
       const header = splitRow(line)
       const align = splitRow(lines[i + 1]!).map((c) =>
-        c.startsWith(":") && c.endsWith(":") ? ("center" as const) : c.endsWith(":") ? ("right" as const) : c.startsWith(":") ? ("left" as const) : undefined,
+        c.startsWith(":") && c.endsWith(":")
+          ? ("center" as const)
+          : c.endsWith(":")
+            ? ("right" as const)
+            : c.startsWith(":")
+              ? ("left" as const)
+              : undefined,
       )
       if (header.length > 1 || line.trim().startsWith("|")) {
         flush()
@@ -138,7 +145,8 @@ export const parseBlocks = (source: string): ReadonlyArray<Block> => {
             checked.push(undefined)
             items.push(raw)
           }
-        } else if (l.trim() !== "" && /^\s{2,}\S/.test(l) && items.length > 0) items[items.length - 1] += `\n${l.trim()}`
+        } else if (l.trim() !== "" && /^\s{2,}\S/.test(l) && items.length > 0)
+          items[items.length - 1] += `\n${l.trim()}`
         else break
         i++
       }
@@ -204,17 +212,32 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 export const makeMentionScope = (bots: ReadonlyArray<MentionBot>, tone: "bot" | "inherit" = "bot"): MentionScope => {
   const byName = new Map(bots.map((b) => [b.name.toLowerCase(), b] as const))
   const names = [...bots.map((b) => b.name)].sort((a, b) => b.length - a.length).map(escapeRe)
-  return { byName, tone, re: names.length === 0 ? undefined : new RegExp(`(?<![\\w@])@(${names.join("|")}|everyone)(?![\\w-])`, "i") }
+  return {
+    byName,
+    tone,
+    re: names.length === 0 ? undefined : new RegExp(`(?<![\\w@])@(${names.join("|")}|everyone)(?![\\w-])`, "i"),
+  }
 }
 
-export function Mention({ bot, tone }: { readonly bot: MentionBot | undefined; readonly tone: "bot" | "inherit" }): ReactNode {
+export function Mention({
+  bot,
+  tone,
+}: {
+  readonly bot: MentionBot | undefined
+  readonly tone: "bot" | "inherit"
+}): ReactNode {
   if (bot === undefined) return <strong className="font-semibold">@everyone</strong>
   return (
     <span
       className="ob-mention inline-flex items-baseline gap-[3px] font-medium whitespace-nowrap"
       style={tone === "bot" ? { color: `var(--ob-${bot.avatar.color}-fg, inherit)` } : { fontWeight: 600 }}
     >
-      <Avatar shape={bot.avatar.shape as never} color={bot.avatar.color as never} size={16} className="relative top-[3px] shrink-0" />
+      <Avatar
+        shape={bot.avatar.shape as never}
+        color={bot.avatar.color as never}
+        size={16}
+        className="relative top-[3px] shrink-0"
+      />
       {bot.name}
     </span>
   )
@@ -224,9 +247,15 @@ const mentionRule = (scope: MentionScope): InlineRule | undefined =>
   scope.re === undefined
     ? undefined
     : {
-      re: scope.re,
-      render: (m, key) => <Mention key={key} bot={m[1]!.toLowerCase() === "everyone" ? undefined : scope.byName.get(m[1]!.toLowerCase())} tone={scope.tone} />,
-    }
+        re: scope.re,
+        render: (m, key) => (
+          <Mention
+            key={key}
+            bot={m[1]!.toLowerCase() === "everyone" ? undefined : scope.byName.get(m[1]!.toLowerCase())}
+            tone={scope.tone}
+          />
+        ),
+      }
 
 const rules: ReadonlyArray<InlineRule> = [
   { re: /`([^`\n]+)`/, render: (m, key) => <code key={key}>{m[1]}</code> },
@@ -246,7 +275,11 @@ const rules: ReadonlyArray<InlineRule> = [
     render: (m, key) => {
       const href = safeHref(m[2]!)
       if (!href) return <Fragment key={key}>{renderInline(m[1]!, `${key}t`)}</Fragment>
-      return <Link key={key} href={href}>{renderInline(m[1]!, `${key}t`)}</Link>
+      return (
+        <Link key={key} href={href}>
+          {renderInline(m[1]!, `${key}t`)}
+        </Link>
+      )
     },
   },
   {
@@ -261,7 +294,10 @@ const rules: ReadonlyArray<InlineRule> = [
   { re: /__(?=\S)([\s\S]+?)__(?!\w)/, render: (m, key) => <strong key={key}>{renderInline(m[1]!, `${key}b`)}</strong> },
   { re: /~~(?=\S)([\s\S]+?)~~/, render: (m, key) => <del key={key}>{renderInline(m[1]!, `${key}s`)}</del> },
   { re: /\*(?=[^\s*])([^*\n]+?)\*/, render: (m, key) => <em key={key}>{renderInline(m[1]!, `${key}i`)}</em> },
-  { re: /(?<![\w])_(?=\S)([^_\n]+?)_(?![\w])/, render: (m, key) => <em key={key}>{renderInline(m[1]!, `${key}i`)}</em> },
+  {
+    re: /(?<![\w])_(?=\S)([^_\n]+?)_(?![\w])/,
+    render: (m, key) => <em key={key}>{renderInline(m[1]!, `${key}i`)}</em>,
+  },
 ]
 
 const hostOf = (href: string): string | undefined => {
@@ -310,19 +346,19 @@ function SiteIcon({ host }: { readonly host: string | undefined }): ReactNode {
   const [tone, setTone] = useState<Tone | undefined>()
   return (
     <span className="ob-site-icon" data-tone={tone} aria-hidden>
-      {host === undefined || failed
-        ? <Globe size={13} strokeWidth={1.75} className="opacity-70" />
-        : (
-          <img
-            src={`/api/favicon?host=${encodeURIComponent(host)}`}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            // a 1-pixel image is the brain's "no icon"
-            onLoad={(e) => (e.currentTarget.naturalWidth <= 1 ? setFailed(true) : setTone(toneOf(e.currentTarget)))}
-            onError={() => setFailed(true)}
-          />
-        )}
+      {host === undefined || failed ? (
+        <Globe size={13} strokeWidth={1.75} className="opacity-70" />
+      ) : (
+        <img
+          src={`/api/favicon?host=${encodeURIComponent(host)}`}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          // a 1-pixel image is the brain's "no icon"
+          onLoad={(e) => (e.currentTarget.naturalWidth <= 1 ? setFailed(true) : setTone(toneOf(e.currentTarget)))}
+          onError={() => setFailed(true)}
+        />
+      )}
     </span>
   )
 }
@@ -342,8 +378,17 @@ function Link({ href, children }: { readonly href: string; readonly children: Re
   const external = /^https?:/i.test(href)
   const [lead, rest] = external ? leadOf(children) : [undefined, children]
   return (
-    <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})} className="break-words">
-      {external && <span className="whitespace-nowrap"><SiteIcon key={hostOf(href)} host={hostOf(href)} />{lead}</span>}
+    <a
+      href={href}
+      {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})}
+      className="break-words"
+    >
+      {external && (
+        <span className="whitespace-nowrap">
+          <SiteIcon key={hostOf(href)} host={hostOf(href)} />
+          {lead}
+        </span>
+      )}
       {rest}
     </a>
   )
@@ -352,7 +397,11 @@ function Link({ href, children }: { readonly href: string; readonly children: Re
 /** The mention scope of the Markdown render in progress (rendering is synchronous; nested rules inherit it). */
 let currentScope: MentionScope | undefined
 
-export const renderInline = (text: string, keyPrefix = "i", scope: MentionScope | undefined = currentScope): ReactNode[] => {
+export const renderInline = (
+  text: string,
+  keyPrefix = "i",
+  scope: MentionScope | undefined = currentScope,
+): ReactNode[] => {
   const mention = scope === undefined ? undefined : mentionRule(scope)
   const active = mention === undefined ? rules : [rules[0]!, mention, ...rules.slice(1)]
   const out: ReactNode[] = []
@@ -378,7 +427,15 @@ export const renderInline = (text: string, keyPrefix = "i", scope: MentionScope 
 // ------------------------------------------------------------------------------------------ render
 
 /** Renders plain text with only `@Bot` mentions styled (user bubbles). */
-export function MentionText({ text, bots, tone = "inherit" }: { readonly text: string; readonly bots: ReadonlyArray<MentionBot>; readonly tone?: "bot" | "inherit" }): ReactNode {
+export function MentionText({
+  text,
+  bots,
+  tone = "inherit",
+}: {
+  readonly text: string
+  readonly bots: ReadonlyArray<MentionBot>
+  readonly tone?: "bot" | "inherit"
+}): ReactNode {
   const scope = makeMentionScope(bots, tone)
   const rule = mentionRule(scope)
   if (rule === undefined) return text
@@ -394,7 +451,15 @@ export function MentionText({ text, bots, tone = "inherit" }: { readonly text: s
   return <>{out}</>
 }
 
-export function Markdown({ text, className, bots }: { readonly text: string; readonly className?: string; readonly bots?: ReadonlyArray<MentionBot> }): ReactNode {
+export function Markdown({
+  text,
+  className,
+  bots,
+}: {
+  readonly text: string
+  readonly className?: string
+  readonly bots?: ReadonlyArray<MentionBot>
+}): ReactNode {
   const blocks = parseBlocks(text)
   const previous = currentScope
   currentScope = bots === undefined ? undefined : makeMentionScope(bots, "bot")
@@ -405,7 +470,8 @@ export function Markdown({ text, className, bots }: { readonly text: string; rea
   }
 }
 
-const alignClass = (a: "left" | "center" | "right" | undefined) => (a === "center" ? "text-center" : a === "right" ? "text-right" : "text-left")
+const alignClass = (a: "left" | "center" | "right" | undefined) =>
+  a === "center" ? "text-center" : a === "right" ? "text-right" : "text-left"
 
 function renderBlocks(blocks: ReadonlyArray<Block>, className: string | undefined): ReactNode {
   return (
@@ -419,7 +485,9 @@ function renderBlocks(blocks: ReadonlyArray<Block>, className: string | undefine
                   <thead>
                     <tr>
                       {b.header.map((h, c) => (
-                        <th key={c} className={alignClass(b.align[c])}>{renderInline(h, `t${i}-h${c}-`)}</th>
+                        <th key={c} className={alignClass(b.align[c])}>
+                          {renderInline(h, `t${i}-h${c}-`)}
+                        </th>
                       ))}
                     </tr>
                   </thead>
@@ -427,7 +495,9 @@ function renderBlocks(blocks: ReadonlyArray<Block>, className: string | undefine
                     {b.rows.map((row, r) => (
                       <tr key={r}>
                         {b.header.map((_, c) => (
-                          <td key={c} className={alignClass(b.align[c])}>{renderInline(row[c] ?? "", `t${i}-${r}-${c}-`)}</td>
+                          <td key={c} className={alignClass(b.align[c])}>
+                            {renderInline(row[c] ?? "", `t${i}-${r}-${c}-`)}
+                          </td>
                         ))}
                       </tr>
                     ))}
@@ -446,14 +516,21 @@ function renderBlocks(blocks: ReadonlyArray<Block>, className: string | undefine
               </pre>
             )
           case "heading":
-            return <p key={i} className={b.level <= 2 ? "text-xl font-semibold" : "font-semibold"}>{renderInline(b.text, `h${i}-`)}</p>
+            return (
+              <p key={i} className={b.level <= 2 ? "text-xl font-semibold" : "font-semibold"}>
+                {renderInline(b.text, `h${i}-`)}
+              </p>
+            )
           case "quote":
             return <blockquote key={i}>{renderInline(b.text, `q${i}-`)}</blockquote>
           case "list":
             return b.ordered ? (
               <ol key={i} start={b.start}>
                 {b.items.map((it, j) => (
-                  <li key={j} {...(b.checked === undefined ? {} : { "data-task": b.checked[j] === true ? "done" : "todo" })}>
+                  <li
+                    key={j}
+                    {...(b.checked === undefined ? {} : { "data-task": b.checked[j] === true ? "done" : "todo" })}
+                  >
                     {b.checked?.[j] === undefined ? null : <span aria-hidden>{b.checked[j] === true ? "☑" : "☐"}</span>}
                     {b.checked?.[j] === undefined ? null : " "}
                     {renderInline(it, `l${i}-${j}-`)}
@@ -463,7 +540,10 @@ function renderBlocks(blocks: ReadonlyArray<Block>, className: string | undefine
             ) : (
               <ul key={i}>
                 {b.items.map((it, j) => (
-                  <li key={j} {...(b.checked === undefined ? {} : { "data-task": b.checked[j] === true ? "done" : "todo" })}>
+                  <li
+                    key={j}
+                    {...(b.checked === undefined ? {} : { "data-task": b.checked[j] === true ? "done" : "todo" })}
+                  >
                     {b.checked?.[j] === undefined ? null : <span aria-hidden>{b.checked[j] === true ? "☑" : "☐"}</span>}
                     {b.checked?.[j] === undefined ? null : " "}
                     {renderInline(it, `l${i}-${j}-`)}

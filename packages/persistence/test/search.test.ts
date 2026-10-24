@@ -5,7 +5,15 @@
  */
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun"
 import { KnownTranscriptEntry, Task } from "@openbot/contracts"
-import { ConversationRepo, EntryRepo, parseSearchQuery, type SearchCursor, SearchRepo, SEARCH_TEXT_VERSION, TaskRepo } from "@openbot/core"
+import {
+  ConversationRepo,
+  EntryRepo,
+  parseSearchQuery,
+  type SearchCursor,
+  SearchRepo,
+  SEARCH_TEXT_VERSION,
+  TaskRepo,
+} from "@openbot/core"
 import {
   botId,
   conversationId,
@@ -34,7 +42,7 @@ const encodeTask = Schema.encodeSync(Schema.fromJsonString(Task))
 const A = botId("bot_a")
 const dm = conversationId("cnv_a")
 
-const integrity = Effect.gen(function*() {
+const integrity = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   yield* sql`INSERT INTO search_fts (search_fts, rank) VALUES ('integrity-check', 1)`
   yield* sql`INSERT INTO search_steps_fts (search_steps_fts, rank) VALUES ('integrity-check', 1)`
@@ -42,7 +50,7 @@ const integrity = Effect.gen(function*() {
 
 /** Rows of both FTS indexes matching `fts`. */
 const ftsCount = (fts: string) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
     const a = yield* sql<{ n: number }>`SELECT count(*) AS n FROM search_fts WHERE search_fts MATCH ${fts}`
     const b = yield* sql<{ n: number }>`SELECT count(*) AS n FROM search_steps_fts WHERE search_steps_fts MATCH ${fts}`
@@ -50,7 +58,7 @@ const ftsCount = (fts: string) =>
   })
 
 const count = (table: string) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
     const rows = yield* sql<{ n: number }>`SELECT count(*) AS n FROM ${sql(table)}`
     return rows[0]!.n
@@ -60,30 +68,66 @@ describe("0004_message_search", () => {
   test("a 0003 database gains the index; the boot backfill indexes what is stored, once", async () => {
     const dir = await tempDataDir()
     const entries = [
-      makeMessageEntry({ id: entryId("ent_1"), conversationId: dm, createdAt: 1, text: "the migration waits for Lekë" }),
-      makeMessageEntry({ id: entryId("ent_2"), conversationId: dm, createdAt: 2, role: "bot", author: { kind: "bot", botId: A }, text: "half", streaming: true }),
-      makeToolCallEntry({ id: entryId("ent_3"), conversationId: dm, createdAt: 3, author: { kind: "bot", botId: A }, inputSummary: "git log migration", status: "completed" }),
-      makeEventEntry({ id: entryId("ent_4"), conversationId: dm, createdAt: 4, event: { type: "auto-decided", decision: "allowed", summary: "ls" } }),
+      makeMessageEntry({
+        id: entryId("ent_1"),
+        conversationId: dm,
+        createdAt: 1,
+        text: "the migration waits for Lekë",
+      }),
+      makeMessageEntry({
+        id: entryId("ent_2"),
+        conversationId: dm,
+        createdAt: 2,
+        role: "bot",
+        author: { kind: "bot", botId: A },
+        text: "half",
+        streaming: true,
+      }),
+      makeToolCallEntry({
+        id: entryId("ent_3"),
+        conversationId: dm,
+        createdAt: 3,
+        author: { kind: "bot", botId: A },
+        inputSummary: "git log migration",
+        status: "completed",
+      }),
+      makeEventEntry({
+        id: entryId("ent_4"),
+        conversationId: dm,
+        createdAt: 4,
+        event: { type: "auto-decided", decision: "allowed", summary: "ls" },
+      }),
     ]
     // a database as an older release left it
     await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* SqliteMigrator.run({
-          loader: SqliteMigrator.fromRecord({ "0001_initial": Initial, "0002_one_mind_per_bot": OneMind, "0003_background_tasks": BackgroundTasks }),
+          loader: SqliteMigrator.fromRecord({
+            "0001_initial": Initial,
+            "0002_one_mind_per_bot": OneMind,
+            "0003_background_tasks": BackgroundTasks,
+          }),
         })
         const sql = yield* SqlClient.SqlClient
         for (const entry of entries) {
           yield* sql`INSERT INTO entries (id, conversation_id, revision, created_at, kind, payload_json)
             VALUES (${entry.id}, ${entry.conversationId}, 0, ${entry.createdAt}, ${entry.kind}, ${encodeEntry(entry)})`
         }
-        const task = makeTask({ id: taskId("tsk_1"), botId: A, conversationId: dm, title: "Migration check", result: "fine", endedAt: 9 })
+        const task = makeTask({
+          id: taskId("tsk_1"),
+          botId: A,
+          conversationId: dm,
+          title: "Migration check",
+          result: "fine",
+          endedAt: 9,
+        })
         yield* sql`INSERT INTO tasks (id, bot_id, conversation_id, status, created_at, payload_json)
           VALUES (${task.id}, ${task.botId}, ${task.conversationId}, 'succeeded', 0, ${encodeTask(task)})`
       }).pipe(Effect.provide(SqliteClient.layer({ filename: join(dir, "openbot.sqlite") }))),
     )
 
     const out = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const search = yield* SearchRepo
         yield* (yield* ConversationRepo).upsert(makeDirectConversation({ id: dm, botId: A }))
         const before = { indexing: yield* search.indexing, docs: yield* count("search_docs") }
@@ -91,8 +135,12 @@ describe("0004_message_search", () => {
         const after = { indexing: yield* search.indexing, docs: yield* count("search_docs") }
         yield* integrity
         const sql = yield* SqlClient.SqlClient
-        const chatIndex = yield* sql<{ n: number }>`SELECT count(*) AS n FROM search_fts WHERE search_fts MATCH 'migration'`
-        const stepsIndex = yield* sql<{ n: number }>`SELECT count(*) AS n FROM search_steps_fts WHERE search_steps_fts MATCH 'migration'`
+        const chatIndex = yield* sql<{
+          n: number
+        }>`SELECT count(*) AS n FROM search_fts WHERE search_fts MATCH 'migration'`
+        const stepsIndex = yield* sql<{
+          n: number
+        }>`SELECT count(*) AS n FROM search_steps_fts WHERE search_steps_fts MATCH 'migration'`
         const page = yield* search.query({
           scope: { kind: "owner" },
           match: parseSearchQuery("migration ")!,
@@ -101,7 +149,9 @@ describe("0004_message_search", () => {
           limit: 10,
         })
         const second = yield* search.ensure
-        const version = yield* sql<{ value_json: string }>`SELECT value_json FROM settings WHERE key = ${SEARCH_VERSION_KEY}`
+        const version = yield* sql<{
+          value_json: string
+        }>`SELECT value_json FROM settings WHERE key = ${SEARCH_VERSION_KEY}`
         return {
           before,
           first,
@@ -129,13 +179,20 @@ describe("0004_message_search", () => {
   test("a new text version rebuilds the index", async () => {
     const dir = await tempDataDir()
     const out = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         const search = yield* SearchRepo
         const repo = yield* EntryRepo
         yield* search.ensure
         for (let i = 0; i < 1_200; i++) {
-          yield* repo.upsert(makeMessageEntry({ id: entryId(`ent_${String(i).padStart(5, "0")}`), conversationId: dm, createdAt: i, text: `heron number ${i}` }))
+          yield* repo.upsert(
+            makeMessageEntry({
+              id: entryId(`ent_${String(i).padStart(5, "0")}`),
+              conversationId: dm,
+              createdAt: i,
+              text: `heron number ${i}`,
+            }),
+          )
         }
         yield* sql`UPDATE settings SET value_json = '0' WHERE key = ${SEARCH_VERSION_KEY}`
         yield* sql`UPDATE search_docs SET text = 'stale words' WHERE ref_id = 'ent_00007'`
@@ -155,14 +212,16 @@ describe("0004_message_search", () => {
     const dir = await tempDataDir()
     const total = 2_000
     const out = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         const search = yield* SearchRepo
         const repo = yield* EntryRepo
         yield* search.ensure
         const id = (i: number) => entryId(`ent_${String(i).padStart(5, "0")}`)
         for (let i = 0; i < total; i++) {
-          yield* repo.upsert(makeMessageEntry({ id: id(i), conversationId: dm, createdAt: i, text: `heron number ${i}` }))
+          yield* repo.upsert(
+            makeMessageEntry({ id: id(i), conversationId: dm, createdAt: i, text: `heron number ${i}` }),
+          )
         }
         yield* sql`UPDATE settings SET value_json = '0' WHERE key = ${SEARCH_VERSION_KEY}`
         const rebuild = yield* Effect.forkChild(search.ensure)
@@ -173,15 +232,33 @@ describe("0004_message_search", () => {
           const docs = yield* count("search_docs")
           if (docs > 0 && docs < total) {
             docsWhenWritten = docs
-            yield* repo.upsert(makeMessageEntry({ id: id(7), revision: 1, conversationId: dm, createdAt: 7, text: "egret passed" }))
-            yield* repo.upsert(makeMessageEntry({ id: id(total - 3), revision: 1, conversationId: dm, createdAt: total - 3, text: "egret ahead" }))
-            yield* repo.upsert(makeMessageEntry({ id: id(total + 5), conversationId: dm, createdAt: total + 5, text: "egret new" }))
+            yield* repo.upsert(
+              makeMessageEntry({ id: id(7), revision: 1, conversationId: dm, createdAt: 7, text: "egret passed" }),
+            )
+            yield* repo.upsert(
+              makeMessageEntry({
+                id: id(total - 3),
+                revision: 1,
+                conversationId: dm,
+                createdAt: total - 3,
+                text: "egret ahead",
+              }),
+            )
+            yield* repo.upsert(
+              makeMessageEntry({ id: id(total + 5), conversationId: dm, createdAt: total + 5, text: "egret new" }),
+            )
           }
           yield* Effect.yieldNow
         }
         const report = yield* Fiber.join(rebuild)
         yield* integrity
-        const egrets = yield* search.query({ scope: { kind: "owner" }, match: parseSearchQuery("egret")!, kinds: ["message"], sort: "oldest", limit: 10 })
+        const egrets = yield* search.query({
+          scope: { kind: "owner" },
+          match: parseSearchQuery("egret")!,
+          kinds: ["message"],
+          sort: "oldest",
+          limit: 10,
+        })
         return {
           docsWhenWritten,
           report,
@@ -204,16 +281,33 @@ describe("0004_message_search", () => {
   test("after a rollback, what the older release wrote or changed is indexed at the next boot", async () => {
     const dir = await tempDataDir()
     const out = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         const search = yield* SearchRepo
         const repo = yield* EntryRepo
         const tasks = yield* TaskRepo
         yield* (yield* ConversationRepo).upsert(makeDirectConversation({ id: dm, botId: A }))
         yield* search.ensure
-        const first = makeMessageEntry({ id: entryId("ent_1"), conversationId: dm, createdAt: 1, text: "priorword stays" })
-        const second = makeMessageEntry({ id: entryId("ent_2"), conversationId: dm, createdAt: 2, text: "priorword goes" })
-        const task = makeTask({ id: taskId("tsk_1"), botId: A, conversationId: dm, title: "Audit", status: "running", createdAt: 3 })
+        const first = makeMessageEntry({
+          id: entryId("ent_1"),
+          conversationId: dm,
+          createdAt: 1,
+          text: "priorword stays",
+        })
+        const second = makeMessageEntry({
+          id: entryId("ent_2"),
+          conversationId: dm,
+          createdAt: 2,
+          text: "priorword goes",
+        })
+        const task = makeTask({
+          id: taskId("tsk_1"),
+          botId: A,
+          conversationId: dm,
+          title: "Audit",
+          status: "running",
+          createdAt: 3,
+        })
         yield* repo.upsert(first)
         yield* repo.upsert(second)
         yield* tasks.upsert(task)
@@ -226,7 +320,9 @@ describe("0004_message_search", () => {
               kind = excluded.kind, turn_id = excluded.turn_id, client_nonce = excluded.client_nonce,
               native_id = excluded.native_id, payload_json = excluded.payload_json`
         yield* oldEntryWrite({ ...second, revision: 1, text: "replacementword now" } as KnownTranscriptEntry)
-        yield* oldEntryWrite(makeMessageEntry({ id: entryId("ent_3"), conversationId: dm, createdAt: 4, text: "addedword later" }))
+        yield* oldEntryWrite(
+          makeMessageEntry({ id: entryId("ent_3"), conversationId: dm, createdAt: 4, text: "addedword later" }),
+        )
         const finished = { ...task, status: "succeeded" as const, result: "resultword found", endedAt: 5 }
         yield* sql`INSERT INTO tasks (id, bot_id, conversation_id, status, created_at, payload_json)
           VALUES (${finished.id}, ${finished.botId}, ${finished.conversationId}, ${finished.status}, ${finished.createdAt}, ${encodeTask(finished)})
@@ -236,9 +332,15 @@ describe("0004_message_search", () => {
         const report = yield* search.ensure
         yield* integrity
         const hits = (words: string) =>
-          search.query({ scope: { kind: "owner" }, match: parseSearchQuery(words)!, kinds: ["message", "task"], sort: "oldest", limit: 10 }).pipe(
-            Effect.map((page) => page.hits.map((hit) => hit.doc.refId)),
-          )
+          search
+            .query({
+              scope: { kind: "owner" },
+              match: parseSearchQuery(words)!,
+              kinds: ["message", "task"],
+              sort: "oldest",
+              limit: 10,
+            })
+            .pipe(Effect.map((page) => page.hits.map((hit) => hit.doc.refId)))
         return {
           report,
           prior: yield* hits("priorword"),
@@ -262,19 +364,30 @@ describe("0004_message_search", () => {
     const dir = await tempDataDir()
     const total = 600
     const out = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const search = yield* SearchRepo
         const repo = yield* EntryRepo
         yield* (yield* ConversationRepo).upsert(makeDirectConversation({ id: dm, botId: A }))
         yield* search.ensure
         for (let i = 1; i <= total; i++) {
-          yield* repo.upsert(makeMessageEntry({ id: entryId(`ent_${String(i).padStart(4, "0")}`), conversationId: dm, createdAt: i, text: "same heron words" }))
+          yield* repo.upsert(
+            makeMessageEntry({
+              id: entryId(`ent_${String(i).padStart(4, "0")}`),
+              conversationId: dm,
+              createdAt: i,
+              text: "same heron words",
+            }),
+          )
         }
         const seen: Array<string> = []
         let after: SearchCursor | undefined
         for (let pages = 0; pages < 100; pages++) {
           const page = yield* search.query({
-            scope: { kind: "owner" }, match: parseSearchQuery("heron")!, kinds: ["message"], sort: "relevance", limit: 20,
+            scope: { kind: "owner" },
+            match: parseSearchQuery("heron")!,
+            kinds: ["message"],
+            sort: "relevance",
+            limit: 20,
             ...(after === undefined ? {} : { after }),
           })
           seen.push(...page.hits.map((hit) => hit.doc.refId))
@@ -294,23 +407,46 @@ describe("0004_message_search", () => {
   test("the FTS index follows inserts, edits, deletes and repeated revisions", async () => {
     const dir = await tempDataDir()
     const out = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const repo = yield* EntryRepo
         const tasks = yield* TaskRepo
         const sql = yield* SqlClient.SqlClient
         for (let revision = 0; revision < 30; revision++) {
-          yield* repo.upsert(makeMessageEntry({ id: entryId("ent_s"), conversationId: dm, revision, createdAt: 1, text: "stream ".repeat(revision + 1), streaming: revision < 29 }))
+          yield* repo.upsert(
+            makeMessageEntry({
+              id: entryId("ent_s"),
+              conversationId: dm,
+              revision,
+              createdAt: 1,
+              text: "stream ".repeat(revision + 1),
+              streaming: revision < 29,
+            }),
+          )
         }
         const afterStream = yield* sql<{ text: string }>`SELECT text FROM search_docs WHERE ref_id = 'ent_s'`
         // a reaction-only revision leaves the doc row untouched
         const changesBefore = yield* sql<{ n: number }>`SELECT total_changes() AS n`
-        yield* repo.upsert(makeMessageEntry({
-          id: entryId("ent_s"), conversationId: dm, revision: 30, createdAt: 1, text: "stream ".repeat(30),
-          reactions: [{ emoji: "👍", by: { kind: "system" } }],
-        }))
+        yield* repo.upsert(
+          makeMessageEntry({
+            id: entryId("ent_s"),
+            conversationId: dm,
+            revision: 30,
+            createdAt: 1,
+            text: "stream ".repeat(30),
+            reactions: [{ emoji: "👍", by: { kind: "system" } }],
+          }),
+        )
         const changesAfter = yield* sql<{ n: number }>`SELECT total_changes() AS n`
         yield* tasks.upsert(makeTask({ id: taskId("tsk_x"), botId: A, conversationId: dm, title: "egret" }))
-        yield* tasks.upsert(makeTask({ id: taskId("tsk_x"), botId: A, conversationId: dm, title: "egret", progress: "Running a command" }))
+        yield* tasks.upsert(
+          makeTask({
+            id: taskId("tsk_x"),
+            botId: A,
+            conversationId: dm,
+            title: "egret",
+            progress: "Running a command",
+          }),
+        )
         yield* tasks.delete(taskId("tsk_x"))
         yield* repo.remove(entryId("ent_s"))
         yield* integrity
@@ -333,26 +469,68 @@ describe("0004_message_search", () => {
   test("no input reaches SQLite as FTS syntax (nothing fails)", async () => {
     const dir = await tempDataDir()
     const inputs = [
-      "\"", "\"\"\"", "a\"b\"c", "NEAR(a b)", "a OR b", "a AND", "NOT a", "-", "--a", "col:val", "text:x", "^a", "a*b*", "*a",
-      "(", ")", "{a b}", "a + b", "'; DROP TABLE search_docs; --", "\u0000", "\u0002x\u0003", "🙂 emoji 🙂", "ẞtraße", "日本語のテキスト",
-      "x".repeat(3_000), Array.from({ length: 60 }, (_, i) => `w${i}`).join(" "),
+      '"',
+      '"""',
+      'a"b"c',
+      "NEAR(a b)",
+      "a OR b",
+      "a AND",
+      "NOT a",
+      "-",
+      "--a",
+      "col:val",
+      "text:x",
+      "^a",
+      "a*b*",
+      "*a",
+      "(",
+      ")",
+      "{a b}",
+      "a + b",
+      "'; DROP TABLE search_docs; --",
+      "\u0000",
+      "\u0002x\u0003",
+      "🙂 emoji 🙂",
+      "ẞtraße",
+      "日本語のテキスト",
+      "x".repeat(3_000),
+      Array.from({ length: 60 }, (_, i) => `w${i}`).join(" "),
     ]
     const results = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const repo = yield* EntryRepo
         const search = yield* SearchRepo
         yield* (yield* ConversationRepo).upsert(makeDirectConversation({ id: dm, botId: A }))
-        yield* repo.upsert(makeMessageEntry({ id: entryId("ent_1"), conversationId: dm, createdAt: 1, text: "a b c NEAR text val 日本語のテキスト emoji" }))
+        yield* repo.upsert(
+          makeMessageEntry({
+            id: entryId("ent_1"),
+            conversationId: dm,
+            createdAt: 1,
+            text: "a b c NEAR text val 日本語のテキスト emoji",
+          }),
+        )
         const out: Array<number> = []
         for (const input of inputs) {
           const match = parseSearchQuery(input)
           if (match === undefined) continue
           for (const sort of ["relevance", "newest"] as const) {
-            const page = yield* search.query({ scope: { kind: "bot", botId: A }, match, kinds: ["message"], sort, limit: 5 })
+            const page = yield* search.query({
+              scope: { kind: "bot", botId: A },
+              match,
+              kinds: ["message"],
+              sort,
+              limit: 5,
+            })
             out.push(page.hits.length)
           }
           yield* search.positions({ scope: { kind: "owner" }, conversationId: dm, match, kinds: ["message"], limit: 5 })
-          yield* search.positions({ scope: { kind: "owner" }, conversationId: dm, substring: input, kinds: ["message"], limit: 5 })
+          yield* search.positions({
+            scope: { kind: "owner" },
+            conversationId: dm,
+            substring: input,
+            kinds: ["message"],
+            limit: 5,
+          })
         }
         return out
       }),

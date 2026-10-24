@@ -28,42 +28,51 @@ describe.skipIf(!LIVE_STT)("voice input with the real sherpa-onnx and Parakeet",
       const server = await startServer({ server: { speechToText: SpeechToTextLive({ dir: STT_DIR }) } })
       try {
         const cookie = await login(server.base, server.ownerToken)
-        await server.run(Effect.gen(function*() {
-          const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
-          yield* client["stt.install"]()
-          const status = yield* eventually(client["stt.status"](), (s) => s.state !== "installing", { timeout: INSTALL_TIMEOUT_MS, label: "install" })
-          expect(status.state).toBe("ready")
+        await server.run(
+          Effect.gen(function* () {
+            const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
+            yield* client["stt.install"]()
+            const status = yield* eventually(client["stt.status"](), (s) => s.state !== "installing", {
+              timeout: INSTALL_TIMEOUT_MS,
+              label: "install",
+            })
+            expect(status.state).toBe("ready")
 
-          const clip = CLIP ?? join(STT_DIR, "model", "test_wavs", "en.wav")
-          const { samples } = pcm16WavSamples(new Uint8Array(readFileSync(clip)))
-          const asMicrophone = upsampleByRepeating(samples, MICROPHONE_RATE / MODEL_RATE)
-          const openedAt = performance.now()
-          const { sessionId } = yield* client["stt.open"]()
-          const openMs = performance.now() - openedAt
-          const chunkSamples = CHUNK_SECONDS * MICROPHONE_RATE
-          const appendMs: Array<number> = []
-          let live = ""
-          for (let offset = 0; offset < asMicrophone.length; offset += chunkSamples) {
-            const chunk = downsample(asMicrophone.subarray(offset, offset + chunkSamples), MICROPHONE_RATE, MODEL_RATE)
-            const sentAt = performance.now()
-            live = (yield* client["stt.append"]({ sessionId, pcmBase64: toBase64(encodePcm16(chunk)) })).text
-            appendMs.push(performance.now() - sentAt)
-          }
-          const finishedAt = performance.now()
-          const final = yield* client["stt.finish"]({ sessionId, pcmBase64: "" })
-          const finishMs = performance.now() - finishedAt
-          console.log({
-            seconds: samples.length / MODEL_RATE,
-            openMs: Math.round(openMs),
-            appendMedianMs: Math.round(median(appendMs)),
-            appendMaxMs: Math.round(Math.max(...appendMs)),
-            finishMs: Math.round(finishMs),
-            live,
-            final: final.text,
-          })
-          if (CLIP === undefined) expect(final.text.toLowerCase()).toContain("country")
-          expect(final.text.length).toBeGreaterThan(0)
-        }))
+            const clip = CLIP ?? join(STT_DIR, "model", "test_wavs", "en.wav")
+            const { samples } = pcm16WavSamples(new Uint8Array(readFileSync(clip)))
+            const asMicrophone = upsampleByRepeating(samples, MICROPHONE_RATE / MODEL_RATE)
+            const openedAt = performance.now()
+            const { sessionId } = yield* client["stt.open"]()
+            const openMs = performance.now() - openedAt
+            const chunkSamples = CHUNK_SECONDS * MICROPHONE_RATE
+            const appendMs: Array<number> = []
+            let live = ""
+            for (let offset = 0; offset < asMicrophone.length; offset += chunkSamples) {
+              const chunk = downsample(
+                asMicrophone.subarray(offset, offset + chunkSamples),
+                MICROPHONE_RATE,
+                MODEL_RATE,
+              )
+              const sentAt = performance.now()
+              live = (yield* client["stt.append"]({ sessionId, pcmBase64: toBase64(encodePcm16(chunk)) })).text
+              appendMs.push(performance.now() - sentAt)
+            }
+            const finishedAt = performance.now()
+            const final = yield* client["stt.finish"]({ sessionId, pcmBase64: "" })
+            const finishMs = performance.now() - finishedAt
+            console.log({
+              seconds: samples.length / MODEL_RATE,
+              openMs: Math.round(openMs),
+              appendMedianMs: Math.round(median(appendMs)),
+              appendMaxMs: Math.round(Math.max(...appendMs)),
+              finishMs: Math.round(finishMs),
+              live,
+              final: final.text,
+            })
+            if (CLIP === undefined) expect(final.text.toLowerCase()).toContain("country")
+            expect(final.text.length).toBeGreaterThan(0)
+          }),
+        )
       } finally {
         await server.close()
       }

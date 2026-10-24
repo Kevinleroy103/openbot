@@ -48,7 +48,19 @@ export const sessionLayout = (input: {
 }
 
 /** Variables passed through from the node's own environment (no secrets, nothing display-related). */
-const PASS_THROUGH = ["HOME", "USER", "LOGNAME", "SHELL", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "TZ", "TMPDIR"]
+const PASS_THROUGH = [
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "LANG",
+  "LANGUAGE",
+  "LC_ALL",
+  "LC_CTYPE",
+  "LC_MESSAGES",
+  "TZ",
+  "TMPDIR",
+]
 
 export interface SessionEnvInput {
   readonly display: number
@@ -145,10 +157,12 @@ const desktopEntry = (app: DesktopApp): string =>
     "",
   ].join("\n")
 
-const xmlEscape = (s: string) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+const xmlEscape = (s: string) =>
+  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
 
 /** POSIX shell quoting (openbox menu `<command>` lines are parsed shell-style). */
-export const shellQuote = (s: string): string => (/^[A-Za-z0-9_./=:,@%+-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`)
+export const shellQuote = (s: string): string =>
+  /^[A-Za-z0-9_./=:,@%+-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`
 
 export const openboxMenu = (apps: ReadonlyArray<DesktopApp>): string =>
   [
@@ -202,7 +216,10 @@ export const MINIMAL_OPENBOX_RC = `<?xml version="1.0" encoding="UTF-8"?>
  */
 export const openboxRc = (template: string | undefined, menuPath: string): string => {
   let rc = template ?? MINIMAL_OPENBOX_RC
-  rc = rc.replace(/(<desktops>[\s\S]*?<number>)\s*\d+\s*(<\/number>)/, (_m, open: string, close: string) => `${open}1${close}`)
+  rc = rc.replace(
+    /(<desktops>[\s\S]*?<number>)\s*\d+\s*(<\/number>)/,
+    (_m, open: string, close: string) => `${open}1${close}`,
+  )
   rc = /<file>[^<]*<\/file>/.test(rc)
     ? rc.replace(/<file>[^<]*<\/file>/, `<file>${xmlEscape(menuPath)}</file>`)
     : rc.replace(/<\/openbox_config>/, `<menu><file>${xmlEscape(menuPath)}</file></menu></openbox_config>`)
@@ -295,7 +312,16 @@ export const backgroundArgs = (
 ): ReadonlyArray<string> =>
   bg.kind === "xsetroot"
     ? [...bg.argv, "-display", `:${display}`, "-solid", BACKGROUND.solid]
-    : [...bg.argv, "-display", `:${display}`, "-window", "root", "-size", `${width}x${height}`, `gradient:${BACKGROUND.top}-${BACKGROUND.bottom}`]
+    : [
+        ...bg.argv,
+        "-display",
+        `:${display}`,
+        "-window",
+        "root",
+        "-size",
+        `${width}x${height}`,
+        `gradient:${BACKGROUND.top}-${BACKGROUND.bottom}`,
+      ]
 
 export interface X11vncOptions {
   readonly x11vnc: string
@@ -328,7 +354,13 @@ export const x11vncArgs = (o: X11vncOptions): ReadonlyArray<string> => [
   ...(o.viewOnly ? ["-viewonly", "-nocursorshape", "-nocursorpos"] : []),
 ]
 
-export const xvfbArgs = (o: { readonly xvfb: string; readonly display: number; readonly width: number; readonly height: number; readonly xauthority: string }) => [
+export const xvfbArgs = (o: {
+  readonly xvfb: string
+  readonly display: number
+  readonly width: number
+  readonly height: number
+  readonly xauthority: string
+}) => [
   o.xvfb,
   `:${o.display}`,
   "-screen",

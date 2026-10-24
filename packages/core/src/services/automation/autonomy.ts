@@ -55,7 +55,10 @@ interface Root {
  * Normalizes an absolute (`/x`, `~/x`, `C:\x`) path into segments; `undefined` when it is not
  * absolute or a `..` climbs above its root.
  */
-const absoluteSegments = (raw: string, windows: boolean): { readonly anchor: Root["anchor"]; readonly segments: Array<string> } | undefined => {
+const absoluteSegments = (
+  raw: string,
+  windows: boolean,
+): { readonly anchor: Root["anchor"]; readonly segments: Array<string> } | undefined => {
   let path = windows ? raw.replace(/\\/g, "/") : raw
   let anchor: Root["anchor"]
   let head: Array<string> = []
@@ -165,27 +168,105 @@ export const isInsideRoots = (workspace: ApprovalWorkspace, path: string, base: 
 
 /** Programs that always ask under "workspace" (they reach beyond the workspace or the machine). */
 const RISKY_PROGRAMS: ReadonlySet<string> = new Set([
-  "sudo", "su", "doas", "pkexec", "runas",
-  "ssh", "scp", "sftp", "rsync", "nc", "ncat", "netcat", "telnet", "ftp",
+  "sudo",
+  "su",
+  "doas",
+  "pkexec",
+  "runas",
+  "ssh",
+  "scp",
+  "sftp",
+  "rsync",
+  "nc",
+  "ncat",
+  "netcat",
+  "telnet",
+  "ftp",
   "eval",
-  "shutdown", "reboot", "halt", "poweroff", "init",
-  "mkfs", "fdisk", "parted", "dd", "mount", "umount", "diskutil",
-  "kill", "killall", "pkill",
-  "systemctl", "launchctl", "service", "crontab", "iptables", "ufw", "nft",
-  "apt", "apt-get", "dpkg", "yum", "dnf", "pacman", "brew", "snap", "flatpak", "port", "zypper", "apk",
-  "docker", "podman", "kubectl", "gh",
-  "open", "xdg-open",
-  "chown", "chgrp",
+  "shutdown",
+  "reboot",
+  "halt",
+  "poweroff",
+  "init",
+  "mkfs",
+  "fdisk",
+  "parted",
+  "dd",
+  "mount",
+  "umount",
+  "diskutil",
+  "kill",
+  "killall",
+  "pkill",
+  "systemctl",
+  "launchctl",
+  "service",
+  "crontab",
+  "iptables",
+  "ufw",
+  "nft",
+  "apt",
+  "apt-get",
+  "dpkg",
+  "yum",
+  "dnf",
+  "pacman",
+  "brew",
+  "snap",
+  "flatpak",
+  "port",
+  "zypper",
+  "apk",
+  "docker",
+  "podman",
+  "kubectl",
+  "gh",
+  "open",
+  "xdg-open",
+  "chown",
+  "chgrp",
 ])
 
 /** Shells: `sh -c "…"` (unverifiable) and anything piped into a shell (`curl … | sh`) ask. */
-const SHELLS: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "pwsh", "powershell", "cmd"])
+const SHELLS: ReadonlySet<string> = new Set([
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "dash",
+  "ksh",
+  "csh",
+  "tcsh",
+  "pwsh",
+  "powershell",
+  "cmd",
+])
 
 /** Wrappers whose first non-option argument is the real program. */
-const WRAPPERS: ReadonlySet<string> = new Set(["env", "time", "nohup", "nice", "command", "builtin", "exec", "xargs", "timeout", "stdbuf"])
+const WRAPPERS: ReadonlySet<string> = new Set([
+  "env",
+  "time",
+  "nohup",
+  "nice",
+  "command",
+  "builtin",
+  "exec",
+  "xargs",
+  "timeout",
+  "stdbuf",
+])
 
 /** Device paths a command may name freely. */
-const HARMLESS_ABSOLUTE: ReadonlySet<string> = new Set(["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin", "/dev/zero", "/dev/random", "/dev/urandom", "/dev/tty"])
+const HARMLESS_ABSOLUTE: ReadonlySet<string> = new Set([
+  "/dev/null",
+  "/dev/stdout",
+  "/dev/stderr",
+  "/dev/stdin",
+  "/dev/zero",
+  "/dev/random",
+  "/dev/urandom",
+  "/dev/tty",
+])
 
 interface Token {
   readonly text: string
@@ -207,7 +288,7 @@ const parseCommand = (command: string): ReadonlyArray<Segment> | "unbalanced" | 
   let tokens: Array<Token> = []
   let current = ""
   let started = false
-  let quote: "'" | "\"" | undefined
+  let quote: "'" | '"' | undefined
   let separator = ""
   const endToken = () => {
     if (started) tokens.push({ text: current })
@@ -225,11 +306,11 @@ const parseCommand = (command: string): ReadonlyArray<Segment> | "unbalanced" | 
     if (quote !== "'" && (c === "`" || (c === "$" && /[{(A-Za-z_]/.test(command[i + 1] ?? "")))) return "expansion"
     if (quote !== undefined) {
       if (c === quote) quote = undefined
-      else if (c === "\\" && quote === "\"" && i + 1 < command.length) current += command[++i]!
+      else if (c === "\\" && quote === '"' && i + 1 < command.length) current += command[++i]!
       else current += c
       continue
     }
-    if (c === "'" || c === "\"") {
+    if (c === "'" || c === '"') {
       quote = c
       started = true
       continue
@@ -274,8 +355,13 @@ const redirectTarget = (text: string): string | undefined => {
 }
 
 const looksLikePath = (text: string): boolean =>
-  text.startsWith("/") || text.startsWith("~") || text === ".." || text.startsWith("../") ||
-  text.includes("/../") || text.endsWith("/..") || /^[A-Za-z]:[\\/]/.test(text)
+  text.startsWith("/") ||
+  text.startsWith("~") ||
+  text === ".." ||
+  text.startsWith("../") ||
+  text.includes("/../") ||
+  text.endsWith("/..") ||
+  /^[A-Za-z]:[\\/]/.test(text)
 
 /** Candidate paths inside one token (`--out=/x`, `VAR=/x`, `a:/b` lists; URLs are not paths). */
 const pathCandidates = (text: string): ReadonlyArray<string> => {
@@ -330,24 +416,36 @@ const riskOf = (segment: Segment, roots: Roots, cwd: string): string | undefined
   if (RISKY_PROGRAMS.has(name) || /^mkfs(\.|$)/.test(name)) return `risky command: ${name}`
   // `cd` alone goes home, `cd -` / `popd` to an unknown earlier directory.
   if (name === "popd") return "changes to an unknown directory"
-  if ((name === "cd" || name === "pushd") && (args.length === 0 || args.some((a) => a.startsWith("-")))) return "changes to an unknown directory"
+  if ((name === "cd" || name === "pushd") && (args.length === 0 || args.some((a) => a.startsWith("-"))))
+    return "changes to an unknown directory"
   if (SHELLS.has(name)) {
     if (segment.after === "|") return "pipes into a shell"
     if (args.some((a) => /^-[a-z]*c[a-z]*$/i.test(a) || a === "/c" || a === "-Command")) return "inline shell script"
   }
-  if (segment.after === "|" && ["python", "python3", "node", "bun", "deno", "perl", "ruby", "php"].includes(name) && args.every((a) => a.startsWith("-"))) {
+  if (
+    segment.after === "|" &&
+    ["python", "python3", "node", "bun", "deno", "perl", "ruby", "php"].includes(name) &&
+    args.every((a) => a.startsWith("-"))
+  ) {
     return "pipes into an interpreter"
   }
   if (name === "git") {
     const sub = args.find((a) => !a.startsWith("-"))
-    if (sub === "push" || sub === "send-email" || sub === "daemon" || args.includes("--global") || args.includes("--system")) {
+    if (
+      sub === "push" ||
+      sub === "send-email" ||
+      sub === "daemon" ||
+      args.includes("--global") ||
+      args.includes("--system")
+    ) {
       return `risky command: git ${sub ?? ""}`.trim()
     }
   }
   if (["npm", "pnpm", "yarn", "bun", "pip", "pip3", "pipx", "cargo", "go", "gem", "uv", "npx", "bunx"].includes(name)) {
     if (args.some((a) => GLOBAL_FLAGS.has(a))) return "global install"
     const sub = args.find((a) => !a.startsWith("-"))
-    if (sub === "publish" || (name === "cargo" && sub === "install") || (name === "go" && sub === "install")) return `risky command: ${name} ${sub}`
+    if (sub === "publish" || (name === "cargo" && sub === "install") || (name === "go" && sub === "install"))
+      return `risky command: ${name} ${sub}`
     if ((name === "yarn" || name === "pnpm") && sub === "global") return "global install"
     if (name === "uv" && sub === "tool") return "global install"
   }
@@ -393,7 +491,8 @@ export const commandRisk = (
 
 // ------------------------------------------------------------------------------ evaluation
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
 
 /** Codex `request_permissions` (and the like) asking for network access as well. */
 const wantsNetwork = (request: HarnessApprovalRequest): boolean =>
@@ -422,7 +521,8 @@ export const evaluateAutonomy = (
       const paths = request.paths ?? []
       if (paths.length === 0) return ask("no paths")
       if (wantsNetwork(request)) return ask("network access")
-      if (request.cwd !== undefined && !pathInside(roots, request.cwd, workspace.path)) return ask("runs outside the workspace")
+      if (request.cwd !== undefined && !pathInside(roots, request.cwd, workspace.path))
+        return ask("runs outside the workspace")
       return paths.every((p) => p.trim().length > 0 && pathInside(roots, p.trim(), base))
         ? { action: "allow", reason: "inside-workspace" }
         : ask("path outside the workspace")
@@ -463,7 +563,10 @@ const parentOf = (path: string): string => {
  * the roots. Undefined when the request runs on another node, is not a shell / file request, already
  * works inside a root (it asks for another reason), or names no absolute directory.
  */
-export const outsideWorkDir = (request: HarnessApprovalRequest, workspace: ApprovalWorkspace | undefined): string | undefined => {
+export const outsideWorkDir = (
+  request: HarnessApprovalRequest,
+  workspace: ApprovalWorkspace | undefined,
+): string | undefined => {
   if (workspace === undefined) return undefined
   if (request.nodeId !== undefined && request.nodeId !== workspace.nodeId) return undefined
   if (request.kind === "mcp-approval") return undefined
@@ -480,14 +583,39 @@ export const outsideWorkDir = (request: HarnessApprovalRequest, workspace: Appro
   for (const raw of request.paths ?? []) {
     const p = raw.trim()
     if (p.length === 0 || pathInside(roots, p, base)) continue
-    const absolute = cleanAbsolute(p, home) ?? cleanAbsolute(`${expandHome(base, home).replace(/[\\/]+$/, "")}/${p}`, home)
+    const absolute =
+      cleanAbsolute(p, home) ?? cleanAbsolute(`${expandHome(base, home).replace(/[\\/]+$/, "")}/${p}`, home)
     return absolute === undefined ? undefined : parentOf(absolute)
   }
   return undefined
 }
 
 /** Top-level system directories never offered as a project folder. */
-const SYSTEM_TOP = new Set(["etc", "usr", "bin", "sbin", "lib", "lib32", "lib64", "libx32", "boot", "dev", "proc", "sys", "run", "var", "snap", "System", "Library", "private", "Applications", "Windows", "Program Files", "Program Files (x86)", "ProgramData"])
+const SYSTEM_TOP = new Set([
+  "etc",
+  "usr",
+  "bin",
+  "sbin",
+  "lib",
+  "lib32",
+  "lib64",
+  "libx32",
+  "boot",
+  "dev",
+  "proc",
+  "sys",
+  "run",
+  "var",
+  "snap",
+  "System",
+  "Library",
+  "private",
+  "Applications",
+  "Windows",
+  "Program Files",
+  "Program Files (x86)",
+  "ProgramData",
+])
 /** Secret directories (the node deny-list) never offered either. */
 const SECRET_SEGMENTS = new Set([".ssh", ".gnupg", ".aws", ".kube", ".password-store", ".config", ".local"])
 
@@ -507,7 +635,12 @@ export const offerableFolder = (folder: string, home: string | undefined): boole
   if (home !== undefined) {
     const h = absoluteSegments(home, isWindowsPath(home))
     // the home itself, or a directory above it
-    if (h !== undefined && h.anchor === parsed.anchor && parsed.segments.length <= h.segments.length && parsed.segments.every((s, i) => h.segments[i] === s)) {
+    if (
+      h !== undefined &&
+      h.anchor === parsed.anchor &&
+      parsed.segments.length <= h.segments.length &&
+      parsed.segments.every((s, i) => h.segments[i] === s)
+    ) {
       return false
     }
   }

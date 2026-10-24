@@ -29,8 +29,15 @@ export default function Web(): ReactNode {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <View style={[styles.bar, { paddingTop: Platform.OS === "ios" ? 14 : insets.top + 8, borderColor: theme.lineTertiary }]}>
-        <Text numberOfLines={1} style={[styles.title, { color: theme.fg }]}>{title ?? "OpenBot"}</Text>
+      <View
+        style={[
+          styles.bar,
+          { paddingTop: Platform.OS === "ios" ? 14 : insets.top + 8, borderColor: theme.lineTertiary },
+        ]}
+      >
+        <Text numberOfLines={1} style={[styles.title, { color: theme.fg }]}>
+          {title ?? "OpenBot"}
+        </Text>
         <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" style={styles.done}>
           <Text style={{ color: theme.accentFg, fontSize: 17, fontWeight: "600" }}>Done</Text>
         </Pressable>
@@ -56,7 +63,14 @@ export default function Web(): ReactNode {
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   title: { fontSize: 17, fontWeight: "600", maxWidth: "70%" },
   done: { position: "absolute", right: 16, bottom: 12 },
   message: { textAlign: "center", marginTop: 40, paddingHorizontal: 32, fontSize: 15 },

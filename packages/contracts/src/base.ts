@@ -13,7 +13,8 @@ export type NonNegativeInt = typeof NonNegativeInt.Type
 export const Slug = Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9_-]{0,63}$/))
 export type Slug = typeof Slug.Type
 
-const makeId = <B extends string>(brand: Parameters<typeof Schema.brand<B>>[0]) => NonEmptyString.pipe(Schema.brand<B>(brand))
+const makeId = <B extends string>(brand: Parameters<typeof Schema.brand<B>>[0]) =>
+  NonEmptyString.pipe(Schema.brand<B>(brand))
 
 /** Ids are server-allocated prefixed ULIDs (`bot_…`, `cnv_…`, `ent_…`); the prefix is a convention, not validated. */
 export const BotId = makeId("BotId")
@@ -80,7 +81,8 @@ export type HarnessKind = typeof HarnessKind.Type
  */
 export type HarnessKindName = HarnessKind | (string & {})
 export const HarnessKindName = NonEmptyString as unknown as Schema.Codec<HarnessKindName, string>
-export const isKnownHarnessKind = (kind: string): kind is HarnessKind => (KnownHarnessKinds as ReadonlyArray<string>).includes(kind)
+export const isKnownHarnessKind = (kind: string): kind is HarnessKind =>
+  (KnownHarnessKinds as ReadonlyArray<string>).includes(kind)
 
 /** Where a transcript fact came from, for dedupe/debugging. Never used as a UI key. */
 export const HarnessRef = Schema.Struct({
@@ -121,7 +123,11 @@ export const withUnknownFallback = <
   const Members extends ReadonlyArray<Schema.Top & { readonly fields: object }>,
   const Tag extends string,
   const KeepFields extends Schema.Struct.Fields,
->(options: { readonly members: Members; readonly tag: Tag; readonly keep: KeepFields }) => {
+>(options: {
+  readonly members: Members
+  readonly tag: Tag
+  readonly keep: KeepFields
+}) => {
   const known = knownTags(options.members, options.tag)
   const unknownType = Schema.Struct({
     ...options.keep,
@@ -131,11 +137,17 @@ export const withUnknownFallback = <
   const unknownArm = Schema.Struct({
     ...options.keep,
     [options.tag]: Schema.String.check(
-      Schema.makeFilter((value: string) => (value !== "unknown" && !known.has(value)) || `A known ${options.tag} must decode in full.`),
+      Schema.makeFilter(
+        (value: string) => (value !== "unknown" && !known.has(value)) || `A known ${options.tag} must decode in full.`,
+      ),
     ),
   } as KeepFields & { [K in Tag]: Schema.String }).pipe(
     Schema.decodeTo(unknownType as Schema.Top, {
-      decode: SchemaGetter.transform((raw: any) => ({ ...raw, [options.tag]: "unknown", originalTag: raw[options.tag] })),
+      decode: SchemaGetter.transform((raw: any) => ({
+        ...raw,
+        [options.tag]: "unknown",
+        originalTag: raw[options.tag],
+      })),
       encode: SchemaGetter.forbidden(() => `Unknown ${options.tag} values are decode-only.`),
     }),
   )
@@ -151,10 +163,14 @@ export const withUnknownFallback = <
   }
 }
 
-export const knownTags = (members: ReadonlyArray<Schema.Top & { readonly fields: object }>, tag: string): ReadonlySet<string> => {
+export const knownTags = (
+  members: ReadonlyArray<Schema.Top & { readonly fields: object }>,
+  tag: string,
+): ReadonlySet<string> => {
   const tags = new Set<string>()
   for (const member of members) {
-    const field = (member.fields as Record<string, unknown>)[tag] as { readonly literal?: unknown; readonly literals?: ReadonlyArray<unknown> } | undefined
+    const field = (member.fields as Record<string, unknown>)[tag] as
+      { readonly literal?: unknown; readonly literals?: ReadonlyArray<unknown> } | undefined
     for (const literal of field?.literals ?? [field?.literal]) {
       if (typeof literal !== "string") throw new Error(`Every member needs a string literal "${tag}".`)
       tags.add(literal)

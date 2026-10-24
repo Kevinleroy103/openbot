@@ -5,7 +5,17 @@ import { useAtomValue } from "@effect/atom-react"
 import { buildSidebar, formatListTime, initials, plainPreview, type SidebarItem } from "@openbot/app-model"
 import { connectionAtom, sessionInfoAtom } from "@openbot/client"
 import { type ReactNode, useMemo, useState } from "react"
-import { ActionSheetIOS, Alert, Platform, Pressable, SectionList, StyleSheet, Text, TextInput, View } from "react-native"
+import {
+  ActionSheetIOS,
+  Alert,
+  Platform,
+  Pressable,
+  SectionList,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRoster, valueOr } from "../src/data.ts"
 import { openChat, openWeb } from "../src/nav.ts"
@@ -28,12 +38,19 @@ export default function Home(): ReactNode {
   const q = query?.trim().toLowerCase() ?? ""
   const matches = (item: SidebarItem) =>
     q === "" ||
-    (item.kind === "bot" ? `${item.bot.name} ${item.bot.label ?? ""}` : `${item.summary.title ?? ""} ${item.bots.map((b) => b.name).join(" ")}`)
+    (item.kind === "bot"
+      ? `${item.bot.name} ${item.bot.label ?? ""}`
+      : `${item.summary.title ?? ""} ${item.bots.map((b) => b.name).join(" ")}`
+    )
       .toLowerCase()
       .includes(q)
   const pinned = q === "" ? model.pinned : []
   const sections = model.sections
-    .map((s) => ({ key: s.id, title: s.name, data: q === "" ? s.items : [...s.items, ...(s.id === "unassigned" ? model.pinned : [])].filter(matches) }))
+    .map((s) => ({
+      key: s.id,
+      title: s.name,
+      data: q === "" ? s.items : [...s.items, ...(s.id === "unassigned" ? model.pinned : [])].filter(matches),
+    }))
     .filter((s) => s.data.length > 0)
 
   const ownerName = info?.ownerName ?? roster.state.settings?.ownerName
@@ -49,13 +66,18 @@ export default function Home(): ReactNode {
         ])
       }
     }
-    if (Platform.OS === "ios") ActionSheetIOS.showActionSheetWithOptions({ options: [...actions], cancelButtonIndex: 3, destructiveButtonIndex: 2 }, run)
-    else Alert.alert("OpenBot", undefined, [
-      { text: actions[0], onPress: () => run(0) },
-      { text: actions[1], onPress: () => run(1) },
-      { text: actions[2], style: "destructive", onPress: () => run(2) },
-      { text: "Cancel", style: "cancel" },
-    ])
+    if (Platform.OS === "ios")
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: [...actions], cancelButtonIndex: 3, destructiveButtonIndex: 2 },
+        run,
+      )
+    else
+      Alert.alert("OpenBot", undefined, [
+        { text: actions[0], onPress: () => run(0) },
+        { text: actions[1], onPress: () => run(1) },
+        { text: actions[2], style: "destructive", onPress: () => run(2) },
+        { text: "Cancel", style: "cancel" },
+      ])
   }
 
   const top = insets.top + 8
@@ -90,20 +112,35 @@ export default function Home(): ReactNode {
             {pinned.length > 0 && (
               <View style={styles.tiles}>
                 {pinned.map((item) => (
-                  <Pressable key={item.key} onPress={() => openChat(item.bot.directConversationId)} style={({ pressed }) => [styles.tile, { backgroundColor: theme.elevated, opacity: pressed ? 0.7 : 1 }]}>
+                  <Pressable
+                    key={item.key}
+                    onPress={() => openChat(item.bot.directConversationId)}
+                    style={({ pressed }) => [
+                      styles.tile,
+                      { backgroundColor: theme.elevated, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
                     <View>
                       <Avatar avatar={item.bot.avatar} size={56} />
                       <StatusDot status={item.status} theme={theme} big />
                     </View>
-                    <Text numberOfLines={1} style={[styles.tileName, { color: theme.fg }]}>{item.bot.name}</Text>
+                    <Text numberOfLines={1} style={[styles.tileName, { color: theme.fg }]}>
+                      {item.bot.name}
+                    </Text>
                   </Pressable>
                 ))}
               </View>
             )}
-            {!roster.loaded && <Text style={[styles.empty, { color: theme.fgTertiary }]}>{connection.status === "offline" ? "Can't reach OpenBot. Retrying…" : "Connecting…"}</Text>}
+            {!roster.loaded && (
+              <Text style={[styles.empty, { color: theme.fgTertiary }]}>
+                {connection.status === "offline" ? "Can't reach OpenBot. Retrying…" : "Connecting…"}
+              </Text>
+            )}
           </>
         }
-        renderSectionHeader={({ section }) => <Text style={[styles.sectionTitle, { color: theme.fgSecondary }]}>{section.title}</Text>}
+        renderSectionHeader={({ section }) => (
+          <Text style={[styles.sectionTitle, { color: theme.fgSecondary }]}>{section.title}</Text>
+        )}
         renderItem={({ item }) => <Row item={item} theme={theme} />}
       />
 
@@ -127,7 +164,11 @@ export default function Home(): ReactNode {
         </View>
       )}
       <View style={[styles.bottomBar, { bottom: insets.bottom + 10 }]} pointerEvents="box-none">
-        <Pressable onPress={() => openWeb("#/settings/computers", "Computers")} accessibilityRole="button" style={{ flex: 1 }}>
+        <Pressable
+          onPress={() => openWeb("#/settings/computers", "Computers")}
+          accessibilityRole="button"
+          style={{ flex: 1 }}
+        >
           <Glass interactive style={styles.computers}>
             <Icon name="computer" size={18} color={theme.icon} />
             <Text style={{ color: theme.fg, fontSize: 17, fontWeight: "500" }}>Computers</Text>
@@ -138,11 +179,33 @@ export default function Home(): ReactNode {
   )
 }
 
-function StatusDot({ status, theme, big = false }: { readonly status: SidebarItem["status"]; readonly theme: Theme; readonly big?: boolean }): ReactNode {
+function StatusDot({
+  status,
+  theme,
+  big = false,
+}: {
+  readonly status: SidebarItem["status"]
+  readonly theme: Theme
+  readonly big?: boolean
+}): ReactNode {
   if (status === "idle") return null
   const color = status === "working" ? theme.success : status === "attention" ? theme.warn : theme.accent
   const size = big ? 14 : 11
-  return <View style={{ position: "absolute", right: big ? 2 : -1, bottom: big ? 2 : -1, width: size, height: size, borderRadius: size / 2, backgroundColor: color, borderWidth: 2, borderColor: big ? theme.elevated : theme.bg }} />
+  return (
+    <View
+      style={{
+        position: "absolute",
+        right: big ? 2 : -1,
+        bottom: big ? 2 : -1,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+        borderWidth: 2,
+        borderColor: big ? theme.elevated : theme.bg,
+      }}
+    />
+  )
 }
 
 function Row({ item, theme }: { readonly item: SidebarItem; readonly theme: Theme }): ReactNode {
@@ -151,46 +214,101 @@ function Row({ item, theme }: { readonly item: SidebarItem; readonly theme: Them
   const at = item.kind === "bot" ? item.summary?.lastActivityAt : item.summary.lastActivityAt
   const busy = item.status === "working" || item.status === "attention"
   return (
-    <Pressable onPress={() => openChat(conversationId)} style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.secondary }]}>
+    <Pressable
+      onPress={() => openChat(conversationId)}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.secondary }]}
+    >
       <View>
-        {item.kind === "bot" ? <Avatar avatar={item.bot.avatar} size={44} /> : <AvatarStack avatars={item.bots.map((b) => b.avatar)} size={44} outline={theme.bg} />}
+        {item.kind === "bot" ? (
+          <Avatar avatar={item.bot.avatar} size={44} />
+        ) : (
+          <AvatarStack avatars={item.bots.map((b) => b.avatar)} size={44} outline={theme.bg} />
+        )}
         <StatusDot status={item.status} theme={theme} />
       </View>
       <View style={styles.rowText}>
         <View style={styles.rowTop}>
-          <Text numberOfLines={1} style={[styles.rowName, { color: theme.fg }]}>{name}</Text>
+          <Text numberOfLines={1} style={[styles.rowName, { color: theme.fg }]}>
+            {name}
+          </Text>
           {item.kind === "bot" && item.bot.label ? (
             <View style={[styles.chip, { backgroundColor: theme.secondary, borderColor: theme.lineTertiary }]}>
-              <Text numberOfLines={1} style={{ color: theme.fgSecondary, fontSize: 12 }}>{item.bot.label}</Text>
+              <Text numberOfLines={1} style={{ color: theme.fgSecondary, fontSize: 12 }}>
+                {item.bot.label}
+              </Text>
             </View>
           ) : null}
           <View style={{ flex: 1 }} />
-          {at !== undefined && <Text style={[styles.time, { color: item.unread ? theme.accentFg : theme.fgTertiary }]}>{formatListTime(at)}</Text>}
+          {at !== undefined && (
+            <Text style={[styles.time, { color: item.unread ? theme.accentFg : theme.fgTertiary }]}>
+              {formatListTime(at)}
+            </Text>
+          )}
         </View>
-        <Text numberOfLines={1} style={[styles.preview, { color: busy ? theme.fg : theme.fgSecondary }]}>{plainPreview(item.preview) || " "}</Text>
+        <Text numberOfLines={1} style={[styles.preview, { color: busy ? theme.fg : theme.fgSecondary }]}>
+          {plainPreview(item.preview) || " "}
+        </Text>
       </View>
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  topBar: { position: "absolute", left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  topBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   monogram: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   bottomBar: { position: "absolute", left: 16, right: 16, flexDirection: "row" },
-  computers: { height: 52, borderRadius: 26, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center" },
+  computers: {
+    height: 52,
+    borderRadius: 26,
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   offline: { position: "absolute", left: 0, right: 0, alignItems: "center" },
   offlinePill: { paddingHorizontal: 14, height: 30, borderRadius: 15, justifyContent: "center" },
-  search: { marginHorizontal: 16, marginBottom: 12, height: 44, borderRadius: 22, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14 },
+  search: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    height: 44,
+    borderRadius: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+  },
   searchInput: { flex: 1, fontSize: 16, height: 44 },
   tiles: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 8, marginBottom: 8 },
-  tile: { width: "31.5%", aspectRatio: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 6 },
+  tile: {
+    width: "31.5%",
+    aspectRatio: 1,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 6,
+  },
   tileName: { fontSize: 14, fontWeight: "500", maxWidth: "100%" },
   sectionTitle: { fontSize: 15, marginTop: 18, marginBottom: 4, paddingHorizontal: 20 },
   row: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 10 },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   rowTop: { flexDirection: "row", alignItems: "center", gap: 8 },
   rowName: { fontSize: 17, fontWeight: "600", flexShrink: 1 },
-  chip: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, borderWidth: StyleSheet.hairlineWidth, flexShrink: 1, maxWidth: 140 },
+  chip: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 1,
+    maxWidth: 140,
+  },
   time: { fontSize: 13 },
   preview: { fontSize: 15 },
   empty: { textAlign: "center", marginTop: 40, fontSize: 15 },

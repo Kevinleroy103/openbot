@@ -16,14 +16,17 @@ type Upsert = Extract<HarnessEvent, { _tag: "ItemUpserted" }>
 const upserts = (events: ReadonlyArray<HarnessEvent>, turn: TurnId) =>
   ofTag(events, "ItemUpserted").filter((e) => e.turnId === turn)
 /** The last version of every item of `turn`, in first-seen order. */
-const finalItems = (events: ReadonlyArray<HarnessEvent>, turn: TurnId): ReadonlyArray<HarnessItem & { key: string }> => {
+const finalItems = (
+  events: ReadonlyArray<HarnessEvent>,
+  turn: TurnId,
+): ReadonlyArray<HarnessItem & { key: string }> => {
   const byKey = new Map<string, HarnessItem>()
   for (const e of upserts(events, turn)) byKey.set(e.key, e.item)
   return [...byKey.entries()].map(([key, item]) => ({ ...item, key }))
 }
 const terminalOf = (events: ReadonlyArray<HarnessEvent>, turn: TurnId) =>
-  events.find((e) =>
-    (e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted") && e.turnId === turn
+  events.find(
+    (e) => (e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted") && e.turnId === turn,
   )
 
 describe("normalizer on the recorded codex-basic fixture", () => {
@@ -34,8 +37,9 @@ describe("normalizer on the recorded codex-basic fixture", () => {
     expect(replay.turns.length).toBe(6)
     for (const turn of replay.turns) {
       expect(ofTag(replay.events, "TurnStarted").filter((e) => e.turnId === turn).length).toBe(1)
-      const ends = replay.events.filter((e) =>
-        (e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted") && e.turnId === turn
+      const ends = replay.events.filter(
+        (e) =>
+          (e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted") && e.turnId === turn,
       )
       expect(ends.length).toBe(1)
       // No item of the turn after its end.
@@ -61,9 +65,17 @@ describe("normalizer on the recorded codex-basic fixture", () => {
         streaming: false,
         source: "summary",
       },
-      { _tag: "Message", key: expect.stringMatching(/:msg_0$/), role: "bot", text: "Hello from the scripted Codex.", streaming: false },
+      {
+        _tag: "Message",
+        key: expect.stringMatching(/:msg_0$/),
+        role: "bot",
+        text: "Hello from the scripted Codex.",
+        streaming: false,
+      },
     ])
-    const streamed = upserts(replay.events, A).filter((e) => e.item._tag === "Message").map((e) => e.item)
+    const streamed = upserts(replay.events, A)
+      .filter((e) => e.item._tag === "Message")
+      .map((e) => e.item)
     expect(streamed.map((item) => item._tag === "Message" && item.text)).toEqual([
       "Hello ",
       "Hello from the ",
@@ -88,7 +100,9 @@ describe("normalizer on the recorded codex-basic fixture", () => {
     })
     const first = upserts(replay.events, B).find((e) => e.item._tag === "ToolCall")
     expect(first?.item).toMatchObject({ status: "running" })
-    expect(ofTag(replay.events, "Activity").some((a) => a.label === "Running a command" && a.toolKind === "shell")).toBe(true)
+    expect(
+      ofTag(replay.events, "Activity").some((a) => a.label === "Running a command" && a.toolKind === "shell"),
+    ).toBe(true)
   })
 
   test("C: a declined command stays declined", () => {
@@ -146,7 +160,11 @@ describe("normalizer on the recorded codex-basic fixture", () => {
 
   test("context usage is the last call over the model window", () => {
     expect(replay.normalizer.contextUsage).toEqual({ usedTokens: 15, windowTokens: 258400 })
-    expect(ofTag(replay.events, "ContextUsage").at(-1)).toEqual({ _tag: "ContextUsage", usedTokens: 15, windowTokens: 258400 })
+    expect(ofTag(replay.events, "ContextUsage").at(-1)).toEqual({
+      _tag: "ContextUsage",
+      usedTokens: 15,
+      windowTokens: 258400,
+    })
   })
 
   test("item keys are <nativeTurnId>:<itemId>", () => {
@@ -169,9 +187,13 @@ describe("normalizer edge cases", () => {
 
   test("native turns nobody expected (manual compaction) are internal and report their end", () => {
     const ended: Array<string> = []
-    const n = new CodexNormalizer({ onInternalTurnEnd: (native, outcome) => void ended.push(`${native}:${outcome._tag}`) })
+    const n = new CodexNormalizer({
+      onInternalTurnEnd: (native, outcome) => void ended.push(`${native}:${outcome._tag}`),
+    })
     expect(n.handle("turn/started", { turn: { id: "compact-1" } })).toEqual([])
-    expect(n.handle("item/completed", { turnId: "compact-1", item: { type: "contextCompaction", id: "c1" } })).toEqual([])
+    expect(n.handle("item/completed", { turnId: "compact-1", item: { type: "contextCompaction", id: "c1" } })).toEqual(
+      [],
+    )
     const usage = n.handle("thread/tokenUsage/updated", {
       turnId: "compact-1",
       tokenUsage: {
@@ -190,7 +212,11 @@ describe("normalizer edge cases", () => {
     const n = new CodexNormalizer()
     n.expectTurn(t1)
     n.handle("turn/started", { turn: { id: "nat-1" } })
-    n.handle("error", { turnId: "nat-1", willRetry: false, error: { message: "Out of credits", codexErrorInfo: "usageLimitExceeded" } })
+    n.handle("error", {
+      turnId: "nat-1",
+      willRetry: false,
+      error: { message: "Out of credits", codexErrorInfo: "usageLimitExceeded" },
+    })
     const out = n.handle("turn/completed", { turn: { id: "nat-1", status: "failed", error: null } })
     expect(out.at(-1)).toEqual({
       _tag: "TurnFailed",
@@ -220,12 +246,19 @@ describe("normalizer edge cases", () => {
       turnId: "nat-1",
       item: { type: "commandExecution", id: "exec-1", command: "sleep 100", status: "inProgress" },
     })
-    const out = n.finishTurn(t1, { _tag: "failed", error: { code: "closed", message: "Codex stopped", retryable: true } })
-    expect(out.find((e) => e._tag === "ItemUpserted")).toMatchObject({ item: { status: "failed", error: "Codex stopped" } })
+    const out = n.finishTurn(t1, {
+      _tag: "failed",
+      error: { code: "closed", message: "Codex stopped", retryable: true },
+    })
+    expect(out.find((e) => e._tag === "ItemUpserted")).toMatchObject({
+      item: { status: "failed", error: "Codex stopped" },
+    })
     expect(out.at(-1)?._tag).toBe("TurnFailed")
     expect(n.finishTurn(t1, { _tag: "completed" })).toEqual([])
     // Late notifications of the ended turn are ignored.
-    expect(n.handle("item/completed", { turnId: "nat-1", item: { type: "agentMessage", id: "m", text: "late" } })).toEqual([])
+    expect(
+      n.handle("item/completed", { turnId: "nat-1", item: { type: "agentMessage", id: "m", text: "late" } }),
+    ).toEqual([])
   })
 
   test("a turn/start folded into a native turn that OpenBot already ended is taken over", () => {
@@ -244,7 +277,12 @@ describe("normalizer edge cases", () => {
     n.expectTurn(t1)
     const started = n.handle("item/started", {
       turnId: "nat-1",
-      item: { type: "fileChange", id: "fc-1", status: "inProgress", changes: [{ path: "/w/a.txt", kind: { type: "add" }, diff: "+hi" }] },
+      item: {
+        type: "fileChange",
+        id: "fc-1",
+        status: "inProgress",
+        changes: [{ path: "/w/a.txt", kind: { type: "add" }, diff: "+hi" }],
+      },
     })
     expect(started.find((e): e is Upsert => e._tag === "ItemUpserted")?.item).toMatchObject({
       toolName: "apply_patch",
@@ -261,7 +299,13 @@ describe("normalizer edge cases", () => {
     n.expectTurn(t1)
     const out = n.handle("item/started", {
       turnId: "nat-1",
-      item: { type: "mcpToolCall", id: "m1", server: "openbot", tool: "shell", arguments: { command: "ls -la", node: "nod_2" } },
+      item: {
+        type: "mcpToolCall",
+        id: "m1",
+        server: "openbot",
+        tool: "shell",
+        arguments: { command: "ls -la", node: "nod_2" },
+      },
     })
     expect(out.find((e): e is Upsert => e._tag === "ItemUpserted")?.item).toMatchObject({
       kind: "shell",
@@ -280,9 +324,28 @@ describe("normalizer edge cases", () => {
     }
     const openbot = (tool: string) => labelOf({ type: "mcpToolCall", server: "openbot", tool, arguments: {} })
     const bookkeeping = [
-      "start_task", "list_tasks", "check_task", "cancel_task", "remember", "forget", "recall_memory", "list_bots", "list_models",
-      "create_routine", "update_routine", "list_routines", "list_sections", "create_section", "move_bot_to_section", "save_skill",
-      "list_skills", "react", "create_bot", "update_bot", "list_nodes", "notify_user",
+      "start_task",
+      "list_tasks",
+      "check_task",
+      "cancel_task",
+      "remember",
+      "forget",
+      "recall_memory",
+      "list_bots",
+      "list_models",
+      "create_routine",
+      "update_routine",
+      "list_routines",
+      "list_sections",
+      "create_section",
+      "move_bot_to_section",
+      "save_skill",
+      "list_skills",
+      "react",
+      "create_bot",
+      "update_bot",
+      "list_nodes",
+      "notify_user",
     ]
     for (const tool of bookkeeping) expect(openbot(tool)).toBe(THINKING_ACTIVITY)
     for (const tool of ["message_bot", "handoff_task", "post_to_group"]) expect(openbot(tool)).toBe(MESSAGING_ACTIVITY)
@@ -291,11 +354,26 @@ describe("normalizer edge cases", () => {
     expect(openbot("browser")).toBe("Using the browser")
     expect(openbot("send_file")).toBe("Sending a file")
     expect(openbot("ask_user")).toBe("Asking you a question")
-    expect(labelOf({ type: "mcpToolCall", server: "github", tool: "create_issue", arguments: {} })).toBe(CONNECTED_APP_ACTIVITY)
-    expect(labelOf({ type: "collabAgentToolCall", tool: "spawn_agent", prompt: "look around", status: "inProgress" })).toBe(THINKING_ACTIVITY)
-    expect(labelOf({ type: "dynamicToolCall", tool: "some_tool", arguments: {}, status: "inProgress" })).toBe(THINKING_ACTIVITY)
+    expect(labelOf({ type: "mcpToolCall", server: "github", tool: "create_issue", arguments: {} })).toBe(
+      CONNECTED_APP_ACTIVITY,
+    )
+    expect(
+      labelOf({ type: "collabAgentToolCall", tool: "spawn_agent", prompt: "look around", status: "inProgress" }),
+    ).toBe(THINKING_ACTIVITY)
+    expect(labelOf({ type: "dynamicToolCall", tool: "some_tool", arguments: {}, status: "inProgress" })).toBe(
+      THINKING_ACTIVITY,
+    )
     expect(labelOf({ type: "reasoning", summary: [], content: [] })).toBe(THINKING_ACTIVITY)
-    for (const tool of [...bookkeeping, "message_bot", "handoff_task", "post_to_group", "send_file", "ask_user", "shell", "grep"]) {
+    for (const tool of [
+      ...bookkeeping,
+      "message_bot",
+      "handoff_task",
+      "post_to_group",
+      "send_file",
+      "ask_user",
+      "shell",
+      "grep",
+    ]) {
       expect(openbot(tool) ?? "").not.toMatch(PLUMBING)
     }
   })

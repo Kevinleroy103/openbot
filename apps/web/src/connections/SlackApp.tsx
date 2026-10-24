@@ -6,7 +6,13 @@
 // which Bot gets it, whether your own @OpenBot mentions do the same, and the one-time manifest
 // update for apps made before it) and Disconnect.
 import { slackStatusAtom } from "@openbot/client"
-import { type BotId, SLACK_SHORTCUT_NAME, type SlackStatus, slackAppManifest, slackCreateAppUrl } from "@openbot/contracts"
+import {
+  type BotId,
+  SLACK_SHORTCUT_NAME,
+  type SlackStatus,
+  slackAppManifest,
+  slackCreateAppUrl,
+} from "@openbot/contracts"
 import { CardLink, PillButton, Select, StatusPill, Switch, TextField } from "@openbot/ui"
 import { ExternalLink } from "lucide-react"
 import { type ReactNode, useState } from "react"
@@ -18,7 +24,8 @@ import { GroupLabel, RowDivider, SettingsCard, SettingsRow } from "../settings/l
 const copyManifest = () => navigator.clipboard.writeText(JSON.stringify(slackAppManifest(), null, 2))
 
 /** The app's App Manifest page in Slack (its list of apps until live messages told OpenBot its id). */
-const manifestPage = (status: SlackStatus) => status.appId === undefined ? "https://api.slack.com/apps" : `https://api.slack.com/apps/${status.appId}/app-manifest`
+const manifestPage = (status: SlackStatus) =>
+  status.appId === undefined ? "https://api.slack.com/apps" : `https://api.slack.com/apps/${status.appId}/app-manifest`
 
 /** What a missing permission keeps Bots from doing. */
 const SCOPE_FEATURES: Record<string, string> = { "files:write": "attach files to Slack messages" }
@@ -35,11 +42,17 @@ function ManifestButtons({ status }: { readonly status: SlackStatus }): ReactNod
           void copyManifest().then(() => {
             setCopied(true)
             setTimeout(() => setCopied(false), 2_000)
-          })}
+          })
+        }
       >
         {copied ? "Copied" : "Copy manifest"}
       </PillButton>
-      <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(manifestPage(status), "_blank", "noopener")}>
+      <PillButton
+        variant="secondary"
+        size="md"
+        trailingIcon={ExternalLink}
+        onClick={() => window.open(manifestPage(status), "_blank", "noopener")}
+      >
         Open in Slack
       </PillButton>
     </div>
@@ -47,7 +60,13 @@ function ManifestButtons({ status }: { readonly status: SlackStatus }): ReactNod
 }
 
 /** The app was made from an older manifest: what it can't do yet, and how to update it. */
-function UpdateApp({ status, missing }: { readonly status: SlackStatus; readonly missing: ReadonlyArray<string> }): ReactNode {
+function UpdateApp({
+  status,
+  missing,
+}: {
+  readonly status: SlackStatus
+  readonly missing: ReadonlyArray<string>
+}): ReactNode {
   const check = useCommand("slack.connect", "check")
   const cant = missing.map((scope) => SCOPE_FEATURES[scope] ?? scope)
   return (
@@ -88,11 +107,20 @@ export function SlackApp(): ReactNode {
       )}
       <GroupLabel>What Bots can do</GroupLabel>
       <SettingsCard>
-        <SettingsRow title="Read and search" description="Everything you can see in Slack: channels, DMs and threads." />
+        <SettingsRow
+          title="Read and search"
+          description="Everything you can see in Slack: channels, DMs and threads."
+        />
         <RowDivider />
-        <SettingsRow title="Draft messages" description="A Bot writes the message; you edit it and press Send. It goes out as you. Nothing is sent without you." />
+        <SettingsRow
+          title="Draft messages"
+          description="A Bot writes the message; you edit it and press Send. It goes out as you. Nothing is sent without you."
+        />
         <RowDivider />
-        <SettingsRow title="Start routines" description="When someone DMs you, mentions you, or says a phrase. Add one under a Bot's Details › Routines, or ask the Bot." />
+        <SettingsRow
+          title="Start routines"
+          description="When someone DMs you, mentions you, or says a phrase. Add one under a Bot's Details › Routines, or ask the Bot."
+        />
       </SettingsCard>
     </div>
   )
@@ -116,7 +144,12 @@ function Connect(): ReactNode {
           title="1. Create the app"
           description="Opens Slack with OpenBot's app filled in. Pick your workspace, then Next and Create."
           control={
-            <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(slackCreateAppUrl(), "_blank", "noopener")}>
+            <PillButton
+              variant="secondary"
+              size="md"
+              trailingIcon={ExternalLink}
+              onClick={() => window.open(slackCreateAppUrl(), "_blank", "noopener")}
+            >
               Create in Slack
             </PillButton>
           }
@@ -167,12 +200,18 @@ function Connect(): ReactNode {
               loading={connect.pending}
               data-testid="slack-connect-button"
               onClick={() =>
-                void connect.run({ userToken: userToken.trim(), ...(appToken.trim() === "" ? {} : { appToken: appToken.trim() }) }).then((r) => {
-                  if (r.ok) {
-                    setUserToken("")
-                    setAppToken("")
-                  }
-                })}
+                void connect
+                  .run({
+                    userToken: userToken.trim(),
+                    ...(appToken.trim() === "" ? {} : { appToken: appToken.trim() }),
+                  })
+                  .then((r) => {
+                    if (r.ok) {
+                      setUserToken("")
+                      setAppToken("")
+                    }
+                  })
+              }
             >
               Connect
             </PillButton>
@@ -188,11 +227,23 @@ function Connect(): ReactNode {
 const eventsPill = (status: SlackStatus): ReactNode => {
   switch (status.events) {
     case "live":
-      return <StatusPill tone="success" dot>On</StatusPill>
+      return (
+        <StatusPill tone="success" dot>
+          On
+        </StatusPill>
+      )
     case "connecting":
-      return <StatusPill tone="neutral" spinner>Connecting</StatusPill>
+      return (
+        <StatusPill tone="neutral" spinner>
+          Connecting
+        </StatusPill>
+      )
     case "failed":
-      return <StatusPill tone="danger" dot>Not working</StatusPill>
+      return (
+        <StatusPill tone="danger" dot>
+          Not working
+        </StatusPill>
+      )
     case "off":
       return <StatusPill tone="neutral">Off</StatusPill>
   }
@@ -205,12 +256,17 @@ function Connected({ status }: { readonly status: SlackStatus }): ReactNode {
   const [appToken, setAppToken] = useState("")
   return (
     <>
-      {status.missingScopes !== undefined && status.missingScopes.length > 0 && <UpdateApp status={status} missing={status.missingScopes} />}
+      {status.missingScopes !== undefined && status.missingScopes.length > 0 && (
+        <UpdateApp status={status} missing={status.missingScopes} />
+      )}
       <GroupLabel>Connected</GroupLabel>
       <SettingsCard testId="slack-connected">
         <SettingsRow
           title={status.team ?? "Slack"}
-          description={[status.userName === undefined ? undefined : `As ${status.userName}`, status.teamUrl?.replace(/^https?:\/\//, "").replace(/\/$/, "")]
+          description={[
+            status.userName === undefined ? undefined : `As ${status.userName}`,
+            status.teamUrl?.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+          ]
             .filter((part) => part !== undefined)
             .join(" · ")}
           control={
@@ -222,13 +278,15 @@ function Connected({ status }: { readonly status: SlackStatus }): ReactNode {
         <RowDivider />
         <SettingsRow
           title="Live messages"
-          description={status.events === "live"
-            ? "Slack messages can start your Bots' routines."
-            : status.events === "connecting"
-            ? "Connecting to Slack…"
-            : status.events === "failed"
-            ? (status.problem ?? "Slack's live messages aren't working.")
-            : "Add an app-level token so Slack messages can start routines: in the app's Basic Information › App-Level Tokens, Generate Token and Scopes with connections:write."}
+          description={
+            status.events === "live"
+              ? "Slack messages can start your Bots' routines."
+              : status.events === "connecting"
+                ? "Connecting to Slack…"
+                : status.events === "failed"
+                  ? (status.problem ?? "Slack's live messages aren't working.")
+                  : "Add an app-level token so Slack messages can start routines: in the app's Basic Information › App-Level Tokens, Generate Token and Scopes with connections:write."
+          }
           control={eventsPill(status)}
           wide={status.events === "off" || status.events === "failed"}
         >
@@ -291,7 +349,10 @@ function SendToOpenBot({ status }: { readonly status: SlackStatus }): ReactNode 
               label="Send to"
               value={settings.slackSendTo ?? LAST_CHATTED}
               onValueChange={(v) => void patch({ slackSendTo: v === LAST_CHATTED ? null : (v as BotId) })}
-              options={[{ value: LAST_CHATTED, label: "The Bot you chatted with last" }, ...roster.bots.map((bot) => ({ value: bot.id as string, label: bot.name }))]}
+              options={[
+                { value: LAST_CHATTED, label: "The Bot you chatted with last" },
+                ...roster.bots.map((bot) => ({ value: bot.id as string, label: bot.name })),
+              ]}
             />
           }
         >
@@ -302,7 +363,11 @@ function SendToOpenBot({ status }: { readonly status: SlackStatus }): ReactNode 
           title="When you mention @OpenBot"
           description="A message you write that mentions @OpenBot (pick it from Slack's suggestions) goes there too, like Send to OpenBot: “@OpenBot remind me of this tomorrow”."
           control={
-            <Switch checked={settings.slackMentions} onCheckedChange={(slackMentions) => void patch({ slackMentions })} label="Send my @OpenBot mentions" />
+            <Switch
+              checked={settings.slackMentions}
+              onCheckedChange={(slackMentions) => void patch({ slackMentions })}
+              label="Send my @OpenBot mentions"
+            />
           }
         />
         <RowDivider />

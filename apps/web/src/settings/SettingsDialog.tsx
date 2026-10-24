@@ -2,7 +2,19 @@
 // hairline, content column with a round × at the top right. Phone: a full-screen sheet whose nav is
 // an iOS-style list that drills down into each page (‹ Settings back, browser Back too).
 import { Dialog, Icon, IconButton, cn } from "@openbot/ui"
-import { ChartNoAxesColumn, ChevronLeft, ChevronRight, Cpu, Info, type LucideIcon, Monitor, Settings, ShieldCheck, Sparkles, X } from "lucide-react"
+import {
+  ChartNoAxesColumn,
+  ChevronLeft,
+  ChevronRight,
+  Cpu,
+  Info,
+  type LucideIcon,
+  Monitor,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import { useIsPhone } from "../app/layout.ts"
 import { useBackDismiss } from "../app/nav.ts"
@@ -26,7 +38,8 @@ const NAV: ReadonlyArray<{ readonly id: SettingsPage; readonly label: string; re
 
 const known = (p: string | undefined): SettingsPage => (NAV.some((n) => n.id === p) ? (p as SettingsPage) : "general")
 /** Phone: "Settings" (= general) opens the list; a specific page (Computers, Permissions…) opens on it. */
-const phoneStart = (p: string | undefined): SettingsPage | null => (p === undefined || known(p) === "general" ? null : known(p))
+const phoneStart = (p: string | undefined): SettingsPage | null =>
+  p === undefined || known(p) === "general" ? null : known(p)
 
 function PageBody({ page }: { readonly page: SettingsPage }): ReactNode {
   return (
@@ -65,7 +78,14 @@ export function SettingsDialog({ open, initialPage, onClose }: SettingsDialogPro
   if (phone) {
     const current = phonePage === null ? undefined : NAV.find((n) => n.id === phonePage)
     return (
-      <Dialog open={open} onOpenChange={(o) => !o && onClose()} width={900} height={702} label="Settings" className="ob-phone-full bg-chrome">
+      <Dialog
+        open={open}
+        onOpenChange={(o) => !o && onClose()}
+        width={900}
+        height={702}
+        label="Settings"
+        className="ob-phone-full bg-chrome"
+      >
         <div className="flex min-h-0 flex-1 flex-col" data-testid="settings-dialog">
           <div className="relative flex h-14 shrink-0 items-center justify-center px-2">
             {current ? (
@@ -81,10 +101,22 @@ export function SettingsDialog({ open, initialPage, onClose }: SettingsDialogPro
             ) : (
               <h2 className="text-xl font-medium text-fg">Settings</h2>
             )}
-            <IconButton icon={X} label="Close settings" size={36} variant="secondary" className="absolute end-3" onClick={onClose} />
+            <IconButton
+              icon={X}
+              label="Close settings"
+              size={36}
+              variant="secondary"
+              className="absolute end-3"
+              onClick={onClose}
+            />
           </div>
           {current ? (
-            <div ref={scrollRef} key={current.id} className="min-h-0 flex-1 animate-push-in overflow-y-auto px-4 pt-1 pb-12 scrollbar-thin" data-testid={`settings-page-${current.id}`}>
+            <div
+              ref={scrollRef}
+              key={current.id}
+              className="min-h-0 flex-1 animate-push-in overflow-y-auto px-4 pt-1 pb-12 scrollbar-thin"
+              data-testid={`settings-page-${current.id}`}
+            >
               <PageBody page={current.id} />
             </div>
           ) : (
@@ -96,7 +128,10 @@ export function SettingsDialog({ open, initialPage, onClose }: SettingsDialogPro
                     type="button"
                     onClick={() => setPhonePage(n.id)}
                     data-testid={`settings-nav-${n.id}`}
-                    className={cn("flex min-h-[52px] items-center gap-3 px-4 text-start text-[16px] text-fg transition-colors active:bg-hover", i > 0 && "border-t-[0.5px] border-line-tertiary")}
+                    className={cn(
+                      "flex min-h-[52px] items-center gap-3 px-4 text-start text-[16px] text-fg transition-colors active:bg-hover",
+                      i > 0 && "border-t-[0.5px] border-line-tertiary",
+                    )}
                   >
                     <Icon icon={n.icon} size="lg" className="text-icon-secondary" />
                     <span className="min-w-0 flex-1 truncate">{n.label}</span>
@@ -112,9 +147,19 @@ export function SettingsDialog({ open, initialPage, onClose }: SettingsDialogPro
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()} width={900} height={702} label="Settings" className="bg-chrome">
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      width={900}
+      height={702}
+      label="Settings"
+      className="bg-chrome"
+    >
       <div className="flex min-h-0 flex-1" data-testid="settings-dialog">
-        <nav aria-label="Settings" className="flex w-[200px] shrink-0 flex-col gap-0.5 border-e-[0.5px] border-line-tertiary p-3">
+        <nav
+          aria-label="Settings"
+          className="flex w-[200px] shrink-0 flex-col gap-0.5 border-e-[0.5px] border-line-tertiary p-3"
+        >
           {NAV.map((n) => (
             <button
               key={n.id}
@@ -122,7 +167,10 @@ export function SettingsDialog({ open, initialPage, onClose }: SettingsDialogPro
               onClick={() => setPage(n.id)}
               aria-current={page === n.id ? "page" : undefined}
               data-testid={`settings-nav-${n.id}`}
-              className={cn("flex h-8 items-center gap-2 rounded-lg px-2 text-base text-fg transition-colors hover:bg-hover", page === n.id && "bg-active hover:bg-active")}
+              className={cn(
+                "flex h-8 items-center gap-2 rounded-lg px-2 text-base text-fg transition-colors hover:bg-hover",
+                page === n.id && "bg-active hover:bg-active",
+              )}
             >
               <Icon icon={n.icon} size="lg" className="text-icon-secondary" />
               {n.label}
@@ -130,8 +178,18 @@ export function SettingsDialog({ open, initialPage, onClose }: SettingsDialogPro
           ))}
         </nav>
         <div className="relative min-w-0 flex-1">
-          <IconButton icon={X} label="Close settings" size={28} className="absolute top-4 right-4 z-10" onClick={onClose} />
-          <div ref={scrollRef} className="h-full overflow-y-auto px-10 pt-6 pb-12 scrollbar-thin" data-testid={`settings-page-${page}`}>
+          <IconButton
+            icon={X}
+            label="Close settings"
+            size={28}
+            className="absolute top-4 right-4 z-10"
+            onClick={onClose}
+          />
+          <div
+            ref={scrollRef}
+            className="h-full overflow-y-auto px-10 pt-6 pb-12 scrollbar-thin"
+            data-testid={`settings-page-${page}`}
+          >
             <PageBody page={page} />
           </div>
         </div>

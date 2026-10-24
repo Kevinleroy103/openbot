@@ -3,11 +3,20 @@
 // Parakeet and Kokoro; the Bot is played by the test.
 import { describe, expect, test } from "bun:test"
 import type { VoiceServerMessage } from "@openbot/contracts"
-import { type AskNote, CALL_INPUT_SAMPLE_RATE, type CallDeps, isBackchannel, isStop, toPcm16, VoiceCall } from "../src/voice/call.ts"
+import {
+  type AskNote,
+  CALL_INPUT_SAMPLE_RATE,
+  type CallDeps,
+  isBackchannel,
+  isStop,
+  toPcm16,
+  VoiceCall,
+} from "../src/voice/call.ts"
 
 const tone = (seconds: number, amplitude = 0.3) => {
   const samples = new Float32Array(Math.round(CALL_INPUT_SAMPLE_RATE * seconds))
-  for (let i = 0; i < samples.length; i++) samples[i] = amplitude * Math.sin((2 * Math.PI * 220 * i) / CALL_INPUT_SAMPLE_RATE)
+  for (let i = 0; i < samples.length; i++)
+    samples[i] = amplitude * Math.sin((2 * Math.PI * 220 * i) / CALL_INPUT_SAMPLE_RATE)
   return toPcm16(samples)
 }
 const quiet = (seconds: number) => tone(seconds, 0.001)
@@ -80,7 +89,13 @@ describe("a voice call", () => {
     call.botDone(false)
     call.played()
     await until(() => sent.at(-1)?.type === "phase", "listening")
-    expect(sent.filter((m) => m.type === "phase").map((m) => m.type === "phase" && m.phase)).toEqual(["listening", "hearing", "thinking", "speaking", "listening"])
+    expect(sent.filter((m) => m.type === "phase").map((m) => m.type === "phase" && m.phase)).toEqual([
+      "listening",
+      "hearing",
+      "thinking",
+      "speaking",
+      "listening",
+    ])
     await say(call, tone(1))
     await say(call, quiet(0.8))
     await until(() => asked.length === 2, "asked again")
@@ -132,7 +147,9 @@ describe("a voice call", () => {
     await say(call, quiet(0.8))
     await until(() => asked.length === 1, "asked")
     expect(asked).toEqual([{ words: "Uh can you message engineering?", first: true }])
-    expect(sent.filter((m) => m.type === "you" && m.final)).toEqual([{ type: "you", text: "Uh can you message engineering?", final: true }])
+    expect(sent.filter((m) => m.type === "you" && m.final)).toEqual([
+      { type: "you", text: "Uh can you message engineering?", final: true },
+    ])
     // nothing more came: after a moment it goes as it is
     await say(call, tone(0.8))
     await say(call, quiet(0.8))
@@ -181,7 +198,7 @@ describe("a voice call", () => {
     await until(() => spoken().includes("The eleven forty-five one."), "the next message")
   })
 
-  test("\"mm-hm\" or a cough over the Bot: its voice comes back and it carries on", async () => {
+  test('"mm-hm" or a cough over the Bot: its voice comes back and it carries on', async () => {
     const { call, sent, asked, spoken } = makeCall(["Go on.", "Mm-hm.", ""], 5, 0.3)
     await say(call, tone(1))
     await say(call, quiet(0.8))
@@ -199,7 +216,7 @@ describe("a voice call", () => {
     expect(asked).toHaveLength(1)
   })
 
-  test("\"stop\" on its own stops the Bot's work too", async () => {
+  test('"stop" on its own stops the Bot\'s work too', async () => {
     const { call, asked } = makeCall(["Check my whole inbox.", "Stop, stop."])
     await say(call, tone(1))
     await say(call, quiet(0.8))
@@ -211,9 +228,13 @@ describe("a voice call", () => {
   })
 
   test("what counts as listening, and as stop", () => {
-    for (const text of ["Mm-hm.", "Yeah.", "Okay, cool.", "Got it.", "Uh-huh", "Yeah yeah, right."]) expect(isBackchannel(text)).toBe(true)
-    for (const text of ["Yeah, but which one?", "Wait.", "No.", "Okay, send it."]) expect(isBackchannel(text)).toBe(false)
-    for (const text of ["Stop.", "Wait, wait.", "Okay stop.", "Hold on a second.", "Never mind.", "Cancel that."]) expect(isStop(text)).toBe(true)
-    for (const text of ["Wait, which one overlaps?", "Stop the meeting invite.", "Don't stop."]) expect(isStop(text)).toBe(false)
+    for (const text of ["Mm-hm.", "Yeah.", "Okay, cool.", "Got it.", "Uh-huh", "Yeah yeah, right."])
+      expect(isBackchannel(text)).toBe(true)
+    for (const text of ["Yeah, but which one?", "Wait.", "No.", "Okay, send it."])
+      expect(isBackchannel(text)).toBe(false)
+    for (const text of ["Stop.", "Wait, wait.", "Okay stop.", "Hold on a second.", "Never mind.", "Cancel that."])
+      expect(isStop(text)).toBe(true)
+    for (const text of ["Wait, which one overlaps?", "Stop the meeting invite.", "Don't stop."])
+      expect(isStop(text)).toBe(false)
   })
 })

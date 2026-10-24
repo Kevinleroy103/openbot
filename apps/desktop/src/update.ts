@@ -109,9 +109,13 @@ export const makeUpdater = (input: {
       return
     }
     const old = installed()
-    const relaunch = process.platform === "darwin"
-      ? `open "${old}"`
-      : `nohup "${old}/${process.execPath.split("/").at(-1)}" ${process.argv.slice(1).map((a) => `'${a.replaceAll("'", "'\\''")}'`).join(" ")} >/dev/null 2>&1 &`
+    const relaunch =
+      process.platform === "darwin"
+        ? `open "${old}"`
+        : `nohup "${old}/${process.execPath.split("/").at(-1)}" ${process.argv
+            .slice(1)
+            .map((a) => `'${a.replaceAll("'", "'\\''")}'`)
+            .join(" ")} >/dev/null 2>&1 &`
     const script = join(input.workDir, "apply.sh")
     await writeFile(
       script,

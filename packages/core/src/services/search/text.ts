@@ -169,12 +169,18 @@ export const isStreamingEntry = (entry: TranscriptEntry): boolean =>
 // ============================================================================ words
 
 /** Lower case without diacritics, like the index's tokenizer ("Lekë" → "leke"). */
-export const foldText = (text: string): string => text.normalize("NFD").replace(/\p{M}+/gu, "").toLowerCase()
+export const foldText = (text: string): string =>
+  text
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
 
 const TOKEN = /[\p{L}\p{N}\p{M}]+/gu
 
 /** The index's tokens of `text`, with their ranges in `text`. */
-export const tokenSpans = (text: string): Array<{ readonly token: string; readonly start: number; readonly end: number }> => {
+export const tokenSpans = (
+  text: string,
+): Array<{ readonly token: string; readonly start: number; readonly end: number }> => {
   const spans: Array<{ token: string; start: number; end: number }> = []
   for (const match of text.matchAll(TOKEN)) {
     const token = foldText(match[0])
@@ -231,7 +237,8 @@ export const parseSearchQuery = (input: string): SearchMatch | undefined => {
   if (include.length === 0) return undefined
   const last = include[include.length - 1]!
   // A one-letter prefix would match nearly every word: it stays a whole word.
-  const typing = lastBare !== undefined && lastBare.term === last && lastBare.end === input.trimEnd().length && !/\s$/.test(input)
+  const typing =
+    lastBare !== undefined && lastBare.term === last && lastBare.end === input.trimEnd().length && !/\s$/.test(input)
   if (typing && last.tokens[last.tokens.length - 1]!.length > 1) {
     include[include.length - 1] = { ...last, prefix: true }
   }
@@ -273,7 +280,9 @@ export const SNIPPET_ELLIPSIS = "…"
 export const SNIPPET_TOKENS = 24
 
 /** A snippet with sentinels → plain text and highlight ranges. */
-export const parseSnippet = (raw: string): { readonly snippet: string; readonly highlights: ReadonlyArray<SearchHighlight> } => {
+export const parseSnippet = (
+  raw: string,
+): { readonly snippet: string; readonly highlights: ReadonlyArray<SearchHighlight> } => {
   let snippet = ""
   const highlights: Array<SearchHighlight> = []
   let open: number | undefined
@@ -290,7 +299,12 @@ export const parseSnippet = (raw: string): { readonly snippet: string; readonly 
 /** Texts longer than this are only tokenized around the first occurrence of a looked-for word. */
 const SNIPPET_SCAN_CHARS = 2_000
 
-const snippetOf = (text: string, match: SearchMatch | undefined, cutBefore: boolean, cutAfter: boolean): string | undefined => {
+const snippetOf = (
+  text: string,
+  match: SearchMatch | undefined,
+  cutBefore: boolean,
+  cutAfter: boolean,
+): string | undefined => {
   const spans = tokenSpans(text)
   const tokens = spans.map((span) => span.token)
   const marked = new Set<number>()
@@ -307,7 +321,9 @@ const snippetOf = (text: string, match: SearchMatch | undefined, cutBefore: bool
   for (let i = start; i < end; i++) {
     const span = spans[i]!
     out += text.slice(cursor, span.start)
-    out += marked.has(i) ? `${SNIPPET_OPEN}${text.slice(span.start, span.end)}${SNIPPET_CLOSE}` : text.slice(span.start, span.end)
+    out += marked.has(i)
+      ? `${SNIPPET_OPEN}${text.slice(span.start, span.end)}${SNIPPET_CLOSE}`
+      : text.slice(span.start, span.end)
     cursor = span.end
   }
   out += end < spans.length ? SNIPPET_ELLIPSIS : `${text.slice(cursor)}${cutAfter ? SNIPPET_ELLIPSIS : ""}`
@@ -345,9 +361,10 @@ export const makeSubstringSnippet = (text: string, needle: string): string => {
   if (at < 0 || needle === "") return text.slice(0, 200)
   const start = Math.max(0, at - 60)
   const end = Math.min(text.length, at + needle.length + 100)
-  return `${start > 0 ? SNIPPET_ELLIPSIS : ""}${text.slice(start, at)}${SNIPPET_OPEN}${text.slice(at, at + needle.length)}${SNIPPET_CLOSE}${
-    text.slice(at + needle.length, end)
-  }${end < text.length ? SNIPPET_ELLIPSIS : ""}`
+  return `${start > 0 ? SNIPPET_ELLIPSIS : ""}${text.slice(start, at)}${SNIPPET_OPEN}${text.slice(at, at + needle.length)}${SNIPPET_CLOSE}${text.slice(
+    at + needle.length,
+    end,
+  )}${end < text.length ? SNIPPET_ELLIPSIS : ""}`
 }
 
 // ============================================================================ cursors
@@ -370,7 +387,9 @@ export const decodeSearchCursor = (text: string, sort: SearchSort): SearchCursor
     const rank = Number(parts[1])
     const createdAt = Number(parts[2])
     const refId = parts[3]!
-    return Number.isFinite(rank) && Number.isInteger(createdAt) && refId !== "" ? { sort, rank, createdAt, refId } : undefined
+    return Number.isFinite(rank) && Number.isInteger(createdAt) && refId !== ""
+      ? { sort, rank, createdAt, refId }
+      : undefined
   }
   if (parts.length !== 3 || parts[0] !== (sort === "newest" ? "n" : "o")) return undefined
   const createdAt = Number(parts[1])

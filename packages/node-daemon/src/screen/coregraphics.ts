@@ -19,7 +19,10 @@ const FIELD_CLICK_STATE = 1
 
 export const loadCoreGraphics = (): CoreGraphics => {
   const cg = dlopen(CG, {
-    CGEventCreateMouseEvent: { args: [FFIType.ptr, FFIType.u32, FFIType.f64, FFIType.f64, FFIType.u32], returns: FFIType.ptr },
+    CGEventCreateMouseEvent: {
+      args: [FFIType.ptr, FFIType.u32, FFIType.f64, FFIType.f64, FFIType.u32],
+      returns: FFIType.ptr,
+    },
     CGEventCreateKeyboardEvent: { args: [FFIType.ptr, FFIType.u16, FFIType.bool], returns: FFIType.ptr },
     CGEventKeyboardSetUnicodeString: { args: [FFIType.ptr, FFIType.u64, FFIType.ptr], returns: FFIType.void },
     CGEventSetFlags: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
@@ -38,7 +41,10 @@ export const loadCoreGraphics = (): CoreGraphics => {
   const wheel = (() => {
     try {
       return dlopen(CG, {
-        CGEventCreateScrollWheelEvent2: { args: [FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.i32, FFIType.i32, FFIType.i32], returns: FFIType.ptr },
+        CGEventCreateScrollWheelEvent2: {
+          args: [FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.i32, FFIType.i32, FFIType.i32],
+          returns: FFIType.ptr,
+        },
       }).symbols
     } catch {
       return undefined
@@ -57,7 +63,8 @@ export const loadCoreGraphics = (): CoreGraphics => {
   return {
     mouse: (type, x, y, button, clickState, flags) => {
       const e = cg.CGEventCreateMouseEvent(null, type, x, y, button)
-      if (e !== null && clickState > 0) cg.CGEventSetIntegerValueField(e, FIELD_CLICK_STATE, BigInt(clickState) as never)
+      if (e !== null && clickState > 0)
+        cg.CGEventSetIntegerValueField(e, FIELD_CLICK_STATE, BigInt(clickState) as never)
       post(e, flags)
     },
     key: (keyCode, down, flags) => post(cg.CGEventCreateKeyboardEvent(null, keyCode, down), flags),

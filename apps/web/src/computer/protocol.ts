@@ -51,7 +51,9 @@ const utf8 = new TextDecoder()
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)
 
 /** Inverse of node-protocol `encodeScreencastFrame`; `undefined` for malformed frames. */
-export const decodeScreencastFrame = (buffer: ArrayBuffer): { readonly meta: ScreencastFrameMeta; readonly image: Uint8Array } | undefined => {
+export const decodeScreencastFrame = (
+  buffer: ArrayBuffer,
+): { readonly meta: ScreencastFrameMeta; readonly image: Uint8Array } | undefined => {
   if (buffer.byteLength < 4) return undefined
   const n = new DataView(buffer).getUint32(0, false)
   if (n > MAX_META_BYTES || 4 + n > buffer.byteLength) return undefined
@@ -86,7 +88,9 @@ export const decodeScreencastNotice = (text: string): ScreencastNotice | undefin
       case "Ended":
         return { _tag: "Ended", reason: String(raw["reason"] ?? "") }
       case "Lease":
-        return raw["holder"] === "user" || raw["holder"] === "bot" ? { _tag: "Lease", holder: raw["holder"] } : undefined
+        return raw["holder"] === "user" || raw["holder"] === "bot"
+          ? { _tag: "Lease", holder: raw["holder"] }
+          : undefined
       case "Url":
         return { _tag: "Url", url: String(raw["url"] ?? ""), title: String(raw["title"] ?? "") }
       default:
@@ -132,7 +136,12 @@ export type BrowserInputEvent =
     }
   | { readonly _tag: "text"; readonly text: string }
 
-export const modifiersOf = (e: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }): InputModifiers | undefined =>
+export const modifiersOf = (e: {
+  altKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+}): InputModifiers | undefined =>
   e.altKey || e.ctrlKey || e.metaKey || e.shiftKey
     ? {
         ...(e.altKey ? { alt: true } : {}),
@@ -142,7 +151,8 @@ export const modifiersOf = (e: { altKey: boolean; ctrlKey: boolean; metaKey: boo
       }
     : undefined
 
-export const mouseButtonOf = (button: number): "left" | "middle" | "right" => (button === 1 ? "middle" : button === 2 ? "right" : "left")
+export const mouseButtonOf = (button: number): "left" | "middle" | "right" =>
+  button === 1 ? "middle" : button === 2 ? "right" : "left"
 
 /**
  * Map a pointer position on the drawn frame (an element whose box exactly covers the frame, e.g. the
@@ -163,13 +173,18 @@ export const toViewportPoint = (
 
 // ------------------------------------------------------------------------------------- terminal
 
-export type TerminalControl = { readonly exit: number | null; readonly signal?: string | null } | { readonly error: string }
+export type TerminalControl =
+  { readonly exit: number | null; readonly signal?: string | null } | { readonly error: string }
 
 export const decodeTerminalControl = (text: string): TerminalControl | undefined => {
   try {
     const raw = JSON.parse(text) as Record<string, unknown>
     if (typeof raw?.["error"] === "string") return { error: raw["error"] }
-    if ("exit" in raw) return { exit: typeof raw["exit"] === "number" ? raw["exit"] : null, signal: typeof raw["signal"] === "string" ? raw["signal"] : null }
+    if ("exit" in raw)
+      return {
+        exit: typeof raw["exit"] === "number" ? raw["exit"] : null,
+        signal: typeof raw["signal"] === "string" ? raw["signal"] : null,
+      }
     return undefined
   } catch {
     return undefined
@@ -188,7 +203,12 @@ const wsOrigin = (): string => {
 
 /** `/ws/computer/:botId?mode=…` on the page's origin (`viewPath` from `computer.status` wins when present). */
 /** `passive`: a preview (the side thumbnail), which does not keep the screen awake. */
-export const computerSocketUrl = (botId: string, mode: "view" | "control", viewPath?: string, passive = false): string =>
+export const computerSocketUrl = (
+  botId: string,
+  mode: "view" | "control",
+  viewPath?: string,
+  passive = false,
+): string =>
   `${wsOrigin()}${viewPath ?? `/ws/computer/${encodeURIComponent(botId)}`}?mode=${mode}${passive ? "&passive=1" : ""}`
 
 export const terminalSocketUrl = (botId: string, cols: number, rows: number): string =>

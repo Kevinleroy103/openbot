@@ -43,12 +43,54 @@ const PLAYBACK_LATENCY_MS = 60
 const HEARD_CHARS = 300
 
 const wordsOf = (text: string): Array<string> =>
-  text.toLowerCase().replace(/[^a-z'\s-]/g, " ").replace(/-/g, " ").split(/\s+/).filter((w) => w !== "")
+  text
+    .toLowerCase()
+    .replace(/[^a-z'\s-]/g, " ")
+    .replace(/-/g, " ")
+    .split(/\s+/)
+    .filter((w) => w !== "")
 
-const BACKCHANNEL_PHRASES = ["got it", "i see", "all right", "sounds good", "makes sense", "uh huh", "mm hm", "mm hmm", "of course", "fair enough", "go on"]
+const BACKCHANNEL_PHRASES = [
+  "got it",
+  "i see",
+  "all right",
+  "sounds good",
+  "makes sense",
+  "uh huh",
+  "mm hm",
+  "mm hmm",
+  "of course",
+  "fair enough",
+  "go on",
+]
 const BACKCHANNEL_WORDS = new Set([
-  "mm", "mmm", "mhm", "hm", "hmm", "uh", "huh", "ah", "oh", "yeah", "yep", "yes", "yup", "ok", "okay", "right", "sure", "cool",
-  "nice", "great", "alright", "true", "exactly", "gotcha", "wow", "totally", "indeed",
+  "mm",
+  "mmm",
+  "mhm",
+  "hm",
+  "hmm",
+  "uh",
+  "huh",
+  "ah",
+  "oh",
+  "yeah",
+  "yep",
+  "yes",
+  "yup",
+  "ok",
+  "okay",
+  "right",
+  "sure",
+  "cool",
+  "nice",
+  "great",
+  "alright",
+  "true",
+  "exactly",
+  "gotcha",
+  "wow",
+  "totally",
+  "indeed",
 ])
 /** Only "mm-hm", "yeah", "okay", "got it"…: listening, not taking a turn. */
 export const isBackchannel = (text: string): boolean => {
@@ -60,8 +102,26 @@ export const isBackchannel = (text: string): boolean => {
 
 const STOP_FILLER = new Set(["ok", "okay", "no", "please", "hey", "actually", "just", "sorry", "um", "uh"])
 const STOP_PHRASES = new Set([
-  "stop", "stop it", "stop that", "wait", "wait a sec", "wait a second", "wait a minute", "hold on", "hold on a sec", "hold on a second",
-  "hang on", "never mind", "nevermind", "cancel", "cancel that", "cancel it", "forget it", "forget that", "enough", "that's enough",
+  "stop",
+  "stop it",
+  "stop that",
+  "wait",
+  "wait a sec",
+  "wait a second",
+  "wait a minute",
+  "hold on",
+  "hold on a sec",
+  "hold on a second",
+  "hang on",
+  "never mind",
+  "nevermind",
+  "cancel",
+  "cancel that",
+  "cancel it",
+  "forget it",
+  "forget that",
+  "enough",
+  "that's enough",
 ])
 /** "Stop", "wait", "never mind"… and nothing else: stop what the Bot is doing. */
 export const isStop = (text: string): boolean => {
@@ -110,7 +170,8 @@ const concat = (parts: ReadonlyArray<Float32Array>): Float32Array => {
 export const toPcm16 = (samples: Float32Array): Uint8Array => {
   const out = new Uint8Array(samples.length * 2)
   const view = new DataView(out.buffer)
-  for (let i = 0; i < samples.length; i++) view.setInt16(i * 2, Math.round(Math.max(-1, Math.min(1, samples[i]!)) * 0x7fff), true)
+  for (let i = 0; i < samples.length; i++)
+    view.setInt16(i * 2, Math.round(Math.max(-1, Math.min(1, samples[i]!)) * 0x7fff), true)
   return out
 }
 
@@ -197,7 +258,10 @@ export class VoiceCall {
 
   /** How long the call went and what was said (both sides). */
   summary(): { readonly durationMs: number; readonly lines: ReadonlyArray<CallLine> } {
-    return { durationMs: this.startedAt === 0 ? 0 : Date.now() - this.startedAt, lines: this.lines.map((l) => ({ ...l })) }
+    return {
+      durationMs: this.startedAt === 0 ? 0 : Date.now() - this.startedAt,
+      lines: this.lines.map((l) => ({ ...l })),
+    }
   }
 
   // ---------------------------------------------------------------- input
@@ -292,9 +356,11 @@ export class VoiceCall {
     this.speaking = this.speaking.then(async () => {
       const samples = await audio
       // not over the owner: while they talk it waits ("mm-hm" lets it go on, real words drop it)
-      while (this.utterance !== undefined && generation === this.generation && !this.ended) await Bun.sleep(QUIET_POLL_MS)
+      while (this.utterance !== undefined && generation === this.generation && !this.ended)
+        await Bun.sleep(QUIET_POLL_MS)
       this.inFlight--
-      if (generation !== this.generation || this.ended || samples.length === 0 || message?.dropped === true) return this.settle()
+      if (generation !== this.generation || this.ended || samples.length === 0 || message?.dropped === true)
+        return this.settle()
       if (message !== undefined) {
         if (message.line === undefined) {
           message.line = { who: "bot", text }
@@ -387,7 +453,11 @@ export class VoiceCall {
       const text = await transcription.append(samples).catch(() => utterance.latestText)
       if (text !== utterance.latestText && this.utterance === utterance && text !== "") {
         utterance.latestText = text
-        this.deps.send({ type: "you", text: this.held === undefined ? text : `${this.held.text} ${text}`, final: false })
+        this.deps.send({
+          type: "you",
+          text: this.held === undefined ? text : `${this.held.text} ${text}`,
+          final: false,
+        })
         // real words, not "mm-hm": the Bot stops now, not when the owner is done
         if (this.ducked && !isBackchannel(text)) this.talkedOver()
       }
@@ -402,7 +472,8 @@ export class VoiceCall {
     utterance.pending = []
     void utterance.busy.then(async () => {
       const transcription = await utterance.transcription
-      const text = transcription === undefined ? "" : (await transcription.finish(rest).catch(() => utterance.latestText)).trim()
+      const text =
+        transcription === undefined ? "" : (await transcription.finish(rest).catch(() => utterance.latestText)).trim()
       if (this.ended) return
       // over the Bot it was only "mm-hm", "yeah" or a cough: it carries on
       if (this.ducked && (text === "" || isBackchannel(text))) {
@@ -436,7 +507,10 @@ export class VoiceCall {
   private commit(words: string) {
     this.deps.send({ type: "you", text: words, final: true })
     this.lines.push({ who: "you", text: words })
-    const note: AskNote = { ...(this.cutOff === undefined ? {} : { heard: this.cutOff }), ...(isStop(words) ? { stop: true } : {}) }
+    const note: AskNote = {
+      ...(this.cutOff === undefined ? {} : { heard: this.cutOff }),
+      ...(isStop(words) ? { stop: true } : {}),
+    }
     this.cutOff = undefined
     this.voiced = []
     this.deps.ask(words, this.asked++ === 0, note)

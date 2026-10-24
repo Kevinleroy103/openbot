@@ -20,7 +20,7 @@ const slow = defineTool({
   description: "Sleeps for `ms` without reporting progress itself.",
   params: p.params({ ms: p.number("Milliseconds.", { integer: true, min: 0 }) }),
   handler: (args) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       runs += 1
       yield* Effect.sleep(args.ms)
       return textResult(`slept ${args.ms} (run ${runs})`)

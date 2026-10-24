@@ -12,9 +12,13 @@ const codexModels = [
 
 const run = <A, E>(effect: Effect.Effect<A, E, HarnessRegistry>) =>
   Effect.runPromiseExit(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const registry = yield* HarnessRegistry
-      yield* registry.register({ kind: "codex", displayName: "Codex", listModels: Effect.succeed(codexModels) } as never)
+      yield* registry.register({
+        kind: "codex",
+        displayName: "Codex",
+        listModels: Effect.succeed(codexModels),
+      } as never)
       return yield* effect
     }).pipe(Effect.provide(HarnessRegistry.layer), Effect.scoped),
   )

@@ -22,7 +22,12 @@ export interface RunningMock {
 /** Starts the mock server as a child process (cwd apps/web so its bunfig loads Tailwind). */
 export const startMock = async (port = 0, extra: ReadonlyArray<string> = []): Promise<RunningMock> => {
   const p = port || 43000 + Math.floor(Math.random() * 2000)
-  const child = Bun.spawn([process.execPath, mockEntry, "--port", String(p), ...extra], { cwd: webDir, stdout: "pipe", stderr: "inherit", env: { ...process.env, OPENBOT_MOCK_CHILD: "1" } })
+  const child = Bun.spawn([process.execPath, mockEntry, "--port", String(p), ...extra], {
+    cwd: webDir,
+    stdout: "pipe",
+    stderr: "inherit",
+    env: { ...process.env, OPENBOT_MOCK_CHILD: "1" },
+  })
   const reader = child.stdout.getReader()
   const decoder = new TextDecoder()
   let buf = ""
@@ -67,9 +72,21 @@ export const SCENES: ReadonlyArray<Shot> = [
       await page.locator(".ob-msg[data-entry]", { hasText: "Booked: marina house" }).first().hover()
     },
   },
-  { name: "03-details", route: "#/c/cnv_chief", act: async (page) => void (await page.getByRole("button", { name: "View conversation details" }).click()) },
-  { name: "12-account-menu", route: "#/c/cnv_chief", act: async (page) => void (await page.getByRole("button", { name: "Account" }).click()) },
-  { name: "13-bot-context-menu", route: "#/c/cnv_chief", act: async (page) => void (await page.locator('[data-row="bot_scout"]').click({ button: "right" })) },
+  {
+    name: "03-details",
+    route: "#/c/cnv_chief",
+    act: async (page) => void (await page.getByRole("button", { name: "View conversation details" }).click()),
+  },
+  {
+    name: "12-account-menu",
+    route: "#/c/cnv_chief",
+    act: async (page) => void (await page.getByRole("button", { name: "Account" }).click()),
+  },
+  {
+    name: "13-bot-context-menu",
+    route: "#/c/cnv_chief",
+    act: async (page) => void (await page.locator('[data-row="bot_scout"]').click({ button: "right" })),
+  },
   {
     name: "14-react-popover",
     route: "#/c/cnv_chief",
@@ -79,7 +96,11 @@ export const SCENES: ReadonlyArray<Shot> = [
       await msg.getByRole("button", { name: "React" }).click()
     },
   },
-  { name: "10-new-chat", route: "#/new", act: async (page) => void (await page.waitForSelector('[aria-label="New chat"]')) },
+  {
+    name: "10-new-chat",
+    route: "#/new",
+    act: async (page) => void (await page.waitForSelector('[aria-label="New chat"]')),
+  },
   {
     name: "10b-new-chat-typed",
     route: "#/new",
@@ -101,11 +122,17 @@ export const SCENES: ReadonlyArray<Shot> = [
     name: "20-typed",
     route: "#/c/cnv_chief",
     act: async (page) => {
-      await page.getByRole("textbox", { name: "Message Chief of Staff" }).fill("Can you ask Research Scout to draft the board update for Friday")
+      await page
+        .getByRole("textbox", { name: "Message Chief of Staff" })
+        .fill("Can you ask Research Scout to draft the board update for Friday")
     },
   },
   { name: "21-compact", route: "#/c/cnv_chief", act: async (page) => void (await page.keyboard.press(`${mod}+b`)) },
-  { name: "22-plus-menu", route: "#/c/cnv_chief", act: async (page) => void (await page.getByRole("button", { name: "Composer actions" }).click()) },
+  {
+    name: "22-plus-menu",
+    route: "#/c/cnv_chief",
+    act: async (page) => void (await page.getByRole("button", { name: "Composer actions" }).click()),
+  },
   {
     name: "23-hidden-bots",
     route: "#/c/cnv_chief",
@@ -117,7 +144,10 @@ export const SCENES: ReadonlyArray<Shot> = [
     act: async (page) => {
       const steps = page.getByRole("button", { name: /5 steps/ })
       await steps.click()
-      await page.getByRole("button", { name: /npm run build/ }).first().click()
+      await page
+        .getByRole("button", { name: /npm run build/ })
+        .first()
+        .click()
     },
   },
   { name: "31-working", route: "#/c/cnv_inbox" },
@@ -130,7 +160,12 @@ export const SCENES: ReadonlyArray<Shot> = [
     route: "#/c/cnv_sales",
     act: async (page) => {
       // the middle "3 messages with Research Scout" run: the dialog opens there, lit up
-      await page.getByTestId("transcript").locator('button[data-exchange="bot_scout"]').filter({ hasText: "3 messages with" }).nth(1).click()
+      await page
+        .getByTestId("transcript")
+        .locator('button[data-exchange="bot_scout"]')
+        .filter({ hasText: "3 messages with" })
+        .nth(1)
+        .click()
       await page.getByRole("dialog").locator("[data-exchange-item][data-target]").first().waitFor()
     },
   },
@@ -198,7 +233,11 @@ export const SCENES: ReadonlyArray<Shot> = [
 
 /** The full-desktop view's picture is live (noVNC connected to the mock's fake RFB desktop). */
 export const desktopLive = async (page: Page, interactive = false) => {
-  await page.locator(`[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]${interactive ? "[data-interactive]" : ""}`).waitFor({ timeout: 10_000 })
+  await page
+    .locator(
+      `[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]${interactive ? "[data-interactive]" : ""}`,
+    )
+    .waitFor({ timeout: 10_000 })
   await page.waitForTimeout(400)
 }
 
@@ -268,7 +307,10 @@ export const COMPUTER_SCENES: ReadonlyArray<Shot> = [
     route: "#/c/cnv_chief",
     act: async (page) => {
       await computerTab(page)
-      await page.getByTestId("screen-thumbnail").locator('[data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+      await page
+        .getByTestId("screen-thumbnail")
+        .locator('[data-testid="desktop-screen"][data-live]')
+        .waitFor({ timeout: 10_000 })
     },
   },
   { name: "75-details-missing", route: "#/c/cnv_expense", act: async (page) => void (await computerTab(page)) },
@@ -305,7 +347,11 @@ export const COMPUTER_SCENES: ReadonlyArray<Shot> = [
     route: "#/c/cnv_chief",
     act: async (page) => {
       await openComputers(page)
-      await page.getByTestId("node-row").filter({ hasText: "vps-1" }).getByRole("button", { name: "Show details" }).click()
+      await page
+        .getByTestId("node-row")
+        .filter({ hasText: "vps-1" })
+        .getByRole("button", { name: "Show details" })
+        .click()
       await page.getByTestId("desktop-setup").waitFor()
     },
   },
@@ -324,8 +370,17 @@ const openSkills = async (page: Page) => {
   await page.getByTestId("skills-library").getByTestId("skill-row").first().waitFor()
 }
 
-export const openPage = async (browser: Browser, url: string, theme: "dark" | "light", route = "#/"): Promise<{ page: Page; errors: string[] }> => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: theme })
+export const openPage = async (
+  browser: Browser,
+  url: string,
+  theme: "dark" | "light",
+  route = "#/",
+): Promise<{ page: Page; errors: string[] }> => {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 2,
+    colorScheme: theme,
+  })
   const page = await context.newPage()
   page.setDefaultTimeout(8000)
   const errors: string[] = []
@@ -334,13 +389,17 @@ export const openPage = async (browser: Browser, url: string, theme: "dark" | "l
     if (m.type() === "error") errors.push(`console: ${m.text()}`)
   })
   await page.goto(`${url}/${route}`)
-  await page.waitForSelector('nav[aria-label="Bots"] [data-row], nav[aria-label="Bots"] [data-bot]', { timeout: 15_000 })
+  await page.waitForSelector('nav[aria-label="Bots"] [data-row], nav[aria-label="Bots"] [data-bot]', {
+    timeout: 15_000,
+  })
   await page.evaluate(() => document.fonts.ready)
   await page.waitForTimeout(400)
   return { page, errors }
 }
 
-export const takeScreens = async (options: { readonly only?: ReadonlyArray<string>; readonly themes?: ReadonlyArray<"dark" | "light"> } = {}) => {
+export const takeScreens = async (
+  options: { readonly only?: ReadonlyArray<string>; readonly themes?: ReadonlyArray<"dark" | "light"> } = {},
+) => {
   const files: string[] = []
   const errors: string[] = []
   const browser = await chromium.launch({ executablePath: chromiumPath })
@@ -351,9 +410,18 @@ export const takeScreens = async (options: { readonly only?: ReadonlyArray<strin
         for (const shot of [...SCENES, ...COMPUTER_SCENES]) {
           if (options.only && options.only.length > 0 && !options.only.some((o) => shot.name.includes(o))) continue
           const { page, errors: errs } = await openPage(browser, mock.url, theme, shot.route)
-          if (shot.route?.startsWith("#/c/")) await page.waitForSelector(`[data-conversation="${shot.route.slice(4)}"] [data-entry], [data-conversation="${shot.route.slice(4)}"] [role="separator"]`, { timeout: 10_000 }).catch(() => {})
+          if (shot.route?.startsWith("#/c/"))
+            await page
+              .waitForSelector(
+                `[data-conversation="${shot.route.slice(4)}"] [data-entry], [data-conversation="${shot.route.slice(4)}"] [role="separator"]`,
+                { timeout: 10_000 },
+              )
+              .catch(() => {})
           await page.waitForTimeout(300)
-          if (shot.act) await shot.act(page).catch((e: unknown) => errors.push(`${shot.name}/${theme}: act failed: ${String(e).split("\n")[0]}`))
+          if (shot.act)
+            await shot
+              .act(page)
+              .catch((e: unknown) => errors.push(`${shot.name}/${theme}: act failed: ${String(e).split("\n")[0]}`))
           await page.waitForTimeout(450)
           const file = join(screenshotDir, `${shot.name}-${theme}.png`)
           await page.screenshot({ path: file })
@@ -373,7 +441,11 @@ export const takeScreens = async (options: { readonly only?: ReadonlyArray<strin
 
 if (import.meta.main) {
   const only = process.argv.slice(2).filter((a) => !a.startsWith("--"))
-  const themes = process.argv.includes("--dark") ? (["dark"] as const) : process.argv.includes("--light") ? (["light"] as const) : undefined
+  const themes = process.argv.includes("--dark")
+    ? (["dark"] as const)
+    : process.argv.includes("--light")
+      ? (["light"] as const)
+      : undefined
   const res = await takeScreens({ only, ...(themes ? { themes } : {}) })
   for (const f of res.files) console.log(f)
   for (const e of res.errors) console.error("ERROR", e)

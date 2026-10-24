@@ -85,21 +85,33 @@ describe("InstructionRenderer: groups", () => {
     )
   })
 
-  test("a \"Your groups\" section only when there are groups; the rule keeps group work in the group", () => {
-    const sections = { base: renderBase(lead, placement(["bot"])), persona: "", team: "", memoryIndex: "", placement: "" }
+  test('a "Your groups" section only when there are groups; the rule keeps group work in the group', () => {
+    const sections = {
+      base: renderBase(lead, placement(["bot"])),
+      persona: "",
+      team: "",
+      memoryIndex: "",
+      placement: "",
+    }
     expect(assembleInstructions(sections).text).not.toContain("## Your groups")
     const text = assembleInstructions({ ...sections, groups: renderGroups(lead, [group], team) }).text
     expect(text).toContain('## Your groups\n- "improve video render speed" (id cnv_render)')
-    expect(text).toContain("Work that belongs to one of your groups (under \"Your groups\") is coordinated in that group, wherever the request reaches you")
+    expect(text).toContain(
+      'Work that belongs to one of your groups (under "Your groups") is coordinated in that group, wherever the request reaches you',
+    )
     expect(text).toContain("For anything none of your groups is about, `message_bot`")
   })
 
   test("the rendered instructions list the bot's live groups", async () => {
     const text = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
-        yield* (yield* ConversationService).createGroup({ title: "launch", memberBotIds: [ada.id, bob.id], leadBotId: ada.id })
+        yield* (yield* ConversationService).createGroup({
+          title: "launch",
+          memberBotIds: [ada.id, bob.id],
+          leadBotId: ada.id,
+        })
         return (yield* (yield* InstructionRenderer).render({ bot: ada, placement: placement(["bot"]) })).text
       }),
       appLayer(),

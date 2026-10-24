@@ -21,7 +21,13 @@ const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "🙏"] as co
  * "to @Sender" above a bot's replies in its direct chat when they answer another Bot's message
  * (`message_bot`), so the owner sees they are not addressed to them.
  */
-export function AddresseeChip({ bot, onOpen }: { readonly bot: Bot | undefined; readonly onOpen?: (() => void) | undefined }): ReactNode {
+export function AddresseeChip({
+  bot,
+  onOpen,
+}: {
+  readonly bot: Bot | undefined
+  readonly onOpen?: (() => void) | undefined
+}): ReactNode {
   return (
     <button
       type="button"
@@ -37,7 +43,12 @@ export function AddresseeChip({ bot, onOpen }: { readonly bot: Bot | undefined; 
 
 const isEmojiOnly = (text: string) => {
   const t = text.trim()
-  return t.length > 0 && t.length <= 8 && /^(\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s)+$/u.test(t) && !/^[\d#*\s]+$/.test(t)
+  return (
+    t.length > 0 &&
+    t.length <= 8 &&
+    /^(\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s)+$/u.test(t) &&
+    !/^[\d#*\s]+$/.test(t)
+  )
 }
 
 export interface MessageBubbleProps {
@@ -67,7 +78,11 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
     )
   }
   const actions = (
-    <div className={cn("ob-msg-actions flex shrink-0 items-center gap-0.5 self-center", menuOpen && "opacity-100")} role="toolbar" aria-label="Message actions">
+    <div
+      className={cn("ob-msg-actions flex shrink-0 items-center gap-0.5 self-center", menuOpen && "opacity-100")}
+      role="toolbar"
+      aria-label="Message actions"
+    >
       <Popover
         side="top"
         align={side === "user" ? "end" : "start"}
@@ -75,7 +90,13 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
         onOpenChange={setMenuOpen}
         className="p-1"
         trigger={(p) => (
-          <button {...p} type="button" aria-label="React" title="React" className="inline-flex size-7 items-center justify-center rounded-full text-icon-tertiary transition-colors hover:bg-secondary hover:text-icon">
+          <button
+            {...p}
+            type="button"
+            aria-label="React"
+            title="React"
+            className="inline-flex size-7 items-center justify-center rounded-full text-icon-tertiary transition-colors hover:bg-secondary hover:text-icon"
+          >
             <SmilePlus size={16} strokeWidth={1.75} aria-hidden />
           </button>
         )}
@@ -99,7 +120,13 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
         )}
       </Popover>
       {onReply && (
-        <button type="button" aria-label="Reply" title="Reply" onClick={() => onReply(entry)} className="inline-flex size-7 items-center justify-center rounded-full text-icon-tertiary transition-colors hover:bg-secondary hover:text-icon">
+        <button
+          type="button"
+          aria-label="Reply"
+          title="Reply"
+          onClick={() => onReply(entry)}
+          className="inline-flex size-7 items-center justify-center rounded-full text-icon-tertiary transition-colors hover:bg-secondary hover:text-icon"
+        >
           <Reply size={16} strokeWidth={1.75} aria-hidden />
         </button>
       )}
@@ -109,7 +136,13 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
         side="top"
         onOpenChange={setMenuOpen}
         trigger={(p) => (
-          <button {...p} type="button" aria-label="More" title="More" className="inline-flex size-7 items-center justify-center rounded-full text-icon-tertiary transition-colors hover:bg-secondary hover:text-icon">
+          <button
+            {...p}
+            type="button"
+            aria-label="More"
+            title="More"
+            className="inline-flex size-7 items-center justify-center rounded-full text-icon-tertiary transition-colors hover:bg-secondary hover:text-icon"
+          >
             <Ellipsis size={16} strokeWidth={1.75} aria-hidden />
           </button>
         )}
@@ -126,40 +159,63 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
   )
 
   return (
-    <div className={cn("ob-msg flex w-full flex-col gap-1", side === "user" ? "items-end" : "items-start", reactions.length > 0 && "pt-5")} data-entry={entry.id}>
+    <div
+      className={cn(
+        "ob-msg flex w-full flex-col gap-1",
+        side === "user" ? "items-end" : "items-start",
+        reactions.length > 0 && "pt-5",
+      )}
+      data-entry={entry.id}
+    >
       <Attachments items={entry.attachments} side={side} />
       {(entry.text.length > 0 || quoted) && (
         <div className={cn("relative flex w-full items-end gap-2", side === "user" ? "flex-row-reverse" : "flex-row")}>
-          <Bubble side={side} position={position} emojiOnly={emoji} className={cn("relative", side === "bot" && !emoji && "whitespace-normal", entry.aborted && "opacity-80")}>
+          <Bubble
+            side={side}
+            position={position}
+            emojiOnly={emoji}
+            className={cn("relative", side === "bot" && !emoji && "whitespace-normal", entry.aborted && "opacity-80")}
+          >
             {quoted && (
               <span className="mb-0.5 flex items-center gap-1 text-xs opacity-80">
                 <MessageSquareQuote size={13} strokeWidth={1.75} aria-hidden />
                 <span className="truncate">“{plainPreview(quoted.text, 80)}”</span>
               </span>
             )}
-            {side === "bot" && !emoji ? <Markdown text={entry.text} bots={roster.bots} /> : emoji ? entry.text : <MentionText text={entry.text} bots={roster.bots} />}
+            {side === "bot" && !emoji ? (
+              <Markdown text={entry.text} bots={roster.bots} />
+            ) : emoji ? (
+              entry.text
+            ) : (
+              <MentionText text={entry.text} bots={roster.bots} />
+            )}
             {entry.aborted && <span className="ms-1 text-sm opacity-70">(stopped)</span>}
             {reactions.length > 0 && (
               <span className={cn("absolute -top-4 flex gap-0.5", side === "user" ? "-start-3" : "-end-3")}>
-                {Object.entries(reactions.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.emoji]: (acc[r.emoji] ?? 0) + 1 }), {})).map(([e, n]) => {
+                {Object.entries(
+                  reactions.reduce<Record<string, number>>(
+                    (acc, r) => ({ ...acc, [r.emoji]: (acc[r.emoji] ?? 0) + 1 }),
+                    {},
+                  ),
+                ).map(([e, n]) => {
                   // Who reacted (bots react too, D5.1 `react` tool): shown on hover.
                   const who = reactions
                     .filter((r) => r.emoji === e)
                     .map((r) => (r.by.kind === "bot" ? (roster.botById(r.by.botId)?.name ?? "A Bot") : "You"))
                     .join(", ")
                   return (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => void react(e)}
-                    className="inline-flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-full bg-elevated px-1 text-base shadow-control ring-2 ring-chrome"
-                    title={`${e} ${who}`}
-                    aria-label={`${e} by ${who}`}
-                    data-testid="reaction"
-                  >
-                    {e}
-                    {n > 1 && <span className="text-xs text-fg-secondary">{n}</span>}
-                  </button>
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => void react(e)}
+                      className="inline-flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-full bg-elevated px-1 text-base shadow-control ring-2 ring-chrome"
+                      title={`${e} ${who}`}
+                      aria-label={`${e} by ${who}`}
+                      data-testid="reaction"
+                    >
+                      {e}
+                      {n > 1 && <span className="text-xs text-fg-secondary">{n}</span>}
+                    </button>
                   )
                 })}
               </span>
@@ -173,7 +229,17 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
 }
 
 /** Optimistic user bubble from the outbox: pending progress bar, or "Failed to send · Resend · Delete". */
-export function PendingBubble({ pending, position, onResend, onDelete }: { readonly pending: PendingMessage; readonly position: BubblePosition; readonly onResend: () => void; readonly onDelete: () => void }): ReactNode {
+export function PendingBubble({
+  pending,
+  position,
+  onResend,
+  onDelete,
+}: {
+  readonly pending: PendingMessage
+  readonly position: BubblePosition
+  readonly onResend: () => void
+  readonly onDelete: () => void
+}): ReactNode {
   return (
     <div className="flex flex-col items-end gap-1" data-pending={pending.clientNonce}>
       <div className="relative">
@@ -181,7 +247,10 @@ export function PendingBubble({ pending, position, onResend, onDelete }: { reado
           {pending.text}
         </Bubble>
         {pending.status === "sending" && (
-          <span className="ob-send-progress absolute -bottom-2 end-2 h-1 w-5 overflow-hidden rounded bg-secondary" aria-label="Sending">
+          <span
+            className="ob-send-progress absolute -bottom-2 end-2 h-1 w-5 overflow-hidden rounded bg-secondary"
+            aria-label="Sending"
+          >
             <span className="absolute inset-y-0 start-1.5 w-2 rounded bg-fg-tertiary" />
           </span>
         )}
@@ -191,10 +260,18 @@ export function PendingBubble({ pending, position, onResend, onDelete }: { reado
           <span className="font-medium text-danger-fg" title={pending.error}>
             Failed to send
           </span>
-          <button type="button" onClick={onResend} className="h-[22px] rounded-[11px] px-2 text-fg-secondary hover:bg-hover hover:text-fg">
+          <button
+            type="button"
+            onClick={onResend}
+            className="h-[22px] rounded-[11px] px-2 text-fg-secondary hover:bg-hover hover:text-fg"
+          >
             Resend
           </button>
-          <button type="button" onClick={onDelete} className="h-[22px] rounded-[11px] px-2 text-fg-secondary hover:bg-hover hover:text-fg">
+          <button
+            type="button"
+            onClick={onDelete}
+            className="h-[22px] rounded-[11px] px-2 text-fg-secondary hover:bg-hover hover:text-fg"
+          >
             Delete
           </button>
         </div>

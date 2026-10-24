@@ -93,7 +93,7 @@ const closedError = () =>
 /** Connections whose process-global skill root is already set (`skills/extraRoots/set`). */
 const skillRootsSet = new WeakMap<AppServerConnection, string>()
 
-export const openCodexSession = Effect.fn("CodexSession.open")(function*(
+export const openCodexSession = Effect.fn("CodexSession.open")(function* (
   input: OpenSessionInput,
   deps: CodexSessionDeps,
 ) {
@@ -118,32 +118,37 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
     const register = plan.register
     yield* request("environment/add", register, deps.openTimeout).pipe(
       Effect.mapError((error) =>
-        toHarnessError("open-failed", error, `Codex could not attach the environment of node ${placement.hostNodeId}`)
+        toHarnessError("open-failed", error, `Codex could not attach the environment of node ${placement.hostNodeId}`),
       ),
     )
   }
 
   // ---------------------------------------------------------------- skills (best effort)
-  const skillRules = (deps.isolateSkills ?? true)
-    ? yield* Effect.gen(function*() {
-      const root = deps.skillsRoot
-      if (root !== undefined && skillRootsSet.get(connection) !== root) {
-        const mounted = yield* request("skills/extraRoots/set", { extraRoots: [root] }).pipe(
-          Effect.as(true),
-          Effect.catch((error) =>
-            Effect.logWarning(`Codex: could not mount the OpenBot skills library: ${error._tag}`).pipe(Effect.as(false))
-          ),
-        )
-        if (mounted) skillRootsSet.set(connection, root)
-      }
-      const listed = yield* request("skills/list", { cwds: [plan.cwd], forceReload: true }).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(`Codex: skills/list failed, host skills stay visible: ${error._tag}`).pipe(Effect.as(undefined))
-        ),
-      )
-      return skillRulesFor(listed, root, input.bot.skills)
-    })
-    : []
+  const skillRules =
+    (deps.isolateSkills ?? true)
+      ? yield* Effect.gen(function* () {
+          const root = deps.skillsRoot
+          if (root !== undefined && skillRootsSet.get(connection) !== root) {
+            const mounted = yield* request("skills/extraRoots/set", { extraRoots: [root] }).pipe(
+              Effect.as(true),
+              Effect.catch((error) =>
+                Effect.logWarning(`Codex: could not mount the OpenBot skills library: ${error._tag}`).pipe(
+                  Effect.as(false),
+                ),
+              ),
+            )
+            if (mounted) skillRootsSet.set(connection, root)
+          }
+          const listed = yield* request("skills/list", { cwds: [plan.cwd], forceReload: true }).pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(`Codex: skills/list failed, host skills stay visible: ${error._tag}`).pipe(
+                Effect.as(undefined),
+              ),
+            ),
+          )
+          return skillRulesFor(listed, root, input.bot.skills)
+        })
+      : []
   const config = threadConfig(input.mcp, { ...deps.threadConfig, skillRules, effort: input.effort })
 
   // ---------------------------------------------------------------- state
@@ -168,11 +173,13 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
         outcome._tag === "completed"
           ? Effect.void
           : Effect.fail(
-            harnessError(
-              "other",
-              outcome._tag === "failed" ? `Codex could not compact: ${outcome.error.message}` : "Compaction was interrupted.",
+              harnessError(
+                "other",
+                outcome._tag === "failed"
+                  ? `Codex could not compact: ${outcome.error.message}`
+                  : "Compaction was interrupted.",
+              ),
             ),
-          ),
       )
     },
   })
@@ -225,7 +232,7 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
     connection.isClosed.pipe(
       Effect.flatMap((closed) => (closed ? Effect.void : request("thread/unsubscribe", { threadId }, "5 seconds"))),
       Effect.ignore,
-    )
+    ),
   )
   // onRequest fibers live here; closed after the close finalizer answered them.
   const requestScope = yield* Scope.fork(sessionScope, "parallel")
@@ -247,11 +254,13 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
       emit([{ _tag: "SessionClosed", reason }])
       ended = true
       Queue.endUnsafe(events)
-      return fibers.length === 0 ? Effect.void : Effect.forkIn(Fiber.interruptAll(fibers), sessionScope).pipe(Effect.asVoid)
+      return fibers.length === 0
+        ? Effect.void
+        : Effect.forkIn(Fiber.interruptAll(fibers), sessionScope).pipe(Effect.asVoid)
     })
 
   yield* Effect.addFinalizer(() =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (ended) return
       // Decline what is still waiting so Codex does not hang on a closed session.
       for (const entry of pending.values()) {
@@ -266,7 +275,7 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
         yield* request("turn/interrupt", { threadId, turnId: native }, "3 seconds").pipe(Effect.ignore)
       }
       yield* finish("closed", { _tag: "interrupted" })
-    })
+    }),
   )
 
   // ---------------------------------------------------------------- interrupts
@@ -289,10 +298,13 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
   const requestContext = { normalizer, nodeIdForEnvironment: plan.nodeIdForEnvironment }
 
   const handleRequest = (message: Extract<ThreadMessage, { readonly _tag: "Request" }>): Effect.Effect<void> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (message.method === "currentTime/read") {
         const now = yield* Clock.currentTimeMillis
-        Deferred.doneUnsafe(message.reply, Effect.succeed<RequestReply>({ result: { currentTimeAt: Math.floor(now / 1000) } }))
+        Deferred.doneUnsafe(
+          message.reply,
+          Effect.succeed<RequestReply>({ result: { currentTimeAt: Math.floor(now / 1000) } }),
+        )
         return
       }
       const mapped = mapServerRequest(message.id, message.method, message.params, requestContext)
@@ -313,15 +325,15 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
             : Effect.logWarning("Codex: onRequest failed; declining", cause).pipe(
-              Effect.as<HarnessRequestResolution>({ decision: "deny", message: "The request could not be handled." }),
-            )
+                Effect.as<HarnessRequestResolution>({ decision: "deny", message: "The request could not be handled." }),
+              ),
         ),
         Effect.flatMap((resolution) =>
           Effect.sync(() => {
             if (pending.get(key) !== entry) return // withdrawn or the session closed meanwhile
             pending.delete(key)
             Deferred.doneUnsafe(entry.reply, Effect.succeed<RequestReply>(safeReply(() => mapped.reply(resolution))))
-          })
+          }),
         ),
         Effect.forkIn(requestScope, { startImmediately: true }),
       )
@@ -342,7 +354,7 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
 
   // ---------------------------------------------------------------- reader
   const handleNotification = (method: string, params: Record<string, unknown>): Effect.Effect<void> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       switch (method) {
         case "serverRequest/resolved":
           return yield* withdraw(params.requestId)
@@ -359,12 +371,19 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
             yield* Effect.logWarning(`Codex: MCP server ${name} failed to start: ${detail}`)
             const active = normalizer.activeTurn
             if (active !== undefined) {
-              emit([{
-                _tag: "ItemUpserted",
-                turnId: active,
-                key: `mcp-startup:${name}`,
-                item: { _tag: "Notice", level: "warning", code: "mcp-unavailable", text: `The ${name} tools are unavailable: ${detail}` },
-              }])
+              emit([
+                {
+                  _tag: "ItemUpserted",
+                  turnId: active,
+                  key: `mcp-startup:${name}`,
+                  item: {
+                    _tag: "Notice",
+                    level: "warning",
+                    code: "mcp-unavailable",
+                    text: `The ${name} tools are unavailable: ${detail}`,
+                  },
+                },
+              ])
             }
           }
           return
@@ -395,15 +414,19 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
     Stream.runForEach((message) =>
       handleMessage(message).pipe(
         Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause) ? Effect.failCause(cause) : Effect.logError("Codex: handling a thread message failed", cause)
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : Effect.logError("Codex: handling a thread message failed", cause),
         ),
-      )
+      ),
     ),
     // The mailbox ends when the connection dies or another session took the thread over.
-    Effect.andThen(finish("The Codex app-server connection ended.", {
-      _tag: "failed",
-      error: { code: "closed", message: "The Codex app-server connection ended.", retryable: true },
-    })),
+    Effect.andThen(
+      finish("The Codex app-server connection ended.", {
+        _tag: "failed",
+        error: { code: "closed", message: "The Codex app-server connection ended.", retryable: true },
+      }),
+    ),
     Effect.forkIn(sessionScope, { startImmediately: true }),
   )
 
@@ -413,7 +436,7 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
   const turnOptions = { model: input.model, effort: input.effort }
 
   const startTurn = (turn: TurnInput): Effect.Effect<void, HarnessError> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (ended) return yield* closedError()
       const stale = normalizer.activeTurn
       if (stale !== undefined && stale !== turn.turnId) {
@@ -432,7 +455,7 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
     })
 
   const steer = (turn: TurnInput): Effect.Effect<void, HarnessError> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (ended) return yield* closedError()
       const active = normalizer.activeTurn
       const native = active !== undefined ? normalizer.nativeTurnOf(active) : undefined
@@ -454,7 +477,7 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
     return sendInterrupt(native)
   })
 
-  const compact: Effect.Effect<void, HarnessError> = Effect.gen(function*() {
+  const compact: Effect.Effect<void, HarnessError> = Effect.gen(function* () {
     if (ended) return yield* closedError()
     const done = yield* Deferred.make<void, HarnessError>()
     compactWaiters.push(done)
@@ -469,7 +492,8 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
     yield* Deferred.await(done).pipe(
       Effect.timeoutOrElse({
         duration: deps.compactTimeout,
-        orElse: () => forget.pipe(Effect.andThen(Effect.fail(harnessError("other", "Codex did not finish compacting in time.")))),
+        orElse: () =>
+          forget.pipe(Effect.andThen(Effect.fail(harnessError("other", "Codex did not finish compacting in time.")))),
       }),
     )
   })

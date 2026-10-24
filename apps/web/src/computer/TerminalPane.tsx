@@ -35,7 +35,17 @@ const THEME = {
   brightWhite: "#ffffff",
 } as const
 
-export function TerminalPane({ botId, botName, active = true, className }: { readonly botId: string; readonly botName: string; readonly active?: boolean; readonly className?: string }): ReactNode {
+export function TerminalPane({
+  botId,
+  botName,
+  active = true,
+  className,
+}: {
+  readonly botId: string
+  readonly botName: string
+  readonly active?: boolean
+  readonly className?: string
+}): ReactNode {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -88,7 +98,8 @@ export function TerminalPane({ botId, botName, active = true, className }: { rea
           setNote(control.error)
           term.write(`\r\n\x1b[31m${control.error}\x1b[0m\r\n`)
         } else {
-          const how = control.exit !== null ? `exit code ${control.exit}` : control.signal ? `signal ${control.signal}` : "exited"
+          const how =
+            control.exit !== null ? `exit code ${control.exit}` : control.signal ? `signal ${control.signal}` : "exited"
           term.write(`\r\n\x1b[2m[process ${how}]\x1b[0m\r\n`)
           setNote(`The shell ended (${how}).`)
         }
@@ -153,7 +164,12 @@ export function TerminalPane({ botId, botName, active = true, className }: { rea
   }, [active])
 
   return (
-    <div className={cn("relative flex h-full min-h-0 flex-col overflow-hidden rounded-md bg-[#141414] ring-[0.5px] ring-white/10", className)}>
+    <div
+      className={cn(
+        "relative flex h-full min-h-0 flex-col overflow-hidden rounded-md bg-[#141414] ring-[0.5px] ring-white/10",
+        className,
+      )}
+    >
       <div ref={hostRef} className="min-h-0 flex-1 px-2 py-1.5" data-testid="terminal-host" />
       {phase === "connecting" && (
         <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">

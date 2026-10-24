@@ -27,7 +27,9 @@ import { Icon } from "../Icon.tsx"
  * measure themselves in a layout effect and would otherwise measure a panel that doesn't exist yet.
  */
 export function Portal({ children }: { readonly children: ReactNode }): ReactNode {
-  const [target, setTarget] = useState<HTMLElement | null>(() => (typeof document === "undefined" ? null : document.body))
+  const [target, setTarget] = useState<HTMLElement | null>(() =>
+    typeof document === "undefined" ? null : document.body,
+  )
   useEffect(() => {
     if (target === null) setTarget(document.body)
   }, [target])
@@ -73,10 +75,20 @@ export const placePanel = (
   let left: number
   if (s === "top" || s === "bottom") {
     top = s === "bottom" ? anchor.top + anchor.height + offset : anchor.top - offset - panel.height
-    left = align === "start" ? anchor.left : align === "end" ? anchor.left + anchor.width - panel.width : anchor.left + (anchor.width - panel.width) / 2
+    left =
+      align === "start"
+        ? anchor.left
+        : align === "end"
+          ? anchor.left + anchor.width - panel.width
+          : anchor.left + (anchor.width - panel.width) / 2
   } else {
     left = s === "right" ? anchor.left + anchor.width + offset : anchor.left - offset - panel.width
-    top = align === "start" ? anchor.top : align === "end" ? anchor.top + anchor.height - panel.height : anchor.top + (anchor.height - panel.height) / 2
+    top =
+      align === "start"
+        ? anchor.top
+        : align === "end"
+          ? anchor.top + anchor.height - panel.height
+          : anchor.top + (anchor.height - panel.height) / 2
   }
   left = Math.max(margin, Math.min(left, viewport.width - margin - panel.width))
   top = Math.max(margin, Math.min(top, viewport.height - margin - panel.height))
@@ -226,10 +238,23 @@ export function Popover({
   const style = useAnchoredPosition(isOpen, anchorRef, panelRef, side, align, offset)
   return (
     <>
-      {trigger({ ref: anchorRef, onClick: () => setOpen(!isOpen), "aria-haspopup": role, "aria-expanded": isOpen, ...(isOpen ? { "aria-controls": id } : {}) })}
+      {trigger({
+        ref: anchorRef,
+        onClick: () => setOpen(!isOpen),
+        "aria-haspopup": role,
+        "aria-expanded": isOpen,
+        ...(isOpen ? { "aria-controls": id } : {}),
+      })}
       {isOpen && (
         <Portal>
-          <div ref={panelRef} id={id} role={role} aria-label={label} style={style} className={cn(popoverSurface, className)}>
+          <div
+            ref={panelRef}
+            id={id}
+            role={role}
+            aria-label={label}
+            style={style}
+            className={cn(popoverSurface, className)}
+          >
             {typeof children === "function" ? children(close) : children}
           </div>
         </Portal>
@@ -243,9 +268,24 @@ export function Popover({
 const MenuContext = createContext<{ close: () => void } | null>(null)
 
 /** Static menu surface (also used inside `Menu`): radius 12, 6 px padding, popover shadow. */
-export function MenuPanel({ children, className, label }: { readonly children: ReactNode; readonly className?: string; readonly label?: string }): ReactNode {
+export function MenuPanel({
+  children,
+  className,
+  label,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+  readonly label?: string
+}): ReactNode {
   return (
-    <div role="menu" aria-label={label} className={cn("flex min-w-[200px] flex-col gap-px rounded-2xl bg-elevated p-1.5 hairline border-line-secondary shadow-popover", className)}>
+    <div
+      role="menu"
+      aria-label={label}
+      className={cn(
+        "flex min-w-[200px] flex-col gap-px rounded-2xl bg-elevated p-1.5 hairline border-line-secondary shadow-popover",
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -268,7 +308,18 @@ export interface MenuItemProps {
   readonly className?: string
 }
 
-export function MenuItem({ children, icon, leading, trailing, onSelect, disabled, danger, checked, active, className }: MenuItemProps): ReactNode {
+export function MenuItem({
+  children,
+  icon,
+  leading,
+  trailing,
+  onSelect,
+  disabled,
+  danger,
+  checked,
+  active,
+  className,
+}: MenuItemProps): ReactNode {
   const ctx = useContext(MenuContext)
   return (
     <button
@@ -288,7 +339,8 @@ export function MenuItem({ children, icon, leading, trailing, onSelect, disabled
         className,
       )}
     >
-      {leading ?? (icon ? <Icon icon={icon} size="md" className={danger ? "text-danger-fg" : "text-icon-secondary"} /> : null)}
+      {leading ??
+        (icon ? <Icon icon={icon} size="md" className={danger ? "text-danger-fg" : "text-icon-secondary"} /> : null)}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing && <span className="shrink-0 text-xs text-fg-tertiary">{trailing}</span>}
       {checked && <Icon icon={Check} size="sm" className="text-icon" />}
@@ -309,7 +361,16 @@ const focusItem = (root: HTMLElement | null, dir: 1 | -1 | "first" | "last") => 
   const items = Array.from(root.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)'))
   if (items.length === 0) return
   const i = items.indexOf(document.activeElement as HTMLElement)
-  const next = dir === "first" ? 0 : dir === "last" ? items.length - 1 : i < 0 ? (dir === 1 ? 0 : items.length - 1) : (i + dir + items.length) % items.length
+  const next =
+    dir === "first"
+      ? 0
+      : dir === "last"
+        ? items.length - 1
+        : i < 0
+          ? dir === 1
+            ? 0
+            : items.length - 1
+          : (i + dir + items.length) % items.length
   items[next]?.focus()
 }
 
@@ -367,7 +428,15 @@ export interface SelectProps<V extends string> {
 }
 
 /** Ghost select ("Light ⌄", "Bot color ⌄"): 13 px + chevron, hairline border, radius 8; opens a menu. */
-export function Select<V extends string>({ value, options, onValueChange, label, align = "end", className, disabled }: SelectProps<V>): ReactNode {
+export function Select<V extends string>({
+  value,
+  options,
+  onValueChange,
+  label,
+  align = "end",
+  className,
+  disabled,
+}: SelectProps<V>): ReactNode {
   const current = options.find((o) => o.value === value)
   return (
     <Menu
@@ -391,7 +460,12 @@ export function Select<V extends string>({ value, options, onValueChange, label,
       )}
     >
       {options.map((o) => (
-        <MenuItem key={o.value} checked={o.value === value} disabled={o.disabled} onSelect={() => onValueChange?.(o.value)}>
+        <MenuItem
+          key={o.value}
+          checked={o.value === value}
+          disabled={o.disabled}
+          onSelect={() => onValueChange?.(o.value)}
+        >
           {o.label}
         </MenuItem>
       ))}
@@ -411,16 +485,38 @@ export interface TooltipProps {
 }
 
 /** Tooltip surface: radius 6, 0.5 px border, 12/16 text, padding 4×6. */
-export function TooltipSurface({ children, className, id }: { readonly children: ReactNode; readonly className?: string; readonly id?: string }): ReactNode {
+export function TooltipSurface({
+  children,
+  className,
+  id,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+  readonly id?: string
+}): ReactNode {
   return (
-    <div id={id} role="tooltip" className={cn("max-w-[260px] rounded-md bg-elevated px-1.5 py-1 text-xs text-fg hairline border-line-secondary shadow-inline", className)}>
+    <div
+      id={id}
+      role="tooltip"
+      className={cn(
+        "max-w-[260px] rounded-md bg-elevated px-1.5 py-1 text-xs text-fg hairline border-line-secondary shadow-inline",
+        className,
+      )}
+    >
       {children}
     </div>
   )
 }
 
 /** Hover/focus tooltip around any inline content. */
-export function Tooltip({ content, children, side = "top", align = "center", delay = 500, className }: TooltipProps): ReactNode {
+export function Tooltip({
+  content,
+  children,
+  side = "top",
+  align = "center",
+  delay = 500,
+  className,
+}: TooltipProps): ReactNode {
   const [open, setOpen] = useState(false)
   const anchorRef = useRef<HTMLSpanElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -481,7 +577,10 @@ export function DialogPanel({ children, className, width = 400, height, label, r
       aria-modal="true"
       aria-label={label}
       tabIndex={-1}
-      className={cn("flex max-h-[calc(100vh-32px)] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-3xl bg-elevated hairline border-line-secondary shadow-modal outline-none", className)}
+      className={cn(
+        "flex max-h-[calc(100vh-32px)] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-3xl bg-elevated hairline border-line-secondary shadow-modal outline-none",
+        className,
+      )}
       style={{ width, height }}
     >
       {children}
@@ -489,7 +588,17 @@ export function DialogPanel({ children, className, width = 400, height, label, r
   )
 }
 
-export function DialogHeader({ title, description, onClose, className }: { readonly title: ReactNode; readonly description?: ReactNode; readonly onClose?: () => void; readonly className?: string }): ReactNode {
+export function DialogHeader({
+  title,
+  description,
+  onClose,
+  className,
+}: {
+  readonly title: ReactNode
+  readonly description?: ReactNode
+  readonly onClose?: () => void
+  readonly className?: string
+}): ReactNode {
   return (
     <div className={cn("flex items-start gap-2 px-4 pt-3.5 pb-3", className)}>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -520,13 +629,23 @@ export interface DialogBodyProps {
 
 export function DialogBody({ children, className, ref, onScroll }: DialogBodyProps): ReactNode {
   return (
-    <div ref={ref} onScroll={onScroll} className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4 text-base scrollbar-thin", className)}>
+    <div
+      ref={ref}
+      onScroll={onScroll}
+      className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-4 text-base scrollbar-thin", className)}
+    >
       {children}
     </div>
   )
 }
 
-export function DialogFooter({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
+export function DialogFooter({
+  children,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
   return <div className={cn("flex items-center justify-end gap-2 py-3 ps-4 pe-3", className)}>{children}</div>
 }
 
@@ -539,10 +658,18 @@ export interface DialogProps extends Omit<DialogPanelProps, "ref"> {
   readonly dismissible?: boolean
 }
 
-const focusables = 'a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])'
+const focusables =
+  'a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])'
 
 /** Modal dialog: 50 % scrim (z 3000), Esc/scrim close, focus moved in, Tab trapped, focus restored. */
-export function Dialog({ open, onOpenChange, placement = "center", dismissible = true, children, ...panel }: DialogProps): ReactNode {
+export function Dialog({
+  open,
+  onOpenChange,
+  placement = "center",
+  dismissible = true,
+  children,
+  ...panel
+}: DialogProps): ReactNode {
   const panelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -569,7 +696,10 @@ export function Dialog({ open, onOpenChange, placement = "center", dismissible =
   return (
     <Portal>
       <div
-        className={cn("fixed inset-0 z-[3000] flex justify-center bg-scrim p-4 animate-fade-in", placement === "center" ? "items-center" : "items-start pt-[22vh]")}
+        className={cn(
+          "fixed inset-0 z-[3000] flex justify-center bg-scrim p-4 animate-fade-in",
+          placement === "center" ? "items-center" : "items-start pt-[22vh]",
+        )}
         onPointerDown={(e) => {
           if (dismissible && e.target === e.currentTarget) onOpenChange(false)
         }}
@@ -597,12 +727,26 @@ export interface ToastData {
   readonly duration?: number
 }
 
-const toastTone: Record<ToastTone, string> = { neutral: "text-icon-secondary", success: "text-success-fg", danger: "text-danger-fg", warn: "text-warn-fg" }
+const toastTone: Record<ToastTone, string> = {
+  neutral: "text-icon-secondary",
+  success: "text-success-fg",
+  danger: "text-danger-fg",
+  warn: "text-warn-fg",
+}
 
 /** Toast surface: radius 9, 12.5 px text, elevated fill, popover shadow. */
-export function Toast({ title, icon, tone = "neutral", action, onDismiss }: ToastData & { readonly onDismiss?: () => void }): ReactNode {
+export function Toast({
+  title,
+  icon,
+  tone = "neutral",
+  action,
+  onDismiss,
+}: ToastData & { readonly onDismiss?: () => void }): ReactNode {
   return (
-    <div role="status" className="pointer-events-auto flex animate-rise-in items-center gap-2 rounded-[9px] bg-elevated px-3 py-[9px] text-[12.5px] leading-4 text-fg hairline border-line-tertiary shadow-popover">
+    <div
+      role="status"
+      className="pointer-events-auto flex animate-rise-in items-center gap-2 rounded-[9px] bg-elevated px-3 py-[9px] text-[12.5px] leading-4 text-fg hairline border-line-tertiary shadow-popover"
+    >
       {icon && <Icon icon={icon} size="xs" glyph={14} className={toastTone[tone]} />}
       <span className="min-w-0 flex-1">{title}</span>
       {action && (
@@ -611,7 +755,12 @@ export function Toast({ title, icon, tone = "neutral", action, onDismiss }: Toas
         </button>
       )}
       {onDismiss && (
-        <button type="button" aria-label="Dismiss" onClick={onDismiss} className="-me-1 inline-flex size-5 items-center justify-center rounded-full text-icon-tertiary hover:bg-secondary hover:text-icon">
+        <button
+          type="button"
+          aria-label="Dismiss"
+          onClick={onDismiss}
+          className="-me-1 inline-flex size-5 items-center justify-center rounded-full text-icon-tertiary hover:bg-secondary hover:text-icon"
+        >
           <Icon icon={X} size="xs" />
         </button>
       )}
@@ -640,7 +789,10 @@ export function Toaster({ children }: { readonly children: ReactNode }): ReactNo
     <ToastContext.Provider value={{ toast, dismiss }}>
       {children}
       <Portal>
-        <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-[5000] flex flex-col items-center gap-2">
+        <div
+          aria-live="polite"
+          className="pointer-events-none fixed inset-x-0 bottom-20 z-[5000] flex flex-col items-center gap-2"
+        >
           {toasts.map((t) => (
             <Toast key={t.id} {...t} onDismiss={() => dismiss(t.id)} />
           ))}
@@ -699,14 +851,30 @@ export interface CommandPaletteProps {
 /** Search palette (Cmd/Ctrl+K): 560 px, search field, grouped rows, arrow/Enter navigation. */
 export function CommandPalette(props: CommandPaletteProps): ReactNode {
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange} width={560} placement="top" label="Search" className="max-h-[min(640px,calc(100vh-120px))]">
+    <Dialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      width={560}
+      placement="top"
+      label="Search"
+      className="max-h-[min(640px,calc(100vh-120px))]"
+    >
       <CommandPaletteBody {...props} />
     </Dialog>
   )
 }
 
 /** The palette content without the dialog shell (for embedding/static rendering). */
-export function CommandPaletteBody({ items, placeholder = "Search", emptyText = "No results", query, onQueryChange, filter, footer, onOpenChange }: CommandPaletteProps): ReactNode {
+export function CommandPaletteBody({
+  items,
+  placeholder = "Search",
+  emptyText = "No results",
+  query,
+  onQueryChange,
+  filter,
+  footer,
+  onOpenChange,
+}: CommandPaletteProps): ReactNode {
   const [inner, setInner] = useState("")
   const q = query ?? inner
   const shown = query === undefined || filter ? filterPaletteItems(items, q) : items
@@ -731,7 +899,17 @@ export function CommandPaletteBody({ items, placeholder = "Search", emptyText = 
   return (
     <>
       <div className="flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-line-secondary px-4">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-icon-tertiary" aria-hidden>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="shrink-0 text-icon-tertiary"
+          aria-hidden
+        >
           <circle cx="11" cy="11" r="7" />
           <path d="m20 20-3.5-3.5" />
         </svg>
@@ -765,7 +943,11 @@ export function CommandPaletteBody({ items, placeholder = "Search", emptyText = 
                   data-index={i}
                   onPointerMove={() => setActive(i)}
                   onClick={() => choose(it)}
-                  className={cn("flex min-h-12 cursor-default items-center gap-2.5 rounded-xl px-3 text-base text-fg", it.detail !== undefined && "py-2", i === active && "bg-hover")}
+                  className={cn(
+                    "flex min-h-12 cursor-default items-center gap-2.5 rounded-xl px-3 text-base text-fg",
+                    it.detail !== undefined && "py-2",
+                    i === active && "bg-hover",
+                  )}
                 >
                   {it.leading}
                   {it.detail !== undefined ? (
@@ -782,14 +964,22 @@ export function CommandPaletteBody({ items, placeholder = "Search", emptyText = 
                       {it.chip}
                     </>
                   )}
-                  {it.trailing && <span className={cn("ms-auto shrink-0", it.detail !== undefined && "self-start pt-0.5")}>{it.trailing}</span>}
+                  {it.trailing && (
+                    <span className={cn("ms-auto shrink-0", it.detail !== undefined && "self-start pt-0.5")}>
+                      {it.trailing}
+                    </span>
+                  )}
                 </div>
               </div>
             )
           })
         )}
       </div>
-      {footer && <div className="flex shrink-0 items-center gap-3 border-t-[0.5px] border-line-secondary px-4 py-2 text-xs text-fg-tertiary">{footer}</div>}
+      {footer && (
+        <div className="flex shrink-0 items-center gap-3 border-t-[0.5px] border-line-secondary px-4 py-2 text-xs text-fg-tertiary">
+          {footer}
+        </div>
+      )}
     </>
   )
 }

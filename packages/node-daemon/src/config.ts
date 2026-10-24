@@ -221,7 +221,9 @@ export const detectBrowserExecutable = (): string | undefined => {
 }
 
 /** `OPENBOT_DESKTOP_PATH` (colon-separated program dirs). */
-export const desktopPathFromEnv = (env: Readonly<Record<string, string | undefined>> = process.env): ReadonlyArray<string> =>
+export const desktopPathFromEnv = (
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ReadonlyArray<string> =>
   (env.OPENBOT_DESKTOP_PATH ?? "")
     .split(":")
     .map((p) => p.trim())
@@ -231,7 +233,10 @@ export const desktopPathFromEnv = (env: Readonly<Record<string, string | undefin
  * Environment for desktop programs found in rootless prefixes: for each `<prefix>/usr/bin` (or
  * `<prefix>/bin`) dir, its sibling `lib` goes on LD_LIBRARY_PATH and `share` on XDG_DATA_DIRS.
  */
-export const desktopPrefixEnv = (dirs: ReadonlyArray<string>, exists: (p: string) => boolean = existsSync): Record<string, string> => {
+export const desktopPrefixEnv = (
+  dirs: ReadonlyArray<string>,
+  exists: (p: string) => boolean = existsSync,
+): Record<string, string> => {
   const libs: Array<string> = []
   const shares: Array<string> = []
   for (const d of dirs) {
@@ -259,7 +264,9 @@ const normalizeRoot = (r: NodeRoot | string, i: number): NodeRoot =>
 export const makeNodeConfig = (input: NodeConfigInput): NodeConfigShape => {
   const detect = input.detectBinaries ?? true
   const dataDir = path.resolve(expandHome(input.dataDir))
-  const roots = (input.roots && input.roots.length > 0 ? input.roots : [path.join(homedir(), "openbot")]).map(normalizeRoot)
+  const roots = (input.roots && input.roots.length > 0 ? input.roots : [path.join(homedir(), "openbot")]).map(
+    normalizeRoot,
+  )
   return {
     nodeId: input.nodeId,
     version: input.version ?? NODE_DAEMON_VERSION,
@@ -285,7 +292,7 @@ export const makeNodeConfig = (input: NodeConfigInput): NodeConfigShape => {
       ...input.limits,
     },
     shell: {
-      program: input.shell?.program ?? (which("bash") ?? "/bin/sh"),
+      program: input.shell?.program ?? which("bash") ?? "/bin/sh",
       interactive: input.shell?.interactive ?? process.env.SHELL ?? which("bash") ?? "/bin/sh",
     },
     binaries: {
@@ -328,6 +335,8 @@ export const makeNodeConfig = (input: NodeConfigInput): NodeConfigShape => {
 }
 
 export const NodeConfigLive = (input: NodeConfigInput | NodeConfigShape): Layer.Layer<NodeConfig> =>
-  Layer.succeed(NodeConfig)("limits" in input && "shell" in input && "browser" in input && "desktop" in input && "platform" in input
-    ? (input as NodeConfigShape)
-    : makeNodeConfig(input as NodeConfigInput))
+  Layer.succeed(NodeConfig)(
+    "limits" in input && "shell" in input && "browser" in input && "desktop" in input && "platform" in input
+      ? (input as NodeConfigShape)
+      : makeNodeConfig(input as NodeConfigInput),
+  )

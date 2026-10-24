@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { ConfigError, DEFAULT_HARNESSES, defaultDataDir, normalizeOrigin, parseCommand, resolvePath } from "../src/config.ts"
+import {
+  ConfigError,
+  DEFAULT_HARNESSES,
+  defaultDataDir,
+  normalizeOrigin,
+  parseCommand,
+  resolvePath,
+} from "../src/config.ts"
 import { originsFor } from "../src/listeners.ts"
 
 const system = { home: "/home/u", cwd: "/work/repo" }
@@ -128,7 +135,12 @@ describe("helpers", () => {
     const lan = originsFor({ host: "192.168.1.5", port: 80, publicOrigins: ["https://box.ts.net"] })
     expect(lan.brainOrigin).toBe("https://box.ts.net")
     expect(lan.selfBase).toBe("http://192.168.1.5:80")
-    expect(lan.allowedOrigins).toEqual(["https://box.ts.net", "http://127.0.0.1:80", "http://localhost:80", "http://192.168.1.5:80"])
+    expect(lan.allowedOrigins).toEqual([
+      "https://box.ts.net",
+      "http://127.0.0.1:80",
+      "http://localhost:80",
+      "http://192.168.1.5:80",
+    ])
     expect(originsFor({ host: "0.0.0.0", port: 1, publicOrigins: [] }).selfBase).toBe("http://127.0.0.1:1")
   })
 })

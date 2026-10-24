@@ -36,10 +36,14 @@ describe("attachments", () => {
     expect(fileFamily({ mime: "application/zip", name: "a.zip" })).toBe("archive")
     expect(fileFamily({ mime: "application/gzip", name: "a.tgz" })).toBe("archive")
     expect(fileFamily({ mime: "text/csv", name: "a.csv" })).toBe("sheet")
-    expect(fileFamily({ mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name: "a.xlsx" })).toBe("sheet")
+    expect(
+      fileFamily({ mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name: "a.xlsx" }),
+    ).toBe("sheet")
     expect(fileFamily({ mime: "application/json", name: "a.json" })).toBe("code")
     expect(fileFamily({ mime: "text/markdown", name: "a.md" })).toBe("text")
-    expect(fileFamily({ mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", name: "a.docx" })).toBe("text")
+    expect(
+      fileFamily({ mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", name: "a.docx" }),
+    ).toBe("text")
     expect(fileFamily({ mime: "application/pdf", name: "a.pdf" })).toBe("pdf")
     expect(fileFamily({ mime: "video/x-matroska", name: "a.mkv" })).toBe("video")
     expect(fileFamily({ mime: "application/octet-stream", name: "a.bin" })).toBe("other")

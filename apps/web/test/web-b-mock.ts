@@ -12,12 +12,15 @@ export interface WebBMock {
 const appRoot = new URL("..", import.meta.url).pathname
 
 export const startWebBMock = async (options: { readonly empty?: boolean } = {}): Promise<WebBMock> => {
-  const proc = Bun.spawn(["bun", join(appRoot, "dev/mock-server.ts"), "--port", "0", "--fast", ...(options.empty ? ["--empty"] : [])], {
-    cwd: appRoot,
-    stdout: "pipe",
-    stderr: "inherit",
-    env: { ...process.env, NODE_ENV: "production" },
-  })
+  const proc = Bun.spawn(
+    ["bun", join(appRoot, "dev/mock-server.ts"), "--port", "0", "--fast", ...(options.empty ? ["--empty"] : [])],
+    {
+      cwd: appRoot,
+      stdout: "pipe",
+      stderr: "inherit",
+      env: { ...process.env, NODE_ENV: "production" },
+    },
+  )
   const reader = proc.stdout.getReader()
   const decoder = new TextDecoder()
   let buffered = ""

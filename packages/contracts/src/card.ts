@@ -98,7 +98,15 @@ export const SlackDraftCard = Schema.Struct({
   files: Schema.optionalKey(Schema.Array(Attachment)),
 })
 
-export const CardMembers = [ApprovalCard, QuestionCard, FormCard, SecretRequestCard, HandoffCard, RoutineCard, SlackDraftCard] as const
+export const CardMembers = [
+  ApprovalCard,
+  QuestionCard,
+  FormCard,
+  SecretRequestCard,
+  HandoffCard,
+  RoutineCard,
+  SlackDraftCard,
+] as const
 const fallback = withUnknownFallback({ members: CardMembers, tag: "type", keep: {} })
 /** Decodes unknown card types into `{ type: "unknown", originalTag }` (decode-only). */
 export const Card = fallback.schema

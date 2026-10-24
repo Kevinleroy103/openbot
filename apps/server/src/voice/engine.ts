@@ -6,7 +6,15 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { availableParallelism } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { archiveFileName, downloadVerified, errorReason, killGroup, libraryPathWith, sharedLibraryName, unpackSingleFolder } from "../stt/engine.ts"
+import {
+  archiveFileName,
+  downloadVerified,
+  errorReason,
+  killGroup,
+  libraryPathWith,
+  sharedLibraryName,
+  unpackSingleFolder,
+} from "../stt/engine.ts"
 import type { VoiceManifest } from "./manifest.ts"
 import type { SpeakerLaunch, SpeakerReply, SpeakerRequest } from "./speaker-protocol.ts"
 
@@ -79,7 +87,8 @@ const collectStderr = (child: Bun.Subprocess<"ignore", "ignore", "pipe">) => {
   let tail = ""
   void (async () => {
     const decoder = new TextDecoder()
-    for await (const chunk of child.stderr) tail = (tail + decoder.decode(chunk, { stream: true })).slice(-STDERR_TAIL_CHARS)
+    for await (const chunk of child.stderr)
+      tail = (tail + decoder.decode(chunk, { stream: true })).slice(-STDERR_TAIL_CHARS)
   })().catch(() => undefined)
   return () => tail
 }
@@ -90,7 +99,13 @@ export interface Speaker extends Child {
 }
 
 /** Kokoro in its own process (`sherpaLibrary`: voice input's libsherpa-onnx-c-api). */
-export const startSpeaker = (input: { readonly layout: VoiceLayout; readonly manifest: VoiceManifest; readonly sherpaLibDir: string; readonly startupTimeoutMs: number; readonly speakTimeoutMs: number }): Promise<Speaker> =>
+export const startSpeaker = (input: {
+  readonly layout: VoiceLayout
+  readonly manifest: VoiceManifest
+  readonly sherpaLibDir: string
+  readonly startupTimeoutMs: number
+  readonly speakTimeoutMs: number
+}): Promise<Speaker> =>
   new Promise((resolveStarted, rejectStarted) => {
     const voices = input.manifest.voices
     const launch: SpeakerLaunch = {

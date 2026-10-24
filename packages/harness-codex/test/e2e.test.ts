@@ -22,7 +22,10 @@ const enabled = process.env.OPENBOT_CODEX_E2E !== "0" && findBundledCodex() !== 
 
 // ---------------------------------------------------------------------------- scripted model
 
-type Body = { readonly input?: ReadonlyArray<Record<string, unknown>>; readonly tools?: ReadonlyArray<Record<string, unknown>> }
+type Body = {
+  readonly input?: ReadonlyArray<Record<string, unknown>>
+  readonly tools?: ReadonlyArray<Record<string, unknown>>
+}
 const modelBodies: Array<Body> = []
 const sse = (event: Record<string, unknown>) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`
 const encoder = new TextEncoder()
@@ -43,8 +46,8 @@ const promptOf = (body: Body) => {
     }
     if (typeof item.type === "string" && item.type.endsWith("_output")) outputs++
   }
-  const compaction = (body.input ?? []).some((item) =>
-    item.type === "message" && JSON.stringify(item.content ?? "").includes("CONTEXT CHECKPOINT COMPACTION")
+  const compaction = (body.input ?? []).some(
+    (item) => item.type === "message" && JSON.stringify(item.content ?? "").includes("CONTEXT CHECKPOINT COMPACTION"),
   )
   return { key, outputs, compaction }
 }
@@ -53,9 +56,9 @@ const promptOf = (body: Body) => {
 const whoamiForm = (body: Body) => {
   const offered = [
     ...(body.tools ?? []),
-    ...(body.input ?? []).filter((item) => item.type === "additional_tools").flatMap((item) =>
-      Array.isArray(item.tools) ? (item.tools as ReadonlyArray<Record<string, unknown>>) : []
-    ),
+    ...(body.input ?? [])
+      .filter((item) => item.type === "additional_tools")
+      .flatMap((item) => (Array.isArray(item.tools) ? (item.tools as ReadonlyArray<Record<string, unknown>>) : [])),
   ]
   for (const tool of offered) {
     if (tool.type === "namespace" && Array.isArray(tool.tools)) {
@@ -72,9 +75,9 @@ const execCall = (n: number, cmd: string) => ({
   type: "custom_tool_call",
   call_id: `call_${n}`,
   name: "exec",
-  input: `text(await tools.exec_command({ cmd: ${
-    JSON.stringify(cmd)
-  }, sandbox_permissions: "require_escalated", justification: "Write the e2e marker" }));`,
+  input: `text(await tools.exec_command({ cmd: ${JSON.stringify(
+    cmd,
+  )}, sandbox_permissions: "require_escalated", justification: "Write the e2e marker" }));`,
 })
 
 let modelServer: ReturnType<typeof Bun.serve> | undefined
@@ -88,13 +91,18 @@ const startModel = () =>
     idleTimeout: 0,
     async fetch(req) {
       const url = new URL(req.url)
-      if (req.method !== "POST" || !url.pathname.endsWith("/responses")) return new Response("not found", { status: 404 })
+      if (req.method !== "POST" || !url.pathname.endsWith("/responses"))
+        return new Response("not found", { status: 404 })
       const body = (await req.json()) as Body
       const n = modelBodies.push(body) - 1
       const { key, outputs, compaction } = promptOf(body)
       const id = `resp_${n}`
       const message = (texts: ReadonlyArray<string>, slowMs = 0) => ({ texts, slowMs })
-      let step: { readonly item?: Record<string, unknown>; readonly texts?: ReadonlyArray<string>; readonly slowMs?: number }
+      let step: {
+        readonly item?: Record<string, unknown>
+        readonly texts?: ReadonlyArray<string>
+        readonly slowMs?: number
+      }
       if (compaction) step = message(["Summary: the user said hello."])
       else if (key === "tool" && outputs === 0) {
         const form = whoamiForm(body)
@@ -107,8 +115,13 @@ const startModel = () =>
             ...(form?.namespace ? { namespace: form.namespace } : {}),
           },
         }
-      } else if ((key === "run" || key === "deny") && outputs === 0) step = { item: execCall(n, "echo e2e > marker.txt") }
-      else if (key === "slow") step = message(Array.from({ length: 40 }, (_, i) => `wave ${i + 1}, `), 100)
+      } else if ((key === "run" || key === "deny") && outputs === 0)
+        step = { item: execCall(n, "echo e2e > marker.txt") }
+      else if (key === "slow")
+        step = message(
+          Array.from({ length: 40 }, (_, i) => `wave ${i + 1}, `),
+          100,
+        )
       else if (key === "tool") step = message(["Tool said: done."])
       else if (key === "run" || key === "deny") step = message(["Command step finished."])
       else step = message(["Hello from the mock."])
@@ -125,19 +138,36 @@ const startModel = () =>
           if (step.item) push({ type: "response.output_item.done", item: step.item })
           if (step.texts) {
             const msgId = `msg_${n}`
-            push({ type: "response.output_item.added", item: { type: "message", role: "assistant", id: msgId, content: [] } })
+            push({
+              type: "response.output_item.added",
+              item: { type: "message", role: "assistant", id: msgId, content: [] },
+            })
             for (const delta of step.texts) {
               push({ type: "response.output_text.delta", item_id: msgId, delta })
               if (step.slowMs) await Bun.sleep(step.slowMs)
             }
             push({
               type: "response.output_item.done",
-              item: { type: "message", role: "assistant", id: msgId, content: [{ type: "output_text", text: step.texts.join("") }] },
+              item: {
+                type: "message",
+                role: "assistant",
+                id: msgId,
+                content: [{ type: "output_text", text: step.texts.join("") }],
+              },
             })
           }
           push({
             type: "response.completed",
-            response: { id, usage: { input_tokens: 100, input_tokens_details: null, output_tokens: 10, output_tokens_details: null, total_tokens: 110 } },
+            response: {
+              id,
+              usage: {
+                input_tokens: 100,
+                input_tokens_details: null,
+                output_tokens: 10,
+                output_tokens_details: null,
+                total_tokens: 110,
+              },
+            },
           })
           try {
             controller.close()
@@ -167,19 +197,24 @@ const startMcp = () =>
         Response.json({ jsonrpc: "2.0", id: message.id, result }, { headers })
       switch (message.method) {
         case "initialize":
-          return reply({
-            protocolVersion: message.params?.protocolVersion ?? "2025-06-18",
-            capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "openbot-e2e", version: "0.0.0" },
-          }, { "mcp-session-id": "e2e-session" })
+          return reply(
+            {
+              protocolVersion: message.params?.protocolVersion ?? "2025-06-18",
+              capabilities: { tools: { listChanged: false } },
+              serverInfo: { name: "openbot-e2e", version: "0.0.0" },
+            },
+            { "mcp-session-id": "e2e-session" },
+          )
         case "tools/list":
           return reply({
-            tools: [{
-              name: "whoami",
-              description: "Says which node the bot is on.",
-              inputSchema: { type: "object", properties: {} },
-              annotations: { readOnlyHint: true },
-            }],
+            tools: [
+              {
+                name: "whoami",
+                description: "Says which node the bot is on.",
+                inputSchema: { type: "object", properties: {} },
+                annotations: { readOnlyHint: true },
+              },
+            ],
           })
         case "tools/call":
           return reply({ content: [{ type: "text", text: "node=e2e-node" }] })
@@ -232,12 +267,19 @@ afterAll(async () => {
 
 describe.skipIf(!enabled)("e2e: real codex app-server + scripted model", () => {
   test("probe and models without a login and without a model call", async () => {
-    const result = await Effect.runPromise(Effect.gen(function*() {
-      const status = yield* driver!.probe
-      const models = yield* driver!.listModels
-      return { status, models }
-    }))
-    expect(result.status).toMatchObject({ kind: "codex", installed: true, version: "0.162.1", auth: { state: "signed-out" } })
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const status = yield* driver!.probe
+        const models = yield* driver!.listModels
+        return { status, models }
+      }),
+    )
+    expect(result.status).toMatchObject({
+      kind: "codex",
+      installed: true,
+      version: "0.162.1",
+      auth: { state: "signed-out" },
+    })
     expect(result.models.length).toBeGreaterThan(0)
     expect(result.models.every((m) => m.id.length > 0 && m.label.length > 0)).toBe(true)
   }, 60_000)
@@ -250,41 +292,77 @@ describe.skipIf(!enabled)("e2e: real codex app-server + scripted model", () => {
         asked.push(request)
         return decision
       })
-    const result = await Effect.runPromise(Effect.scoped(Effect.gen(function*() {
-      const session = yield* driver!.openSession(makeSessionInput(workspace, onRequest, {
-        model: "gpt-5.6-luna",
-        effort: "low",
-        mcp: [{ name: "openbot", url: `http://127.0.0.1:${mcpServer!.port}/mcp`, headers: { Authorization: "Bearer e2e-secret" } }],
-      }))
-      const events = yield* collect(session.events)
-      const ended = (n: number) => (e: ReadonlyArray<HarnessEvent>) =>
-        e.filter((x) => x._tag === "TurnCompleted" || x._tag === "TurnFailed" || x._tag === "TurnInterrupted").length >= n
-      const waitTurn = (n: number) => waitUntil(() => ended(n)(events.events), `turn ${n}`, () => events.events.map((e) => e._tag).join(","), 60_000)
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const session = yield* driver!.openSession(
+            makeSessionInput(workspace, onRequest, {
+              model: "gpt-5.6-luna",
+              effort: "low",
+              mcp: [
+                {
+                  name: "openbot",
+                  url: `http://127.0.0.1:${mcpServer!.port}/mcp`,
+                  headers: { Authorization: "Bearer e2e-secret" },
+                },
+              ],
+            }),
+          )
+          const events = yield* collect(session.events)
+          const ended = (n: number) => (e: ReadonlyArray<HarnessEvent>) =>
+            e.filter((x) => x._tag === "TurnCompleted" || x._tag === "TurnFailed" || x._tag === "TurnInterrupted")
+              .length >= n
+          const waitTurn = (n: number) =>
+            waitUntil(
+              () => ended(n)(events.events),
+              `turn ${n}`,
+              () => events.events.map((e) => e._tag).join(","),
+              60_000,
+            )
 
-      yield* session.startTurn({ turnId: turnId(1), text: "hello", attachments: [] })
-      yield* waitTurn(1)
-      yield* session.startTurn({ turnId: turnId(2), text: "tool please", attachments: [] })
-      yield* waitTurn(2)
-      yield* session.startTurn({ turnId: turnId(3), text: "run the command", attachments: [] })
-      yield* waitTurn(3)
-      const markerAfterAllow = existsSync(join(workspace, "marker.txt")) ? readFileSync(join(workspace, "marker.txt"), "utf8") : undefined
-      decision = { decision: "deny" }
-      yield* Effect.promise(() => Bun.file(join(workspace, "marker.txt")).delete().catch(() => undefined))
-      yield* session.startTurn({ turnId: turnId(4), text: "deny this one", attachments: [] })
-      yield* waitTurn(4)
-      const markerAfterDeny = existsSync(join(workspace, "marker.txt"))
-      yield* session.startTurn({ turnId: turnId(5), text: "slow counting", attachments: [] })
-      yield* events.waitFor(has("ItemUpserted", (e) => e._tag === "ItemUpserted" && e.turnId === turnId(5)), "slow text")
-      yield* session.interrupt
-      yield* waitTurn(5)
-      yield* session.compact
-      const context = yield* session.contextUsage
-      return { events: events.events, markerAfterAllow, markerAfterDeny, context, threadId: yield* session.nativeSessionId }
-    })))
+          yield* session.startTurn({ turnId: turnId(1), text: "hello", attachments: [] })
+          yield* waitTurn(1)
+          yield* session.startTurn({ turnId: turnId(2), text: "tool please", attachments: [] })
+          yield* waitTurn(2)
+          yield* session.startTurn({ turnId: turnId(3), text: "run the command", attachments: [] })
+          yield* waitTurn(3)
+          const markerAfterAllow = existsSync(join(workspace, "marker.txt"))
+            ? readFileSync(join(workspace, "marker.txt"), "utf8")
+            : undefined
+          decision = { decision: "deny" }
+          yield* Effect.promise(() =>
+            Bun.file(join(workspace, "marker.txt"))
+              .delete()
+              .catch(() => undefined),
+          )
+          yield* session.startTurn({ turnId: turnId(4), text: "deny this one", attachments: [] })
+          yield* waitTurn(4)
+          const markerAfterDeny = existsSync(join(workspace, "marker.txt"))
+          yield* session.startTurn({ turnId: turnId(5), text: "slow counting", attachments: [] })
+          yield* events.waitFor(
+            has("ItemUpserted", (e) => e._tag === "ItemUpserted" && e.turnId === turnId(5)),
+            "slow text",
+          )
+          yield* session.interrupt
+          yield* waitTurn(5)
+          yield* session.compact
+          const context = yield* session.contextUsage
+          return {
+            events: events.events,
+            markerAfterAllow,
+            markerAfterDeny,
+            context,
+            threadId: yield* session.nativeSessionId,
+          }
+        }),
+      ),
+    )
 
     const terminal = (n: number) =>
-      result.events.find((e) =>
-        (e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted") && e.turnId === turnId(n)
+      result.events.find(
+        (e) =>
+          (e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted") &&
+          e.turnId === turnId(n),
       )?._tag
     expect([1, 2, 3, 4].map(terminal)).toEqual(["TurnCompleted", "TurnCompleted", "TurnCompleted", "TurnCompleted"])
     expect(terminal(5)).toBe("TurnInterrupted")
@@ -310,7 +388,11 @@ describe.skipIf(!enabled)("e2e: real codex app-server + scripted model", () => {
     // 3/4: command approvals round-trip; Deny is honored.
     const approvals = asked.filter((r) => r.kind === "command-approval")
     expect(approvals.length).toBe(2)
-    expect(approvals[0]).toMatchObject({ toolName: "exec_command", command: "echo e2e > marker.txt", nodeId: "node_local" })
+    expect(approvals[0]).toMatchObject({
+      toolName: "exec_command",
+      command: "echo e2e > marker.txt",
+      nodeId: "node_local",
+    })
     expect(result.markerAfterAllow).toBe("e2e\n")
     expect(result.markerAfterDeny).toBe(false)
     expect(asked.some((r) => r.kind === "mcp-approval")).toBe(false)

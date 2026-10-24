@@ -29,9 +29,32 @@ import {
   TextField,
   cn,
 } from "@openbot/ui"
-import { ChevronRight, CircleAlert, CircleCheck, Clock, Ellipsis, LoaderCircle, Pencil, Play, Plus, Trash2 } from "lucide-react"
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  Clock,
+  Ellipsis,
+  LoaderCircle,
+  Pencil,
+  Play,
+  Plus,
+  Trash2,
+} from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
-import { ConfirmDialog, EmptyNote, ErrorLine, LoadingLine, Section, SectionSheet, describeCron, describeTrigger, formatWhen, useCommand, useQuery } from "./kit.tsx"
+import {
+  ConfirmDialog,
+  EmptyNote,
+  ErrorLine,
+  LoadingLine,
+  Section,
+  SectionSheet,
+  describeCron,
+  describeTrigger,
+  formatWhen,
+  useCommand,
+  useQuery,
+} from "./kit.tsx"
 
 export function RoutinesSection({ bot }: { readonly bot: Bot }): ReactNode {
   const routines = useQuery(routinesAtom(bot.id))
@@ -43,7 +66,20 @@ export function RoutinesSection({ bot }: { readonly bot: Bot }): ReactNode {
   const done = all.filter(isDone).sort((a, b) => (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0))
   const [showDone, setShowDone] = useState(false)
   return (
-    <Section title="Routines" id="details-routines" trailing={<IconButton icon={Plus} label="New routine" size={24} iconSize="sm" onClick={() => setEditing("new")} data-testid="new-routine" />}>
+    <Section
+      title="Routines"
+      id="details-routines"
+      trailing={
+        <IconButton
+          icon={Plus}
+          label="New routine"
+          size={24}
+          iconSize="sm"
+          onClick={() => setEditing("new")}
+          data-testid="new-routine"
+        />
+      }
+    >
       {routines.loading ? (
         <LoadingLine />
       ) : routines.error && !routines.value ? (
@@ -67,7 +103,11 @@ export function RoutinesSection({ bot }: { readonly bot: Bot }): ReactNode {
                 aria-expanded={showDone}
                 className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-start text-xs text-fg-tertiary hover:bg-hover hover:text-fg-secondary"
               >
-                <ChevronRight size={14} className={showDone ? "rotate-90 transition-transform" : "transition-transform"} aria-hidden />
+                <ChevronRight
+                  size={14}
+                  className={showDone ? "rotate-90 transition-transform" : "transition-transform"}
+                  aria-hidden
+                />
                 Done ({done.length}) · removed after 7 days
               </button>
               {showDone && (
@@ -81,7 +121,13 @@ export function RoutinesSection({ bot }: { readonly bot: Bot }): ReactNode {
           )}
         </>
       )}
-      {editing && <RoutineDialog bot={bot} routine={editing === "new" ? undefined : editing} onClose={() => setEditing(undefined)} />}
+      {editing && (
+        <RoutineDialog
+          bot={bot}
+          routine={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
     </Section>
   )
 }
@@ -100,7 +146,12 @@ function RoutineRow({ routine, onEdit }: { readonly routine: Routine; readonly o
   }
   const on = enabled ?? routine.enabled
   return (
-    <div role="group" data-automation-row data-testid="routine-row" className="group flex min-h-12 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-hover">
+    <div
+      role="group"
+      data-automation-row
+      data-testid="routine-row"
+      className="group flex min-h-12 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-hover"
+    >
       <Icon icon={Clock} size="md" className="text-accent" />
       <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 flex-col text-start">
         <span className="truncate text-sm text-fg">{routine.name}</span>
@@ -108,12 +159,12 @@ function RoutineRow({ routine, onEdit }: { readonly routine: Routine; readonly o
           {runNow.pending
             ? "Starting…"
             : runNow.error
-            ? runNow.error
-            : on
-            ? describeTrigger(routine.trigger)
-            : routine.trigger.type === "once" && routine.lastRunAt !== undefined
-            ? `Ran ${formatWhen(routine.lastRunAt).replace(/^[A-Z]/, (c) => c.toLowerCase())}`
-            : "Paused"}
+              ? runNow.error
+              : on
+                ? describeTrigger(routine.trigger)
+                : routine.trigger.type === "once" && routine.lastRunAt !== undefined
+                  ? `Ran ${formatWhen(routine.lastRunAt).replace(/^[A-Z]/, (c) => c.toLowerCase())}`
+                  : "Paused"}
         </span>
       </button>
       <Menu
@@ -210,7 +261,15 @@ const parseCron = (schedule: string): { repeat: Repeat; time: string } => {
   const time = `${m[2]!.padStart(2, "0")}:${m[1]!.padStart(2, "0")}`
   const dow = m[3]!
   const repeat: Repeat | undefined =
-    dow === "*" ? "daily" : dow === "1-5" ? "weekdays" : dow === "0,6" || dow === "6,0" ? "weekends" : /^[0-6]$/.test(dow) ? (dow as Repeat) : undefined
+    dow === "*"
+      ? "daily"
+      : dow === "1-5"
+        ? "weekdays"
+        : dow === "0,6" || dow === "6,0"
+          ? "weekends"
+          : /^[0-6]$/.test(dow)
+            ? (dow as Repeat)
+            : undefined
   return repeat ? { repeat, time } : { repeat: "custom", time }
 }
 
@@ -229,7 +288,15 @@ const toLocalInput = (ms: number): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; readonly routine: Routine | undefined; readonly onClose: () => void }): ReactNode {
+export function RoutineDialog({
+  bot,
+  routine,
+  onClose,
+}: {
+  readonly bot: Bot
+  readonly routine: Routine | undefined
+  readonly onClose: () => void
+}): ReactNode {
   const create = useCommand("routines.create", bot.id)
   const update = useCommand("routines.update", routine?.id ?? "new")
   const runNow = useCommand("routines.runNow", routine?.id ?? "new")
@@ -264,7 +331,8 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
         return { type: "cron", schedule, timezone: timezone.trim() }
       case "interval": {
         const n = Number(every)
-        if (!Number.isInteger(n) || n < MIN_ROUTINE_INTERVAL_MINUTES) return `Run at most every ${MIN_ROUTINE_INTERVAL_MINUTES} minutes`
+        if (!Number.isInteger(n) || n < MIN_ROUTINE_INTERVAL_MINUTES)
+          return `Run at most every ${MIN_ROUTINE_INTERVAL_MINUTES} minutes`
         return { type: "interval", everyMinutes: n }
       }
       case "once": {
@@ -284,13 +352,22 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
           type: "slack",
           on: slackOn,
           ...(slackOn === "phrase" ? { phrase } : {}),
-          ...(channel === "" ? {} : { channel: channel.startsWith("#") || /^[CDG][A-Z0-9]{6,}$/.test(channel) ? channel : `#${channel}` }),
+          ...(channel === ""
+            ? {}
+            : { channel: channel.startsWith("#") || /^[CDG][A-Z0-9]{6,}$/.test(channel) ? channel : `#${channel}` }),
         }
       }
     }
   }, [kind, schedule, timezone, every, once, slackOn, slackPhrase, slackChannel, slackConnected])
 
-  const invalid = typeof trigger === "string" ? trigger : !name.trim() ? "Give the routine a name" : !prompt.trim() ? "Tell the Bot what to do each run" : undefined
+  const invalid =
+    typeof trigger === "string"
+      ? trigger
+      : !name.trim()
+        ? "Give the routine a name"
+        : !prompt.trim()
+          ? "Tell the Bot what to do each run"
+          : undefined
   const error = create.error ?? update.error ?? runNow.error ?? del.error
 
   const save = async () => {
@@ -302,10 +379,28 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} width={520} label={routine ? "Edit routine" : "New routine"}>
-      <DialogHeader title={routine ? "Routine" : "New routine"} description={routine ? undefined : `${bot.name} runs it on its own and posts the result in chat.`} onClose={onClose} />
+      <DialogHeader
+        title={routine ? "Routine" : "New routine"}
+        description={routine ? undefined : `${bot.name} runs it on its own and posts the result in chat.`}
+        onClose={onClose}
+      />
       <DialogBody className="flex flex-col gap-4">
-        <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Morning briefing" data-autofocus data-testid="routine-name" />
-        <TextArea label="Instruction" rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Summarize what changed overnight and what needs me today." className="text-sm" />
+        <TextField
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Morning briefing"
+          data-autofocus
+          data-testid="routine-name"
+        />
+        <TextArea
+          label="Instruction"
+          rows={4}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Summarize what changed overnight and what needs me today."
+          className="text-sm"
+        />
         <div className="flex flex-col gap-2">
           <span className="text-xs text-fg-secondary">When to run</span>
           <SegmentedTabs<TriggerKind>
@@ -326,7 +421,13 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
             {kind === "cron" && (
               <>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Select label="Repeat" value={repeat} options={REPEAT_OPTIONS} onValueChange={setRepeat} align="start" />
+                  <Select
+                    label="Repeat"
+                    value={repeat}
+                    options={REPEAT_OPTIONS}
+                    onValueChange={setRepeat}
+                    align="start"
+                  />
                   {repeat !== "custom" && (
                     <input
                       type="time"
@@ -336,9 +437,24 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
                       className="h-7 rounded-lg bg-elevated px-2 text-sm text-fg outline-none hairline border-line-tertiary"
                     />
                   )}
-                  <TextField size="sm" aria-label="Timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} wrapperClassName="min-w-[140px] flex-1" />
+                  <TextField
+                    size="sm"
+                    aria-label="Timezone"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    wrapperClassName="min-w-[140px] flex-1"
+                  />
                 </div>
-                {repeat === "custom" && <TextField size="sm" aria-label="Cron expression" value={cron} onChange={(e) => setCron(e.target.value)} className="font-mono" placeholder="0 9 * * 1-5" />}
+                {repeat === "custom" && (
+                  <TextField
+                    size="sm"
+                    aria-label="Cron expression"
+                    value={cron}
+                    onChange={(e) => setCron(e.target.value)}
+                    className="font-mono"
+                    placeholder="0 9 * * 1-5"
+                  />
+                )}
                 <span className="text-xs text-fg-tertiary">
                   {describeCron(schedule)} · <span className="font-mono">{schedule}</span>
                 </span>
@@ -347,7 +463,15 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
             {kind === "interval" && (
               <div className="flex items-center gap-2 text-sm text-fg-secondary">
                 Every
-                <TextField size="sm" aria-label="Minutes" type="number" min={MIN_ROUTINE_INTERVAL_MINUTES} value={every} onChange={(e) => setEvery(e.target.value)} wrapperClassName="w-20" />
+                <TextField
+                  size="sm"
+                  aria-label="Minutes"
+                  type="number"
+                  min={MIN_ROUTINE_INTERVAL_MINUTES}
+                  value={every}
+                  onChange={(e) => setEvery(e.target.value)}
+                  wrapperClassName="w-20"
+                />
                 minutes
               </div>
             )}
@@ -364,9 +488,22 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
             {kind === "slack" && (
               <>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Select label="When" value={slackOn} options={SLACK_ON_OPTIONS} onValueChange={setSlackOn} align="start" />
+                  <Select
+                    label="When"
+                    value={slackOn}
+                    options={SLACK_ON_OPTIONS}
+                    onValueChange={setSlackOn}
+                    align="start"
+                  />
                   {slackOn === "phrase" && (
-                    <TextField size="sm" aria-label="Words to look for" placeholder="deploy failed" value={slackPhrase} onChange={(e) => setSlackPhrase(e.target.value)} wrapperClassName="min-w-[140px] flex-1" />
+                    <TextField
+                      size="sm"
+                      aria-label="Words to look for"
+                      placeholder="deploy failed"
+                      value={slackPhrase}
+                      onChange={(e) => setSlackPhrase(e.target.value)}
+                      wrapperClassName="min-w-[140px] flex-1"
+                    />
                   )}
                 </div>
                 <TextField
@@ -402,13 +539,28 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
           <Switch checked={enabled} onCheckedChange={setEnabled} label="Active" />
         </div>
         {routine && <RunHistory routineId={routine.id} />}
-        {(error ?? (invalid && (name || prompt) ? invalid : undefined)) && <ErrorLine className="px-0">{error ?? invalid}</ErrorLine>}
+        {(error ?? (invalid && (name || prompt) ? invalid : undefined)) && (
+          <ErrorLine className="px-0">{error ?? invalid}</ErrorLine>
+        )}
       </DialogBody>
       <DialogFooter>
         {routine && (
           <>
-            <IconButton icon={Trash2} label="Delete routine" size={36} variant="secondary" className="me-auto" onClick={() => setConfirmDelete(true)} />
-            <PillButton variant="secondary" size="card" leadingIcon={Play} loading={runNow.pending} onClick={() => void runNow.run({ routineId: routine.id })}>
+            <IconButton
+              icon={Trash2}
+              label="Delete routine"
+              size={36}
+              variant="secondary"
+              className="me-auto"
+              onClick={() => setConfirmDelete(true)}
+            />
+            <PillButton
+              variant="secondary"
+              size="card"
+              leadingIcon={Play}
+              loading={runNow.pending}
+              onClick={() => void runNow.run({ routineId: routine.id })}
+            >
               Run now
             </PillButton>
           </>
@@ -416,7 +568,14 @@ export function RoutineDialog({ bot, routine, onClose }: { readonly bot: Bot; re
         <PillButton variant="secondary" size="card" onClick={onClose}>
           Cancel
         </PillButton>
-        <PillButton variant="primary" size="card" disabled={invalid !== undefined} loading={create.pending || update.pending} onClick={() => void save()} data-testid="save-routine">
+        <PillButton
+          variant="primary"
+          size="card"
+          disabled={invalid !== undefined}
+          loading={create.pending || update.pending}
+          onClick={() => void save()}
+          data-testid="save-routine"
+        >
           {routine ? "Save" : "Create"}
         </PillButton>
       </DialogFooter>
@@ -464,17 +623,35 @@ function RunHistory({ routineId }: { readonly routineId: Routine["id"] }): React
           {shown.map((run) => {
             const s = RUN_ICON[run.status]
             return (
-              <div key={run.id} className="flex min-h-8 items-center gap-2 rounded-lg px-2 py-1" title={run.error ?? run.summary}>
+              <div
+                key={run.id}
+                className="flex min-h-8 items-center gap-2 rounded-lg px-2 py-1"
+                title={run.error ?? run.summary}
+              >
                 <Icon icon={s.icon} size="sm" className={s.className} label={s.label} />
                 <span className="shrink-0 text-sm text-fg">{formatWhen(run.startedAt)}</span>
-                <span className={cn("min-w-0 flex-1 truncate text-xs", run.error ? "text-danger-fg" : "text-fg-tertiary")}>
-                  {run.error ?? run.summary ?? (run.firedBy === "manual" ? "Run by you" : run.firedBy === "catch-up" ? "Catch-up run" : run.firedBy === "event" ? "Started by a Slack message" : "")}
+                <span
+                  className={cn("min-w-0 flex-1 truncate text-xs", run.error ? "text-danger-fg" : "text-fg-tertiary")}
+                >
+                  {run.error ??
+                    run.summary ??
+                    (run.firedBy === "manual"
+                      ? "Run by you"
+                      : run.firedBy === "catch-up"
+                        ? "Catch-up run"
+                        : run.firedBy === "event"
+                          ? "Started by a Slack message"
+                          : "")}
                 </span>
               </div>
             )
           })}
           {list.length > 5 && (
-            <button type="button" className="rounded-lg px-2 py-1 text-start text-xs text-fg-secondary hover:bg-hover" onClick={() => setAll(!all)}>
+            <button
+              type="button"
+              className="rounded-lg px-2 py-1 text-start text-xs text-fg-secondary hover:bg-hover"
+              onClick={() => setAll(!all)}
+            >
               {all ? "Show less" : `Show all ${list.length}`}
             </button>
           )}

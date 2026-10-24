@@ -38,17 +38,19 @@ const dm = makeDirectConversation({ id: conversationId("cnv_a"), botId: bot.id }
 describe("ConversationServiceFake + LiveHubFake", () => {
   test("appendEvent persists and publishes; updateEntry bumps the revision; subscribers see live changes", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* (yield* ConversationRepo).upsert(dm)
         const conversations = yield* ConversationService
         const hub = yield* LiveHub
-        const items = yield* Stream.runCollect(Stream.take(hub.subscribeConversation({ conversationId: dm.id }), 3)).pipe(
-          Effect.forkChild({ startImmediately: true }),
-        )
+        const items = yield* Stream.runCollect(
+          Stream.take(hub.subscribeConversation({ conversationId: dm.id }), 3),
+        ).pipe(Effect.forkChild({ startImmediately: true }))
         const event: KnownConversationEvent = { type: "skill-saved", name: "triage" }
         const entry = yield* conversations.appendEvent({ conversationId: dm.id, event })
         const updated = yield* conversations.updateEntry(entry.id, (e) => e)
-        const missing = yield* Effect.exit(conversations.appendEvent({ conversationId: conversationId("cnv_x"), event }))
+        const missing = yield* Effect.exit(
+          conversations.appendEvent({ conversationId: conversationId("cnv_x"), event }),
+        )
         const changes = yield* (yield* LiveHubFake).conversationChanges(dm.id)
         const written = yield* (yield* ConversationServiceFake).written
         return { entry, updated, missing, changes, written, items: yield* Fiber.join(items) }
@@ -69,7 +71,7 @@ describe("ConversationServiceFake + LiveHubFake", () => {
 
   test("setActivity publishes activity.updated on the roster", async () => {
     const changes = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* (yield* LiveHub).setActivity({ botId: bot.id, state: "thinking", since: 0 })
         return yield* (yield* LiveHubFake).rosterChanges
       }),
@@ -82,7 +84,7 @@ describe("ConversationServiceFake + LiveHubFake", () => {
 describe("OrchestratorFake", () => {
   test("deliver records with defaults; awaitDelivery resolves on complete", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const control = yield* OrchestratorFake
         const receipt = yield* orchestrator.deliver({
@@ -92,7 +94,9 @@ describe("OrchestratorFake", () => {
           text: "Daily brief",
           urgency: "background",
         })
-        const waiter = yield* orchestrator.awaitDelivery(receipt.deliveryId).pipe(Effect.forkChild({ startImmediately: true }))
+        const waiter = yield* orchestrator
+          .awaitDelivery(receipt.deliveryId)
+          .pipe(Effect.forkChild({ startImmediately: true }))
         yield* control.complete(receipt.deliveryId, { status: "completed", lastBotMessage: "Done" })
         const outcome = yield* Fiber.join(waiter)
         const unknown = yield* Effect.exit(orchestrator.awaitDelivery("dlv_x"))
@@ -111,18 +115,37 @@ describe("OrchestratorFake", () => {
 describe("ApprovalServiceFake", () => {
   test("default policy allows and answers first options; tool requests are pending; answers stream", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const approvals = yield* ApprovalService
         const control = yield* ApprovalServiceFake
         const ctx = { bot, conversationId: dm.id, harness: "fake" }
-        const allow = yield* approvals.evaluate(ctx, { kind: "command-approval", toolName: "Bash", title: "Run", detail: "ls" })
+        const allow = yield* approvals.evaluate(ctx, {
+          kind: "command-approval",
+          toolName: "Bash",
+          title: "Run",
+          detail: "ls",
+        })
         const answers = yield* approvals.evaluate(ctx, {
           kind: "question",
-          questions: [{ id: "q1", prompt: "Pick", options: [{ label: "A" }, { label: "B" }], multiSelect: false, allowFreeText: false }],
+          questions: [
+            {
+              id: "q1",
+              prompt: "Pick",
+              options: [{ label: "A" }, { label: "B" }],
+              multiSelect: false,
+              allowFreeText: false,
+            },
+          ],
         })
         const receipt = yield* approvals.askUser({ claims: makeClaims({ botId: bot.id }) }, { questions: [] })
         const next = yield* Stream.runHead(approvals.asyncAnswers).pipe(Effect.forkChild({ startImmediately: true }))
-        yield* control.answer({ conversationId: dm.id, botId: bot.id, kind: "user-message", text: "B", urgency: "urgent" })
+        yield* control.answer({
+          conversationId: dm.id,
+          botId: bot.id,
+          kind: "user-message",
+          text: "B",
+          urgency: "urgent",
+        })
         return { allow, answers, receipt, next: yield* Fiber.join(next), tools: yield* control.toolRequests }
       }),
       layer(),
@@ -138,7 +161,7 @@ describe("ApprovalServiceFake", () => {
 describe("Settings / Usage / Memory fakes", () => {
   test("settings update + rules; usage aggregation; memory prompt index cap", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const settings = yield* SettingsService
         const updated = yield* settings.update({ botMessaging: false })
         const rule = yield* settings.upsertRule({ surface: "shell", match: { commandPrefix: "git" }, action: "allow" })
@@ -146,8 +169,20 @@ describe("Settings / Usage / Memory fakes", () => {
         const missing = yield* Effect.exit(settings.deleteRule(rule.id))
 
         const usage = yield* UsageService
-        yield* usage.record({ botId: bot.id, conversationId: dm.id, turnId: turnId("trn_1"), harness: "fake", usage: { inputTokens: 3, outputTokens: 1 } })
-        yield* usage.record({ botId: bot.id, conversationId: dm.id, turnId: turnId("trn_1"), harness: "fake", usage: { inputTokens: 2, outputTokens: 1 } })
+        yield* usage.record({
+          botId: bot.id,
+          conversationId: dm.id,
+          turnId: turnId("trn_1"),
+          harness: "fake",
+          usage: { inputTokens: 3, outputTokens: 1 },
+        })
+        yield* usage.record({
+          botId: bot.id,
+          conversationId: dm.id,
+          turnId: turnId("trn_1"),
+          harness: "fake",
+          usage: { inputTokens: 2, outputTokens: 1 },
+        })
         const byBot = yield* usage.byBot({})
 
         yield* (yield* MemoryStore).writeIndex(bot.id, "x".repeat(5000))

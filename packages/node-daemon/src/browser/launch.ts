@@ -40,7 +40,13 @@ export const onScreenBrowserConfig = (
   width: screen.width,
   height: screen.height,
   headless: false,
-  extraArgs: ["--ozone-platform=x11", "--start-maximized", "--window-position=0,0", "--hide-crash-restore-bubble", ...base.extraArgs],
+  extraArgs: [
+    "--ozone-platform=x11",
+    "--start-maximized",
+    "--window-position=0,0",
+    "--hide-crash-restore-bubble",
+    ...base.extraArgs,
+  ],
 })
 
 /** A process's argv joined by spaces (`/proc` on Linux, `ps` elsewhere); undefined when unknown. */
@@ -110,7 +116,8 @@ export const clearStaleLock = (profileDir: string): void => {
     while (isAlive(pid) && Date.now() < deadline) Bun.sleepSync(20)
     if (isAlive(pid)) return
   }
-  for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) rmSync(path.join(profileDir, f), { force: true })
+  for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"])
+    rmSync(path.join(profileDir, f), { force: true })
 }
 
 /** A process the node did not spawn, as an `Exitable` (exit observed by polling). */
@@ -157,13 +164,13 @@ export const findRunningBrowser = (profileDir: string): { readonly pid: number; 
 
 /** The browser WebSocket URL a DevTools port serves; undefined while nothing answers there. */
 const browserWsUrl = (port: number): Promise<string | undefined> =>
-  fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(2000) }).then(
-    async (r) => {
+  fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(2000) })
+    .then(async (r) => {
       if (!r.ok) return undefined
       const url = ((await r.json()) as { webSocketDebuggerUrl?: unknown }).webSocketDebuggerUrl
       return typeof url === "string" && url.startsWith("ws://") ? url : undefined
-    },
-  ).catch(() => undefined)
+    })
+    .catch(() => undefined)
 
 /**
  * DevTools ports come from a fixed range, never `--remote-debugging-port=0`: Google sign-in rejects a
@@ -195,7 +202,10 @@ export const freeDebugPort = (taken: ReadonlySet<number> = new Set()): number =>
 }
 
 /** `config.debugPort`: the DevTools port to use (`freeDebugPort` when the caller has none). */
-export const browserArgs = (config: BrowserConfig & { readonly debugPort?: number | undefined }, headless: boolean): Array<string> => [
+export const browserArgs = (
+  config: BrowserConfig & { readonly debugPort?: number | undefined },
+  headless: boolean,
+): Array<string> => [
   `--remote-debugging-port=${config.debugPort ?? freeDebugPort()}`,
   "--remote-debugging-address=127.0.0.1",
   `--user-data-dir=${config.profileDir}`,
@@ -221,7 +231,10 @@ export interface LaunchOptions {
   readonly cwd?: string | undefined
 }
 
-export const launchBrowser = (config: BrowserConfig & { readonly debugPort?: number | undefined }, options?: LaunchOptions): Effect.Effect<LaunchedBrowser, BrowserUnavailable> =>
+export const launchBrowser = (
+  config: BrowserConfig & { readonly debugPort?: number | undefined },
+  options?: LaunchOptions,
+): Effect.Effect<LaunchedBrowser, BrowserUnavailable> =>
   Effect.gen(function* () {
     const exe = config.executable
     const logFile = options?.logFile
@@ -253,7 +266,8 @@ export const launchBrowser = (config: BrowserConfig & { readonly debugPort?: num
           stderr: logFile ? Bun.file(logFile) : "ignore",
         })
       },
-      catch: (e) => new BrowserUnavailable({ reason: `could not start ${exe}: ${e instanceof Error ? e.message : String(e)}` }),
+      catch: (e) =>
+        new BrowserUnavailable({ reason: `could not start ${exe}: ${e instanceof Error ? e.message : String(e)}` }),
     })
     const deadline = Date.now() + 20_000
     while (true) {
@@ -279,7 +293,9 @@ export const launchBrowser = (config: BrowserConfig & { readonly debugPort?: num
         } catch {
           proc.kill("SIGKILL")
         }
-        return yield* new BrowserUnavailable({ reason: `${path.basename(exe)} did not open a DevTools port within 20 s` })
+        return yield* new BrowserUnavailable({
+          reason: `${path.basename(exe)} did not open a DevTools port within 20 s`,
+        })
       }
       yield* Effect.sleep(50)
     }

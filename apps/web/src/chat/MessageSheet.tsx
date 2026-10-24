@@ -13,7 +13,11 @@ import { plainPreview } from "../app/format.ts"
 import type { MessageEntry } from "./grouping.ts"
 
 /** Table rules and pipes read badly in a one-line preview. */
-const previewText = (text: string): string => text.replace(/^\s*\|?[\s:|-]*-{3,}[\s:|-]*\|?\s*$/gm, "").replace(/\s*\|\s*/g, " · ").replace(/(^|\n) · /g, "$1")
+const previewText = (text: string): string =>
+  text
+    .replace(/^\s*\|?[\s:|-]*-{3,}[\s:|-]*\|?\s*$/gm, "")
+    .replace(/\s*\|\s*/g, " · ")
+    .replace(/(^|\n) · /g, "$1")
 
 /** Same set as the hover React popover (Message.tsx). */
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "🙏"] as const
@@ -45,7 +49,9 @@ export function MessageSheet({ entry, conversationId, authorName, onReply, onClo
       header={
         <div className="flex flex-col gap-0.5">
           <span className="text-xs text-fg-tertiary">{authorName}</span>
-          <p className="line-clamp-2 text-base text-fg-secondary">{plainPreview(previewText(entry.text), 180) || "Attachment"}</p>
+          <p className="line-clamp-2 text-base text-fg-secondary">
+            {plainPreview(previewText(entry.text), 180) || "Attachment"}
+          </p>
         </div>
       }
     >

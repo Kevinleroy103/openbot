@@ -53,8 +53,14 @@ describe("params", () => {
     expect(spec.decode({ name: "" })).toEqual({ ok: false, error: "`name` must not be empty" })
     expect(spec.decode({ name: "x", count: 9 })).toEqual({ ok: false, error: "`count` must be at most 3" })
     expect(spec.decode({ name: "x", mode: "c" })).toEqual({ ok: false, error: "`mode` must be one of: a, b" })
-    expect(spec.decode({ name: "x", tags: ["a", "b", "c"] })).toEqual({ ok: false, error: "`tags` must have at most 2 items" })
-    expect(spec.decode({ name: "x", nested: { flag: 3 } })).toEqual({ ok: false, error: "`nested.flag` must be true or false" })
+    expect(spec.decode({ name: "x", tags: ["a", "b", "c"] })).toEqual({
+      ok: false,
+      error: "`tags` must have at most 2 items",
+    })
+    expect(spec.decode({ name: "x", nested: { flag: 3 } })).toEqual({
+      ok: false,
+      error: "`nested.flag` must be true or false",
+    })
     expect(spec.decode("nope")).toEqual({ ok: false, error: "Arguments must be an object" })
   })
 
@@ -70,10 +76,58 @@ describe("params", () => {
     }
     expect([...names].sort()).toEqual(
       [
-        "message_bot", "post_to_group", "react", "handoff_task", "list_bots", "list_models", "create_bot", "update_bot", "list_sections", "create_section", "rename_section", "delete_section", "move_bot_to_section", "ask_user", "request_approval", "notify_user", "send_file",
-        "remember", "forget", "recall_memory", "search_messages", "read_conversation", "create_routine", "update_routine", "list_routines", "save_skill",
-        "list_skills", "enable_skill", "disable_skill", "find_skills", "preview_skill", "install_skill", "list_nodes", "start_task", "list_tasks", "check_task", "cancel_task", "update_task", "shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep",
-        "browser", "computer", "request_takeover", "slack_search", "slack_read", "slack_find", "slack_draft",
+        "message_bot",
+        "post_to_group",
+        "react",
+        "handoff_task",
+        "list_bots",
+        "list_models",
+        "create_bot",
+        "update_bot",
+        "list_sections",
+        "create_section",
+        "rename_section",
+        "delete_section",
+        "move_bot_to_section",
+        "ask_user",
+        "request_approval",
+        "notify_user",
+        "send_file",
+        "remember",
+        "forget",
+        "recall_memory",
+        "search_messages",
+        "read_conversation",
+        "create_routine",
+        "update_routine",
+        "list_routines",
+        "save_skill",
+        "list_skills",
+        "enable_skill",
+        "disable_skill",
+        "find_skills",
+        "preview_skill",
+        "install_skill",
+        "list_nodes",
+        "start_task",
+        "list_tasks",
+        "check_task",
+        "cancel_task",
+        "update_task",
+        "shell",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "list_dir",
+        "glob",
+        "grep",
+        "browser",
+        "computer",
+        "request_takeover",
+        "slack_search",
+        "slack_read",
+        "slack_find",
+        "slack_draft",
       ].sort(),
     )
   })
@@ -104,7 +158,10 @@ describe("results", () => {
     expect(toWireResult(sneaky)).toEqual({ content: [{ type: "text", text: "hi" }] })
     const err = toWireResult({
       isError: true,
-      content: [{ type: "text", text: "boom" }, { type: "image", data: "x", mimeType: "image/png" }],
+      content: [
+        { type: "text", text: "boom" },
+        { type: "image", data: "x", mimeType: "image/png" },
+      ],
     })
     expect(err).toEqual({ isError: true, content: [{ type: "text", text: "ERROR: boom" }] })
     const big = toWireResult({ content: [{ type: "text", text: "x".repeat(50_000) }] })
@@ -114,13 +171,19 @@ describe("results", () => {
   })
 
   test("renderToolError covers contract, node-protocol and gateway errors", () => {
-    expect(renderToolError(new InvalidInput({ message: "Bot messaging is turned off" }))).toBe("ERROR: Bot messaging is turned off")
-    expect(renderToolError(new NotFound({ entity: "bot", id: "Zed" }))).toBe("ERROR: bot Zed was not found")
-    expect(renderToolError(new ContractNodeUnavailable({ nodeId: "n" as never, message: "Node Laptop is offline" }))).toBe(
-      "ERROR: Node Laptop is offline",
+    expect(renderToolError(new InvalidInput({ message: "Bot messaging is turned off" }))).toBe(
+      "ERROR: Bot messaging is turned off",
     )
-    expect(renderToolError(new NodeUnavailable({ nodeId: "n1", reason: "gone" }))).toBe("ERROR: Node n1 is offline: gone")
-    expect(renderToolError(new PathDenied({ path: "/x", reason: "deny-list" }))).toBe("ERROR: Access to /x is denied: deny-list")
+    expect(renderToolError(new NotFound({ entity: "bot", id: "Zed" }))).toBe("ERROR: bot Zed was not found")
+    expect(
+      renderToolError(new ContractNodeUnavailable({ nodeId: "n" as never, message: "Node Laptop is offline" })),
+    ).toBe("ERROR: Node Laptop is offline")
+    expect(renderToolError(new NodeUnavailable({ nodeId: "n1", reason: "gone" }))).toBe(
+      "ERROR: Node n1 is offline: gone",
+    )
+    expect(renderToolError(new PathDenied({ path: "/x", reason: "deny-list" }))).toBe(
+      "ERROR: Access to /x is denied: deny-list",
+    )
     expect(renderToolError(new ToolRefusal({ message: "nope" }))).toBe("ERROR: nope")
     expect(renderToolError(new Error("secret internals"))).toBe("ERROR: Internal error")
   })
@@ -147,21 +210,27 @@ describe("helpers", () => {
 
   test("toBrowserAction maps flat args", async () => {
     const run = <A, E>(e: Effect.Effect<A, E>) => Effect.runPromiseExit(e)
-    expect(await run(toBrowserAction({ action: "navigate", url: "https://x" }))).toEqual(Exit.succeed({ _tag: "navigate", url: "https://x" }))
-    expect(await run(toBrowserAction({ action: "click", x: 1, y: 2 }))).toEqual(Exit.succeed({ _tag: "click", x: 1, y: 2 }))
+    expect(await run(toBrowserAction({ action: "navigate", url: "https://x" }))).toEqual(
+      Exit.succeed({ _tag: "navigate", url: "https://x" }),
+    )
+    expect(await run(toBrowserAction({ action: "click", x: 1, y: 2 }))).toEqual(
+      Exit.succeed({ _tag: "click", x: 1, y: 2 }),
+    )
     expect(await run(toBrowserAction({ action: "tabs" }))).toEqual(Exit.succeed({ _tag: "tabs", op: "list" }))
     expect(Exit.isFailure(await run(toBrowserAction({ action: "click", ref: undefined })))).toBe(true)
   })
 
   test("toComputerAction keeps the node-protocol names and checks each action's fields", async () => {
     const run = <A, E>(e: Effect.Effect<A, E>) => Effect.runPromiseExit(e)
-    expect(await run(toComputerAction({ action: "screenshot", coordinate: [1, 2] }))).toEqual(Exit.succeed({ action: "screenshot" }))
+    expect(await run(toComputerAction({ action: "screenshot", coordinate: [1, 2] }))).toEqual(
+      Exit.succeed({ action: "screenshot" }),
+    )
     expect(await run(toComputerAction({ action: "left_click", coordinate: [640, 400], text: "shift" }))).toEqual(
       Exit.succeed({ action: "left_click", coordinate: [640, 400], text: "shift" }),
     )
-    expect(await run(toComputerAction({ action: "left_click_drag", start_coordinate: [1, 2], coordinate: [3, 4] }))).toEqual(
-      Exit.succeed({ action: "left_click_drag", start_coordinate: [1, 2], coordinate: [3, 4] }),
-    )
+    expect(
+      await run(toComputerAction({ action: "left_click_drag", start_coordinate: [1, 2], coordinate: [3, 4] })),
+    ).toEqual(Exit.succeed({ action: "left_click_drag", start_coordinate: [1, 2], coordinate: [3, 4] }))
     expect(await run(toComputerAction({ action: "scroll", scroll_direction: "down" }))).toEqual(
       Exit.succeed({ action: "scroll", scroll_direction: "down", scroll_amount: 3 }),
     )
@@ -183,9 +252,9 @@ describe("helpers", () => {
   })
 
   test("renderToolError explains DesktopUnavailable with the missing programs", () => {
-    expect(renderToolError({ _tag: "DesktopUnavailable", message: "No desktop here", missing: ["Xvfb", "x11vnc"] })).toBe(
-      "ERROR: No desktop here (missing: Xvfb, x11vnc)",
-    )
+    expect(
+      renderToolError({ _tag: "DesktopUnavailable", message: "No desktop here", missing: ["Xvfb", "x11vnc"] }),
+    ).toBe("ERROR: No desktop here (missing: Xvfb, x11vnc)")
   })
 })
 
@@ -193,7 +262,12 @@ describe("helpers", () => {
 
 const BOT = "bot_alpha" as BotId
 const claims = makeClaims({ botId: BOT })
-const ctx: ToolCallContext = { tool: { claims, callId: "toolu_x" }, claims, sessionId: "s", progress: () => Effect.void }
+const ctx: ToolCallContext = {
+  tool: { claims, callId: "toolu_x" },
+  claims,
+  sessionId: "s",
+  progress: () => Effect.void,
+}
 const tool = (name: string) => BotToolkit.find((t) => t.name === name)!
 
 const callTool = (name: string, args: unknown, layer: Layer.Layer<any>) => {
@@ -231,7 +305,11 @@ describe("bot tools", () => {
           return routine({ name: input.spec.name, trigger: input.spec.trigger })
         }),
     })
-    const result = await callTool("create_routine", { name: "Daily", prompt: "Do it", schedule: "cron", cron: "0 8 * * 1-5" }, layer)
+    const result = await callTool(
+      "create_routine",
+      { name: "Daily", prompt: "Do it", schedule: "cron", cron: "0 8 * * 1-5" },
+      layer,
+    )
     expect(textOf(result)).toContain("Created routine Daily")
     expect(created).toEqual([
       {
@@ -246,7 +324,11 @@ describe("bot tools", () => {
         },
       },
     ])
-    const tooOften = await callTool("create_routine", { name: "x", prompt: "y", schedule: "interval", every_minutes: 1 }, layer)
+    const tooOften = await callTool(
+      "create_routine",
+      { name: "x", prompt: "y", schedule: "interval", every_minutes: 1 },
+      layer,
+    )
     expect(textOf(tooOften)).toStartWith("ERROR: Invalid routine")
     const noCron = await callTool("create_routine", { name: "x", prompt: "y", schedule: "cron" }, layer)
     expect(textOf(noCron)).toBe("ERROR: `cron` is required when schedule is cron")
@@ -305,7 +387,8 @@ describe("bot tools", () => {
     const layer = (decision: "allow-once" | "deny") =>
       Layer.mergeAll(
         Layer.mock(SkillService, {
-          get: (name) => (name === "triage" ? Effect.succeed(skill) : Effect.fail(new NotFound({ entity: "skill", id: name }))),
+          get: (name) =>
+            name === "triage" ? Effect.succeed(skill) : Effect.fail(new NotFound({ entity: "skill", id: name })),
         }),
         Layer.mock(BotService, {
           get: () => Effect.sync(() => makeBot({ id: BOT, name: "Alpha", skills: current })),
@@ -328,9 +411,11 @@ describe("bot tools", () => {
     const dropped = textOf(await callTool("disable_skill", { name: "triage" }, layer("deny")))
     const teammate = textOf(await callTool("enable_skill", { name: "triage", bot: "Beta" }, layer("allow-once")))
     expect(denied).toStartWith("ERROR: The user did not allow the skill triage")
-    expect(given).toBe("You have triage now; from your next message on it loads like your other skills. Its instructions, to use it right away:\n\nb")
+    expect(given).toBe(
+      "You have triage now; from your next message on it loads like your other skills. Its instructions, to use it right away:\n\nb",
+    )
     expect(already).toBe("You already have triage.")
-    expect(missing).toStartWith("ERROR: There is no skill named \"nope\"")
+    expect(missing).toStartWith('ERROR: There is no skill named "nope"')
     expect(dropped).toBe("You no longer have triage.")
     expect(teammate).toBe("@Beta has triage now, from its next message on.")
     // asked twice for itself (denied, then allowed), once for Beta; dropping its own skill asked nothing
@@ -348,7 +433,10 @@ describe("bot tools", () => {
       name: "release-notes",
       description: "Use when writing release notes.",
       body: "1. Collect",
-      files: [{ path: "SKILL.md", bytes: 120 }, { path: "scripts/a.sh", bytes: 2048 }],
+      files: [
+        { path: "SKILL.md", bytes: 120 },
+        { path: "scripts/a.sh", bytes: 2048 },
+      ],
       replaces: false,
     }
     const asked: Array<HarnessApprovalRequest> = []
@@ -360,32 +448,56 @@ describe("bot tools", () => {
             offline
               ? Effect.fail(new Unavailable({ message: "skills.sh did not answer (search): HTTP 503" }))
               : Effect.succeed([
-                { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 48_200 },
-                { id: "x/y/react", name: "react", repo: "x/y", installs: 950 },
-              ]),
-          list: Effect.succeed([{ name: "react" as SkillName, description: "d", body: "b", updatedAt: 0, source: { kind: "skills.sh" as const, id: "x/y/react" } }]),
+                  { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 48_200 },
+                  { id: "x/y/react", name: "react", repo: "x/y", installs: 950 },
+                ]),
+          list: Effect.succeed([
+            {
+              name: "react" as SkillName,
+              description: "d",
+              body: "b",
+              updatedAt: 0,
+              source: { kind: "skills.sh" as const, id: "x/y/react" },
+            },
+          ]),
           preview: () => Effect.succeed(preview),
           install: (id, botIds) =>
-            Effect.sync(() => (installs.push([id, botIds]), { name: "release-notes" as SkillName, description: preview.description, body: "1. Collect", updatedAt: 0 })),
+            Effect.sync(
+              () => (
+                installs.push([id, botIds]),
+                {
+                  name: "release-notes" as SkillName,
+                  description: preview.description,
+                  body: "1. Collect",
+                  updatedAt: 0,
+                }
+              ),
+            ),
         }),
         Layer.mock(BotService, {
           get: () => Effect.succeed(makeBot({ id: BOT, name: "Alpha" })),
           resolve: (ref) => Effect.succeed(makeBot({ id: `bot_${ref.toLowerCase()}` as BotId, name: ref })),
         }),
-        Layer.mock(Orchestrator, { approveToolCall: (_tool, request) => Effect.sync(() => (asked.push(request), { decision })) }),
+        Layer.mock(Orchestrator, {
+          approveToolCall: (_tool, request) => Effect.sync(() => (asked.push(request), { decision })),
+        }),
       )
     expect(textOf(await callTool("find_skills", { query: "notes" }, layer("allow-once")))).toBe(
       "acme/skills/release-notes — 48K installs\nx/y/react — 950 installs (already in the library)",
     )
-    expect(textOf(await callTool("find_skills", { query: "notes" }, layer("allow-once", true)))).toBe("ERROR: skills.sh did not answer (search): HTTP 503")
+    expect(textOf(await callTool("find_skills", { query: "notes" }, layer("allow-once", true)))).toBe(
+      "ERROR: skills.sh did not answer (search): HTTP 503",
+    )
     const read = textOf(await callTool("preview_skill", { id: "acme/skills/release-notes" }, layer("allow-once")))
     expect(read).toContain("When to use it: Use when writing release notes.")
     expect(read).toContain("- scripts/a.sh (2 KB)")
-    expect(textOf(await callTool("install_skill", { id: "acme/skills/release-notes", bots: ["Beta"] }, layer("deny")))).toStartWith(
-      "ERROR: The user did not allow installing release-notes",
-    )
+    expect(
+      textOf(await callTool("install_skill", { id: "acme/skills/release-notes", bots: ["Beta"] }, layer("deny"))),
+    ).toStartWith("ERROR: The user did not allow installing release-notes")
     expect(installs).toEqual([])
-    expect(textOf(await callTool("install_skill", { id: "acme/skills/release-notes" }, layer("allow-once")))).toStartWith(
+    expect(
+      textOf(await callTool("install_skill", { id: "acme/skills/release-notes" }, layer("allow-once"))),
+    ).toStartWith(
       "Installed release-notes for you; it loads from the next message on. Its instructions, to use it right away:\n\n1. Collect",
     )
     expect(installs).toEqual([["acme/skills/release-notes", [BOT]]])
@@ -399,7 +511,13 @@ describe("bot tools", () => {
     const layer = Layer.mergeAll(
       Layer.mock(SkillService, {
         list: Effect.succeed([
-          { name: "effect" as SkillName, description: "Effect 4 code.", body: "b", updatedAt: 0, source: { kind: "skills.sh" as const, id: "kitlangton/skills/effect" } },
+          {
+            name: "effect" as SkillName,
+            description: "Effect 4 code.",
+            body: "b",
+            updatedAt: 0,
+            source: { kind: "skills.sh" as const, id: "kitlangton/skills/effect" },
+          },
           { name: "triage" as SkillName, description: "Bug triage.", body: "b", updatedAt: 0 },
         ]),
         preview: () => Effect.fail(new InvalidInput({ message: "A skill needs a description of when to use it." })),

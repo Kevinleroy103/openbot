@@ -9,7 +9,8 @@ const startOfDay = (ms: number): number => {
   return d.getTime()
 }
 
-export const formatClock = (ms: number): string => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+export const formatClock = (ms: number): string =>
+  new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
 
 /** Home list (phone) time column: "9:41 AM", "Yesterday", "Mon", "Oct 3". */
 export const formatListTime = (ms: number, now: number = Date.now()): string => {
@@ -18,7 +19,11 @@ export const formatListTime = (ms: number, now: number = Date.now()): string => 
   if (days === 1) return "Yesterday"
   if (days < 7) return new Date(ms).toLocaleDateString("en-US", { weekday: "short" })
   const sameYear = new Date(ms).getFullYear() === new Date(now).getFullYear()
-  return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) })
+  return new Date(ms).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  })
 }
 
 /** Transcript timestamp row label. */

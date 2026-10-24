@@ -19,12 +19,12 @@ export type ScreenAvailability =
   | { readonly kind: "unsupported"; readonly message: string; readonly missing?: ReadonlyArray<string> | undefined }
   /** The host node is offline / unreachable, or the screen failed to start. */
   | {
-    readonly kind: "unreachable"
-    readonly message: string
-    readonly surface?: ScreenSurface | undefined
-    /** what the computer lacks (a Mac's permissions) */
-    readonly missing?: ReadonlyArray<string> | undefined
-  }
+      readonly kind: "unreachable"
+      readonly message: string
+      readonly surface?: ScreenSurface | undefined
+      /** what the computer lacks (a Mac's permissions) */
+      readonly missing?: ReadonlyArray<string> | undefined
+    }
   /** No screen yet: a desktop that is asleep, or no browser window (needs `computer.ensure`). */
   | { readonly kind: "absent"; readonly surface: ScreenSurface }
   /** `ready` or `starting`: connect the viewer socket. */
@@ -33,11 +33,20 @@ export type ScreenAvailability =
 export const availabilityOf = (status: ComputerStatus | undefined, error: string | undefined): ScreenAvailability => {
   if (!status) return error ? { kind: "unreachable", message: error } : { kind: "loading" }
   if (status.surface === "none" || status.state === "unsupported") {
-    return { kind: "unsupported", message: status.message ?? "This computer has no screen to show", ...(status.missing ? { missing: status.missing } : {}) }
+    return {
+      kind: "unsupported",
+      message: status.message ?? "This computer has no screen to show",
+      ...(status.missing ? { missing: status.missing } : {}),
+    }
   }
   const surface: ScreenSurface = status.surface
   if (status.state === "error") {
-    return { kind: "unreachable", message: status.message ?? "Can't reach the screen", surface, ...(status.missing ? { missing: status.missing } : {}) }
+    return {
+      kind: "unreachable",
+      message: status.message ?? "Can't reach the screen",
+      surface,
+      ...(status.missing ? { missing: status.missing } : {}),
+    }
   }
   // a Mac's screen is always there: watching it checks it
   if (status.state === "absent" && surface !== "screen") return { kind: "absent", surface }
@@ -53,7 +62,6 @@ export function useComputer(botId: BotId) {
 }
 
 /** Which tab ComputerView opens on (set by the details pane right before `useComputerView().open`). */
-export const computerInitialTabAtom: Atom.Writable<"screen" | "terminal"> = Atom.make<"screen" | "terminal">("screen").pipe(
-  Atom.keepAlive,
-  Atom.withLabel("openbot/web/computerInitialTab"),
-)
+export const computerInitialTabAtom: Atom.Writable<"screen" | "terminal"> = Atom.make<"screen" | "terminal">(
+  "screen",
+).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/computerInitialTab"))

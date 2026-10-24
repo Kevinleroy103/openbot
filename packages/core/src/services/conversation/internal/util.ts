@@ -20,8 +20,11 @@ import { formatBytes } from "../files.ts"
 
 /** The request a card answers, if any (its pending / answered state lives on the request). */
 export const cardRequestId = (card: Card): RequestId | undefined =>
-  card.type === "approval" || card.type === "form" || card.type === "secret-request" || card.type === "handoff" ||
-    card.type === "question"
+  card.type === "approval" ||
+  card.type === "form" ||
+  card.type === "secret-request" ||
+  card.type === "handoff" ||
+  card.type === "question"
     ? card.requestId
     : undefined
 
@@ -35,7 +38,8 @@ export const required = <A, R>(
   id: string,
 ): Effect.Effect<A, NotFound, R> =>
   Effect.flatMap(Effect.orDie(lookup), (found) =>
-    Option.isSome(found) ? Effect.succeed(found.value) : Effect.fail(new NotFound({ entity, id })))
+    Option.isSome(found) ? Effect.succeed(found.value) : Effect.fail(new NotFound({ entity, id })),
+  )
 
 /**
  * Removes keys whose value is `undefined` (shallow). Contract structs use `optionalKey`, which
@@ -180,7 +184,8 @@ export const parseMentions = (text: string, bots: ReadonlyArray<Pick<Bot, "id" |
 /** True for entries that are still being produced. */
 export const isStreamingEntry = (entry: TranscriptEntry): boolean =>
   ((entry.kind === "message" || entry.kind === "reasoning") && entry.streaming) ||
-  (entry.kind === "tool-call" && (entry.status === "pending" || entry.status === "running" || entry.status === "awaiting-approval"))
+  (entry.kind === "tool-call" &&
+    (entry.status === "pending" || entry.status === "running" || entry.status === "awaiting-approval"))
 
 /** Narrow a stored entry to the encodable union (drops decode-only `unknown` entries). */
 export const asKnown = (entry: TranscriptEntry): KnownTranscriptEntry | undefined =>
@@ -190,7 +195,8 @@ export const asKnown = (entry: TranscriptEntry): KnownTranscriptEntry | undefine
  * Housekeeping lines (a Bot compacting its context, a new session): they neither move the
  * conversation in the sidebar nor become its preview.
  */
-export const isHousekeeping = (entry: KnownTranscriptEntry): boolean => entry.kind === "event" && entry.event.type === "session-changed"
+export const isHousekeeping = (entry: KnownTranscriptEntry): boolean =>
+  entry.kind === "event" && entry.event.type === "session-changed"
 
 /** Short human text for an event line (previews, group catch-up lines). */
 export const describeEvent = (event: KnownConversationEvent): string => {

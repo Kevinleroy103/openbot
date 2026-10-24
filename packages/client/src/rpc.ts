@@ -27,7 +27,10 @@ export class OpenBotClient extends AtomRpc.Service<OpenBotClient>()("@openbot/cl
       retryPolicy: reconnectSchedule(registry, config.reconnect, owner),
     }).pipe(
       Layer.provide(
-        Socket.layerWebSocket(config.url, { openTimeout: config.openTimeout, ...(config.headers ? { headers: config.headers } : {}) }),
+        Socket.layerWebSocket(config.url, {
+          openTimeout: config.openTimeout,
+          ...(config.headers ? { headers: config.headers } : {}),
+        }),
       ),
       Layer.provide(config.headers ? layerWebSocketConstructorWithHeaders : Socket.layerWebSocketConstructorGlobal),
       Layer.provide(RpcSerialization.layerJson),
@@ -40,11 +43,16 @@ export class OpenBotClient extends AtomRpc.Service<OpenBotClient>()("@openbot/cl
  * `globalThis.WebSocket` with handshake headers: React Native takes them as a third argument
  * (`new WebSocket(url, protocols, { headers })`), Bun in its options object.
  */
-const layerWebSocketConstructorWithHeaders = Layer.succeed(Socket.WebSocketConstructor)((url, options?: WebSocketConstructorOptions) => {
+const layerWebSocketConstructorWithHeaders = Layer.succeed(Socket.WebSocketConstructor)((
+  url,
+  options?: WebSocketConstructorOptions,
+) => {
   const opts = typeof options === "object" && !Array.isArray(options) ? options : { protocols: options }
   const Ctor = globalThis.WebSocket as unknown as new (...args: Array<unknown>) => globalThis.WebSocket
   const reactNative = (globalThis as { navigator?: { product?: string } }).navigator?.product === "ReactNative"
-  return reactNative ? new Ctor(url, opts.protocols, { headers: opts.headers }) : new Ctor(url, { headers: opts.headers, protocols: opts.protocols })
+  return reactNative
+    ? new Ctor(url, opts.protocols, { headers: opts.headers })
+    : new Ctor(url, { headers: opts.headers, protocols: opts.protocols })
 })
 
 /** The flattened client type: `client("bots.create", payload)`. */

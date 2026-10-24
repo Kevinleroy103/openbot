@@ -30,7 +30,12 @@ describe.skipIf(!supportsProcessGroups)("process-group spawner", () => {
     expect(spawner.pid()).toBeUndefined()
     await spawner.waitExit() // nothing started: resolves at once
     const controller = new AbortController()
-    const child = spawner.spawn({ command: "sh", args: ["-c", CLI_SCRIPT], env: { PATH: process.env.PATH }, signal: controller.signal })
+    const child = spawner.spawn({
+      command: "sh",
+      args: ["-c", CLI_SCRIPT],
+      env: { PATH: process.env.PATH },
+      signal: controller.signal,
+    })
     const grandchild = await grandchildOf(child)
     expect(spawned).toEqual([child.pid!])
     expect(spawner.pid()).toBe(child.pid!)

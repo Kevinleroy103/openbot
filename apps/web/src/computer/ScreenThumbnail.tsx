@@ -32,11 +32,30 @@ function useLivePicture(botId: BotId, botName: string, quality: number) {
   const { status, availability, ensure } = useComputer(botId)
   const fullView = useComputerView()
   const streaming = availability.kind === "stream" && fullView.botId !== botId
-  const desktop = (availability.kind === "stream" || availability.kind === "absent" ? availability.surface : status.value?.surface) === "desktop"
+  const desktop =
+    (availability.kind === "stream" || availability.kind === "absent"
+      ? availability.surface
+      : status.value?.surface) === "desktop"
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const targetRef = useRef<HTMLDivElement>(null)
-  const screencast = useScreencast({ botId, enabled: streaming && !desktop, mode: "view", viewPath: status.value?.viewPath, canvasRef, onTrouble: status.refresh })
-  const desk = useDesktop({ botId, enabled: streaming && desktop, mode: "view", viewPath: status.value?.viewPath, targetRef, quality, passive: true, onTrouble: status.refresh })
+  const screencast = useScreencast({
+    botId,
+    enabled: streaming && !desktop,
+    mode: "view",
+    viewPath: status.value?.viewPath,
+    canvasRef,
+    onTrouble: status.refresh,
+  })
+  const desk = useDesktop({
+    botId,
+    enabled: streaming && desktop,
+    mode: "view",
+    viewPath: status.value?.viewPath,
+    targetRef,
+    quality,
+    passive: true,
+    onTrouble: status.refresh,
+  })
   // an asleep screen wakes when the bot needs it: look again now and then, so the picture comes back
   const asleep = availability.kind === "absent" || (desktop && desk.state.phase === "asleep")
   const latest = useRef({ phase: desk.state.phase, state: status.value?.state })
@@ -66,9 +85,26 @@ function useLivePicture(botId: BotId, botName: string, quality: number) {
   const wake = () => void ensure.run({ botId }).then((r) => (status.refresh(), r.ok && desk.retry()))
   const picture = (overlay: ReactNode, frameClassName?: string) =>
     desktop ? (
-      <DesktopStage targetRef={targetRef} aspect={desktopAspect(status.value)} live={live} interactive={false} passive overlay={overlay} label={`${botName}'s screen`} frameClassName={frameClassName} />
+      <DesktopStage
+        targetRef={targetRef}
+        aspect={desktopAspect(status.value)}
+        live={live}
+        interactive={false}
+        passive
+        overlay={overlay}
+        label={`${botName}'s screen`}
+        frameClassName={frameClassName}
+      />
     ) : (
-      <ScreenStage canvasRef={canvasRef} state={screencast.state} interactive={false} send={screencast.send} overlay={overlay} label={`${botName}'s screen`} frameClassName={frameClassName} />
+      <ScreenStage
+        canvasRef={canvasRef}
+        state={screencast.state}
+        interactive={false}
+        send={screencast.send}
+        overlay={overlay}
+        label={`${botName}'s screen`}
+        frameClassName={frameClassName}
+      />
     )
   return { availability, notice, live, wake, waking: ensure.pending, wakeError: ensure.error, picture }
 }
@@ -76,7 +112,13 @@ function useLivePicture(botId: BotId, botName: string, quality: number) {
 export function ScreenThumbnail({ botId, botName, nodeLabel, onOpen, className }: ScreenThumbnailProps): ReactNode {
   const { availability, notice, live, wake, waking, wakeError, picture } = useLivePicture(botId, botName, 5)
   const overlay = notice ? (
-    <ThumbNotice notice={notice} nodeLabel={availability.kind === "unsupported" ? nodeLabel : undefined} waking={waking} error={wakeError} onWake={wake} />
+    <ThumbNotice
+      notice={notice}
+      nodeLabel={availability.kind === "unsupported" ? nodeLabel : undefined}
+      waking={waking}
+      error={wakeError}
+      onWake={wake}
+    />
   ) : undefined
 
   return (
@@ -108,9 +150,21 @@ export function ScreenThumbnail({ botId, botName, nodeLabel, onOpen, className }
 }
 
 /** The bot's screen at the container's width (16:10), view-only; click opens the full view. */
-export function ScreenPeek({ botId, botName, onOpen, className }: { readonly botId: BotId; readonly botName: string; readonly onOpen: () => void; readonly className?: string }): ReactNode {
+export function ScreenPeek({
+  botId,
+  botName,
+  onOpen,
+  className,
+}: {
+  readonly botId: BotId
+  readonly botName: string
+  readonly onOpen: () => void
+  readonly className?: string
+}): ReactNode {
   const { notice, wake, waking, wakeError, picture } = useLivePicture(botId, botName, 5)
-  const overlay = notice ? <ThumbNotice notice={notice} compact waking={waking} error={wakeError} onWake={wake} /> : undefined
+  const overlay = notice ? (
+    <ThumbNotice notice={notice} compact waking={waking} error={wakeError} onWake={wake} />
+  ) : undefined
   return (
     <div
       role="button"
@@ -124,7 +178,10 @@ export function ScreenPeek({ botId, botName, onOpen, className }: { readonly bot
           onOpen()
         }
       }}
-      className={cn("relative aspect-[16/10] w-full cursor-pointer overflow-hidden rounded-xl bg-secondary hairline border-line-tertiary", className)}
+      className={cn(
+        "relative aspect-[16/10] w-full cursor-pointer overflow-hidden rounded-xl bg-secondary hairline border-line-tertiary",
+        className,
+      )}
     >
       <div className="absolute inset-0">{picture(overlay)}</div>
     </div>
@@ -163,9 +220,15 @@ function ThumbNotice({
   const sub = error ?? (worksOn ? "No screen to show" : notice.icon === "spinner" ? "Just a moment" : notice.body)
   const canWake = notice.action === "wake" || notice.action === "open-browser"
   return (
-    <div className="flex flex-col items-center gap-1 px-4 text-center" data-testid="screen-empty" data-notice={notice.icon}>
+    <div
+      className="flex flex-col items-center gap-1 px-4 text-center"
+      data-testid="screen-empty"
+      data-notice={notice.icon}
+    >
       {icon}
-      <div className={cn("mt-1.5 text-fg", compact ? "text-sm" : "text-base")}>{notice.busy ? <ShimmerText>{title}</ShimmerText> : title}</div>
+      <div className={cn("mt-1.5 text-fg", compact ? "text-sm" : "text-base")}>
+        {notice.busy ? <ShimmerText>{title}</ShimmerText> : title}
+      </div>
       {!compact && sub && <div className="line-clamp-2 text-sm text-fg-secondary">{sub}</div>}
       {canWake && (
         <PillButton

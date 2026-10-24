@@ -104,6 +104,7 @@ computer. You reach the brain over HTTPS from any of the apps.
   - **OpenCode:** install [OpenCode](https://opencode.ai) and connect a provider.
 
   Settings › Harnesses shows which ones are ready and what's missing.
+
 - **Optional:** Google Chrome or Chromium, so bots can use a browser.
 - **Optional, Linux only:** the desktop programs listed under [Bot desktops](#bot-desktops-linux).
 
@@ -156,7 +157,7 @@ The brain doesn't have to live on the computer you work on. To keep it on an alw
 server, an LXC container, a VPS) and deploy to it from your own:
 
 1. On the server: install Bun and the agents, and sign them in there (`claude auth login`, `codex login
-   --device-auth`, and `gh auth login` if your bots use GitHub). Install
+--device-auth`, and `gh auth login` if your bots use GitHub). Install
    [`scripts/openbot.service`](scripts/openbot.service) as a user service (its header has the
    steps). It starts OpenBot at boot and again after a crash.
 2. On your computer, point deploys at the server: `{ "host": "<ssh host>" }` in
@@ -200,9 +201,9 @@ screen over to you.
 
 Install the required programs, plus the optional ones for a complete desktop:
 
-| | Arch | Debian / Ubuntu |
-|---|---|---|
-| Required | `xorg-server-xvfb x11vnc xdotool xfwm4 imagemagick` | `xvfb x11vnc xdotool xfwm4 imagemagick` |
+|          | Arch                                                      | Debian / Ubuntu                                               |
+| -------- | --------------------------------------------------------- | ------------------------------------------------------------- |
+| Required | `xorg-server-xvfb x11vnc xdotool xfwm4 imagemagick`       | `xvfb x11vnc xdotool xfwm4 imagemagick`                       |
 | Optional | `plank dbus xfce4-terminal thunar mousepad xorg-xsetroot` | `plank dbus xfce4-terminal thunar mousepad x11-xserver-utils` |
 
 `openbox` works in place of `xfwm4`, and `xterm` in place of `xfce4-terminal`. Settings ›
@@ -341,20 +342,20 @@ bun run lint
 bun run test
 ```
 
-| Path | What it is |
-|---|---|
-| `apps/server` | The brain: orchestration, coding agents, storage, the MCP tool gateway and the web server |
-| `apps/web` | The web app (React) |
-| `apps/node` | The node daemon that connects another computer |
-| `apps/desktop` | The desktop app (Electron), built and served by the brain |
-| `apps/mobile` | The iPhone app (Expo) |
-| `packages/core` | Bots, conversations, tasks, routines, approvals, memory and skills |
-| `packages/contracts` | Shared schemas and the RPC API |
-| `packages/persistence` | SQLite storage and file stores |
-| `packages/gateway` | The tools bots get, served over MCP |
-| `packages/harness-*` | Claude, Codex and OpenCode adapters, plus a scripted fake for tests |
-| `packages/node-daemon`, `packages/node-protocol`, `packages/brain-nodes` | Computers: shell, files, browser, desktops, and how they talk to the brain |
-| `packages/client`, `packages/ui` | Web client state and UI components |
+| Path                                                                     | What it is                                                                                |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `apps/server`                                                            | The brain: orchestration, coding agents, storage, the MCP tool gateway and the web server |
+| `apps/web`                                                               | The web app (React)                                                                       |
+| `apps/node`                                                              | The node daemon that connects another computer                                            |
+| `apps/desktop`                                                           | The desktop app (Electron), built and served by the brain                                 |
+| `apps/mobile`                                                            | The iPhone app (Expo)                                                                     |
+| `packages/core`                                                          | Bots, conversations, tasks, routines, approvals, memory and skills                        |
+| `packages/contracts`                                                     | Shared schemas and the RPC API                                                            |
+| `packages/persistence`                                                   | SQLite storage and file stores                                                            |
+| `packages/gateway`                                                       | The tools bots get, served over MCP                                                       |
+| `packages/harness-*`                                                     | Claude, Codex and OpenCode adapters, plus a scripted fake for tests                       |
+| `packages/node-daemon`, `packages/node-protocol`, `packages/brain-nodes` | Computers: shell, files, browser, desktops, and how they talk to the brain                |
+| `packages/client`, `packages/ui`                                         | Web client state and UI components                                                        |
 
 The screenshots in this README come from the web app's dev mock (made-up bots and chats):
 `bun apps/web/test/shoot-readme.ts` takes them again after UI changes.

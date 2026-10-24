@@ -6,11 +6,12 @@ import { RepoError } from "@openbot/core"
 import { Effect, Schema } from "effect"
 
 /** Wraps any failure of `effect` into a `RepoError` tagged with the repository operation. */
-export const repoOp = (op: string) => <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, RepoError, R> =>
-  Effect.mapError(effect, (cause) =>
-    cause instanceof RepoError
-      ? cause
-      : new RepoError({ op, message: describeCause(cause), cause }))
+export const repoOp =
+  (op: string) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, RepoError, R> =>
+    Effect.mapError(effect, (cause) =>
+      cause instanceof RepoError ? cause : new RepoError({ op, message: describeCause(cause), cause }),
+    )
 
 export const describeCause = (cause: unknown): string => {
   if (cause instanceof Error) return cause.message

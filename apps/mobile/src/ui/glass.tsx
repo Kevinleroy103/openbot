@@ -24,19 +24,42 @@ export function Glass({
   const theme = useTheme()
   if (liquidGlass) {
     return (
-      <GlassView style={style} isInteractive={interactive} glassEffectStyle="regular" colorScheme={theme.dark ? "dark" : "light"}>
+      <GlassView
+        style={style}
+        isInteractive={interactive}
+        glassEffectStyle="regular"
+        colorScheme={theme.dark ? "dark" : "light"}
+      >
         {children}
       </GlassView>
     )
   }
   if (Platform.OS === "ios") {
     return (
-      <BlurView intensity={60} tint={theme.dark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"} style={[style, styles.clip]}>
+      <BlurView
+        intensity={60}
+        tint={theme.dark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
+        style={[style, styles.clip]}
+      >
         {children}
       </BlurView>
     )
   }
-  return <View style={[style, styles.clip, { backgroundColor: theme.glassFallback, borderColor: theme.lineSecondary, borderWidth: StyleSheet.hairlineWidth }]}>{children}</View>
+  return (
+    <View
+      style={[
+        style,
+        styles.clip,
+        {
+          backgroundColor: theme.glassFallback,
+          borderColor: theme.lineSecondary,
+          borderWidth: StyleSheet.hairlineWidth,
+        },
+      ]}
+    >
+      {children}
+    </View>
+  )
 }
 
 /** A round glass button with an SF Symbol (back, more, search, new, attach). */
@@ -67,7 +90,10 @@ export function GlassCircle({
       }}
       style={style}
     >
-      <Glass interactive style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}>
+      <Glass
+        interactive
+        style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
+      >
         <Icon name={icon} size={iconSize} color={theme.icon} />
       </Glass>
     </Pressable>

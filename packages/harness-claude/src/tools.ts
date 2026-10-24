@@ -68,7 +68,10 @@ const jsonSummary = (input: Record<string, unknown>): string => {
 }
 
 const humanize = (name: string): string => {
-  const spaced = name.replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim()
+  const spaced = name
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim()
   return spaced.length > 0 ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : name
 }
 
@@ -81,32 +84,99 @@ const classifyOpenBotTool = (tool: string, input: Record<string, unknown>): Tool
   switch (tool) {
     case "shell": {
       const command = str(input.command) ?? ""
-      return { ...base, kind: "shell", surface: "shell", title: "Run command", inputSummary: oneLine(command), activity: "Running a command", command }
+      return {
+        ...base,
+        kind: "shell",
+        surface: "shell",
+        title: "Run command",
+        inputSummary: oneLine(command),
+        activity: "Running a command",
+        command,
+      }
     }
     case "read_file":
-      return { ...base, kind: "file-read", surface: "file-read", title: path ? `Read ${basename(path)}` : "Read file", inputSummary: path ?? "", activity: "Reading files", ...(path ? { paths: [path] } : {}) }
+      return {
+        ...base,
+        kind: "file-read",
+        surface: "file-read",
+        title: path ? `Read ${basename(path)}` : "Read file",
+        inputSummary: path ?? "",
+        activity: "Reading files",
+        ...(path ? { paths: [path] } : {}),
+      }
     case "write_file":
-      return { ...base, kind: "file-write", surface: "file-edit", title: path ? `Write ${basename(path)}` : "Write file", inputSummary: path ?? "", activity: "Editing files", ...(path ? { paths: [path] } : {}) }
+      return {
+        ...base,
+        kind: "file-write",
+        surface: "file-edit",
+        title: path ? `Write ${basename(path)}` : "Write file",
+        inputSummary: path ?? "",
+        activity: "Editing files",
+        ...(path ? { paths: [path] } : {}),
+      }
     case "edit_file":
-      return { ...base, kind: "file-edit", surface: "file-edit", title: path ? `Edit ${basename(path)}` : "Edit file", inputSummary: path ?? "", activity: "Editing files", ...(path ? { paths: [path] } : {}) }
+      return {
+        ...base,
+        kind: "file-edit",
+        surface: "file-edit",
+        title: path ? `Edit ${basename(path)}` : "Edit file",
+        inputSummary: path ?? "",
+        activity: "Editing files",
+        ...(path ? { paths: [path] } : {}),
+      }
     case "list_dir":
-      return { ...base, kind: "file-read", surface: "file-read", title: "List directory", inputSummary: path ?? "", activity: "Reading files" }
+      return {
+        ...base,
+        kind: "file-read",
+        surface: "file-read",
+        title: "List directory",
+        inputSummary: path ?? "",
+        activity: "Reading files",
+      }
     case "glob":
     case "grep": {
       const pattern = str(input.pattern) ?? ""
-      return { ...base, kind: "search", surface: "file-read", title: tool === "glob" ? "Find files" : "Search files", inputSummary: oneLine(pattern), activity: "Searching" }
+      return {
+        ...base,
+        kind: "search",
+        surface: "file-read",
+        title: tool === "glob" ? "Find files" : "Search files",
+        inputSummary: oneLine(pattern),
+        activity: "Searching",
+      }
     }
     case "browser": {
       const action = str(input.action) ?? ""
       const url = str(input.url)
-      return { ...base, kind: "browser", surface: "browser", title: action ? `Browser: ${action}` : "Use the browser", inputSummary: oneLine(url ?? action), activity: "Using the browser" }
+      return {
+        ...base,
+        kind: "browser",
+        surface: "browser",
+        title: action ? `Browser: ${action}` : "Use the browser",
+        inputSummary: oneLine(url ?? action),
+        activity: "Using the browser",
+      }
     }
     case "computer": {
       const action = str(input.action) ?? ""
-      return { ...base, kind: "computer", surface: "computer", title: action ? `Computer: ${action}` : "Use the computer", inputSummary: oneLine(action), activity: "Using the computer" }
+      return {
+        ...base,
+        kind: "computer",
+        surface: "computer",
+        title: action ? `Computer: ${action}` : "Use the computer",
+        inputSummary: oneLine(action),
+        activity: "Using the computer",
+      }
     }
     default:
-      return { ...base, kind: "mcp", surface: "mcp", title: humanize(tool), inputSummary: jsonSummary(input), activity: openBotToolActivity(tool) }
+      return {
+        ...base,
+        kind: "mcp",
+        surface: "mcp",
+        title: humanize(tool),
+        inputSummary: jsonSummary(input),
+        activity: openBotToolActivity(tool),
+      }
   }
 }
 
@@ -116,7 +186,14 @@ export const classifyTool = (toolName: string, rawInput: unknown): ToolClassific
   const mcp = parseMcpToolName(toolName)
   if (mcp) {
     if (mcp.server === OPENBOT_MCP_SERVER) return classifyOpenBotTool(mcp.tool, input)
-    return { kind: "mcp", surface: "mcp", title: humanize(mcp.tool), inputSummary: jsonSummary(input), activity: CONNECTED_APP_ACTIVITY, mcp }
+    return {
+      kind: "mcp",
+      surface: "mcp",
+      title: humanize(mcp.tool),
+      inputSummary: jsonSummary(input),
+      activity: CONNECTED_APP_ACTIVITY,
+      mcp,
+    }
   }
   const filePath = str(input.file_path) ?? str(input.notebook_path) ?? str(input.path)
   switch (toolName) {
@@ -135,40 +212,97 @@ export const classifyTool = (toolName: string, rawInput: unknown): ToolClassific
       }
     }
     case "Read":
-      return { kind: "file-read", surface: "file-read", title: filePath ? `Read ${basename(filePath)}` : "Read file", inputSummary: filePath ?? "", activity: "Reading files", ...(filePath ? { paths: [filePath] } : {}) }
+      return {
+        kind: "file-read",
+        surface: "file-read",
+        title: filePath ? `Read ${basename(filePath)}` : "Read file",
+        inputSummary: filePath ?? "",
+        activity: "Reading files",
+        ...(filePath ? { paths: [filePath] } : {}),
+      }
     case "Write":
-      return { kind: "file-write", surface: "file-edit", title: filePath ? `Write ${basename(filePath)}` : "Write file", inputSummary: filePath ?? "", activity: "Editing files", ...(filePath ? { paths: [filePath] } : {}) }
+      return {
+        kind: "file-write",
+        surface: "file-edit",
+        title: filePath ? `Write ${basename(filePath)}` : "Write file",
+        inputSummary: filePath ?? "",
+        activity: "Editing files",
+        ...(filePath ? { paths: [filePath] } : {}),
+      }
     case "Edit":
     case "MultiEdit":
     case "NotebookEdit":
-      return { kind: "file-edit", surface: "file-edit", title: filePath ? `Edit ${basename(filePath)}` : "Edit file", inputSummary: filePath ?? "", activity: "Editing files", ...(filePath ? { paths: [filePath] } : {}) }
+      return {
+        kind: "file-edit",
+        surface: "file-edit",
+        title: filePath ? `Edit ${basename(filePath)}` : "Edit file",
+        inputSummary: filePath ?? "",
+        activity: "Editing files",
+        ...(filePath ? { paths: [filePath] } : {}),
+      }
     case "Glob":
     case "Grep":
     case "LS": {
       const pattern = str(input.pattern) ?? filePath ?? ""
-      return { kind: "search", surface: "file-read", title: toolName === "Grep" ? "Search files" : "Find files", inputSummary: oneLine(pattern), activity: "Searching" }
+      return {
+        kind: "search",
+        surface: "file-read",
+        title: toolName === "Grep" ? "Search files" : "Find files",
+        inputSummary: oneLine(pattern),
+        activity: "Searching",
+      }
     }
     case "WebFetch": {
       const url = str(input.url) ?? ""
-      return { kind: "web", surface: "network", title: "Fetch web page", inputSummary: oneLine(url), activity: "Reading the web" }
+      return {
+        kind: "web",
+        surface: "network",
+        title: "Fetch web page",
+        inputSummary: oneLine(url),
+        activity: "Reading the web",
+      }
     }
     case "WebSearch": {
       const query = str(input.query) ?? ""
-      return { kind: "web", surface: "network", title: "Search the web", inputSummary: oneLine(query), activity: "Searching the web" }
+      return {
+        kind: "web",
+        surface: "network",
+        title: "Search the web",
+        inputSummary: oneLine(query),
+        activity: "Searching the web",
+      }
     }
     case "Agent":
     case "Task": {
       const description = str(input.description) ?? "Subagent"
-      return { kind: "subagent", surface: "other", title: description, inputSummary: oneLine(str(input.prompt) ?? description), activity: THINKING_ACTIVITY }
+      return {
+        kind: "subagent",
+        surface: "other",
+        title: description,
+        inputSummary: oneLine(str(input.prompt) ?? description),
+        activity: THINKING_ACTIVITY,
+      }
     }
     case "AskUserQuestion": {
       const questions = Array.isArray(input.questions) ? input.questions : []
       const first = str(asRecord(questions[0]).question) ?? ""
-      return { kind: "question", surface: "other", title: "Ask a question", inputSummary: oneLine(first), activity: "Waiting for your answer" }
+      return {
+        kind: "question",
+        surface: "other",
+        title: "Ask a question",
+        inputSummary: oneLine(first),
+        activity: "Waiting for your answer",
+      }
     }
     case "TodoWrite":
       return { kind: "other", surface: "other", title: "Update plan", inputSummary: "", activity: "Planning" }
     default:
-      return { kind: "other", surface: "other", title: humanize(toolName), inputSummary: jsonSummary(input), activity: THINKING_ACTIVITY }
+      return {
+        kind: "other",
+        surface: "other",
+        title: humanize(toolName),
+        inputSummary: jsonSummary(input),
+        activity: THINKING_ACTIVITY,
+      }
   }
 }

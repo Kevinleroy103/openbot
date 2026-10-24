@@ -80,7 +80,11 @@ describe("geometry", () => {
     expect(toApi(g, 960, 600)).toEqual({ x: 640, y: 400 })
     expect(toApi(g, 1919, 1199)).toEqual({ x: 1279, y: 799 })
     // round trip within one API pixel
-    for (const [x, y] of [[1, 1], [333, 777], [1279, 799]] as const) {
+    for (const [x, y] of [
+      [1, 1],
+      [333, 777],
+      [1279, 799],
+    ] as const) {
       const s = toScreen(g, x, y)
       const back = toApi(g, s.x, s.y)
       expect(Math.abs(back.x - x)).toBeLessThanOrEqual(1)
@@ -105,7 +109,14 @@ describe("geometry", () => {
 
   test("zoom: an API region becomes a full-resolution crop fitted into the screenshot box", () => {
     expect(zoomRect(g, [0, 0, 100, 50])).toEqual({ x: 0, y: 0, width: 150, height: 75, outWidth: 1280, outHeight: 640 })
-    expect(zoomRect(g, [640, 400, 0, 0])).toEqual({ x: 0, y: 0, width: 960, height: 600, outWidth: 1280, outHeight: 800 })
+    expect(zoomRect(g, [640, 400, 0, 0])).toEqual({
+      x: 0,
+      y: 0,
+      width: 960,
+      height: 600,
+      outWidth: 1280,
+      outHeight: 800,
+    })
     // tall region: fits the height
     const tall = zoomRect(g, [100, 0, 200, 800])
     expect(typeof tall === "object" && tall.outHeight).toBe(800)
@@ -165,8 +176,12 @@ describe("action plans (xdotool command lines)", () => {
     })
     expect(plan({ action: "right_click", coordinate: [10, 10] }).steps[1]).toEqual(xdo("click", 3))
     expect(plan({ action: "middle_click" }).steps).toEqual([xdo("click", 2)])
-    expect(plan({ action: "double_click", coordinate: [1, 1] }).steps[1]).toEqual(xdo("click", "--repeat", 2, "--delay", 80, 1))
-    expect(plan({ action: "triple_click", coordinate: [1, 1] }).steps[1]).toEqual(xdo("click", "--repeat", 3, "--delay", 80, 1))
+    expect(plan({ action: "double_click", coordinate: [1, 1] }).steps[1]).toEqual(
+      xdo("click", "--repeat", 2, "--delay", 80, 1),
+    )
+    expect(plan({ action: "triple_click", coordinate: [1, 1] }).steps[1]).toEqual(
+      xdo("click", "--repeat", 3, "--delay", 80, 1),
+    )
     const shifted = plan({ action: "left_click", coordinate: [1, 1], text: "shift+ctrl" })
     expect(shifted.hold).toEqual(["shift", "ctrl"])
     expect(shifted.text).toBe("Clicked at (1, 1) holding shift+ctrl.")
@@ -187,13 +202,19 @@ describe("action plans (xdotool command lines)", () => {
     ])
     expect(planAction(g, { action: "left_click_drag", coordinate: [1, 1] })).toContain("start_coordinate")
     expect(plan({ action: "left_mouse_down" }).steps).toEqual([xdo("mousedown", 1)])
-    expect(plan({ action: "left_mouse_up", coordinate: [2, 2] }).steps).toEqual([xdo("mousemove", "--sync", 3, 3), xdo("mouseup", 1)])
-    expect(plan({ action: "scroll", coordinate: [640, 400], scroll_direction: "down", scroll_amount: 5 }).steps).toEqual([
-      xdo("mousemove", "--sync", 960, 600),
-      xdo("click", "--repeat", 5, "--delay", 30, 5),
+    expect(plan({ action: "left_mouse_up", coordinate: [2, 2] }).steps).toEqual([
+      xdo("mousemove", "--sync", 3, 3),
+      xdo("mouseup", 1),
     ])
-    expect(plan({ action: "scroll", scroll_direction: "up" }).steps).toEqual([xdo("click", "--repeat", 3, "--delay", 30, 4)])
-    expect(plan({ action: "scroll", scroll_direction: "left", scroll_amount: 1 }).steps[0]).toEqual(xdo("click", "--repeat", 1, "--delay", 30, 6))
+    expect(
+      plan({ action: "scroll", coordinate: [640, 400], scroll_direction: "down", scroll_amount: 5 }).steps,
+    ).toEqual([xdo("mousemove", "--sync", 960, 600), xdo("click", "--repeat", 5, "--delay", 30, 5)])
+    expect(plan({ action: "scroll", scroll_direction: "up" }).steps).toEqual([
+      xdo("click", "--repeat", 3, "--delay", 30, 4),
+    ])
+    expect(plan({ action: "scroll", scroll_direction: "left", scroll_amount: 1 }).steps[0]).toEqual(
+      xdo("click", "--repeat", 1, "--delay", 30, 6),
+    )
     expect(plan({ action: "scroll", scroll_direction: "right", text: "shift" }).hold).toEqual(["shift"])
     expect(planAction(g, { action: "scroll" })).toContain("scroll_direction")
     expect(planAction(g, { action: "scroll", scroll_direction: "down", scroll_amount: 0 })).toContain("between 1 and")
@@ -212,7 +233,10 @@ describe("action plans (xdotool command lines)", () => {
     expect(plan({ action: "key", text: "ctrl+l" }).steps).toEqual([xdo("key", "--delay", 50, "--", "ctrl+l")])
     expect(plan({ action: "key", text: "Enter" }).text).toBe("Pressed Return.")
     expect(planAction(g, { action: "key" })).toContain("key or combination")
-    expect(plan({ action: "hold_key", text: "shift", duration: 2 })).toMatchObject({ hold: ["shift"], steps: [{ _tag: "sleep", ms: 2000 }] })
+    expect(plan({ action: "hold_key", text: "shift", duration: 2 })).toMatchObject({
+      hold: ["shift"],
+      steps: [{ _tag: "sleep", ms: 2000 }],
+    })
     expect(planAction(g, { action: "hold_key", text: "shift", duration: 600 })).toContain("at most")
     expect(plan({ action: "wait", duration: 0.5 })).toMatchObject({ steps: [{ _tag: "sleep", ms: 500 }], image: "now" })
     expect(plan({ action: "cursor_position" })).toMatchObject({ cursor: true, image: "none" })
@@ -232,12 +256,33 @@ describe("action plans (xdotool command lines)", () => {
   test("mouse location and ImageMagick import arguments", () => {
     expect(parseMouseLocation("X=960\nY=600\nSCREEN=0\nWINDOW=935\n")).toEqual({ x: 960, y: 600 })
     expect(parseMouseLocation("nope")).toBeUndefined()
-    expect(importArgs({ display: ":101", width: 1280, height: 800, exact: true, format: "jpeg", quality: 80 })).toEqual([
-      "-silent", "-display", ":101", "-window", "root", "-resize", "1280x800!", "-strip", "-quality", "80", "jpeg:-",
-    ])
+    expect(importArgs({ display: ":101", width: 1280, height: 800, exact: true, format: "jpeg", quality: 80 })).toEqual(
+      ["-silent", "-display", ":101", "-window", "root", "-resize", "1280x800!", "-strip", "-quality", "80", "jpeg:-"],
+    )
     expect(
-      importArgs({ display: ":101", width: 1280, height: 640, exact: false, crop: { x: 3, y: 4, width: 150, height: 75 }, format: "png", quality: 80 }),
-    ).toEqual(["-silent", "-display", ":101", "-window", "root", "-crop", "150x75+3+4", "+repage", "-resize", "1280x640", "-strip", "png:-"])
+      importArgs({
+        display: ":101",
+        width: 1280,
+        height: 640,
+        exact: false,
+        crop: { x: 3, y: 4, width: 150, height: 75 },
+        format: "png",
+        quality: 80,
+      }),
+    ).toEqual([
+      "-silent",
+      "-display",
+      ":101",
+      "-window",
+      "root",
+      "-crop",
+      "150x75+3+4",
+      "+repage",
+      "-resize",
+      "1280x640",
+      "-strip",
+      "png:-",
+    ])
   })
 })
 
@@ -261,7 +306,13 @@ describe("programs", () => {
     expect(d.programs.terminal).toEqual({ kind: "xfce4-terminal", path: "/usr/bin/xfce4-terminal" })
   })
   test("missing programs are named; ImageMagick 7 without `import` works through `magick import`", () => {
-    expect(detectDesktopPrograms(() => undefined).missing).toEqual(["Xvfb", "x11vnc", "xdotool", "xfwm4 or openbox", "ImageMagick (import)"])
+    expect(detectDesktopPrograms(() => undefined).missing).toEqual([
+      "Xvfb",
+      "x11vnc",
+      "xdotool",
+      "xfwm4 or openbox",
+      "ImageMagick (import)",
+    ])
     const d = detectDesktopPrograms((n) => ({ Xvfb: "/x/Xvfb", openbox: "/x/openbox", magick: "/x/magick" })[n])
     expect(d.missing).toEqual(["x11vnc", "xdotool"])
     expect(d.programs.screenshot).toEqual(["/x/magick", "import"])
@@ -269,7 +320,10 @@ describe("programs", () => {
   })
   test("rootless prefixes add their lib and share dirs", () => {
     const env = desktopPrefixEnv(["/opt/xroot/usr/bin", "/usr/bin"], (p) => p.startsWith("/opt/xroot/usr/"))
-    expect(env).toEqual({ LD_LIBRARY_PATH: "/opt/xroot/usr/lib", XDG_DATA_DIRS: "/opt/xroot/usr/share:/usr/local/share:/usr/share" })
+    expect(env).toEqual({
+      LD_LIBRARY_PATH: "/opt/xroot/usr/lib",
+      XDG_DATA_DIRS: "/opt/xroot/usr/share:/usr/local/share:/usr/share",
+    })
   })
 })
 
@@ -347,7 +401,22 @@ describe("display allocation and session files", () => {
 
   test("command lines: Xvfb without TCP and with -noreset, loopback x11vnc, view-only flag", () => {
     expect(xvfbArgs({ xvfb: "Xvfb", display: 100, width: 1920, height: 1200, xauthority: "/r/Xa" })).toEqual([
-      "Xvfb", ":100", "-screen", "0", "1920x1200x24", "-nolisten", "tcp", "-auth", "/r/Xa", "-noreset", "-dpi", "96", "+extension", "XTEST", "+extension", "RANDR",
+      "Xvfb",
+      ":100",
+      "-screen",
+      "0",
+      "1920x1200x24",
+      "-nolisten",
+      "tcp",
+      "-auth",
+      "/r/Xa",
+      "-noreset",
+      "-dpi",
+      "96",
+      "+extension",
+      "XTEST",
+      "+extension",
+      "RANDR",
     ])
     const vnc = x11vncArgs({ x11vnc: "x11vnc", display: 100, xauthority: "/r/Xa", port: 5999, viewOnly: true })
     expect(vnc).toContain("-localhost")
@@ -355,7 +424,9 @@ describe("display allocation and session files", () => {
     // watchers see the bot's pointer drawn into the picture
     expect(vnc).toEqual(expect.arrayContaining(["-nocursorshape", "-nocursorpos"]))
     expect(vnc.slice(vnc.indexOf("-rfbport"), vnc.indexOf("-rfbport") + 2)).toEqual(["-rfbport", "5999"])
-    expect(x11vncArgs({ x11vnc: "x11vnc", display: 100, xauthority: "/r/Xa", port: 5998, viewOnly: false })).not.toContain("-viewonly")
+    expect(
+      x11vncArgs({ x11vnc: "x11vnc", display: 100, xauthority: "/r/Xa", port: 5998, viewOnly: false }),
+    ).not.toContain("-viewonly")
   })
 
   test("openbox rc.xml: one desktop, maximized windows, our menu", () => {
@@ -374,7 +445,14 @@ describe("display allocation and session files", () => {
     const layout = sessionLayout({ dataDir: "/data", botId: "bot_1", display: 101, tmpdir: "/tmp", uid: 1000 })
     const { files } = desktopFiles({
       layout,
-      apps: [{ id: "terminal", name: "Terminal", icon: "utilities-terminal", argv: ["xfce4-terminal", "--working-directory=/w s"] }],
+      apps: [
+        {
+          id: "terminal",
+          name: "Terminal",
+          icon: "utilities-terminal",
+          argv: ["xfce4-terminal", "--working-directory=/w s"],
+        },
+      ],
     })
     const byName = new Map(files.map((f) => [path.basename(f.path), f.content]))
     expect(byName.get("openbot-terminal.desktop")).toContain(`Exec=xfce4-terminal "--working-directory=/w s"`)
@@ -571,7 +649,11 @@ const nodeConfig = (extra?: Partial<NodeConfigInput>) =>
 const fastTimeouts = { display: 500, vnc: 500, windowManager: 20, bus: 200, exec: 1000 }
 
 const withManager = <A, E>(
-  f: (dm: Effect.Success<ReturnType<typeof makeDesktopManager>>, os: FakeOs, leases: ReturnType<typeof makeLeaseBook>) => Effect.Effect<A, E, Scope.Scope>,
+  f: (
+    dm: Effect.Success<ReturnType<typeof makeDesktopManager>>,
+    os: FakeOs,
+    leases: ReturnType<typeof makeLeaseBook>,
+  ) => Effect.Effect<A, E, Scope.Scope>,
   options?: { readonly os?: FakeOs; readonly detected?: DetectedPrograms; readonly config?: Partial<NodeConfigInput> },
 ) =>
   run(
@@ -590,7 +672,9 @@ const withManager = <A, E>(
 
 /** xdotool runs of actions (not the start-up probes: display geometry, waiting for the dock). */
 const xdoCalls = (os: FakeOs) =>
-  os.execs.filter((a) => path.basename(a[0]!) === "xdotool" && a[1] !== "getdisplaygeometry" && a[1] !== "search").map((a) => a.slice(1).join(" "))
+  os.execs
+    .filter((a) => path.basename(a[0]!) === "xdotool" && a[1] !== "getdisplaygeometry" && a[1] !== "search")
+    .map((a) => a.slice(1).join(" "))
 
 describe("DesktopManager (fake OS)", () => {
   test("ensure starts Xvfb, a session bus, xfwm4, plank and two loopback VNC servers; concurrent calls share it", () =>
@@ -605,7 +689,12 @@ describe("DesktopManager (fake OS)", () => {
         const names = os.spawned.map((c) => path.basename(c.argv[0]!))
         expect(names).toEqual(["Xvfb", "dbus-daemon", "xfwm4", "plank", "x11vnc", "x11vnc"])
         // the desktop is handed out once the dock is on screen
-        expect(os.execs.some((a) => path.basename(a[0]!) === "xdotool" && a.slice(1).join(" ") === "search --onlyvisible --classname plank")).toBe(true)
+        expect(
+          os.execs.some(
+            (a) =>
+              path.basename(a[0]!) === "xdotool" && a.slice(1).join(" ") === "search --onlyvisible --classname plank",
+          ),
+        ).toBe(true)
         const xvfb = os.spawned[0]!
         expect(xvfb.argv.slice(0, 5)).toEqual(["/usr/bin/Xvfb", ":100", "-screen", "0", "1920x1200x24"])
         // every child: the bot's display, no Wayland, the marker
@@ -629,32 +718,39 @@ describe("DesktopManager (fake OS)", () => {
     ))
 
   test("display allocation: a stale lock is reclaimed, a live one skipped, a lost race moves on", () =>
-    withManager(
-      (dm, os) =>
-        Effect.gen(function* () {
-          os.files.set(displayLockPath(100), "      123\n") // live (see below)
-          os.alive.add(123)
-          os.files.set(displayLockPath(101), "      124\n") // dead
-          os.files.set(displaySocketPath(101), "")
-          // the first Xvfb on :101 loses a race to another server
-          let first = true
-          os.onSpawn.set("Xvfb", (c) => {
-            const n = Number(c.argv[1]!.slice(1))
-            if (first) {
-              first = false
-              os.files.set(path.join(t.path, "state", "desktops", "bot_1", "logs", "xvfb.log"), "Fatal server error:\nServer is already active for display 101\n")
-              return c.exit(1)
-            }
-            os.files.set(displaySocketPath(n), "")
-            os.files.set(displayLockPath(n), `      ${c.handle.pid}\n`)
-          })
-          const origRead = os.system.readText
-          ;(os.system as { readText: DesktopSystem["readText"] }).readText = (p) =>
-            p.endsWith("xvfb.log") ? os.files.get(path.join(t.path, "state", "desktops", "bot_1", "logs", "xvfb.log")) as string : origRead(p)
-          const d = yield* dm.ensure("bot_1")
-          expect(d.display).toBe(":102")
-          expect(os.spawned.filter((c) => path.basename(c.argv[0]!) === "Xvfb").map((c) => c.argv[1])).toEqual([":101", ":102"])
-        }),
+    withManager((dm, os) =>
+      Effect.gen(function* () {
+        os.files.set(displayLockPath(100), "      123\n") // live (see below)
+        os.alive.add(123)
+        os.files.set(displayLockPath(101), "      124\n") // dead
+        os.files.set(displaySocketPath(101), "")
+        // the first Xvfb on :101 loses a race to another server
+        let first = true
+        os.onSpawn.set("Xvfb", (c) => {
+          const n = Number(c.argv[1]!.slice(1))
+          if (first) {
+            first = false
+            os.files.set(
+              path.join(t.path, "state", "desktops", "bot_1", "logs", "xvfb.log"),
+              "Fatal server error:\nServer is already active for display 101\n",
+            )
+            return c.exit(1)
+          }
+          os.files.set(displaySocketPath(n), "")
+          os.files.set(displayLockPath(n), `      ${c.handle.pid}\n`)
+        })
+        const origRead = os.system.readText
+        ;(os.system as { readText: DesktopSystem["readText"] }).readText = (p) =>
+          p.endsWith("xvfb.log")
+            ? (os.files.get(path.join(t.path, "state", "desktops", "bot_1", "logs", "xvfb.log")) as string)
+            : origRead(p)
+        const d = yield* dm.ensure("bot_1")
+        expect(d.display).toBe(":102")
+        expect(os.spawned.filter((c) => path.basename(c.argv[0]!) === "Xvfb").map((c) => c.argv[1])).toEqual([
+          ":101",
+          ":102",
+        ])
+      }),
     ))
 
   test("missing programs: not offered, ensure and act fail with the list", () =>
@@ -706,21 +802,30 @@ describe("DesktopManager (fake OS)", () => {
       Effect.gen(function* () {
         const r = yield* dm.act("bot_1", { action: "double_click", coordinate: [640, 400] })
         expect(r.text).toBe("Double-clicked at (640, 400).")
-        expect(r.image).toEqual({ mimeType: "image/png", data: Buffer.from(pngHeader(1280, 800)).toString("base64"), width: 1280, height: 800 })
+        expect(r.image).toEqual({
+          mimeType: "image/png",
+          data: Buffer.from(pngHeader(1280, 800)).toString("base64"),
+          width: 1280,
+          height: 800,
+        })
         expect(xdoCalls(os)).toEqual(["mousemove --sync 960 600", "click --repeat 2 --delay 80 1"])
         const shot = os.execs.find((a) => path.basename(a[0]!) === "import")!
         expect(shot).toContain("1280x800!")
         expect(shot).toContain(":100")
 
         os.execs.length = 0
-        os.onExec.set("xdotool", (argv) => (argv[1] === "click" ? { code: 1, stdout: new Uint8Array(), stderr: "boom", timedOut: false } : undefined))
+        os.onExec.set("xdotool", (argv) =>
+          argv[1] === "click" ? { code: 1, stdout: new Uint8Array(), stderr: "boom", timedOut: false } : undefined,
+        )
         const failed = yield* Effect.flip(dm.act("bot_1", { action: "left_click", text: "shift" }))
         expect(failed._tag).toBe("DesktopUnavailable")
         expect(xdoCalls(os)).toEqual(["keydown shift", "click 1", "keyup shift"])
         os.onExec.delete("xdotool")
 
         os.execs.length = 0
-        os.onExec.set("xdotool", (argv) => (argv[1] === "getmouselocation" ? ok("X=960\nY=600\nSCREEN=0\nWINDOW=1\n") : undefined))
+        os.onExec.set("xdotool", (argv) =>
+          argv[1] === "getmouselocation" ? ok("X=960\nY=600\nSCREEN=0\nWINDOW=1\n") : undefined,
+        )
         const pos = yield* dm.act("bot_1", { action: "cursor_position" })
         expect(pos).toEqual({ text: "X=640, Y=400" })
 
@@ -783,7 +888,9 @@ describe("DesktopManager (fake OS)", () => {
     withManager((dm) =>
       Effect.gen(function* () {
         const started: Array<string> = []
-        dm.onStart((info) => Effect.sync(() => void started.push(`${info.botId}@${info.display} ${info.width}x${info.height}`)))
+        dm.onStart((info) =>
+          Effect.sync(() => void started.push(`${info.botId}@${info.display} ${info.width}x${info.height}`)),
+        )
         yield* Effect.all([dm.ensure("bot_1"), dm.ensure("bot_1")], { concurrency: "unbounded" })
         yield* dm.ensure("bot_1")
         expect(started).toEqual(["bot_1@:100 1920x1200"])
@@ -818,7 +925,11 @@ describe("DesktopManager (fake OS)", () => {
       Effect.gen(function* () {
         const os = makeFakeOs()
         const scope = yield* Scope.make()
-        const dm = yield* makeDesktopManager(nodeConfig(), { system: os.system, detected: allPrograms, timeouts: fastTimeouts }).pipe(Scope.provide(scope))
+        const dm = yield* makeDesktopManager(nodeConfig(), {
+          system: os.system,
+          detected: allPrograms,
+          timeouts: fastTimeouts,
+        }).pipe(Scope.provide(scope))
         yield* dm.ensure("bot_1")
         yield* dm.ensure("bot_2")
         yield* Scope.close(scope, Exit.void)
@@ -847,7 +958,9 @@ const handlerNode = (os: FakeOs, input?: Partial<NodeConfigInput>, detected: Det
       DesktopManager,
       Effect.gen(function* () {
         const leases = yield* LeaseBook
-        return DesktopManager.of(yield* makeDesktopManager(yield* NodeConfig, { system: os.system, detected, leases, timeouts: fastTimeouts }))
+        return DesktopManager.of(
+          yield* makeDesktopManager(yield* NodeConfig, { system: os.system, detected, leases, timeouts: fastTimeouts }),
+        )
       }),
     )
     const layer = NodeHandlersFromServices.pipe(
@@ -887,7 +1000,8 @@ const collect = (socket: Socket.Socket) =>
     return end
   })
 
-const text = (frames: ReadonlyArray<string | Uint8Array>) => frames.map((f) => (typeof f === "string" ? f : new TextDecoder().decode(f))).join("")
+const text = (frames: ReadonlyArray<string | Uint8Array>) =>
+  frames.map((f) => (typeof f === "string" ? f : new TextDecoder().decode(f))).join("")
 
 const waitFor = (pred: () => boolean, ms = 3000) =>
   Effect.gen(function* () {
@@ -910,10 +1024,20 @@ describe("handlers (fake OS)", () => {
   test("hello: no desktop@1 and the missing programs when not offered", () =>
     run(
       Effect.gen(function* () {
-        const { info, client } = yield* handlerNode(makeFakeOs(), undefined, detectDesktopPrograms(() => undefined))
+        const { info, client } = yield* handlerNode(
+          makeFakeOs(),
+          undefined,
+          detectDesktopPrograms(() => undefined),
+        )
         expect(info.capabilities).not.toContain("desktop@1")
         const hello = yield* client["node.hello"]({ protocol: { min: 1, max: 1 }, brainVersion: "t", brainSig: "" })
-        expect(hello.desktop?.missing).toEqual(["Xvfb", "x11vnc", "xdotool", "xfwm4 or openbox", "ImageMagick (import)"])
+        expect(hello.desktop?.missing).toEqual([
+          "Xvfb",
+          "x11vnc",
+          "xdotool",
+          "xfwm4 or openbox",
+          "ImageMagick (import)",
+        ])
         const e = yield* Effect.flip(client["desktop.ensure"]({ botId: "bot_1" }))
         expect(e._tag).toBe("DesktopUnavailable")
       }),
@@ -925,7 +1049,10 @@ describe("handlers (fake OS)", () => {
         const never = yield* handlerNode(makeFakeOs(), { policy: { actions: { computer: "never" } } })
         expect(never.info.capabilities).not.toContain("desktop@1")
         expect((yield* Effect.flip(never.client["desktop.ensure"]({ botId: "bot_1" }))).message).toContain("policy")
-        expect((yield* Effect.flip(never.client["computer.act"]({ inv: inv("bot_1"), action: { action: "screenshot" } })))._tag).toBe("PolicyRefused")
+        expect(
+          (yield* Effect.flip(never.client["computer.act"]({ inv: inv("bot_1"), action: { action: "screenshot" } })))
+            ._tag,
+        ).toBe("PolicyRefused")
 
         const ask = yield* handlerNode(makeFakeOs(), { policy: { actions: { computer: "ask" } } })
         const r = yield* ask.client["computer.act"]({ inv: inv("bot_1"), action: { action: "type", text: "hunter2" } })
@@ -971,7 +1098,9 @@ describe("handlers (fake OS)", () => {
         const viewOnly = os.running("x11vnc").find((c) => c.argv.includes("-viewonly"))!
         expect(viewOnly.argv[viewOnly.argv.indexOf("-rfbport") + 1]).toBe(String(view.port))
 
-        const refused = yield* Effect.flip(client["computer.stream"]({ botId: "bot_1", mode: "control", streamId: "c0", streamToken: "tok" }))
+        const refused = yield* Effect.flip(
+          client["computer.stream"]({ botId: "bot_1", mode: "control", streamId: "c0", streamToken: "tok" }),
+        )
         expect(refused._tag).toBe("LeaseHeld")
 
         yield* client["lease.set"]({ botId: "bot_1", holder: "user" })
@@ -1003,7 +1132,6 @@ describe("DevTools ports", () => {
     const args = browserArgs(browser, false)
     const port = Number(args.find((a) => a.startsWith("--remote-debugging-port="))!.split("=")[1])
     expect(port).toBeGreaterThanOrEqual(DEBUG_PORT_RANGE.from)
-    expect(browserArgs({ ...browser, debugPort: 9555 }, false))
-      .toContain("--remote-debugging-port=9555")
+    expect(browserArgs({ ...browser, debugPort: 9555 }, false)).toContain("--remote-debugging-port=9555")
   })
 })

@@ -4,7 +4,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import type { Browser } from "playwright-core"
 import type { BotId, ConversationId } from "@openbot/contracts"
-import { type AppPage, type Brain, connectRpc, createBotViaUi, eventually, hasChromium, launchBrowser, openApp, type Rpc, send, startBrain, waitIdle } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  createBotViaUi,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  send,
+  startBrain,
+  waitIdle,
+} from "./brain.ts"
 
 describe.skipIf(!hasChromium)("e2e: details pane, routines, memory, attachments", () => {
   let brain: Brain
@@ -41,7 +54,11 @@ describe.skipIf(!hasChromium)("e2e: details pane, routines, memory, attachments"
     const pane = page.getByTestId("details-pane")
     await pane.waitFor()
     await pane.getByText("Nothing remembered yet", { exact: false }).waitFor()
-    await send(page, BOT, 'tool: remember {"title": "Prefers green tea", "body": "The owner drinks green tea every morning."}')
+    await send(
+      page,
+      BOT,
+      'tool: remember {"title": "Prefers green tea", "body": "The owner drinks green tea every morning."}',
+    )
     await page.getByTestId("transcript").getByText("I called remember", { exact: false }).waitFor()
     await waitIdle(page)
     await pane.getByTestId("memory-fact").filter({ hasText: "Prefers green tea" }).waitFor()
@@ -71,7 +88,11 @@ describe.skipIf(!hasChromium)("e2e: details pane, routines, memory, attachments"
     await waitIdle(page)
     const [routine] = await rpc.call((c) => c["routines.list"]({ botId }))
     expect(routine?.name).toBe("Morning briefing")
-    const runs = await eventually(() => rpc.call((c) => c["routines.runs"]({ routineId: routine!.id })), (r) => r.length > 0 && r[0]!.status !== "running", { label: "a finished run" })
+    const runs = await eventually(
+      () => rpc.call((c) => c["routines.runs"]({ routineId: routine!.id })),
+      (r) => r.length > 0 && r[0]!.status !== "running",
+      { label: "a finished run" },
+    )
     expect(runs[0]!.status).toBe("succeeded")
     expect(runs[0]!.firedBy).toBe("manual")
     // the run shows in the routine's history
@@ -88,7 +109,11 @@ describe.skipIf(!hasChromium)("e2e: details pane, routines, memory, attachments"
 
   test("attachments: upload, served at the upload url, the bot sees them", async () => {
     const { page } = app
-    await page.locator('input[type="file"]').setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("launch notes for the e2e suite") })
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "notes.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("launch notes for the e2e suite"),
+    })
     await page.getByRole("button", { name: "Remove notes.txt" }).waitFor()
     await send(page, BOT, "Here are my notes")
     const transcript = page.getByTestId("transcript")

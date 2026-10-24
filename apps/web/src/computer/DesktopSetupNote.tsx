@@ -26,7 +26,11 @@ export function DesktopSetupNote({
       <p className="text-sm text-fg-secondary">
         {missing.length > 0 ? `Full desktop needs ${describeMissing(missing)} on ` : "Full desktop isn't set up on "}
         <span className="whitespace-nowrap">{nodeName}</span>.{" "}
-        {hints.length === 0 ? "Full desktops need Linux (Xvfb, x11vnc)." : local ? "Install these, then restart OpenBot." : "Install these there, then restart its OpenBot node."}
+        {hints.length === 0
+          ? "Full desktops need Linux (Xvfb, x11vnc)."
+          : local
+            ? "Install these, then restart OpenBot."
+            : "Install these there, then restart its OpenBot node."}
       </p>
       {hints.map((h) => (
         <div key={h.label} className="flex min-w-0 flex-col gap-1">

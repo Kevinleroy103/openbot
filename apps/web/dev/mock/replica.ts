@@ -56,7 +56,12 @@ class Replica<State, Change, Item extends { readonly cursor: StreamCursor }> {
 
 export class ConversationReplica extends Replica<ConversationState, KnownConversationChange, ConversationChangeItem> {
   constructor(conversation: Conversation) {
-    super(conversation.epoch, { ...emptyConversationState, conversation }, applyConversationChange, (cursor, change): ConversationChangeItem => ({ kind: "change", cursor, change }))
+    super(
+      conversation.epoch,
+      { ...emptyConversationState, conversation },
+      applyConversationChange,
+      (cursor, change): ConversationChangeItem => ({ kind: "change", cursor, change }),
+    )
   }
   get conversation(): Conversation {
     return this.state.conversation as Conversation
@@ -88,7 +93,12 @@ export class ConversationReplica extends Replica<ConversationState, KnownConvers
 
 export class RosterReplica extends Replica<RosterState, KnownRosterChange, RosterChangeItem> {
   constructor() {
-    super("r1", { ...emptyRosterState, settings: DEFAULT_SETTINGS }, applyRosterChange, (cursor, change): RosterChangeItem => ({ kind: "change", cursor, change }))
+    super(
+      "r1",
+      { ...emptyRosterState, settings: DEFAULT_SETTINGS },
+      applyRosterChange,
+      (cursor, change): RosterChangeItem => ({ kind: "change", cursor, change }),
+    )
   }
   snapshot(): Extract<KnownRosterStreamItem, { kind: "snapshot" }> {
     const s = this.state
@@ -116,9 +126,14 @@ export const subscribeTo = <Item extends { readonly kind: string; readonly curso
       const sub = yield* PubSub.subscribe(replica.pubsub)
       const head = replica.head
       const plan = resumePlan(after, head, replica.oldestBuffered)
-      const backlog: Item[] = plan === "replay" ? (replica.log.filter((i: { cursor: StreamCursor }) => i.cursor.sequence > after!.sequence) as Item[]) : [snapshot()]
+      const backlog: Item[] =
+        plan === "replay"
+          ? (replica.log.filter((i: { cursor: StreamCursor }) => i.cursor.sequence > after!.sequence) as Item[])
+          : [snapshot()]
       const synchronized = { kind: "synchronized", cursor: head } as unknown as Item
-      const live = Stream.fromSubscription(sub).pipe(Stream.filter((i: Item) => (i.cursor?.sequence ?? 0) > head.sequence))
+      const live = Stream.fromSubscription(sub).pipe(
+        Stream.filter((i: Item) => (i.cursor?.sequence ?? 0) > head.sequence),
+      )
       return Stream.concat(Stream.fromIterable([...backlog, synchronized]), live as Stream.Stream<Item>)
     }),
   )

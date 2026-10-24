@@ -6,7 +6,11 @@ import { Check, Play } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { useCommand } from "../details/kit.tsx"
 
-const GROUPS: ReadonlyArray<{ readonly title: string; readonly accent: KokoroVoice["accent"]; readonly gender: KokoroVoice["gender"] }> = [
+const GROUPS: ReadonlyArray<{
+  readonly title: string
+  readonly accent: KokoroVoice["accent"]
+  readonly gender: KokoroVoice["gender"]
+}> = [
   { title: "American · female", accent: "American", gender: "female" },
   { title: "American · male", accent: "American", gender: "male" },
   { title: "British · female", accent: "British", gender: "female" },
@@ -51,13 +55,22 @@ export function VoicePicker({ bot }: { readonly bot: Bot }): ReactNode {
         <section key={group.title} className="flex flex-col gap-0.5">
           <h3 className="px-2 pb-1 text-xs text-fg-tertiary">{group.title}</h3>
           {KOKORO_VOICES.filter((v) => v.accent === group.accent && v.gender === group.gender).map((voice) => (
-            <div key={voice.id} className={cn("flex items-center gap-1 rounded-xl ps-1 pe-2", voice.id === current && "bg-secondary")}>
+            <div
+              key={voice.id}
+              className={cn("flex items-center gap-1 rounded-xl ps-1 pe-2", voice.id === current && "bg-secondary")}
+            >
               {previewing === voice.id ? (
                 <span className="inline-flex size-7 items-center justify-center">
                   <Spinner size={12} label={`Playing ${voice.label}`} />
                 </span>
               ) : (
-                <IconButton icon={Play} label={`Hear ${voice.label}`} size={28} iconSize="xs" onClick={() => void listen(voice)} />
+                <IconButton
+                  icon={Play}
+                  label={`Hear ${voice.label}`}
+                  size={28}
+                  iconSize="xs"
+                  onClick={() => void listen(voice)}
+                />
               )}
               <button
                 type="button"
@@ -72,7 +85,9 @@ export function VoicePicker({ bot }: { readonly bot: Bot }): ReactNode {
           ))}
         </section>
       ))}
-      {(choose.error ?? preview.error) && <p className="px-2 text-sm text-danger-fg">{choose.error ?? preview.error}</p>}
+      {(choose.error ?? preview.error) && (
+        <p className="px-2 text-sm text-danger-fg">{choose.error ?? preview.error}</p>
+      )}
     </div>
   )
 }

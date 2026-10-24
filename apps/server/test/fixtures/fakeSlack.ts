@@ -16,11 +16,31 @@ export const SCOPES_WITHOUT_FILES =
 export const ALL_SCOPES = `${SCOPES_WITHOUT_FILES},files:write`
 
 const members = [
-  { id: "U_OWNER", name: "owner", real_name: "Owner Person", profile: { display_name: "Owner", real_name: "Owner Person", title: "" } },
-  { id: "U_ALICE", name: "alice", real_name: "Alice Smith", profile: { display_name: "", real_name: "Alice Smith", title: "Designer" } },
-  { id: "U_BOB", name: "bob", real_name: "Bob Jones", profile: { display_name: "Bob", real_name: "Bob Jones", title: "" } },
+  {
+    id: "U_OWNER",
+    name: "owner",
+    real_name: "Owner Person",
+    profile: { display_name: "Owner", real_name: "Owner Person", title: "" },
+  },
+  {
+    id: "U_ALICE",
+    name: "alice",
+    real_name: "Alice Smith",
+    profile: { display_name: "", real_name: "Alice Smith", title: "Designer" },
+  },
+  {
+    id: "U_BOB",
+    name: "bob",
+    real_name: "Bob Jones",
+    profile: { display_name: "Bob", real_name: "Bob Jones", title: "" },
+  },
 ]
-const appBot = { id: "U_OPENBOT", name: "openbot", is_bot: true, profile: { display_name: "OpenBot", real_name: "OpenBot", api_app_id: "A_OPENBOT" } }
+const appBot = {
+  id: "U_OPENBOT",
+  name: "openbot",
+  is_bot: true,
+  profile: { display_name: "OpenBot", real_name: "OpenBot", api_app_id: "A_OPENBOT" },
+}
 const channels = [
   { id: "C_GENERAL", name: "general", is_channel: true, is_private: false, topic: { value: "Company news" } },
   { id: "D_ALICE", is_im: true, user: "U_ALICE" },
@@ -32,7 +52,13 @@ export interface FakeSlack {
   readonly acks: ReadonlyArray<string>
   readonly calls: ReadonlyArray<string>
   readonly responses: ReadonlyArray<Record<string, unknown>>
-  readonly uploads: ReadonlyArray<{ readonly fileId: string; readonly filename: string; readonly length: number; readonly bytes: number; readonly authorized: boolean }>
+  readonly uploads: ReadonlyArray<{
+    readonly fileId: string
+    readonly filename: string
+    readonly length: number
+    readonly bytes: number
+    readonly authorized: boolean
+  }>
   readonly shared: ReadonlyArray<Record<string, string>>
   readonly ephemeral: ReadonlyArray<Record<string, string>>
   readonly setScopes: (scopes: string) => void
@@ -107,15 +133,29 @@ export const startFakeSlack = (options?: { readonly scopes?: string }): FakeSlac
           return ok({
             messages: [
               { ts: "1729340100.000100", user: "U_ALICE", text: "Ping <@U_OWNER>, the deploy failed" },
-              { ts: "1729340000.000100", user: "U_BOB", text: "see <https://x.com/doc|the doc> &amp; <#C_GENERAL>", thread_ts: "1729340000.000100", reply_count: 2 },
+              {
+                ts: "1729340000.000100",
+                user: "U_BOB",
+                text: "see <https://x.com/doc|the doc> &amp; <#C_GENERAL>",
+                thread_ts: "1729340000.000100",
+                reply_count: 2,
+              },
             ],
             has_more: true,
           })
         case "conversations.replies":
           return ok({
             messages: [
-              { ts: args.ts, thread_ts: args.ts, user: "U_ALICE", text: "Can someone look at the deploy?", reply_count: 1 },
-              ...(args.limit === "1" ? [] : [{ ts: "1729340300.000100", thread_ts: args.ts, user: "U_BOB", text: "On it" }]),
+              {
+                ts: args.ts,
+                thread_ts: args.ts,
+                user: "U_ALICE",
+                text: "Can someone look at the deploy?",
+                reply_count: 1,
+              },
+              ...(args.limit === "1"
+                ? []
+                : [{ ts: "1729340300.000100", thread_ts: args.ts, user: "U_BOB", text: "On it" }]),
             ],
             has_more: false,
           })
@@ -123,13 +163,16 @@ export const startFakeSlack = (options?: { readonly scopes?: string }): FakeSlac
           return ok({
             messages: {
               total: 3,
-              matches: [{
-                channel: { id: "C_GENERAL", name: "general" },
-                user: "U_ALICE",
-                ts: "1729340000.000100",
-                text: `${args.query} is broken`,
-                permalink: "https://acme.slack.com/archives/C_GENERAL/p1729340050000100?thread_ts=1729340000.000100&cid=C_GENERAL",
-              }],
+              matches: [
+                {
+                  channel: { id: "C_GENERAL", name: "general" },
+                  user: "U_ALICE",
+                  ts: "1729340000.000100",
+                  text: `${args.query} is broken`,
+                  permalink:
+                    "https://acme.slack.com/archives/C_GENERAL/p1729340050000100?thread_ts=1729340000.000100&cid=C_GENERAL",
+                },
+              ],
             },
           })
         case "chat.postMessage":
@@ -139,14 +182,22 @@ export const startFakeSlack = (options?: { readonly scopes?: string }): FakeSlac
           ephemeral.push(args)
           return ok({ message_ts: "1729340500.000100" })
         case "files.getUploadURLExternal": {
-          if (!scopes.split(",").includes("files:write")) return Response.json({ ok: false, error: "missing_scope", needed: "files:write" })
+          if (!scopes.split(",").includes("files:write"))
+            return Response.json({ ok: false, error: "missing_scope", needed: "files:write" })
           const fileId = `F_${uploads.length + 1}`
-          uploads.push({ fileId, filename: String(args.filename), length: Number(args.length), bytes: -1, authorized: false })
+          uploads.push({
+            fileId,
+            filename: String(args.filename),
+            length: Number(args.length),
+            bytes: -1,
+            authorized: false,
+          })
           return ok({ upload_url: `http://127.0.0.1:${server.port}/upload/${fileId}`, file_id: fileId })
         }
         case "files.completeUploadExternal": {
           const files = JSON.parse(args.files ?? "[]") as Array<{ id: string; title?: string }>
-          if (files.some((f) => (uploads.find((u) => u.fileId === f.id)?.bytes ?? -1) < 0)) return fail("file_not_found")
+          if (files.some((f) => (uploads.find((u) => u.fileId === f.id)?.bytes ?? -1) < 0))
+            return fail("file_not_found")
           shared.push(args)
           return ok({ files: files.map((f) => ({ id: f.id, title: f.title })) })
         }
@@ -196,12 +247,20 @@ export const messageEnvelope = (event: Record<string, unknown>): Record<string, 
   return {
     type: "events_api",
     envelope_id: `env-${envelopes}`,
-    payload: { event_id: `Ev${envelopes}`, event: { type: "message", ts: `17293405${String(envelopes).padStart(2, "0")}.000100`, ...event } },
+    payload: {
+      event_id: `Ev${envelopes}`,
+      event: { type: "message", ts: `17293405${String(envelopes).padStart(2, "0")}.000100`, ...event },
+    },
   }
 }
 
 /** A Socket Mode `interactive` envelope: someone clicked "Send to OpenBot" on a message. */
-export const shortcutEnvelope = (input: { readonly by: string; readonly channel: string; readonly message: Record<string, unknown>; readonly responseUrl: string }): Record<string, unknown> => {
+export const shortcutEnvelope = (input: {
+  readonly by: string
+  readonly channel: string
+  readonly message: Record<string, unknown>
+  readonly responseUrl: string
+}): Record<string, unknown> => {
   envelopes++
   return {
     type: "interactive",

@@ -60,12 +60,18 @@ const webp = (png: string, target: string) => {
 }
 
 const desktopPage = async (browser: Browser, url: string, theme: Theme, route: string, height = 900) => {
-  const context = await browser.newContext({ viewport: { width: 1440, height }, deviceScaleFactor: 2, colorScheme: theme })
+  const context = await browser.newContext({
+    viewport: { width: 1440, height },
+    deviceScaleFactor: 2,
+    colorScheme: theme,
+  })
   await context.addInitScript((t) => localStorage.setItem("openbot.theme", t), theme)
   const page = await context.newPage()
   page.setDefaultTimeout(10_000)
   await page.goto(`${url}/${route}`)
-  await page.waitForSelector('nav[aria-label="Bots"] [data-row], nav[aria-label="Bots"] [data-bot]', { timeout: 15_000 })
+  await page.waitForSelector('nav[aria-label="Bots"] [data-row], nav[aria-label="Bots"] [data-bot]', {
+    timeout: 15_000,
+  })
   await page.evaluate(() => document.fonts.ready)
   return { page, close: () => context.close() }
 }
@@ -79,7 +85,9 @@ if (import.meta.main) {
   try {
     for (const shot of SHOTS.filter((s) => only.length === 0 || only.includes(s.name))) {
       for (const theme of shot.themes) {
-        const opened = shot.phone ? await openDevice(browser, mock.url, IPHONE, theme, shot.route) : await desktopPage(browser, mock.url, theme, shot.route, shot.height)
+        const opened = shot.phone
+          ? await openDevice(browser, mock.url, IPHONE, theme, shot.route)
+          : await desktopPage(browser, mock.url, theme, shot.route, shot.height)
         await shot.act?.(opened.page)
         // let favicons, avatars and the live desktop settle
         await opened.page.waitForTimeout(800)

@@ -15,7 +15,8 @@ const replayBasic = async () => {
   for (const frame of frames) {
     const p = frame.payload
     if (frame.source === "openbot.control") {
-      if (p.action === "send") events.push(...pipeline.send(turnId(p.turnIndex as number), `uuid-${String(p.turnIndex)}`))
+      if (p.action === "send")
+        events.push(...pipeline.send(turnId(p.turnIndex as number), `uuid-${String(p.turnIndex)}`))
       if (p.action === "interrupt") pipeline.requestInterrupt()
     } else if (frame.source === "claude.canUseTool.response") {
       const result = p.result as { behavior: "allow" | "deny"; message?: string }
@@ -77,14 +78,21 @@ describe("ClaudeEventPipeline × claude-basic.jsonl", () => {
     const items = finalItems(events)
     expect(items.get("msg_fake_001:0")).toEqual({
       turnId: turnId(0),
-      item: { _tag: "Reasoning", text: "The user greets me. I should greet back.", streaming: false, source: "thinking" },
+      item: {
+        _tag: "Reasoning",
+        text: "The user greets me. I should greet back.",
+        streaming: false,
+        source: "thinking",
+      },
     })
     expect(items.get("msg_fake_001:1")).toEqual({
       turnId: turnId(0),
       item: { _tag: "Message", role: "bot", text: "Hello from the scripted Claude.", streaming: false },
     })
     // streamed deltas came first
-    const streamed = events.find((e) => e._tag === "ItemUpserted" && e.key === "msg_fake_001:1" && e.item._tag === "Message" && e.item.streaming)
+    const streamed = events.find(
+      (e) => e._tag === "ItemUpserted" && e.key === "msg_fake_001:1" && e.item._tag === "Message" && e.item.streaming,
+    )
     expect(streamed).toBeDefined()
   })
 
@@ -103,7 +111,9 @@ describe("ClaudeEventPipeline × claude-basic.jsonl", () => {
       command: { command: "touch marker.txt && echo openbot-fixture" },
     })
     expect(finalItems(events).get("msg_fake_002:0")!.item).toMatchObject({ _tag: "Message", text: "Running it now." })
-    expect(finalItems(events).get("msg_fake_003:0")!.item).toMatchObject({ text: "The command printed openbot-fixture." })
+    expect(finalItems(events).get("msg_fake_003:0")!.item).toMatchObject({
+      text: "The command printed openbot-fixture.",
+    })
   })
 
   test("denied Write → declined tool with the deny message", async () => {
@@ -122,7 +132,12 @@ describe("ClaudeEventPipeline × claude-basic.jsonl", () => {
   test("AskUserQuestion → completed question tool", async () => {
     const { events } = await replayBasic()
     const ask = finalItems(events).get("toolu_fake_006_0")!
-    expect(ask.item).toMatchObject({ _tag: "ToolCall", toolName: "AskUserQuestion", kind: "question", status: "completed" })
+    expect(ask.item).toMatchObject({
+      _tag: "ToolCall",
+      toolName: "AskUserQuestion",
+      kind: "question",
+      status: "completed",
+    })
     expect((ask.item as { outputPreview?: string }).outputPreview).toContain("Blue")
   })
 
@@ -166,24 +181,35 @@ describe("ClaudeEventPipeline × claude-basic.jsonl", () => {
   test("a resumed session only sets the cost baseline on its first result", async () => {
     const pipeline = new ClaudeEventPipeline({ resumed: true, sessionId: "s" })
     pipeline.send(turnId(1), "u1")
-    const first = pipeline.message({ type: "result", subtype: "success", total_cost_usd: 5, usage: { input_tokens: 3, output_tokens: 1 } })
+    const first = pipeline.message({
+      type: "result",
+      subtype: "success",
+      total_cost_usd: 5,
+      usage: { input_tokens: 3, output_tokens: 1 },
+    })
     expect(ofTag(first.events, "Usage")[0]!.usage.costUsd).toBeUndefined()
     pipeline.send(turnId(2), "u2")
-    const second = pipeline.message({ type: "result", subtype: "success", total_cost_usd: 5.5, usage: { input_tokens: 3, output_tokens: 1 } })
+    const second = pipeline.message({
+      type: "result",
+      subtype: "success",
+      total_cost_usd: 5.5,
+      usage: { input_tokens: 3, output_tokens: 1 },
+    })
     expect(ofTag(second.events, "Usage")[0]!.usage.costUsd).toBeCloseTo(0.5)
   })
 })
 
 describe("ClaudeEventPipeline × live recordings", () => {
   test("MCP tool turn, image turn and interrupted thinking turn (messages.jsonl)", async () => {
-    const lines = await loadJsonl<{ phase: string; m: Record<string, unknown> }>(join(LOCAL_FIXTURES, "claude-live-messages.jsonl"))
+    const lines = await loadJsonl<{ phase: string; m: Record<string, unknown> }>(
+      join(LOCAL_FIXTURES, "claude-live-messages.jsonl"),
+    )
     const pipeline = new ClaudeEventPipeline()
     const events: Array<HarnessEvent> = []
     // The client uuid each turn was sent with, as the CLI echoes it (turn2 was sent without one).
     const sentUuid = (phase: string) =>
       lines.find((l) => l.phase === phase && typeof l.m.user_message_uuid === "string")?.m.user_message_uuid as
-        | string
-        | undefined
+        string | undefined
     expect(sentUuid("turn1")).toBe("fbfac1eb-ba8f-4b6f-934a-c2f0eee8294a")
     expect(sentUuid("turn2")).toBeUndefined()
     let turn = 0
@@ -209,7 +235,9 @@ describe("ClaudeEventPipeline × live recordings", () => {
     })
     expect(ofTag(events, "TurnCompleted").map((e) => e.turnId)).toEqual([turnId(1), turnId(2)])
     expect(ofTag(events, "TurnInterrupted").map((e) => e.turnId)).toEqual([turnId(3)])
-    const texts = [...items.values()].filter((v) => v.item._tag === "Message").map((v) => v.item as { text: string; aborted?: boolean })
+    const texts = [...items.values()]
+      .filter((v) => v.item._tag === "Message")
+      .map((v) => v.item as { text: string; aborted?: boolean })
     expect(texts.map((t) => t.text)).toContain("Red")
     expect(texts.find((t) => t.aborted)?.text.startsWith("1\n2\n3")).toBe(true)
     // omitted thinking display (empty thinking text, no deltas) produces no reasoning item
@@ -264,7 +292,12 @@ describe("ClaudeEventPipeline turn bookkeeping", () => {
     const pipeline = new ClaudeEventPipeline({ sessionId: "s" })
     pipeline.send(turnId(1), "a")
     pipeline.steer(turnId(1), "b")
-    const out = pipeline.message({ type: "result", subtype: "success", user_message_uuid: "b", user_message_uuids: ["a", "b"] })
+    const out = pipeline.message({
+      type: "result",
+      subtype: "success",
+      user_message_uuid: "b",
+      user_message_uuids: ["a", "b"],
+    })
     expect(ofTag(out.events, "TurnCompleted").map((e) => e.turnId)).toEqual([turnId(1)])
     expect(pipeline.busy).toBe(false)
   })
@@ -282,8 +315,16 @@ describe("ClaudeEventPipeline turn bookkeeping", () => {
     expect(first.events.map((e) => e._tag)).toEqual(["Usage"])
     expect(pipeline.activeTurnId).toBe(turnId(1))
     // the CLI answers the steered input as its next turn: items stay in turn 1
-    pipeline.message({ type: "stream_event", parent_tool_use_id: null, event: { type: "message_start", message: { id: "m2" } } })
-    pipeline.message({ type: "stream_event", parent_tool_use_id: null, event: { type: "content_block_start", index: 0, content_block: { type: "text" } } })
+    pipeline.message({
+      type: "stream_event",
+      parent_tool_use_id: null,
+      event: { type: "message_start", message: { id: "m2" } },
+    })
+    pipeline.message({
+      type: "stream_event",
+      parent_tool_use_id: null,
+      event: { type: "content_block_start", index: 0, content_block: { type: "text" } },
+    })
     const delta = pipeline.message({
       type: "stream_event",
       parent_tool_use_id: null,
@@ -328,7 +369,12 @@ describe("ClaudeEventPipeline turn bookkeeping", () => {
     })
     expect(ofTag(interrupted.events, "TurnInterrupted").map((e) => e.turnId)).toEqual([turnId(1)])
     pipeline.send(turnId(2), "c")
-    const stray = pipeline.message({ type: "result", subtype: "success", user_message_uuids: ["b"], usage: { input_tokens: 4, output_tokens: 1 } })
+    const stray = pipeline.message({
+      type: "result",
+      subtype: "success",
+      user_message_uuids: ["b"],
+      usage: { input_tokens: 4, output_tokens: 1 },
+    })
     expect(stray.events.map((e) => e._tag)).toEqual(["Usage"])
     expect(pipeline.activeTurnId).toBe(turnId(2))
     const own = pipeline.message({ type: "result", subtype: "success", user_message_uuids: ["c"] })
@@ -346,9 +392,23 @@ describe("ClaudeEventPipeline turn bookkeeping", () => {
   test("error results map to TurnFailed with a classified code", () => {
     const pipeline = new ClaudeEventPipeline({ sessionId: "s" })
     pipeline.send(turnId(1), "a")
-    pipeline.message({ type: "assistant", parent_tool_use_id: null, error: "rate_limit", message: { id: "m", content: [] } })
-    const out = pipeline.message({ type: "result", subtype: "success", is_error: true, result: "You've hit your limit · resets 5pm" })
-    expect(ofTag(out.events, "TurnFailed")[0]!.error).toEqual({ code: "usage-limit", message: "You've hit your limit · resets 5pm", retryable: false })
+    pipeline.message({
+      type: "assistant",
+      parent_tool_use_id: null,
+      error: "rate_limit",
+      message: { id: "m", content: [] },
+    })
+    const out = pipeline.message({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      result: "You've hit your limit · resets 5pm",
+    })
+    expect(ofTag(out.events, "TurnFailed")[0]!.error).toEqual({
+      code: "usage-limit",
+      message: "You've hit your limit · resets 5pm",
+      retryable: false,
+    })
     pipeline.send(turnId(2), "b")
     const max = pipeline.message({ type: "result", subtype: "error_max_turns", is_error: true, errors: ["max turns"] })
     expect(ofTag(max.events, "TurnFailed")[0]!.error.code).toBe("max-turns")
@@ -361,10 +421,18 @@ describe("ClaudeEventPipeline turn bookkeeping", () => {
       type: "assistant",
       parent_tool_use_id: null,
       error: "authentication_failed",
-      message: { id: "m", content: [{ type: "text", text: "Failed to authenticate: OAuth session expired and could not be refreshed" }] },
+      message: {
+        id: "m",
+        content: [{ type: "text", text: "Failed to authenticate: OAuth session expired and could not be refreshed" }],
+      },
     })
     expect(said.events.filter((e) => e._tag === "ItemUpserted")).toEqual([])
-    const out = pipeline.message({ type: "result", subtype: "success", is_error: true, result: "Failed to authenticate: OAuth session expired and could not be refreshed" })
+    const out = pipeline.message({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      result: "Failed to authenticate: OAuth session expired and could not be refreshed",
+    })
     expect(ofTag(out.events, "TurnFailed")[0]!.error).toEqual({
       code: "auth",
       message: "Failed to authenticate: OAuth session expired and could not be refreshed",
@@ -375,12 +443,30 @@ describe("ClaudeEventPipeline turn bookkeeping", () => {
   test("unexpected close fails accepted turns; deliberate close interrupts them", () => {
     const a = new ClaudeEventPipeline({ sessionId: "s" })
     a.send(turnId(1), "a")
-    a.message({ type: "stream_event", parent_tool_use_id: null, event: { type: "message_start", message: { id: "m1" } } })
-    a.message({ type: "stream_event", parent_tool_use_id: null, event: { type: "content_block_start", index: 0, content_block: { type: "text" } } })
-    a.message({ type: "stream_event", parent_tool_use_id: null, event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "par" } } })
+    a.message({
+      type: "stream_event",
+      parent_tool_use_id: null,
+      event: { type: "message_start", message: { id: "m1" } },
+    })
+    a.message({
+      type: "stream_event",
+      parent_tool_use_id: null,
+      event: { type: "content_block_start", index: 0, content_block: { type: "text" } },
+    })
+    a.message({
+      type: "stream_event",
+      parent_tool_use_id: null,
+      event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "par" } },
+    })
     a.send(turnId(2), "b")
     const failed = a.close("crashed", true)
-    expect(failed.events.map((e) => e._tag)).toEqual(["ItemUpserted", "TurnFailed", "TurnStarted", "TurnFailed", "SessionClosed"])
+    expect(failed.events.map((e) => e._tag)).toEqual([
+      "ItemUpserted",
+      "TurnFailed",
+      "TurnStarted",
+      "TurnFailed",
+      "SessionClosed",
+    ])
     expect(failed.events[0]).toMatchObject({ item: { _tag: "Message", text: "par", streaming: false } })
     const b = new ClaudeEventPipeline({ sessionId: "s" })
     b.send(turnId(1), "a")
@@ -427,7 +513,9 @@ describe("ClaudeEventPipeline × host node attribution", () => {
     message: { id: `m-${id}`, content: [{ type: "tool_use", id, name, input }] },
   })
   const toolItem = (events: ReadonlyArray<HarnessEvent>, key: string) =>
-    events.flatMap((e) => (e._tag === "ItemUpserted" && e.key === key && e.item._tag === "ToolCall" ? [e.item] : [])).at(-1)
+    events
+      .flatMap((e) => (e._tag === "ItemUpserted" && e.key === key && e.item._tag === "ToolCall" ? [e.item] : []))
+      .at(-1)
 
   test("gateway node tools without `node` run on the host node (B1 on a remote node)", () => {
     const pipeline = new ClaudeEventPipeline({ sessionId: "s", hostNodeId: "nod_remote" as never })

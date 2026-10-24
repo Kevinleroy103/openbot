@@ -19,7 +19,15 @@ export interface ScreenStageProps {
 
 const DEFAULT_ASPECT = 16 / 10
 
-export function ScreenStage({ canvasRef, state, interactive, send, overlay, frameClassName, label }: ScreenStageProps): ReactNode {
+export function ScreenStage({
+  canvasRef,
+  state,
+  interactive,
+  send,
+  overlay,
+  frameClassName,
+  label,
+}: ScreenStageProps): ReactNode {
   const boxRef = useRef<HTMLDivElement>(null)
   const meta = state.meta
   const aspect = meta && meta.width > 0 && meta.height > 0 ? meta.width / meta.height : DEFAULT_ASPECT
@@ -56,7 +64,14 @@ export function ScreenStage({ canvasRef, state, interactive, send, overlay, fram
       const p = e && point(e, pressed !== undefined)
       if (e && p) {
         const mods = modifiersOf(e)
-        sendRef.current({ _tag: "mouse", type: "move", x: p.x, y: p.y, button: pressed ?? "none", ...(mods ? { modifiers: mods } : {}) })
+        sendRef.current({
+          _tag: "mouse",
+          type: "move",
+          x: p.x,
+          y: p.y,
+          button: pressed ?? "none",
+          ...(mods ? { modifiers: mods } : {}),
+        })
       }
     }
     const onMove = (e: MouseEvent) => {
@@ -71,7 +86,15 @@ export function ScreenStage({ canvasRef, state, interactive, send, overlay, fram
       if (!p) return
       pressed = mouseButtonOf(e.button)
       const mods = modifiersOf(e)
-      sendRef.current({ _tag: "mouse", type: "down", x: p.x, y: p.y, button: pressed, clickCount: Math.max(1, e.detail || 1), ...(mods ? { modifiers: mods } : {}) })
+      sendRef.current({
+        _tag: "mouse",
+        type: "down",
+        x: p.x,
+        y: p.y,
+        button: pressed,
+        clickCount: Math.max(1, e.detail || 1),
+        ...(mods ? { modifiers: mods } : {}),
+      })
     }
     // released anywhere (drags may leave the frame): clamp to the frame edge
     const onUp = (e: MouseEvent) => {
@@ -80,7 +103,15 @@ export function ScreenStage({ canvasRef, state, interactive, send, overlay, fram
       const p = point(e, true)
       if (!p) return
       const mods = modifiersOf(e)
-      sendRef.current({ _tag: "mouse", type: "up", x: p.x, y: p.y, button: mouseButtonOf(e.button), clickCount: Math.max(1, e.detail || 1), ...(mods ? { modifiers: mods } : {}) })
+      sendRef.current({
+        _tag: "mouse",
+        type: "up",
+        x: p.x,
+        y: p.y,
+        button: mouseButtonOf(e.button),
+        clickCount: Math.max(1, e.detail || 1),
+        ...(mods ? { modifiers: mods } : {}),
+      })
     }
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
@@ -89,7 +120,15 @@ export function ScreenStage({ canvasRef, state, interactive, send, overlay, fram
       // normalize line/page deltas to pixels
       const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1
       const mods = modifiersOf(e)
-      sendRef.current({ _tag: "mouse", type: "wheel", x: p.x, y: p.y, deltaX: e.deltaX * scale, deltaY: e.deltaY * scale, ...(mods ? { modifiers: mods } : {}) })
+      sendRef.current({
+        _tag: "mouse",
+        type: "wheel",
+        x: p.x,
+        y: p.y,
+        deltaX: e.deltaX * scale,
+        deltaY: e.deltaY * scale,
+        ...(mods ? { modifiers: mods } : {}),
+      })
     }
     const onKey = (type: "down" | "up") => (e: KeyboardEvent) => {
       if (e.isComposing) return
@@ -97,7 +136,14 @@ export function ScreenStage({ canvasRef, state, interactive, send, overlay, fram
       e.stopPropagation()
       const mods = modifiersOf(e)
       const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey
-      sendRef.current({ _tag: "key", type, key: e.key, code: e.code, ...(printable && type === "down" ? { text: e.key } : {}), ...(mods ? { modifiers: mods } : {}) })
+      sendRef.current({
+        _tag: "key",
+        type,
+        key: e.key,
+        code: e.code,
+        ...(printable && type === "down" ? { text: e.key } : {}),
+        ...(mods ? { modifiers: mods } : {}),
+      })
     }
     const onKeyDown = onKey("down")
     const onKeyUp = onKey("up")
@@ -134,7 +180,11 @@ export function ScreenStage({ canvasRef, state, interactive, send, overlay, fram
     <div ref={boxRef} className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
       <div
         className={cn("relative overflow-hidden", frameClassName)}
-        style={{ width: fit.width || undefined, height: fit.height || undefined, aspectRatio: fit.width ? undefined : String(aspect) }}
+        style={{
+          width: fit.width || undefined,
+          height: fit.height || undefined,
+          aspectRatio: fit.width ? undefined : String(aspect),
+        }}
       >
         <canvas
           ref={canvasRef}
@@ -143,7 +193,11 @@ export function ScreenStage({ canvasRef, state, interactive, send, overlay, fram
           tabIndex={interactive ? 0 : -1}
           data-testid="screen-canvas"
           data-interactive={interactive || undefined}
-          className={cn("absolute inset-0 block h-full w-full outline-none", !live && "invisible", interactive ? "cursor-default" : "cursor-[inherit]")}
+          className={cn(
+            "absolute inset-0 block h-full w-full outline-none",
+            !live && "invisible",
+            interactive ? "cursor-default" : "cursor-[inherit]",
+          )}
         />
         {!live && overlay && <div className="absolute inset-0 flex items-center justify-center">{overlay}</div>}
       </div>

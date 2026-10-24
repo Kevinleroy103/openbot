@@ -51,7 +51,7 @@ const mp4 = (size: number) => {
 
 const layer = () => MessagingLive.pipe(Layer.provideMerge(CoreServiceFakes()), Layer.provideMerge(TestPorts()))
 
-const seed = Effect.gen(function*() {
+const seed = Effect.gen(function* () {
   const bots = yield* BotRepo
   const conversations = yield* ConversationRepo
   for (const bot of [ADA, BOB]) {
@@ -64,13 +64,15 @@ const seed = Effect.gen(function*() {
   yield* files.put(LOCAL_NODE_ID, `${WS}/psychopomp/output/cache-demo.mp4`, mp4(300_000))
 })
 
-const messages = Effect.map(Effect.flatMap(ConversationServiceFake, (fake) => fake.written), (all) =>
-  all.flatMap((e) => (e.kind === "message" ? [e] : [])))
+const messages = Effect.map(
+  Effect.flatMap(ConversationServiceFake, (fake) => fake.written),
+  (all) => all.flatMap((e) => (e.kind === "message" ? [e] : [])),
+)
 
 describe("send_file (Messaging.sendFiles)", () => {
   test("streams the files into the store and posts one bot message with them in the current conversation", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const messaging = yield* Messaging
         const progress: Array<string> = []
@@ -84,14 +86,30 @@ describe("send_file (Messaging.sendFiles)", () => {
         })
         const store = yield* AttachmentStore
         const video = yield* store.read(result.files[1]!.attachment.id)
-        return { result, progress, posted: yield* messages, video: Option.getOrThrow(video), requests: yield* (yield* NodeFilesFake).requests }
+        return {
+          result,
+          progress,
+          posted: yield* messages,
+          video: Option.getOrThrow(video),
+          requests: yield* (yield* NodeFilesFake).requests,
+        }
       }),
       layer(),
     )
     expect(out.result.conversationId).toBe(GROUP.id)
-    expect(out.result.files.map((f) => f.path)).toEqual([`${WS}/out/cover.png`, `${WS}/psychopomp/output/cache-demo.mp4`])
+    expect(out.result.files.map((f) => f.path)).toEqual([
+      `${WS}/out/cover.png`,
+      `${WS}/psychopomp/output/cache-demo.mp4`,
+    ])
     expect(out.result.files.map((f) => f.attachment)).toMatchObject([
-      { name: "cover.png", mime: "image/png", byteSize: 2000, width: 1920, height: 1080, url: expect.stringMatching(/^\/api\/attachments\//) },
+      {
+        name: "cover.png",
+        mime: "image/png",
+        byteSize: 2000,
+        width: 1920,
+        height: 1080,
+        url: expect.stringMatching(/^\/api\/attachments\//),
+      },
       { name: "cache-demo.mp4", mime: "video/mp4", byteSize: 300_000 },
     ])
     expect(out.video.byteLength).toBe(300_000)
@@ -116,7 +134,7 @@ describe("send_file (Messaging.sendFiles)", () => {
 
   test("idempotent per tool call id: a retry (even on a fresh service) posts nothing and downloads nothing", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const messaging = yield* Messaging
         const call = tool(ADA.directConversationId, "call_2")
@@ -127,7 +145,14 @@ describe("send_file (Messaging.sendFiles)", () => {
         const fresh = Context.get(yield* Layer.build(MessagingLive), Messaging)
         const durable = yield* fresh.sendFiles(call, input)
         const other = yield* messaging.sendFiles(tool(ADA.directConversationId, "call_3"), input)
-        return { first, retried, durable, other, posted: yield* messages, requests: (yield* (yield* NodeFilesFake).requests).length }
+        return {
+          first,
+          retried,
+          durable,
+          other,
+          posted: yield* messages,
+          requests: (yield* (yield* NodeFilesFake).requests).length,
+        }
       }),
       layer(),
     )
@@ -141,7 +166,7 @@ describe("send_file (Messaging.sendFiles)", () => {
 
   test("failures post nothing, keep no stored files, and read as model-readable errors", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const messaging = yield* Messaging
         const send = (paths: ReadonlyArray<string>, conversation: ConversationId = ADA.directConversationId) =>
@@ -154,16 +179,24 @@ describe("send_file (Messaging.sendFiles)", () => {
         const notMine = yield* send(["out/cover.png"], BOB.directConversationId)
         const store = yield* AttachmentStore
         // the partial call stored cover.png first, then removed it (sequential ids: scan them all)
-        const leftover = yield* Effect.forEach(Array.from({ length: 200 }, (_, i) => `att_${String(i + 1).padStart(6, "0")}`), (id) =>
-          store.get(id as never)).pipe(Effect.map((found) => Option.firstSomeOf(found)))
+        const leftover = yield* Effect.forEach(
+          Array.from({ length: 200 }, (_, i) => `att_${String(i + 1).padStart(6, "0")}`),
+          (id) => store.get(id as never),
+        ).pipe(Effect.map((found) => Option.firstSomeOf(found)))
         return { missing, partial, denied, none, tooMany, notMine, leftover, posted: yield* messages }
       }),
       layer(),
     )
-    expect(out.missing).toMatchObject({ _tag: "InvalidInput", message: "Could not send nope.mp4: nope.mp4 does not exist" })
+    expect(out.missing).toMatchObject({
+      _tag: "InvalidInput",
+      message: "Could not send nope.mp4: nope.mp4 does not exist",
+    })
     expect(out.partial).toMatchObject({ _tag: "InvalidInput" })
     expect((out.partial as { message: string }).message).toContain("Nothing was sent")
-    expect(out.denied).toMatchObject({ _tag: "InvalidInput", message: "Could not send /denied/x.png: Access to /denied/x.png is denied: outside the node's roots" })
+    expect(out.denied).toMatchObject({
+      _tag: "InvalidInput",
+      message: "Could not send /denied/x.png: Access to /denied/x.png is denied: outside the node's roots",
+    })
     expect(out.none).toMatchObject({ _tag: "InvalidInput", message: "Pass `path` (or `paths`): the file(s) to send." })
     expect((out.tooMany as { message: string }).message).toContain("at most 10 files")
     expect((out.notMine as { message: string }).message).toContain("conversation you are part of")
@@ -173,22 +206,29 @@ describe("send_file (Messaging.sendFiles)", () => {
 
   test("importFiles cancelled after storing a file keeps no stored files", async () => {
     const leftover = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const messaging = yield* Messaging
         const second = yield* Deferred.make<void>()
-        const fiber = yield* Effect.forkChild(messaging.importFiles({
-          nodeId: LOCAL_NODE_ID,
-          inv,
-          cwd: WS,
-          paths: ["out/cover.png", "psychopomp/output/cache-demo.mp4"],
-          progress: (message) => message.includes("cache-demo") ? Effect.andThen(Deferred.succeed(second, undefined), Effect.never) : Effect.void,
-        }))
+        const fiber = yield* Effect.forkChild(
+          messaging.importFiles({
+            nodeId: LOCAL_NODE_ID,
+            inv,
+            cwd: WS,
+            paths: ["out/cover.png", "psychopomp/output/cache-demo.mp4"],
+            progress: (message) =>
+              message.includes("cache-demo")
+                ? Effect.andThen(Deferred.succeed(second, undefined), Effect.never)
+                : Effect.void,
+          }),
+        )
         yield* Deferred.await(second)
         yield* Fiber.interrupt(fiber)
         const store = yield* AttachmentStore
-        return yield* Effect.forEach(Array.from({ length: 20 }, (_, i) => `att_${String(i + 1).padStart(6, "0")}`), (id) =>
-          store.get(id as never)).pipe(Effect.map((found) => Option.firstSomeOf(found)))
+        return yield* Effect.forEach(
+          Array.from({ length: 20 }, (_, i) => `att_${String(i + 1).padStart(6, "0")}`),
+          (id) => store.get(id as never),
+        ).pipe(Effect.map((found) => Option.firstSomeOf(found)))
       }),
       layer(),
     )
@@ -201,7 +241,9 @@ describe("file type and size helpers", () => {
     expect(detectMime("cover.png", png(10, 10))).toBe("image/png")
     expect(detectMime("photo.png", new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]))).toBe("image/jpeg")
     expect(detectMime("demo.mp4", mp4(64))).toBe("video/mp4")
-    expect(detectMime("clip.mov", new Uint8Array([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20]))).toBe("video/quicktime")
+    expect(
+      detectMime("clip.mov", new Uint8Array([0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20])),
+    ).toBe("video/quicktime")
     expect(detectMime("talk.webm", new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1]))).toBe("video/webm")
     expect(detectMime("song.mp3", new TextEncoder().encode("ID3\u0004\u0000"))).toBe("audio/mpeg")
     expect(detectMime("report.pdf", new TextEncoder().encode("%PDF-1.7\n"))).toBe("application/pdf")
@@ -222,8 +264,23 @@ describe("file type and size helpers", () => {
     expect(imageDimensions("image/gif", gif)).toEqual({ width: 320, height: 240 })
     // SOI, APP0 (length 16), SOF0 with height 600, width 800
     const jpeg = new Uint8Array([
-      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, ...new Array(14).fill(0),
-      0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 0x03,
+      0xff,
+      0xd8,
+      0xff,
+      0xe0,
+      0x00,
+      0x10,
+      ...new Array(14).fill(0),
+      0xff,
+      0xc0,
+      0x00,
+      0x11,
+      0x08,
+      0x02,
+      0x58,
+      0x03,
+      0x20,
+      0x03,
     ])
     expect(imageDimensions("image/jpeg", jpeg)).toEqual({ width: 800, height: 600 })
     expect(imageDimensions("video/mp4", mp4(64))).toBeUndefined()
@@ -231,9 +288,19 @@ describe("file type and size helpers", () => {
 
   test("sizes and catch-up lines", () => {
     expect(formatBytes(24_123_456)).toBe("24.1 MB")
-    expect(messageWithAttachments("Here it is", [
-      { id: "att_1" as never, name: "demo.mp4", mime: "video/mp4", byteSize: 24_123_456, url: "/api/attachments/att_1" },
-    ])).toBe("Here it is [attached: demo.mp4 (video/mp4, 24.1 MB)]")
-    expect(messageWithAttachments("", [{ id: "att_2" as never, name: "a.png", mime: "image/png", url: "/x" }])).toBe("[attached: a.png (image/png)]")
+    expect(
+      messageWithAttachments("Here it is", [
+        {
+          id: "att_1" as never,
+          name: "demo.mp4",
+          mime: "video/mp4",
+          byteSize: 24_123_456,
+          url: "/api/attachments/att_1",
+        },
+      ]),
+    ).toBe("Here it is [attached: demo.mp4 (video/mp4, 24.1 MB)]")
+    expect(messageWithAttachments("", [{ id: "att_2" as never, name: "a.png", mime: "image/png", url: "/x" }])).toBe(
+      "[attached: a.png (image/png)]",
+    )
   })
 })

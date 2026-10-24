@@ -43,7 +43,13 @@ const placement = (dir: string, overrides: Partial<ResolvedPlacement> = {}): Res
 
 const instructions: RenderedInstructions = {
   text: "base\n\nBe nice.",
-  sections: { base: "You are Scout, an OpenBot.", persona: "Be nice.", team: "", memoryIndex: "", placement: "Your tools run here." },
+  sections: {
+    base: "You are Scout, an OpenBot.",
+    persona: "Be nice.",
+    team: "",
+    memoryIndex: "",
+    placement: "Your tools run here.",
+  },
   hash: "h1",
 }
 
@@ -89,12 +95,19 @@ const withDriver = <A>(
 ): Promise<A> =>
   Effect.runPromise(
     Effect.scoped(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const host = yield* makeHost({ start: fake.start, silentTimeoutMs: 0, readyTimeoutMs: 2_000, modelRetries: 0 })
         const driver = makeOpenCodeDriver(host, {
           directory: root,
           binaryFound: true,
-          session: { mcpConnectTimeoutMs: 2_000, interruptGraceMs: 100, mcpSettleMs: 0, busyWaitMs: 1_000, compactTimeoutMs: 2_000, ...session },
+          session: {
+            mcpConnectTimeoutMs: 2_000,
+            interruptGraceMs: 100,
+            mcpSettleMs: 0,
+            busyWaitMs: 1_000,
+            compactTimeoutMs: 2_000,
+            ...session,
+          },
         })
         return yield* body(driver)
       }),
@@ -102,7 +115,7 @@ const withDriver = <A>(
   )
 
 const collect = (session: HarnessSession) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const events: Array<HarnessEvent> = []
     yield* Effect.forkScoped(Stream.runForEach(session.events, (e) => Effect.sync(() => events.push(e))))
     return events
@@ -118,14 +131,15 @@ const until = (predicate: () => boolean, timeoutMs = 2_000) =>
   })
 
 const tags = (events: ReadonlyArray<HarnessEvent>) => events.map((e) => e._tag)
-const isTerminal = (e: HarnessEvent) => e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted"
+const isTerminal = (e: HarnessEvent) =>
+  e._tag === "TurnCompleted" || e._tag === "TurnFailed" || e._tag === "TurnInterrupted"
 const turn = (id: string, text = "hi") => ({ turnId: id as TurnId, text, attachments: [] })
 
 describe("OpenCode session (fake server)", () => {
   test("open: create, persona entries, per-session MCP with codemode:false, then SessionBound", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const input = sessionInput({ model: "openai/gpt-test#high" })
         const session = yield* driver.openSession(input)
         const events = yield* collect(session)
@@ -157,11 +171,18 @@ describe("OpenCode session (fake server)", () => {
         expect(add!.input).toEqual({
           server: name,
           location: { directory: input.placement.harnessCwd },
-          config: { type: "remote", url: "http://127.0.0.1:9/mcp/bot_a", headers: { authorization: "Bearer tok-bot_a-cnv_1" }, oauth: false, codemode: false },
+          config: {
+            type: "remote",
+            url: "http://127.0.0.1:9/mcp/bot_a",
+            headers: { authorization: "Bearer tok-bot_a-cnv_1" },
+            oauth: false,
+            codemode: false,
+          },
         })
         // waited for `connected` before handing out the session
         expect(fake.callsOf("mcp.list").length).toBeGreaterThanOrEqual(2)
-      }))
+      }),
+    )
     // closing the scope removes the session's MCP server
     expect(fake.callsOf("mcp.remove")).toHaveLength(1)
   })
@@ -169,25 +190,36 @@ describe("OpenCode session (fake server)", () => {
   test("B1 placement denies the built-in tools", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* driver.openSession(sessionInput({ placement: { mode: "brain-mcp-hands", disableBuiltinTools: true } }))
-        const rules = fake.callsOf("session.create")[0]!.input.permissions as ReadonlyArray<{ action: string; resource: string; effect: string }>
+        const rules = fake.callsOf("session.create")[0]!.input.permissions as ReadonlyArray<{
+          action: string
+          resource: string
+          effect: string
+        }>
         for (const action of ["shell", "read", "edit", "write", "glob", "grep", "execute", "subagent"]) {
           const last = rules.filter((r) => r.action === action).at(-1)
           expect(last).toEqual({ action, resource: "*", effect: "deny" })
         }
         // this session's OpenBot tools stay allowed (the last rule)
-        expect(rules.at(-1)).toEqual({ action: `${mcpServerName(sessionKeyOf(botId("bot_a"), conversationId("cnv_1")), "openbot")}_*`, resource: "*", effect: "allow" })
-      }))
+        expect(rules.at(-1)).toEqual({
+          action: `${mcpServerName(sessionKeyOf(botId("bot_a"), conversationId("cnv_1")), "openbot")}_*`,
+          resource: "*",
+          effect: "allow",
+        })
+      }),
+    )
   })
 
   test("subscribe-before-prompt barrier: nothing is created or prompted before server.connected", async () => {
     const fake = new FakeOpenCode()
     fake.autoConnect = false
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const opened = yield* Deferred.make<HarnessSession>()
-        yield* Effect.forkScoped(Effect.flatMap(driver.openSession(sessionInput({})), (s) => Deferred.succeed(opened, s)))
+        yield* Effect.forkScoped(
+          Effect.flatMap(driver.openSession(sessionInput({})), (s) => Deferred.succeed(opened, s)),
+        )
         yield* until(() => fake.servers.length === 1 && fake.server.channels.size === 1)
         yield* Effect.sleep(50)
         expect(fake.callsOf("session.create")).toHaveLength(0)
@@ -206,26 +238,40 @@ describe("OpenCode session (fake server)", () => {
         expect(message).toMatchObject({ turnId: "trn_1", item: { _tag: "Message", text: "Hello!", streaming: false } })
         expect(events.at(-1)).toEqual({ _tag: "TurnCompleted", turnId: "trn_1" as TurnId, stopReason: "succeeded" })
         expect(events.find((e) => e._tag === "Usage")).toMatchObject({ usage: { inputTokens: 1000, outputTokens: 10 } })
-        expect(fake.callsOf("session.prompt")[0]!.input).toMatchObject({ sessionID: "ses_fake_1", text: "hi", delivery: "queue" })
-      }))
+        expect(fake.callsOf("session.prompt")[0]!.input).toMatchObject({
+          sessionID: "ses_fake_1",
+          text: "hi",
+          delivery: "queue",
+        })
+      }),
+    )
   })
 
   test("interrupting a start that waits for server.connected stops the server", async () => {
     const fake = new FakeOpenCode()
     fake.autoConnect = false
-    await Effect.runPromise(Effect.scoped(Effect.gen(function*() {
-      const host = yield* makeHost({ start: fake.start, silentTimeoutMs: 0, readyTimeoutMs: 2_000, modelRetries: 0 })
-      const starting = yield* Effect.forkScoped(host.connection)
-      yield* until(() => fake.servers.length === 1 && fake.server.channels.size === 1)
-      yield* Fiber.interrupt(starting)
-      yield* until(() => fake.server.dead)
-    })))
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const host = yield* makeHost({
+            start: fake.start,
+            silentTimeoutMs: 0,
+            readyTimeoutMs: 2_000,
+            modelRetries: 0,
+          })
+          const starting = yield* Effect.forkScoped(host.connection)
+          yield* until(() => fake.servers.length === 1 && fake.server.channels.size === 1)
+          yield* Fiber.interrupt(starting)
+          yield* until(() => fake.server.dead)
+        }),
+      ),
+    )
   })
 
   test("sessionID filtering: two sessions on one server only see their own events", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const a = yield* driver.openSession(sessionInput({ conversation: "cnv_a" }))
         const b = yield* driver.openSession(sessionInput({ conversation: "cnv_b" }))
         expect(fake.servers).toHaveLength(1)
@@ -238,10 +284,25 @@ describe("OpenCode session (fake server)", () => {
         yield* b.startTurn(turn("trn_b"))
         const server = fake.server
         server.emit("session.execution.started", { sessionID: "ses_fake_2" })
-        server.emit("session.text.delta", { sessionID: "ses_fake_2", assistantMessageID: "m_b", ordinal: 0, delta: "from B" })
-        server.emit("session.text.delta", { sessionID: "ses_fake_1", assistantMessageID: "m_a", ordinal: 0, delta: "from A" })
+        server.emit("session.text.delta", {
+          sessionID: "ses_fake_2",
+          assistantMessageID: "m_b",
+          ordinal: 0,
+          delta: "from B",
+        })
+        server.emit("session.text.delta", {
+          sessionID: "ses_fake_1",
+          assistantMessageID: "m_a",
+          ordinal: 0,
+          delta: "from A",
+        })
         server.emit("session.execution.succeeded", { sessionID: "ses_fake_2" })
-        server.emit("session.text.delta", { sessionID: "ses_unrelated", assistantMessageID: "m_x", ordinal: 0, delta: "nope" })
+        server.emit("session.text.delta", {
+          sessionID: "ses_unrelated",
+          assistantMessageID: "m_x",
+          ordinal: 0,
+          delta: "nope",
+        })
         yield* until(() => eb.some(isTerminal) && ea.some((e) => e._tag === "ItemUpserted"))
         yield* Effect.sleep(20)
         const textOf = (events: ReadonlyArray<HarnessEvent>) =>
@@ -253,7 +314,8 @@ describe("OpenCode session (fake server)", () => {
         // A starting a second turn while one is running is rejected
         const second = yield* Effect.flip(a.startTurn(turn("trn_a2")))
         expect(second.code).toBe("turn-rejected")
-      }))
+      }),
+    )
   })
 
   test("permission round trip: allow-once, deny with message, allow-session grant; consumer never blocks", async () => {
@@ -261,14 +323,14 @@ describe("OpenCode session (fake server)", () => {
     const requests: Array<HarnessRequest> = []
     const decisions: Array<Deferred.Deferred<HarnessRequestResolution>> = []
     const onRequest: OnRequest = (request) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const d = yield* Deferred.make<HarnessRequestResolution>()
         requests.push(request)
         decisions.push(d)
         return yield* Deferred.await(d)
       })
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({ onRequest }))
         const events = yield* collect(session)
         yield* session.startTurn(turn("trn_1"))
@@ -276,7 +338,13 @@ describe("OpenCode session (fake server)", () => {
         const sid = "ses_fake_1"
         s.emit("session.execution.started", { sessionID: sid })
         s.emit("session.tool.input.started", { sessionID: sid, assistantMessageID: "m1", id: "call_1", name: "shell" })
-        s.emit("session.tool.called", { sessionID: sid, assistantMessageID: "m1", id: "call_1", input: { command: "rm -rf build", description: "Clean" }, executed: false })
+        s.emit("session.tool.called", {
+          sessionID: sid,
+          assistantMessageID: "m1",
+          id: "call_1",
+          input: { command: "rm -rf build", description: "Clean" },
+          executed: false,
+        })
         s.emit("permission.asked", {
           id: "per_1",
           sessionID: sid,
@@ -300,11 +368,21 @@ describe("OpenCode session (fake server)", () => {
 
         yield* Deferred.succeed(decisions[0]!, { decision: "allow-once" })
         yield* until(() => fake.callsOf("permission.reply").length === 1)
-        expect(fake.callsOf("permission.reply")[0]!.input).toEqual({ sessionID: sid, requestID: "per_1", decision: "once" })
+        expect(fake.callsOf("permission.reply")[0]!.input).toEqual({
+          sessionID: sid,
+          requestID: "per_1",
+          decision: "once",
+        })
 
         // deny → reject WITH a message; the tool ends declined
         s.emit("session.tool.input.started", { sessionID: sid, assistantMessageID: "m1", id: "call_2", name: "write" })
-        s.emit("session.tool.called", { sessionID: sid, assistantMessageID: "m1", id: "call_2", input: { path: "x.txt", content: "x" }, executed: false })
+        s.emit("session.tool.called", {
+          sessionID: sid,
+          assistantMessageID: "m1",
+          id: "call_2",
+          input: { path: "x.txt", content: "x" },
+          executed: false,
+        })
         s.emit("permission.asked", {
           id: "per_2",
           sessionID: sid,
@@ -318,10 +396,21 @@ describe("OpenCode session (fake server)", () => {
         expect(requests[1]).toMatchObject({ kind: "file-approval", surface: "file-edit", paths: ["x.txt"], diff: "+x" })
         yield* Deferred.succeed(decisions[1]!, { decision: "deny", message: "Not now." })
         yield* until(() => fake.callsOf("permission.reply").length === 2)
-        expect(fake.callsOf("permission.reply")[1]!.input).toEqual({ sessionID: sid, requestID: "per_2", decision: "reject", message: "Not now." })
+        expect(fake.callsOf("permission.reply")[1]!.input).toEqual({
+          sessionID: sid,
+          requestID: "per_2",
+          decision: "reject",
+          message: "Not now.",
+        })
         yield* until(() => fake.callsOf("permission.reply").length === 2)
         yield* Effect.sleep(10)
-        s.emit("session.tool.failed", { sessionID: sid, assistantMessageID: "m1", id: "call_2", error: { type: "tool.execution", message: "Unable to write x.txt" }, executed: false })
+        s.emit("session.tool.failed", {
+          sessionID: sid,
+          assistantMessageID: "m1",
+          id: "call_2",
+          error: { type: "tool.execution", message: "Unable to write x.txt" },
+          executed: false,
+        })
 
         // allow-session → session rules get a grant, then `once`
         s.emit("permission.asked", { id: "per_3", sessionID: sid, action: "shell", resources: ["ls"], save: ["ls *"] })
@@ -333,19 +422,36 @@ describe("OpenCode session (fake server)", () => {
         expect(fake.callsOf("permission.reply")[2]!.input.decision).toBe("once")
 
         // allow-always → OpenBot owns the durable rule: natively a session grant + `once`, never `always`
-        expect(requests[2]!.kind === "question" ? [] : requests[2]!.suggestions?.map((x) => x.decision)).toEqual(["allow-session"])
-        s.emit("permission.asked", { id: "per_4", sessionID: sid, action: "edit", resources: ["src/a.ts"], save: ["src/*"] })
+        expect(requests[2]!.kind === "question" ? [] : requests[2]!.suggestions?.map((x) => x.decision)).toEqual([
+          "allow-session",
+        ])
+        s.emit("permission.asked", {
+          id: "per_4",
+          sessionID: sid,
+          action: "edit",
+          resources: ["src/a.ts"],
+          save: ["src/*"],
+        })
         yield* until(() => requests.length === 4)
         yield* Deferred.succeed(decisions[3]!, { decision: "allow-always" })
         yield* until(() => fake.callsOf("permission.reply").length === 4)
-        expect(fake.callsOf("permission.reply")[3]!.input).toEqual({ sessionID: sid, requestID: "per_4", decision: "once" })
-        expect(fake.callsOf("session.update").at(-1)!.input.permissions).toContainEqual({ action: "edit", resource: "src/*", effect: "allow" })
+        expect(fake.callsOf("permission.reply")[3]!.input).toEqual({
+          sessionID: sid,
+          requestID: "per_4",
+          decision: "once",
+        })
+        expect(fake.callsOf("session.update").at(-1)!.input.permissions).toContainEqual({
+          action: "edit",
+          resource: "src/*",
+          effect: "allow",
+        })
 
         s.emit("session.execution.succeeded", { sessionID: sid })
         yield* until(() => events.some(isTerminal))
         const write = events.filter((e) => e._tag === "ItemUpserted" && e.key === "oc:tool:m1:call_2").at(-1)
         expect(write).toMatchObject({ item: { status: "declined" } })
-      }))
+      }),
+    )
   })
 
   test("cancel → reject without a message; a request answered elsewhere stops waiting", async () => {
@@ -356,17 +462,32 @@ describe("OpenCode session (fake server)", () => {
         ? Effect.succeed({ decision: "cancel" })
         : Effect.never.pipe(Effect.onInterrupt(() => Effect.sync(() => interrupted++)))
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({ onRequest }))
         yield* session.startTurn(turn("trn_1"))
-        fake.server.emit("permission.asked", { id: "per_1", sessionID: "ses_fake_1", action: "shell", resources: ["x"] })
+        fake.server.emit("permission.asked", {
+          id: "per_1",
+          sessionID: "ses_fake_1",
+          action: "shell",
+          resources: ["x"],
+        })
         yield* until(() => fake.callsOf("permission.reply").length === 1)
-        expect(fake.callsOf("permission.reply")[0]!.input).toEqual({ sessionID: "ses_fake_1", requestID: "per_1", decision: "reject" })
-        fake.server.emit("permission.asked", { id: "per_2", sessionID: "ses_fake_1", action: "shell", resources: ["y"] })
+        expect(fake.callsOf("permission.reply")[0]!.input).toEqual({
+          sessionID: "ses_fake_1",
+          requestID: "per_1",
+          decision: "reject",
+        })
+        fake.server.emit("permission.asked", {
+          id: "per_2",
+          sessionID: "ses_fake_1",
+          action: "shell",
+          resources: ["y"],
+        })
         yield* Effect.sleep(20)
         fake.server.emit("permission.replied", { sessionID: "ses_fake_1", requestID: "per_2", reply: "once" })
         yield* until(() => interrupted === 1)
-      }))
+      }),
+    )
   })
 
   test("question form round trip → form.reply with native values", async () => {
@@ -377,7 +498,7 @@ describe("OpenCode session (fake server)", () => {
       return Effect.succeed({ answers: { q0: "Blue", q1: ["A", "C"], q2: "yes" } })
     }
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({ onRequest }))
         yield* session.startTurn(turn("trn_1"))
         fake.server.emit("form.created", {
@@ -387,8 +508,27 @@ describe("OpenCode session (fake server)", () => {
             title: "Questions",
             metadata: { kind: "question", tool: { messageID: "m1", id: "call_4" } },
             fields: [
-              { key: "q0", title: "Color", description: "Which color?", type: "string", options: [{ value: "blue", label: "Blue" }, { value: "orange", label: "Orange" }], custom: true },
-              { key: "q1", title: "Pick", type: "multiselect", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }, { value: "c", label: "C" }] },
+              {
+                key: "q0",
+                title: "Color",
+                description: "Which color?",
+                type: "string",
+                options: [
+                  { value: "blue", label: "Blue" },
+                  { value: "orange", label: "Orange" },
+                ],
+                custom: true,
+              },
+              {
+                key: "q1",
+                title: "Pick",
+                type: "multiselect",
+                options: [
+                  { value: "a", label: "A" },
+                  { value: "b", label: "B" },
+                  { value: "c", label: "C" },
+                ],
+              },
               { key: "q2", title: "Sure?", type: "boolean" },
             ],
           },
@@ -409,13 +549,14 @@ describe("OpenCode session (fake server)", () => {
           formID: "frm_1",
           answer: { q0: "blue", q1: ["a", "c"], q2: true },
         })
-      }))
+      }),
+    )
   })
 
   test("mcp.add is re-registered after a server restart; the running turn fails retryably", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const input = sessionInput({})
         const session = yield* driver.openSession(input)
         const events = yield* collect(session)
@@ -425,7 +566,11 @@ describe("OpenCode session (fake server)", () => {
 
         fake.server.crash()
         yield* until(() => events.some(isTerminal))
-        expect(events.at(-1)).toMatchObject({ _tag: "TurnFailed", turnId: "trn_1", error: { code: "closed", retryable: true } })
+        expect(events.at(-1)).toMatchObject({
+          _tag: "TurnFailed",
+          turnId: "trn_1",
+          error: { code: "closed", retryable: true },
+        })
 
         // The next turn restarts the server and re-adds the MCP server BEFORE prompting.
         fake.onPrompt = (p, server) => scriptText(server, p.sessionID, "back")
@@ -443,25 +588,35 @@ describe("OpenCode session (fake server)", () => {
         fake.onPrompt = (p, server) => scriptText(server, p.sessionID, "again")
         yield* session.startTurn(turn("trn_3"))
         expect(fake.callsOf("mcp.add")).toHaveLength(2)
-      }))
+      }),
+    )
   })
 
   test("interrupt: native terminal → TurnInterrupted with aborted text", async () => {
     const fake = new FakeOpenCode()
     fake.onInterrupt = (sessionID, server) => {
       setTimeout(() => {
-        server.emit("session.step.failed", { sessionID, assistantMessageID: "m1", error: { type: "aborted", message: "Step interrupted" } })
+        server.emit("session.step.failed", {
+          sessionID,
+          assistantMessageID: "m1",
+          error: { type: "aborted", message: "Step interrupted" },
+        })
         server.emit("session.execution.interrupted", { sessionID, reason: "user" })
       }, 1)
       return true
     }
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({}))
         const events = yield* collect(session)
         yield* session.startTurn(turn("trn_1"))
         fake.server.emit("session.execution.started", { sessionID: "ses_fake_1" })
-        fake.server.emit("session.text.delta", { sessionID: "ses_fake_1", assistantMessageID: "m1", ordinal: 0, delta: "wave 1, " })
+        fake.server.emit("session.text.delta", {
+          sessionID: "ses_fake_1",
+          assistantMessageID: "m1",
+          ordinal: 0,
+          delta: "wave 1, ",
+        })
         yield* until(() => events.some((e) => e._tag === "ItemUpserted"))
         yield* session.interrupt
         yield* until(() => events.some(isTerminal))
@@ -475,14 +630,15 @@ describe("OpenCode session (fake server)", () => {
         // interrupt with no turn is a no-op
         yield* session.interrupt
         expect(fake.callsOf("session.interrupt")).toHaveLength(1)
-      }))
+      }),
+    )
   })
 
   test("interrupt when nothing runs natively ends the turn locally", async () => {
     const fake = new FakeOpenCode()
     fake.onInterrupt = () => false
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({}))
         const events = yield* collect(session)
         yield* session.startTurn(turn("trn_1"))
@@ -493,13 +649,14 @@ describe("OpenCode session (fake server)", () => {
         fake.server.emit("session.execution.interrupted", { sessionID: "ses_fake_1", reason: "user" })
         yield* Effect.sleep(20)
         expect(events.filter(isTerminal)).toHaveLength(1)
-      }))
+      }),
+    )
   })
 
   test("steer uses delivery steer and needs a running turn; rejected prompts fail startTurn", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({}))
         const events = yield* collect(session)
         const noTurn = yield* Effect.flip(session.steer(turn("trn_x")))
@@ -518,30 +675,43 @@ describe("OpenCode session (fake server)", () => {
         fake.onPrompt = (p, server) => scriptText(server, p.sessionID, "ok")
         yield* session.startTurn(turn("trn_3"))
         yield* until(() => events.filter(isTerminal).length === 2)
-      }))
+      }),
+    )
   })
 
   test("attachments become file:// URIs", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({}))
-        yield* session.startTurn({ turnId: "trn_1" as TurnId, text: "look", attachments: [{ path: "/tmp/a b.png", mime: "image/png", name: "a b.png" }] })
-        expect(fake.callsOf("session.prompt")[0]!.input.files).toEqual([{ uri: "file:///tmp/a%20b.png", name: "a b.png" }])
-      }))
+        yield* session.startTurn({
+          turnId: "trn_1" as TurnId,
+          text: "look",
+          attachments: [{ path: "/tmp/a b.png", mime: "image/png", name: "a b.png" }],
+        })
+        expect(fake.callsOf("session.prompt")[0]!.input.files).toEqual([
+          { uri: "file:///tmp/a%20b.png", name: "a b.png" },
+        ])
+      }),
+    )
   })
 
   test("resume: existing session is reused and updated; a missing one is recreated", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* Effect.scoped(driver.openSession(sessionInput({})))
         expect(fake.callsOf("session.create")).toHaveLength(1)
-        const resumed = yield* driver.openSession(sessionInput({ nativeSessionId: "ses_fake_1", model: "openai/gpt-test" }))
+        const resumed = yield* driver.openSession(
+          sessionInput({ nativeSessionId: "ses_fake_1", model: "openai/gpt-test" }),
+        )
         expect(yield* resumed.nativeSessionId).toBe("ses_fake_1")
         expect(fake.callsOf("session.create")).toHaveLength(1)
         expect(fake.callsOf("session.update").at(-1)!.input.sessionID).toBe("ses_fake_1")
-        expect(fake.callsOf("session.switchModel").at(-1)!.input.model).toEqual({ providerID: "openai", id: "gpt-test" })
+        expect(fake.callsOf("session.switchModel").at(-1)!.input.model).toEqual({
+          providerID: "openai",
+          id: "gpt-test",
+        })
         // persona unchanged → no new puts (3 from the first open)
         expect(fake.callsOf("instructions.entry.put")).toHaveLength(3)
 
@@ -549,16 +719,19 @@ describe("OpenCode session (fake server)", () => {
         expect(yield* fresh.nativeSessionId).toBe("ses_fake_2")
 
         // bound to another directory (placement changed): its tools would be elsewhere → new session
-        const moved = yield* driver.openSession(sessionInput({ nativeSessionId: "ses_fake_1", dir: workspace("elsewhere") }))
+        const moved = yield* driver.openSession(
+          sessionInput({ nativeSessionId: "ses_fake_1", dir: workspace("elsewhere") }),
+        )
         expect(yield* moved.nativeSessionId).toBe("ses_fake_3")
         expect(fake.callsOf("session.create").at(-1)!.input.location).toEqual({ directory: workspace("elsewhere") })
-      }))
+      }),
+    )
   })
 
   test("compact waits for the compaction's busy period; context usage follows", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* driver.listModels // fills the context-window cache
         const session = yield* driver.openSession(sessionInput({}))
         const events = yield* collect(session)
@@ -567,7 +740,11 @@ describe("OpenCode session (fake server)", () => {
         yield* session.startTurn(turn("trn_1"))
         yield* until(() => events.some(isTerminal))
         expect(yield* session.contextUsage).toEqual({ usedTokens: 50_010, windowTokens: 200_000 })
-        expect(events.find((e) => e._tag === "ContextUsage")).toEqual({ _tag: "ContextUsage", usedTokens: 50_010, windowTokens: 200_000 })
+        expect(events.find((e) => e._tag === "ContextUsage")).toEqual({
+          _tag: "ContextUsage",
+          usedTokens: 50_010,
+          windowTokens: 200_000,
+        })
 
         // The compaction runs as its own (slow) execution; compact returns only after its terminal.
         let terminalAt = 0
@@ -590,15 +767,17 @@ describe("OpenCode session (fake server)", () => {
         yield* until(() => events.filter(isTerminal).length === 2)
         const message = events.filter((e) => e._tag === "ItemUpserted").at(-1)
         expect(message).toMatchObject({ turnId: "trn_2", item: { _tag: "Message", text: "after", streaming: false } })
-      }))
+      }),
+    )
   })
 
   test("compaction failure is a retryable error; turns are refused while compacting", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({}))
-        fake.onCompact = (sessionID, server) => setTimeout(() => scriptCompaction(sessionID, server, { fail: "did not fill in the template" }), 40)
+        fake.onCompact = (sessionID, server) =>
+          setTimeout(() => scriptCompaction(sessionID, server, { fail: "did not fill in the template" }), 40)
         const compacting = yield* Effect.forkChild(Effect.flip(session.compact), { startImmediately: true })
         yield* until(() => fake.callsOf("session.compact").length === 1)
         const busy = yield* Effect.flip(session.startTurn(turn("trn_1")))
@@ -609,14 +788,15 @@ describe("OpenCode session (fake server)", () => {
         // the session is usable again
         fake.onPrompt = (p, server) => scriptText(server, p.sessionID, "ok")
         yield* session.startTurn(turn("trn_2"))
-      }))
+      }),
+    )
   })
 
   test("a late native terminal after a local interrupt never ends the next turn", async () => {
     const fake = new FakeOpenCode()
     fake.onInterrupt = () => true // acknowledged, but the terminal comes late (after the grace period)
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const session = yield* driver.openSession(sessionInput({}))
         const events = yield* collect(session)
         yield* session.startTurn(turn("trn_1"))
@@ -640,7 +820,8 @@ describe("OpenCode session (fake server)", () => {
           { _tag: "TurnInterrupted", turnId: "trn_1" as TurnId },
           { _tag: "TurnCompleted", turnId: "trn_2" as TurnId, stopReason: "succeeded" },
         ])
-      }))
+      }),
+    )
   })
 
   test("the first prompt waits for the tool registry to settle after mcp connected (G5)", async () => {
@@ -648,7 +829,7 @@ describe("OpenCode session (fake server)", () => {
     await withDriver(
       fake,
       (driver) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const session = yield* driver.openSession(sessionInput({}))
           yield* session.startTurn(turn("trn_1"))
           const lastList = fake.callsOf("mcp.list").at(-1)!
@@ -662,34 +843,70 @@ describe("OpenCode session (fake server)", () => {
   test("probe = /api/info + model.list + integration.list (no model call)", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const status = yield* driver.probe
-        expect(status).toMatchObject({ installed: true, version: "2.0.6", auth: { state: "signed-in", label: "OpenAI" }, problems: [] })
+        expect(status).toMatchObject({
+          installed: true,
+          version: "2.0.6",
+          auth: { state: "signed-in", label: "OpenAI" },
+          problems: [],
+        })
         expect(fake.callsOf("server.info")).toHaveLength(0) // the fake transport is pre-verified
         expect(fake.callsOf("model.list")).toHaveLength(1)
         expect(fake.callsOf("integration.list")).toHaveLength(1)
 
         // no stored login, but a provider key in the environment
         fake.integrations = [{ id: "anthropic", name: "Anthropic", methods: [], connections: [] }]
-        fake.models = [{ id: "claude-x", providerID: "anthropic", name: "Claude X", variants: [], status: "active", enabled: true, limit: { context: 1 } }]
+        fake.models = [
+          {
+            id: "claude-x",
+            providerID: "anthropic",
+            name: "Claude X",
+            variants: [],
+            status: "active",
+            enabled: true,
+            limit: { context: 1 },
+          },
+        ]
         expect((yield* driver.probe).auth).toEqual({ state: "signed-in", label: "anthropic (from the environment)" })
 
         // free models only
-        fake.models = [{ id: "free", providerID: "opencode", name: "Free", variants: [], status: "active", enabled: true, limit: { context: 1 } }]
+        fake.models = [
+          {
+            id: "free",
+            providerID: "opencode",
+            name: "Free",
+            variants: [],
+            status: "active",
+            enabled: true,
+            limit: { context: 1 },
+          },
+        ]
         expect((yield* driver.probe).auth).toMatchObject({ state: "signed-out" })
 
         // nothing usable
-        fake.models = [{ id: "old", providerID: "opencode", name: "Old", variants: [], status: "deprecated", enabled: true, limit: { context: 1 } }]
+        fake.models = [
+          {
+            id: "old",
+            providerID: "opencode",
+            name: "Old",
+            variants: [],
+            status: "deprecated",
+            enabled: true,
+            limit: { context: 1 },
+          },
+        ]
         const empty = yield* driver.probe
         expect(empty.problems[0]).toContain("no usable models")
         expect(fake.callsOf("session.prompt")).toHaveLength(0)
-      }))
+      }),
+    )
   })
 
   test("listModels and probe (no model call)", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const models = yield* driver.listModels
         expect(models).toEqual([
           { id: "openai/gpt-test", label: "GPT Test", efforts: ["low", "high"] },
@@ -705,7 +922,8 @@ describe("OpenCode session (fake server)", () => {
           problems: [],
         })
         expect(fake.callsOf("session.prompt")).toHaveLength(0)
-      }))
+      }),
+    )
   })
 })
 
@@ -714,7 +932,7 @@ describe("OpenCodeHarnessLive", () => {
     const fake = new FakeOpenCode()
     const dataRoot = join(root, "data")
     const result = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const registry = yield* HarnessRegistry
         const driver = yield* registry.get("opencode")
         const status = yield* driver.probe
@@ -735,7 +953,7 @@ describe("OpenCodeHarnessLive", () => {
     expect(fake.server.dead).toBe(true)
 
     const missing = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* (yield* HarnessRegistry).get("opencode")
         return yield* driver.probe
       }).pipe(

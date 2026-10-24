@@ -63,7 +63,10 @@ const SNAPSHOT_TURNS = 20
 const MAX_TAIL_LIMIT = 500
 
 const sameActivity = (a: BotActivity | undefined, b: BotActivity): boolean =>
-  a !== undefined && a.state === b.state && a.label === b.label && a.toolKind === b.toolKind &&
+  a !== undefined &&
+  a.state === b.state &&
+  a.label === b.label &&
+  a.toolKind === b.toolKind &&
   a.conversationId === b.conversationId
 
 export const LiveHubLive: Layer.Layer<
@@ -82,7 +85,7 @@ export const LiveHubLive: Layer.Layer<
   | IdGen
 > = Layer.effect(
   LiveHub,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const log = yield* ReplicaLog
     const conversations = yield* ConversationRepo
     const requests = yield* RequestRepo
@@ -105,18 +108,20 @@ export const LiveHubLive: Layer.Layer<
     const initialEpoch = (key: ReplicaKey): Effect.Effect<string> =>
       key === rosterReplicaKey
         ? ids.next("epc")
-        : Effect.gen(function*() {
-          const id = key.slice("conversation:".length) as ConversationId
-          const conversation = yield* orDie(conversations.get(id))
-          return Option.isSome(conversation) ? conversation.value.epoch : yield* ids.next("epc")
-        })
+        : Effect.gen(function* () {
+            const id = key.slice("conversation:".length) as ConversationId
+            const conversation = yield* orDie(conversations.get(id))
+            return Option.isSome(conversation) ? conversation.value.epoch : yield* ids.next("epc")
+          })
 
     const headUnlocked = (key: ReplicaKey): Effect.Effect<StreamCursor> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const cached = heads.get(key)
         if (cached !== undefined) return cached
         const stored = yield* orDie(log.head(key))
-        const head: StreamCursor = Option.isSome(stored) ? stored.value : { epoch: yield* initialEpoch(key), sequence: 0 }
+        const head: StreamCursor = Option.isSome(stored)
+          ? stored.value
+          : { epoch: yield* initialEpoch(key), sequence: 0 }
         heads.set(key, head)
         return head
       })
@@ -124,11 +129,11 @@ export const LiveHubLive: Layer.Layer<
     const head = (key: ReplicaKey) => lock.withPermits(1)(headUnlocked(key))
 
     const resetUnlocked = (key: ReplicaKey, reason: ResetReason): Effect.Effect<string> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const epoch = yield* ids.next("epc")
-        yield* log.reset(key, epoch).pipe(
-          Effect.catchCause((cause) => Effect.logError("LiveHub: ReplicaLog.reset failed", cause)),
-        )
+        yield* log
+          .reset(key, epoch)
+          .pipe(Effect.catchCause((cause) => Effect.logError("LiveHub: ReplicaLog.reset failed", cause)))
         heads.set(key, { epoch, sequence: 0 })
         yield* PubSub.publish(pubsub, { key, kind: "reset", epoch, reason })
         return epoch
@@ -137,7 +142,7 @@ export const LiveHubLive: Layer.Layer<
     /** sequence++ → ReplicaLog → PubSub, serialized so the bus order is the sequence order. */
     const append = (key: ReplicaKey, change: ReplicaChange): Effect.Effect<StreamCursor> =>
       lock.withPermits(1)(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const current = yield* headUnlocked(key)
           const cursor: StreamCursor = { epoch: current.epoch, sequence: current.sequence + 1 }
           const record: ReplicaRecord = { replicaKey: key, epoch: cursor.epoch, sequence: cursor.sequence, change }
@@ -146,7 +151,7 @@ export const LiveHubLive: Layer.Layer<
             Effect.catchCause((cause) =>
               Effect.logError(`LiveHub: ReplicaLog.append failed for ${key}; rebuilding the replica`, cause).pipe(
                 Effect.as(false),
-              )
+              ),
             ),
           )
           if (!appended) {
@@ -169,7 +174,7 @@ export const LiveHubLive: Layer.Layer<
       cursor: StreamCursor,
       tailLimit: number | undefined,
     ) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conversation = yield* required(conversations.get(conversationId), "conversation", conversationId)
         const limit = Math.min(Math.max(1, Math.floor(tailLimit ?? SNAPSHOT_TAIL_ENTRIES)), MAX_TAIL_LIMIT)
         const page = yield* orDie(Effect.provide(visiblePage({ conversationId, limit }), repos))
@@ -196,7 +201,7 @@ export const LiveHubLive: Layer.Layer<
       })
 
     const rosterSnapshot = (cursor: StreamCursor) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const allBots = yield* orDie(bots.list)
         const botIds = new Set(allBots.map((b) => b.id))
         const allConversations = yield* orDie(conversations.list())
@@ -223,7 +228,7 @@ export const LiveHubLive: Layer.Layer<
 
     /** Replayable records after `after`, or none (→ snapshot). */
     const replayFor = (key: ReplicaKey, after: StreamCursor | undefined, current: StreamCursor) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (after === undefined || after.epoch !== current.epoch) return Option.none<ReadonlyArray<ReplicaRecord>>()
         if (after.sequence > current.sequence || current.sequence - after.sequence > MAX_REPLAY_GAP) {
           return Option.none<ReadonlyArray<ReplicaRecord>>()
@@ -245,7 +250,7 @@ export const LiveHubLive: Layer.Layer<
       readonly onReset: (epoch: string, reason: ResetReason) => ReadonlyArray<Item>
     }): Stream.Stream<Item, E> =>
       Stream.unwrap(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           // Subscribe BEFORE reading the head: nothing published after the head read can be missed.
           const subscription = yield* PubSub.subscribe(pubsub)
           yield* options.preflight
@@ -273,7 +278,7 @@ export const LiveHubLive: Layer.Layer<
               const mapped = options.toChange(item)
               return Effect.succeed(mapped === undefined ? [] : [mapped])
             }
-            return Effect.gen(function*() {
+            return Effect.gen(function* () {
               const fresh = yield* head(options.key)
               last = fresh
               const snapshot = yield* options.snapshot(fresh)
@@ -299,7 +304,8 @@ export const LiveHubLive: Layer.Layer<
           after,
           preflight: Effect.asVoid(required(conversations.get(conversationId), "conversation", conversationId)),
           snapshot: (cursor) => conversationSnapshot(conversationId, cursor, tailLimit),
-          toChange: ({ change, cursor }) => (change.replica === "conversation" ? { kind: "change", cursor, change: change.change } : undefined),
+          toChange: ({ change, cursor }) =>
+            change.replica === "conversation" ? { kind: "change", cursor, change: change.change } : undefined,
           synchronized: (cursor) => ({ kind: "synchronized", cursor }),
           onReset: (epoch, reason) => [{ kind: "reset", epoch, reason }],
         }),
@@ -310,7 +316,8 @@ export const LiveHubLive: Layer.Layer<
           after,
           preflight: Effect.void,
           snapshot: rosterSnapshot,
-          toChange: ({ change, cursor }) => (change.replica === "roster" ? { kind: "change", cursor, change: change.change } : undefined),
+          toChange: ({ change, cursor }) =>
+            change.replica === "roster" ? { kind: "change", cursor, change: change.change } : undefined,
           synchronized: (cursor) => ({ kind: "synchronized", cursor }),
           // The roster stream has no `reset` item: a fresh snapshot replaces the client state.
           onReset: () => [],
@@ -322,7 +329,7 @@ export const LiveHubLive: Layer.Layer<
       activities: Effect.sync(() => [...activities.values()]),
 
       setActivity: (activity) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           if (sameActivity(activities.get(activity.botId), activity)) return
           activities.set(activity.botId, activity)
           yield* publishRoster({ type: "activity.updated", activity })
@@ -331,13 +338,13 @@ export const LiveHubLive: Layer.Layer<
   }).pipe(
     // Forward node list changes into the roster for the lifetime of the layer (D: §8.6).
     Effect.tap((hub) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const directory = yield* NodeDirectory
         yield* Effect.forkScoped(
           Stream.runForEach(directory.changes, (change) => Effect.asVoid(hub.publishRoster(change))),
           { startImmediately: true },
         )
-      })
+      }),
     ),
   ),
 )

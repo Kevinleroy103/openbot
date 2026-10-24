@@ -30,9 +30,11 @@ type In<T extends OpenBotRpcTag> = Rpc.Payload<R<T>>
 type Out<T extends OpenBotRpcTag> = Rpc.Success<R<T>>
 type Svc<S extends { readonly Service: unknown }> = S["Service"]
 
-type Success<F> = F extends (...args: Array<any>) => Effect.Effect<infer A, any, any> ? A
-  : F extends Effect.Effect<infer A, any, any> ? A
-  : never
+type Success<F> = F extends (...args: Array<any>) => Effect.Effect<infer A, any, any>
+  ? A
+  : F extends Effect.Effect<infer A, any, any>
+    ? A
+    : never
 type StreamItem<F> = F extends (...args: Array<any>) => Stream.Stream<infer A, any, any> ? A : never
 /** Element type of a streaming RPC's success. */
 type Elem<S> = S extends Stream.Stream<infer A, any, any> ? A : S
@@ -67,7 +69,9 @@ check<Assignable<In<"settings.update">["patch"], Parameters<Svc<typeof SettingsS
 check<Assignable<In<"rules.list">, Parameters<Svc<typeof SettingsService>["listRules"]>[0]>>(true)
 check<Assignable<In<"rules.upsert">["rule"], Parameters<Svc<typeof SettingsService>["upsertRule"]>[0]>>(true)
 check<Assignable<In<"usage.byBot">, Parameters<Svc<typeof UsageService>["byBot"]>[0]>>(true)
-check<Assignable<In<"nodes.setCapabilities">["approved"], Parameters<Svc<typeof NodeAdmin>["setCapabilities"]>[1]>>(true)
+check<Assignable<In<"nodes.setCapabilities">["approved"], Parameters<Svc<typeof NodeAdmin>["setCapabilities"]>[1]>>(
+  true,
+)
 check<Assignable<In<"harnesses.models">["kind"], Parameters<Svc<typeof HarnessRegistry>["get"]>[0]>>(true)
 
 // ---- service result → RPC success

@@ -62,7 +62,8 @@ const killPid = (pid: number, signal: Signal): void => {
 const PASS_THROUGH = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR"]
 
 /** Brain-supplied env is advisory: the node owns PATH/HOME/loader hooks/tool homes. */
-const BLOCKED_ENV = /^(PATH|HOME|SHELL|USER|LOGNAME|LD_|DYLD_|NODE_OPTIONS|BUN_|BASH_ENV|ENV|PROMPT_COMMAND|CLAUDE_CONFIG_DIR|CODEX_HOME|XDG_|OPENBOT_)/
+const BLOCKED_ENV =
+  /^(PATH|HOME|SHELL|USER|LOGNAME|LD_|DYLD_|NODE_OPTIONS|BUN_|BASH_ENV|ENV|PROMPT_COMMAND|CLAUDE_CONFIG_DIR|CODEX_HOME|XDG_|OPENBOT_)/
 
 export const filterEnv = (env: Readonly<Record<string, string>> | undefined): Record<string, string> => {
   const out: Record<string, string> = {}

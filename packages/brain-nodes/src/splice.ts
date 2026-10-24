@@ -20,7 +20,7 @@ export interface Duplex {
 
 /** Acquire reader + writer in the caller's scope; closing the scope closes the socket. */
 export const open = (socket: Socket.Socket): Effect.Effect<Duplex, Socket.SocketError, Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const reader = yield* socket.reader
     const writer = yield* socket.writer
     return { pull: reader.pull, writer }
@@ -65,7 +65,11 @@ export interface SpliceOptions {
 const closeCodeOf = (exit: Exit.Exit<unknown, Socket.SocketError>): number | undefined => {
   if (Exit.isSuccess(exit)) return undefined
   for (const reason of exit.cause.reasons) {
-    if (reason._tag === "Fail" && Socket.isSocketError(reason.error) && reason.error.reason._tag === "SocketCloseError") {
+    if (
+      reason._tag === "Fail" &&
+      Socket.isSocketError(reason.error) &&
+      reason.error.reason._tag === "SocketCloseError"
+    ) {
       return reason.error.reason.code
     }
   }
@@ -78,7 +82,7 @@ const closeCodeOf = (exit: Exit.Exit<unknown, Socket.SocketError>): number | und
  * first side closed with a code, the same code is forwarded to the other side.
  */
 export const splice = (a: Duplex, b: Duplex, options?: SpliceOptions): Effect.Effect<SpliceResult> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const ab: SpliceCount = { frames: 0, bytes: 0 }
     const ba: SpliceCount = { frames: 0, bytes: 0 }
     const result = yield* Effect.raceFirst(
@@ -94,8 +98,11 @@ export const splice = (a: Duplex, b: Duplex, options?: SpliceOptions): Effect.Ef
   })
 
 /** Open two sockets in the current scope and splice them. */
-export const spliceSockets = (a: Socket.Socket, b: Socket.Socket): Effect.Effect<SpliceResult, Socket.SocketError, Scope.Scope> =>
-  Effect.gen(function*() {
+export const spliceSockets = (
+  a: Socket.Socket,
+  b: Socket.Socket,
+): Effect.Effect<SpliceResult, Socket.SocketError, Scope.Scope> =>
+  Effect.gen(function* () {
     const da = yield* open(a)
     const db = yield* open(b)
     return yield* splice(da, db)

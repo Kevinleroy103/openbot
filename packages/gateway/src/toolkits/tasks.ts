@@ -58,17 +58,18 @@ export const describeTask = (task: Task, now: number): string => {
 
 /** The bot's task named `ref`, or a refusal that lists what there is. */
 const findTask = (ctx: ToolContext, ref: string) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const tasks = yield* BackgroundTasks
     return yield* tasks.find(ctx.claims.botId, ref).pipe(
       Effect.catchTag("NotFound", () =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const recent = yield* tasks.list({ botId: ctx.claims.botId, limit: 10 })
           const titles = recent.map((t) => quoted(t.title)).join(", ")
           return yield* new ToolRefusal({
             message: `Nothing called ${quoted(ref.trim())} is running or recently finished.${titles === "" ? "" : ` Recent work: ${titles}.`}`,
           })
-        })),
+        }),
+      ),
     )
   })
 
@@ -76,9 +77,12 @@ const startTask = defineTool({
   name: "start_task",
   toolset: "bot",
   description:
-    "Start a piece of work that runs in parallel, so you stay available to the owner and your team while it runs. Use it for work likely to take more than about a minute or many tool steps (research, long builds, processing many files); quick things you just do directly. The work runs with your tools, files and memory and sees the recent messages of this conversation, so keep the brief short: one to a few sentences saying what to do and what done looks like, plus only what the recent messages do not already say. Returns at once. The result comes back to you later in this conversation as a message whose first line is [Result of \"<title>\"]; then tell the owner what came out of it in your own words. While it runs, pass the owner's feedback or changes on to it with update_task instead of waiting for it to finish or starting it over. Whenever you tell the owner about it, talk about the work itself, never about how it is run.",
+    'Start a piece of work that runs in parallel, so you stay available to the owner and your team while it runs. Use it for work likely to take more than about a minute or many tool steps (research, long builds, processing many files); quick things you just do directly. The work runs with your tools, files and memory and sees the recent messages of this conversation, so keep the brief short: one to a few sentences saying what to do and what done looks like, plus only what the recent messages do not already say. Returns at once. The result comes back to you later in this conversation as a message whose first line is [Result of "<title>"]; then tell the owner what came out of it in your own words. While it runs, pass the owner\'s feedback or changes on to it with update_task instead of waiting for it to finish or starting it over. Whenever you tell the owner about it, talk about the work itself, never about how it is run.',
   params: p.params({
-    title: p.string(`A short name for the work (at most ${TASK_TITLE_MAX_CHARS} characters).`, { minLength: 1, maxLength: TASK_TITLE_MAX_CHARS }),
+    title: p.string(`A short name for the work (at most ${TASK_TITLE_MAX_CHARS} characters).`, {
+      minLength: 1,
+      maxLength: TASK_TITLE_MAX_CHARS,
+    }),
     brief: p.string(
       "One to a few sentences: what to do and what done looks like. The work already sees the recent messages of this conversation, your files and your memory; add only what they do not say.",
       { minLength: 1, maxLength: TASK_BRIEF_MAX_CHARS },
@@ -87,7 +91,7 @@ const startTask = defineTool({
   annotations: { title: "Start parallel work", destructiveHint: false, openWorldHint: false },
   available: notInTask,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const task = yield* (yield* BackgroundTasks).start(ctx.tool, { title: args.title, brief: args.brief })
       // Plain content, then the rule (no example phrase): the model replies right after reading this.
       const rule = "If you reply now, talk about the work itself, not about how it is run."
@@ -102,16 +106,20 @@ const startTask = defineTool({
 const listTasks = defineTool({
   name: "list_tasks",
   toolset: "bot",
-  description: "List your work running in parallel and what finished recently: title, state and how long it has been running.",
+  description:
+    "List your work running in parallel and what finished recently: title, state and how long it has been running.",
   params: p.params({}),
   annotations: { title: "List parallel work", readOnlyHint: true, openWorldHint: false },
   available: notInTask,
   idempotent: false,
   handler: (_args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const tasks = yield* (yield* BackgroundTasks).list({ botId: ctx.claims.botId, limit: 20 })
       const now = yield* Clock.currentTimeMillis
-      return linesResult(tasks.map((t) => describeTask(t, now)), "Nothing is running and nothing finished recently.")
+      return linesResult(
+        tasks.map((t) => describeTask(t, now)),
+        "Nothing is running and nothing finished recently.",
+      )
     }),
 })
 
@@ -125,7 +133,7 @@ const checkTask = defineTool({
   available: notInTask,
   idempotent: false,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const found = yield* findTask(ctx.tool, args.task)
       const detail = yield* (yield* BackgroundTasks).get(found.id)
       const task = detail.task
@@ -135,10 +143,14 @@ const checkTask = defineTool({
       if (task.status === "succeeded") {
         lines.push(`Result:\n${capChars(task.result ?? "(no written result)", 6_000)}`)
       } else {
-        const partial = [...detail.steps].reverse().find((s) => s.kind === "message" && s.role === "bot" && s.text.trim() !== "")
-        if (partial !== undefined && partial.kind === "message") lines.push(`What it has so far:\n${capChars(partial.text.trim(), 3_000)}`)
+        const partial = [...detail.steps]
+          .reverse()
+          .find((s) => s.kind === "message" && s.role === "bot" && s.text.trim() !== "")
+        if (partial !== undefined && partial.kind === "message")
+          lines.push(`What it has so far:\n${capChars(partial.text.trim(), 3_000)}`)
       }
-      if (!isTerminalTaskStatus(task.status)) lines.push("Its result will come back to you as a message when it is done.")
+      if (!isTerminalTaskStatus(task.status))
+        lines.push("Its result will come back to you as a message when it is done.")
       return textResult(lines.join("\n"))
     }),
 })
@@ -146,18 +158,21 @@ const checkTask = defineTool({
 const cancelTask = defineTool({
   name: "cancel_task",
   toolset: "bot",
-  description: "Stop one piece of your parallel work, by title. Only that work stops; your conversations and your other work continue.",
+  description:
+    "Stop one piece of your parallel work, by title. Only that work stops; your conversations and your other work continue.",
   params: p.params({ task: p.text("The title of the work to stop (or its id).") }),
   annotations: { title: "Stop parallel work", destructiveHint: true, openWorldHint: false },
   available: notInTask,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const found = yield* findTask(ctx.tool, args.task)
       if (isTerminalTaskStatus(found.status)) {
         return textResult(`${quoted(found.title)} is already over; there is nothing to stop.`)
       }
       const task = yield* (yield* BackgroundTasks).cancel(found.id, "bot")
-      return textResult(isTerminalTaskStatus(task.status) ? `Stopped ${quoted(task.title)}.` : `${quoted(task.title)} is stopping.`)
+      return textResult(
+        isTerminalTaskStatus(task.status) ? `Stopped ${quoted(task.title)}.` : `${quoted(task.title)} is stopping.`,
+      )
     }),
 })
 
@@ -176,13 +191,18 @@ const updateTask = defineTool({
   annotations: { title: "Update parallel work", destructiveHint: false, openWorldHint: false },
   available: notInTask,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const found = yield* findTask(ctx.tool, args.task)
-      const { task, delivery } = yield* (yield* BackgroundTasks).update(ctx.tool, { taskId: found.id, message: args.message })
+      const { task, delivery } = yield* (yield* BackgroundTasks).update(ctx.tool, {
+        taskId: found.id,
+        message: args.message,
+      })
       const rule = "If you reply now, talk about the change itself, not about how it is passed on."
       switch (delivery) {
         case "steered":
-          return textResult(`${quoted(task.title)} has your update and is taking it into account now. Its result will come back to you here when it is done. ${rule}`)
+          return textResult(
+            `${quoted(task.title)} has your update and is taking it into account now. Its result will come back to you here when it is done. ${rule}`,
+          )
         case "queued":
           return textResult(
             task.status === "queued"
@@ -191,12 +211,22 @@ const updateTask = defineTool({
           )
         case "finished": {
           const now = yield* Clock.currentTimeMillis
-          const how = isTerminalTaskStatus(task.status) ? ` (${describeTask(task, now).slice(quoted(task.title).length + 3)})` : ""
-          return textResult(`${quoted(task.title)} is already over${how}, so it cannot take this update. If the change is still needed, start the work again with it.`)
+          const how = isTerminalTaskStatus(task.status)
+            ? ` (${describeTask(task, now).slice(quoted(task.title).length + 3)})`
+            : ""
+          return textResult(
+            `${quoted(task.title)} is already over${how}, so it cannot take this update. If the change is still needed, start the work again with it.`,
+          )
         }
       }
     }),
 })
 
 /** Every task tool. */
-export const TaskToolkit: ReadonlyArray<AnyTool<TaskToolkitServices>> = [startTask, listTasks, checkTask, cancelTask, updateTask]
+export const TaskToolkit: ReadonlyArray<AnyTool<TaskToolkitServices>> = [
+  startTask,
+  listTasks,
+  checkTask,
+  cancelTask,
+  updateTask,
+]

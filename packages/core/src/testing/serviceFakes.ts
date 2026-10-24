@@ -46,7 +46,20 @@ import {
   memoryFactIdFromTitle,
   NotFound,
 } from "@openbot/contracts"
-import { Clock, Context, Deferred, Effect, Layer, Option, PubSub, Queue, Ref, Result, Stream, SubscriptionRef } from "effect"
+import {
+  Clock,
+  Context,
+  Deferred,
+  Effect,
+  Layer,
+  Option,
+  PubSub,
+  Queue,
+  Ref,
+  Result,
+  Stream,
+  SubscriptionRef,
+} from "effect"
 import { IdGen } from "../ports/IdGen.ts"
 import {
   ConversationRepo,
@@ -78,8 +91,7 @@ import {
 import { MemoryStore } from "../ports/stores.ts"
 import { addUsage } from "./memoryRepos.ts"
 
-const notImplemented = (fake: string, method: string) =>
-  Effect.die(new Error(`${fake}: ${method} is not implemented`))
+const notImplemented = (fake: string, method: string) => Effect.die(new Error(`${fake}: ${method} is not implemented`))
 
 const repoOrDie = Effect.orDie
 
@@ -96,20 +108,29 @@ type HubItem =
   | { readonly replicaKey: ReplicaKey; readonly conversation: KnownConversationStreamItem }
   | { readonly replicaKey: ReplicaKey; readonly roster: KnownRosterStreamItem }
 
-export class LiveHubFake extends Context.Service<LiveHubFake, {
-  /** Every published change (both replicas), oldest first. */
-  readonly published: Effect.Effect<ReadonlyArray<PublishedChange>>
-  /** Changes published to one conversation replica, oldest first. */
-  readonly conversationChanges: (conversationId: ConversationId) => Effect.Effect<ReadonlyArray<KnownConversationChange>>
-  /** Changes published to the roster replica, oldest first. */
-  readonly rosterChanges: Effect.Effect<ReadonlyArray<KnownRosterChange>>
-  /** `resetConversation` calls, oldest first. */
-  readonly resets: Effect.Effect<ReadonlyArray<{ readonly conversationId: ConversationId; readonly epoch: string; readonly reason: string }>>
-}>()("openbot/core/testing/LiveHubFake") {
+export class LiveHubFake extends Context.Service<
+  LiveHubFake,
+  {
+    /** Every published change (both replicas), oldest first. */
+    readonly published: Effect.Effect<ReadonlyArray<PublishedChange>>
+    /** Changes published to one conversation replica, oldest first. */
+    readonly conversationChanges: (
+      conversationId: ConversationId,
+    ) => Effect.Effect<ReadonlyArray<KnownConversationChange>>
+    /** Changes published to the roster replica, oldest first. */
+    readonly rosterChanges: Effect.Effect<ReadonlyArray<KnownRosterChange>>
+    /** `resetConversation` calls, oldest first. */
+    readonly resets: Effect.Effect<
+      ReadonlyArray<{ readonly conversationId: ConversationId; readonly epoch: string; readonly reason: string }>
+    >
+  }
+>()("openbot/core/testing/LiveHubFake") {
   static readonly layer: Layer.Layer<LiveHub | LiveHubFake> = Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const log = yield* Ref.make<ReadonlyArray<PublishedChange>>([])
-      const resets = yield* Ref.make<ReadonlyArray<{ conversationId: ConversationId; epoch: string; reason: string }>>([])
+      const resets = yield* Ref.make<ReadonlyArray<{ conversationId: ConversationId; epoch: string; reason: string }>>(
+        [],
+      )
       const heads = new Map<ReplicaKey, StreamCursor>()
       const activities = yield* Ref.make<ReadonlyMap<BotId, BotActivity>>(new Map())
       const items = yield* PubSub.unbounded<HubItem>()
@@ -118,7 +139,7 @@ export class LiveHubFake extends Context.Service<LiveHubFake, {
 
       const headOf = (key: ReplicaKey): StreamCursor => heads.get(key) ?? { epoch: "epc_test", sequence: 0 }
       const append = (replicaKey: ReplicaKey, change: ReplicaChange) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const head = headOf(replicaKey)
           const cursor: StreamCursor = { epoch: head.epoch, sequence: head.sequence + 1 }
           heads.set(replicaKey, cursor)
@@ -139,12 +160,14 @@ export class LiveHubFake extends Context.Service<LiveHubFake, {
         publishRoster,
         subscribeConversation: ({ conversationId }) =>
           Stream.unwrap(
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const key = conversationReplicaKey(conversationId)
               const subscription = yield* PubSub.subscribe(items)
               const live = Stream.fromSubscription(subscription).pipe(
                 Stream.filterMap((item) =>
-                  item.replicaKey === key && "conversation" in item ? Result.succeed(item.conversation) : Result.failVoid
+                  item.replicaKey === key && "conversation" in item
+                    ? Result.succeed(item.conversation)
+                    : Result.failVoid,
                 ),
               )
               const synced: KnownConversationStreamItem = { kind: "synchronized", cursor: headOf(key) }
@@ -153,7 +176,7 @@ export class LiveHubFake extends Context.Service<LiveHubFake, {
           ),
         subscribeRoster: () =>
           Stream.unwrap(
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const subscription = yield* PubSub.subscribe(items)
               const live = Stream.fromSubscription(subscription).pipe(
                 Stream.filterMap((item) => ("roster" in item ? Result.succeed(item.roster) : Result.failVoid)),
@@ -163,7 +186,7 @@ export class LiveHubFake extends Context.Service<LiveHubFake, {
             }),
           ),
         resetConversation: (conversationId, reason) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const key = conversationReplicaKey(conversationId)
             const epoch = `epc_test_${++epochs}`
             heads.set(key, { epoch, sequence: 0 })
@@ -185,10 +208,12 @@ export class LiveHubFake extends Context.Service<LiveHubFake, {
             all.flatMap((p) =>
               p.replicaKey === conversationReplicaKey(conversationId) && p.change.replica === "conversation"
                 ? [p.change.change]
-                : []
-            )),
+                : [],
+            ),
+          ),
         rosterChanges: Effect.map(Ref.get(log), (all) =>
-          all.flatMap((p) => (p.change.replica === "roster" ? [p.change.change] : []))),
+          all.flatMap((p) => (p.change.replica === "roster" ? [p.change.change] : [])),
+        ),
         resets: Ref.get(resets),
       })
       return Context.make(LiveHub, hub).pipe(Context.add(LiveHubFake, control))
@@ -198,10 +223,13 @@ export class LiveHubFake extends Context.Service<LiveHubFake, {
 
 // ============================================================================ ConversationService
 
-export class ConversationServiceFake extends Context.Service<ConversationServiceFake, {
-  /** Every entry value written through the fake (appends and updates), oldest first. */
-  readonly written: Effect.Effect<ReadonlyArray<TranscriptEntry>>
-}>()("openbot/core/testing/ConversationServiceFake") {
+export class ConversationServiceFake extends Context.Service<
+  ConversationServiceFake,
+  {
+    /** Every entry value written through the fake (appends and updates), oldest first. */
+    readonly written: Effect.Effect<ReadonlyArray<TranscriptEntry>>
+  }
+>()("openbot/core/testing/ConversationServiceFake") {
   /**
    * Implements `get`, `appendEntry`, `updateEntry`, `appendEvent`, `appendNotice`, `upsertRequest`
    * and `createRoutineRunConversation` (persist, then publish through LiveHub). Conversation
@@ -212,7 +240,7 @@ export class ConversationServiceFake extends Context.Service<ConversationService
     never,
     ConversationRepo | EntryRepo | RequestRepo | IdGen | LiveHub
   > = Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const conversations = yield* ConversationRepo
       const entries = yield* EntryRepo
       const requests = yield* RequestRepo
@@ -223,23 +251,26 @@ export class ConversationServiceFake extends Context.Service<ConversationService
       const getConversation = (conversationId: ConversationId) =>
         conversations.get(conversationId).pipe(
           repoOrDie,
-          Effect.flatMap(Option.match({
-            onNone: () => Effect.fail(new NotFound({ entity: "conversation", id: conversationId })),
-            onSome: Effect.succeed,
-          })),
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.fail(new NotFound({ entity: "conversation", id: conversationId })),
+              onSome: Effect.succeed,
+            }),
+          ),
         )
       const write = (entry: KnownTranscriptEntry) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const outcome = yield* repoOrDie(entries.upsert(entry))
           const value = outcome.applied ? outcome.value : outcome.current
           if (outcome.applied) {
             yield* Ref.update(written, (all) => [...all, value])
-            if (value.kind !== "unknown") yield* hub.publishConversation(value.conversationId, { type: "entry.upserted", entry: value })
+            if (value.kind !== "unknown")
+              yield* hub.publishConversation(value.conversationId, { type: "entry.upserted", entry: value })
           }
           return value
         })
       const appendEntry = (draft: EntryDraft) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* getConversation(draft.conversationId)
           const now = yield* Clock.currentTimeMillis
           const id = draft.id ?? (yield* ids.entryId)
@@ -261,15 +292,19 @@ export class ConversationServiceFake extends Context.Service<ConversationService
         removeGroup: () => notImplemented("ConversationServiceFake", "removeGroup"),
         place: () => notImplemented("ConversationServiceFake", "place"),
         removeEntry: (entryId) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const current = yield* repoOrDie(entries.get(entryId))
             if (Option.isNone(current)) return
             yield* repoOrDie(entries.remove(entryId))
-            yield* hub.publishConversation(current.value.conversationId, { type: "entry.removed", entryId, reason: "retracted" })
+            yield* hub.publishConversation(current.value.conversationId, {
+              type: "entry.removed",
+              entryId,
+              reason: "retracted",
+            })
           }),
         appendEntry,
         updateEntry: (entryId, update) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const current = yield* repoOrDie(entries.get(entryId))
             if (Option.isNone(current) || current.value.kind === "unknown") {
               return yield* new NotFound({ entity: "entry", id: entryId })
@@ -304,13 +339,13 @@ export class ConversationServiceFake extends Context.Service<ConversationService
             ...(turnId === undefined ? {} : { turnId }),
           } as EntryDraft),
         upsertRequest: (request) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             yield* getConversation(request.conversationId)
             yield* repoOrDie(requests.upsert(request))
             yield* hub.publishConversation(request.conversationId, { type: "request.upserted", request })
           }),
         createRoutineRunConversation: ({ botId, routineId, runId, title, triggerSummary }) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis
             const conversation = {
               id: yield* ids.conversationId,
@@ -341,21 +376,24 @@ export class ConversationServiceFake extends Context.Service<ConversationService
 
 export type DeliveryResult = Omit<DeliveryOutcome, "deliveryId">
 
-export class OrchestratorFake extends Context.Service<OrchestratorFake, {
-  /** Every delivery, oldest first (defaults applied: id, mode "auto", attachmentIds [], new chain). */
-  readonly deliveries: Effect.Effect<ReadonlyArray<Delivery>>
-  /** Resolves `awaitDelivery(deliveryId)`. */
-  readonly complete: (deliveryId: string, result: DeliveryResult) => Effect.Effect<void>
-  /** What `currentChain(botId)` returns (default none). */
-  readonly setChain: (botId: BotId, chain: CausalChain | undefined) => Effect.Effect<void>
-  /** What `activeTurn(botId)` returns (default none); the gateway resolves tool calls' conversation from it. */
-  readonly setActiveTurn: (botId: BotId, turn: Turn | undefined) => Effect.Effect<void>
-  /**
-   * Other calls, e.g. "stopBot:<botId>", "newSession:<botId>", "compact:<botId>", "recover",
-   * "approveToolCall:<botId>:<toolName>" (plus ":<taskId>" for a background task's call).
-   */
-  readonly calls: Effect.Effect<ReadonlyArray<string>>
-}>()("openbot/core/testing/OrchestratorFake") {
+export class OrchestratorFake extends Context.Service<
+  OrchestratorFake,
+  {
+    /** Every delivery, oldest first (defaults applied: id, mode "auto", attachmentIds [], new chain). */
+    readonly deliveries: Effect.Effect<ReadonlyArray<Delivery>>
+    /** Resolves `awaitDelivery(deliveryId)`. */
+    readonly complete: (deliveryId: string, result: DeliveryResult) => Effect.Effect<void>
+    /** What `currentChain(botId)` returns (default none). */
+    readonly setChain: (botId: BotId, chain: CausalChain | undefined) => Effect.Effect<void>
+    /** What `activeTurn(botId)` returns (default none); the gateway resolves tool calls' conversation from it. */
+    readonly setActiveTurn: (botId: BotId, turn: Turn | undefined) => Effect.Effect<void>
+    /**
+     * Other calls, e.g. "stopBot:<botId>", "newSession:<botId>", "compact:<botId>", "recover",
+     * "approveToolCall:<botId>:<toolName>" (plus ":<taskId>" for a background task's call).
+     */
+    readonly calls: Effect.Effect<ReadonlyArray<string>>
+  }
+>()("openbot/core/testing/OrchestratorFake") {
   /**
    * `deliver` records and returns `{disposition: "started", turnId: <fresh>}`; with `autoComplete`,
    * every delivery's outcome resolves immediately with that result. `send`, `lookupSend`, `react`
@@ -365,13 +403,9 @@ export class OrchestratorFake extends Context.Service<OrchestratorFake, {
     readonly autoComplete?: DeliveryResult
     /** What `approveToolCall` returns (default allow-once). */
     readonly toolApproval?: HarnessRequestResolution
-  }): Layer.Layer<
-    Orchestrator | OrchestratorFake,
-    never,
-    IdGen
-  > =>
+  }): Layer.Layer<Orchestrator | OrchestratorFake, never, IdGen> =>
     Layer.effectContext(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ids = yield* IdGen
         const deliveries = yield* Ref.make<ReadonlyArray<Delivery>>([])
         const outcomes = new Map<string, Deferred.Deferred<DeliveryOutcome>>()
@@ -392,7 +426,7 @@ export class OrchestratorFake extends Context.Service<OrchestratorFake, {
           resume: () => Effect.void,
           deleteConversation: (conversationId) => call(`deleteConversation:${conversationId}`),
           deliver: (input: DeliveryInput) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const id = input.id ?? (yield* ids.next("dlv"))
               const delivery: Delivery = {
                 ...input,
@@ -416,9 +450,9 @@ export class OrchestratorFake extends Context.Service<OrchestratorFake, {
               : Deferred.await(deferred)
           },
           approveToolCall: (tool, request) =>
-            call(`approveToolCall:${tool.claims.botId}:${request.toolName}${tool.taskId === undefined ? "" : `:${tool.taskId}`}`).pipe(
-              Effect.as(options?.toolApproval ?? { decision: "allow-once" as const }),
-            ),
+            call(
+              `approveToolCall:${tool.claims.botId}:${request.toolName}${tool.taskId === undefined ? "" : `:${tool.taskId}`}`,
+            ).pipe(Effect.as(options?.toolApproval ?? { decision: "allow-once" as const })),
           newSession: ({ botId }) => call(`newSession:${botId}`),
           compact: ({ botId }) => call(`compact:${botId}`),
           stopBot: (botId) => call(`stopBot:${botId}`),
@@ -481,30 +515,31 @@ export interface ToolRequestRecord {
   readonly requestId: RequestId
 }
 
-export class ApprovalServiceFake extends Context.Service<ApprovalServiceFake, {
-  readonly evaluated: Effect.Effect<ReadonlyArray<EvaluatedRequest>>
-  readonly setPolicy: (policy: ApprovalPolicy) => Effect.Effect<void>
-  /** `ask_user` / `request_approval` / `request_takeover` calls, oldest first. */
-  readonly toolRequests: Effect.Effect<ReadonlyArray<ToolRequestRecord>>
-  /** `evaluateNode` calls, oldest first. */
-  readonly nodeRequests: Effect.Effect<ReadonlyArray<NodeApprovalInput>>
-  /** Emits an answered async request on `asyncAnswers`. */
-  readonly answer: (delivery: DeliveryInput) => Effect.Effect<void>
-  /** `cancelPending` calls, oldest first. */
-  readonly cancelled: Effect.Effect<ReadonlyArray<Parameters<ApprovalShape["cancelPending"]>[0]>>
-}>()("openbot/core/testing/ApprovalServiceFake") {
+export class ApprovalServiceFake extends Context.Service<
+  ApprovalServiceFake,
+  {
+    readonly evaluated: Effect.Effect<ReadonlyArray<EvaluatedRequest>>
+    readonly setPolicy: (policy: ApprovalPolicy) => Effect.Effect<void>
+    /** `ask_user` / `request_approval` / `request_takeover` calls, oldest first. */
+    readonly toolRequests: Effect.Effect<ReadonlyArray<ToolRequestRecord>>
+    /** `evaluateNode` calls, oldest first. */
+    readonly nodeRequests: Effect.Effect<ReadonlyArray<NodeApprovalInput>>
+    /** Emits an answered async request on `asyncAnswers`. */
+    readonly answer: (delivery: DeliveryInput) => Effect.Effect<void>
+    /** `cancelPending` calls, oldest first. */
+    readonly cancelled: Effect.Effect<ReadonlyArray<Parameters<ApprovalShape["cancelPending"]>[0]>>
+  }
+>()("openbot/core/testing/ApprovalServiceFake") {
   /**
    * `evaluate` resolves immediately with the policy (it never creates RuntimeRequests or cards and
    * never calls `ctx.onPending`). `evaluateNode` → allow-once by "rule". `respond` is not
    * implemented; `listPending` → [].
    */
-  static readonly layer = (options?: { readonly policy?: ApprovalPolicy }): Layer.Layer<
-    ApprovalService | ApprovalServiceFake,
-    never,
-    IdGen
-  > =>
+  static readonly layer = (options?: {
+    readonly policy?: ApprovalPolicy
+  }): Layer.Layer<ApprovalService | ApprovalServiceFake, never, IdGen> =>
     Layer.effectContext(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ids = yield* IdGen
         const policy = yield* Ref.make<ApprovalPolicy>(options?.policy ?? allowAllPolicy)
         const evaluated = yield* Ref.make<ReadonlyArray<EvaluatedRequest>>([])
@@ -514,7 +549,7 @@ export class ApprovalServiceFake extends Context.Service<ApprovalServiceFake, {
         const answers = yield* Queue.unbounded<DeliveryInput>()
 
         const toolRequest = (tool: ToolRequestRecord["tool"], ctx: ToolContext, input: unknown) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const requestId = yield* ids.requestId
             yield* Ref.update(toolRequests, (all) => [...all, { tool, ctx, input, requestId }])
             return { status: "pending" as const, requestId }
@@ -522,7 +557,7 @@ export class ApprovalServiceFake extends Context.Service<ApprovalServiceFake, {
 
         const service = ApprovalService.of({
           evaluate: (ctx, request) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const resolution = (yield* Ref.get(policy))(ctx, request)
               yield* Ref.update(evaluated, (all) => [...all, { ctx, request, resolution }])
               return resolution
@@ -554,18 +589,19 @@ export class ApprovalServiceFake extends Context.Service<ApprovalServiceFake, {
 
 // ============================================================================ SettingsService
 
-export class SettingsServiceFake extends Context.Service<SettingsServiceFake, {
-  /** Replaces the current settings (emitted on `changes`). */
-  readonly set: (settings: Settings) => Effect.Effect<void>
-}>()("openbot/core/testing/SettingsServiceFake") {
+export class SettingsServiceFake extends Context.Service<
+  SettingsServiceFake,
+  {
+    /** Replaces the current settings (emitted on `changes`). */
+    readonly set: (settings: Settings) => Effect.Effect<void>
+  }
+>()("openbot/core/testing/SettingsServiceFake") {
   /** In-memory settings (defaults + `initial`) and rules; no LiveHub publishing. */
-  static readonly layer = (options?: { readonly initial?: Partial<Settings> }): Layer.Layer<
-    SettingsService | SettingsServiceFake,
-    never,
-    IdGen
-  > =>
+  static readonly layer = (options?: {
+    readonly initial?: Partial<Settings>
+  }): Layer.Layer<SettingsService | SettingsServiceFake, never, IdGen> =>
     Layer.effectContext(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ids = yield* IdGen
         const state = yield* SubscriptionRef.make<Settings>({ ...DEFAULT_SETTINGS, ...options?.initial })
         const rules = yield* Ref.make<ReadonlyArray<ApprovalRule>>([])
@@ -578,10 +614,12 @@ export class SettingsServiceFake extends Context.Service<SettingsServiceFake, {
           changes: SubscriptionRef.changes(state),
           listRules: ({ botId }) =>
             Effect.map(Ref.get(rules), (all) =>
-              all.filter((r) => botId === undefined || r.botId === undefined || r.botId === botId)),
+              all.filter((r) => botId === undefined || r.botId === undefined || r.botId === botId),
+            ),
           upsertRule: (input) =>
-            Effect.gen(function*() {
-              const existing = input.id === undefined ? undefined : (yield* Ref.get(rules)).find((r) => r.id === input.id)
+            Effect.gen(function* () {
+              const existing =
+                input.id === undefined ? undefined : (yield* Ref.get(rules)).find((r) => r.id === input.id)
               const rule: ApprovalRule = {
                 ...input,
                 id: input.id ?? (yield* ids.ruleId),
@@ -592,14 +630,20 @@ export class SettingsServiceFake extends Context.Service<SettingsServiceFake, {
               return rule
             }),
           deleteRule: (ruleId) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const all = yield* Ref.get(rules)
               if (!all.some((r) => r.id === ruleId)) return yield* new NotFound({ entity: "rule", id: ruleId })
-              yield* Ref.set(rules, all.filter((r) => r.id !== ruleId))
+              yield* Ref.set(
+                rules,
+                all.filter((r) => r.id !== ruleId),
+              )
             }),
         })
         return Context.make(SettingsService, service).pipe(
-          Context.add(SettingsServiceFake, SettingsServiceFake.of({ set: (settings) => SubscriptionRef.set(state, settings) })),
+          Context.add(
+            SettingsServiceFake,
+            SettingsServiceFake.of({ set: (settings) => SubscriptionRef.set(state, settings) }),
+          ),
         )
       }),
     )
@@ -617,12 +661,15 @@ export interface RecordedUsage {
   readonly at: number
 }
 
-export class UsageServiceFake extends Context.Service<UsageServiceFake, {
-  readonly recorded: Effect.Effect<ReadonlyArray<RecordedUsage>>
-}>()("openbot/core/testing/UsageServiceFake") {
+export class UsageServiceFake extends Context.Service<
+  UsageServiceFake,
+  {
+    readonly recorded: Effect.Effect<ReadonlyArray<RecordedUsage>>
+  }
+>()("openbot/core/testing/UsageServiceFake") {
   /** Records usage in memory; `byBot` aggregates it (turnCount = distinct turn ids). */
   static readonly layer: Layer.Layer<UsageService | UsageServiceFake> = Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const recorded = yield* Ref.make<ReadonlyArray<RecordedUsage>>([])
       const service = UsageService.of({
         record: (input) =>
@@ -632,7 +679,11 @@ export class UsageServiceFake extends Context.Service<UsageServiceFake, {
             const byBot = new Map<BotId, { usage: Usage; turns: Set<string>; lastAt: number }>()
             for (const r of all) {
               if (sinceMs !== undefined && r.at < sinceMs) continue
-              const current = byBot.get(r.botId) ?? { usage: { inputTokens: 0, outputTokens: 0 }, turns: new Set<string>(), lastAt: 0 }
+              const current = byBot.get(r.botId) ?? {
+                usage: { inputTokens: 0, outputTokens: 0 },
+                turns: new Set<string>(),
+                lastAt: 0,
+              }
               current.usage = addUsage(current.usage, r.usage)
               if (r.turnId !== undefined) current.turns.add(r.turnId)
               current.lastAt = Math.max(current.lastAt, r.at)
@@ -655,16 +706,19 @@ export class UsageServiceFake extends Context.Service<UsageServiceFake, {
 
 // ============================================================================ MemoryService
 
-export class MemoryServiceFake extends Context.Service<MemoryServiceFake, {
-  /** Calls as `"<method>:<botId>:<actor kind>"`, oldest first (actor kind "-" for read-only methods). */
-  readonly calls: Effect.Effect<ReadonlyArray<string>>
-}>()("openbot/core/testing/MemoryServiceFake") {
+export class MemoryServiceFake extends Context.Service<
+  MemoryServiceFake,
+  {
+    /** Calls as `"<method>:<botId>:<actor kind>"`, oldest first (actor kind "-" for read-only methods). */
+    readonly calls: Effect.Effect<ReadonlyArray<string>>
+  }
+>()("openbot/core/testing/MemoryServiceFake") {
   /**
    * Straight over `MemoryStore`: no bot existence checks, no index maintenance, no events.
    * `promptIndex` caps MEMORY.md at `MEMORY_INDEX_PROMPT_CAP_BYTES`.
    */
   static readonly layer: Layer.Layer<MemoryService | MemoryServiceFake, never, MemoryStore> = Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const store = yield* MemoryStore
       const calls = yield* Ref.make<ReadonlyArray<string>>([])
       const call = (method: string, botId: BotId, actor?: Actor) =>
@@ -675,7 +729,7 @@ export class MemoryServiceFake extends Context.Service<MemoryServiceFake, {
       const service = MemoryService.of({
         get: (botId) => call("get", botId).pipe(Effect.andThen(read(botId))),
         putFact: (actor, botId, input) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             yield* call("putFact", botId, actor)
             const fact: MemoryFact = {
               id: input.id ?? memoryFactIdFromTitle(input.title),
@@ -688,16 +742,19 @@ export class MemoryServiceFake extends Context.Service<MemoryServiceFake, {
             return fact
           }),
         deleteFact: (actor, botId, factId) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             yield* call("deleteFact", botId, actor)
             if (!(yield* repoOrDie(store.deleteFact(botId, factId)))) {
               return yield* new NotFound({ entity: "memory-fact", id: factId })
             }
           }),
         setIndex: (botId, index) =>
-          call("setIndex", botId).pipe(Effect.andThen(repoOrDie(store.writeIndex(botId, index))), Effect.andThen(read(botId))),
+          call("setIndex", botId).pipe(
+            Effect.andThen(repoOrDie(store.writeIndex(botId, index))),
+            Effect.andThen(read(botId)),
+          ),
         recall: (botId, query) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             yield* call("recall", botId)
             const facts = yield* repoOrDie(store.listFacts(botId))
             if (query === undefined || query.trim() === "") return facts

@@ -13,7 +13,15 @@
  * `<workspace>/.openbot/out/<invocationId>.log` on the node and the path is returned.
  */
 import type { HarnessApprovalRequest, NodeId, NodeSummary } from "@openbot/contracts"
-import { type McpClaims, DataDir, IdGen, type NodeClient, NodeDirectory, Orchestrator, workspacePathFor } from "@openbot/core"
+import {
+  type McpClaims,
+  DataDir,
+  IdGen,
+  type NodeClient,
+  NodeDirectory,
+  Orchestrator,
+  workspacePathFor,
+} from "@openbot/core"
 import { type ExecEvent, hasCapability, type Invocation } from "@openbot/node-protocol"
 import { Effect, Stream } from "effect"
 import * as p from "../params.ts"
@@ -33,7 +41,8 @@ const LIST_LIMIT = 500
 
 // ============================================================================ paths
 
-const isAbsolutePath = (path: string): boolean => path.startsWith("/") || path.startsWith("~") || /^[A-Za-z]:[\\/]/.test(path)
+const isAbsolutePath = (path: string): boolean =>
+  path.startsWith("/") || path.startsWith("~") || /^[A-Za-z]:[\\/]/.test(path)
 
 /** Resolves `path` against the bot's workspace on the node (relative paths are workspace-relative). */
 export const resolveNodePath = (workspace: string, path: string | undefined): string => {
@@ -75,7 +84,7 @@ export const resolveTarget = (
   nodeArg: string | undefined,
   capability: string | ReadonlyArray<string>,
 ): Effect.Effect<NodeTarget, unknown, NodeDirectory | IdGen | DataDir> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const choice = yield* chooseNode(ctx, nodeArg, capability)
     const client = yield* (yield* NodeDirectory).client(choice.nodeId)
     return { ...choice, client }
@@ -87,7 +96,7 @@ export const chooseNode = (
   nodeArg: string | undefined,
   capability: string | ReadonlyArray<string>,
 ): Effect.Effect<NodeChoice, unknown, NodeDirectory | IdGen | DataDir> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const claims = ctx.claims
     const directory = yield* NodeDirectory
     const allowed = allowedNodeIds(claims)
@@ -115,9 +124,10 @@ export const chooseNode = (
         message: `Node ${node.label} does not offer ${wanted.join(" or ")} (capabilities: ${capabilities.join(", ") || "none"}).`,
       })
     }
-    const workspace = nodeId === claims.hostNodeId
-      ? claims.workspacePath
-      : workspacePathFor({ node, botId: claims.botId, dataDir: yield* DataDir })
+    const workspace =
+      nodeId === claims.hostNodeId
+        ? claims.workspacePath
+        : workspacePathFor({ node, botId: claims.botId, dataDir: yield* DataDir })
     const invocationId = yield* (yield* IdGen).next("inv")
     const inv: Invocation = {
       invocationId,
@@ -136,12 +146,16 @@ export const approve = (
   request: HarnessApprovalRequest,
   what: string,
 ): Effect.Effect<void, ToolRefusal, Orchestrator> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const orchestrator = yield* Orchestrator
     yield* ctx.progress(`Waiting for approval: ${request.title}`)
     const resolution = yield* orchestrator.approveToolCall(ctx.tool, request)
     if ("decision" in resolution) {
-      if (resolution.decision === "allow-once" || resolution.decision === "allow-session" || resolution.decision === "allow-always") {
+      if (
+        resolution.decision === "allow-once" ||
+        resolution.decision === "allow-session" ||
+        resolution.decision === "allow-always"
+      ) {
         return
       }
       const why = resolution.message === undefined || resolution.message === "" ? "" : ` Reason: ${resolution.message}`
@@ -170,7 +184,7 @@ export const spillToNode = (target: NodeTarget, text: string): Effect.Effect<str
 
 /** Caps `text` for a result; when it is too long the full text is spilled to the node first. */
 export const fitToResult = (target: NodeTarget, text: string): Effect.Effect<string> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     if (utf8Length(text) <= OUTPUT_BUDGET_BYTES) return text
     const path = yield* spillToNode(target, text)
     return capText(
@@ -195,17 +209,20 @@ const shell = defineTool({
     command: p.text("The command line (run with the node's default shell)."),
     cwd: p.optional(p.string("Working directory; relative paths are inside your workspace. Default: your workspace.")),
     timeout_seconds: p.optional(
-      p.number(`Kill the command after this many seconds (default ${DEFAULT_SHELL_TIMEOUT_SECONDS}, max ${MAX_SHELL_TIMEOUT_SECONDS}).`, {
-        integer: true,
-        min: 1,
-        max: MAX_SHELL_TIMEOUT_SECONDS,
-      }),
+      p.number(
+        `Kill the command after this many seconds (default ${DEFAULT_SHELL_TIMEOUT_SECONDS}, max ${MAX_SHELL_TIMEOUT_SECONDS}).`,
+        {
+          integer: true,
+          min: 1,
+          max: MAX_SHELL_TIMEOUT_SECONDS,
+        },
+      ),
     ),
     node: nodeParam,
   }),
   annotations: { title: "Run a shell command", destructiveHint: true, openWorldHint: true },
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const target = yield* resolveTarget(ctx, args.node, "shell")
       const cwd = resolveNodePath(target.workspace, args.cwd)
       yield* approve(
@@ -242,7 +259,11 @@ const shell = defineTool({
                 chunks.push(event.data)
                 bytes += utf8Length(event.data)
               }
-              const last = event.data.split("\n").map((l) => l.trim()).filter((l) => l !== "").pop()
+              const last = event.data
+                .split("\n")
+                .map((l) => l.trim())
+                .filter((l) => l !== "")
+                .pop()
               return last === undefined ? Effect.void : ctx.progress(oneLine(last, 200))
             }
             case "Exit":
@@ -272,9 +293,7 @@ const shell = defineTool({
       if (exit.timedOut) {
         return errorResult(`The command timed out after ${timeoutSeconds} s and was killed.\n${shown}`)
       }
-      const status = exit.code !== null
-        ? `exit code ${exit.code}`
-        : `killed by signal ${exit.signal ?? "unknown"}`
+      const status = exit.code !== null ? `exit code ${exit.code}` : `killed by signal ${exit.signal ?? "unknown"}`
       return textResult(`${shown}\n[${status} · ${seconds} s]`)
     }),
 })
@@ -301,7 +320,7 @@ const readFile = defineTool({
   annotations: { title: "Read a file", readOnlyHint: true, openWorldHint: false },
   idempotent: false,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const target = yield* resolveTarget(ctx, args.node, "fs")
       const path = resolveNodePath(target.workspace, args.path)
       const offset = args.offset ?? 0
@@ -312,9 +331,10 @@ const readFile = defineTool({
       }
       const shown = utf8Length(result.content)
       const end = offset + shown
-      const footer = result.truncated || end < result.size
-        ? `\n\n[bytes ${offset}–${end} of ${result.size}; call read_file with offset=${end} to continue]`
-        : ""
+      const footer =
+        result.truncated || end < result.size
+          ? `\n\n[bytes ${offset}–${end} of ${result.size}; call read_file with offset=${end} to continue]`
+          : ""
       const text = capText(result.content, OUTPUT_BUDGET_BYTES).text
       return textResult(result.size === 0 ? `${path} is empty.` : `${text}${footer}`)
     }),
@@ -332,7 +352,7 @@ const writeFile = defineTool({
   }),
   annotations: { title: "Write a file", destructiveHint: true, openWorldHint: false },
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const target = yield* resolveTarget(ctx, args.node, "fs")
       const path = resolveNodePath(target.workspace, args.path)
       yield* approve(
@@ -349,7 +369,12 @@ const writeFile = defineTool({
         },
         "writing this file",
       )
-      const result = yield* target.client["fs.write"]({ inv: target.inv, path, content: args.content, createParents: true })
+      const result = yield* target.client["fs.write"]({
+        inv: target.inv,
+        path,
+        content: args.content,
+        createParents: true,
+      })
       return textResult(`Wrote ${result.size} bytes to ${path}.`)
     }),
 })
@@ -368,11 +393,17 @@ const editFile = defineTool({
   }),
   annotations: { title: "Edit a file", destructiveHint: true, openWorldHint: false },
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const target = yield* resolveTarget(ctx, args.node, "fs")
       const path = resolveNodePath(target.workspace, args.path)
       const diff = capText(
-        `${args.old_string.split("\n").map((l) => `-${l}`).join("\n")}\n${args.new_string.split("\n").map((l) => `+${l}`).join("\n")}`,
+        `${args.old_string
+          .split("\n")
+          .map((l) => `-${l}`)
+          .join("\n")}\n${args.new_string
+          .split("\n")
+          .map((l) => `+${l}`)
+          .join("\n")}`,
         4_000,
       ).text
       yield* approve(
@@ -406,14 +437,16 @@ const listDir = defineTool({
   description: "List a directory on a node (default: your workspace on your host node). Directories end with `/`.",
   params: p.params({
     path: p.optional(p.string("Directory path (default: your workspace).")),
-    depth: p.optional(p.number("Recursion depth (default 1 = direct children, max 5).", { integer: true, min: 1, max: 5 })),
+    depth: p.optional(
+      p.number("Recursion depth (default 1 = direct children, max 5).", { integer: true, min: 1, max: 5 }),
+    ),
     include_hidden: p.optional(p.boolean("Include dotfiles (default false).")),
     node: nodeParam,
   }),
   annotations: { title: "List a directory", readOnlyHint: true, openWorldHint: false },
   idempotent: false,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const target = yield* resolveTarget(ctx, args.node, "fs")
       const path = resolveNodePath(target.workspace, args.path)
       const result = yield* target.client["fs.list"]({
@@ -423,7 +456,9 @@ const listDir = defineTool({
         includeHidden: args.include_hidden ?? false,
         limit: LIST_LIMIT,
       })
-      const lines = result.entries.map((e) => (e.type === "dir" ? `${e.path}/` : e.type === "symlink" ? `${e.path}@` : `${e.path} (${e.size} B)`))
+      const lines = result.entries.map((e) =>
+        e.type === "dir" ? `${e.path}/` : e.type === "symlink" ? `${e.path}@` : `${e.path} (${e.size} B)`,
+      )
       if (result.truncated) lines.push(`[… more entries not shown; list a subdirectory or use glob]`)
       const text = lines.length === 0 ? `${path} is empty.` : `${path}:\n${lines.join("\n")}`
       return textResult(yield* fitToResult(target, text))
@@ -433,7 +468,7 @@ const listDir = defineTool({
 const glob = defineTool({
   name: "glob",
   toolset: "node",
-  description: "Find files by glob pattern (e.g. \"**/*.ts\") on a node (default: in your workspace on your host node).",
+  description: 'Find files by glob pattern (e.g. "**/*.ts") on a node (default: in your workspace on your host node).',
   params: p.params({
     pattern: p.text("Glob pattern."),
     path: p.optional(p.string("Directory to search in (default: your workspace).")),
@@ -442,7 +477,7 @@ const glob = defineTool({
   annotations: { title: "Find files", readOnlyHint: true, openWorldHint: false },
   idempotent: false,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const target = yield* resolveTarget(ctx, args.node, "fs")
       const cwd = resolveNodePath(target.workspace, args.path)
       const result = yield* target.client["fs.glob"]({ inv: target.inv, pattern: args.pattern, cwd, limit: LIST_LIMIT })
@@ -461,17 +496,25 @@ const grep = defineTool({
   params: p.params({
     pattern: p.text("Regular expression (or literal text with literal=true)."),
     path: p.optional(p.string("File or directory to search (default: your workspace).")),
-    glob: p.optional(p.string("Only search files matching this glob, e.g. \"*.md\".")),
-    output_mode: p.optional(p.literals(["files_with_matches", "content", "count"], "What to return (default files_with_matches).")),
+    glob: p.optional(p.string('Only search files matching this glob, e.g. "*.md".')),
+    output_mode: p.optional(
+      p.literals(["files_with_matches", "content", "count"], "What to return (default files_with_matches)."),
+    ),
     ignore_case: p.optional(p.boolean("Case-insensitive (default false).")),
     literal: p.optional(p.boolean("Treat the pattern as literal text (default false).")),
-    context_lines: p.optional(p.number("Lines of context around matches in content mode (default 0, max 10).", { integer: true, min: 0, max: 10 })),
+    context_lines: p.optional(
+      p.number("Lines of context around matches in content mode (default 0, max 10).", {
+        integer: true,
+        min: 0,
+        max: 10,
+      }),
+    ),
     node: nodeParam,
   }),
   annotations: { title: "Search file contents", readOnlyHint: true, openWorldHint: false },
   idempotent: false,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const target = yield* resolveTarget(ctx, args.node, "fs")
       const path = resolveNodePath(target.workspace, args.path)
       const mode = args.output_mode ?? "files_with_matches"
@@ -486,11 +529,12 @@ const grep = defineTool({
         outputMode: mode,
         limit: LIST_LIMIT,
       })
-      const lines = mode === "content"
-        ? result.matches.map((m) => `${m.path}:${m.line}: ${m.text}`)
-        : mode === "count"
-        ? result.counts.map((c) => `${c.path}: ${c.count}`)
-        : [...result.files]
+      const lines =
+        mode === "content"
+          ? result.matches.map((m) => `${m.path}:${m.line}: ${m.text}`)
+          : mode === "count"
+            ? result.counts.map((c) => `${c.path}: ${c.count}`)
+            : [...result.files]
       if (result.truncated) lines.push(`[… more results not shown; narrow the search]`)
       if (lines.length === 0) return textResult(`No matches for ${args.pattern} in ${path}.`)
       return textResult(yield* fitToResult(target, lines.join("\n")))
@@ -507,4 +551,3 @@ export const NodeToolkit: ReadonlyArray<AnyTool<NodeToolkitServices>> = [
   glob,
   grep,
 ]
-

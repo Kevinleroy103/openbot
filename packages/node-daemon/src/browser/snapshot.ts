@@ -28,7 +28,18 @@ export interface Snapshot {
 }
 
 /** Roles that only group content; shown only when they carry a name. */
-const TRANSPARENT = new Set(["generic", "none", "presentation", "GenericContainer", "Section", "LayoutTable", "LayoutTableRow", "LayoutTableCell", "Div", "Pre"])
+const TRANSPARENT = new Set([
+  "generic",
+  "none",
+  "presentation",
+  "GenericContainer",
+  "Section",
+  "LayoutTable",
+  "LayoutTableRow",
+  "LayoutTableCell",
+  "Div",
+  "Pre",
+])
 const SKIP = new Set(["InlineTextBox", "LineBreak"])
 const ROOTS = new Set(["RootWebArea", "WebArea"])
 const VALUE_ROLES = new Set(["textbox", "searchbox", "combobox", "spinbutton", "slider", "TextField"])
@@ -46,7 +57,10 @@ const clean = (s: string, max = 200): string => {
 
 const quote = (s: string) => JSON.stringify(s)
 
-export const renderSnapshot = (nodes: ReadonlyArray<AXNode>, options?: { readonly maxChars?: number; readonly refPrefix?: string }): Snapshot => {
+export const renderSnapshot = (
+  nodes: ReadonlyArray<AXNode>,
+  options?: { readonly maxChars?: number; readonly refPrefix?: string },
+): Snapshot => {
   const maxChars = options?.maxChars ?? 12_000
   const prefix = options?.refPrefix ?? "e"
   const byId = new Map<string, AXNode>()

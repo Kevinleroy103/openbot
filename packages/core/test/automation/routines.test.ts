@@ -2,7 +2,15 @@ import { describe, expect, test } from "bun:test"
 import type { RoutineSpec, TranscriptEntry } from "@openbot/contracts"
 import { ROUTINE_RUNS_KEPT } from "@openbot/contracts"
 import { Effect, Exit, Fiber, Layer, Option } from "effect"
-import { botActor, ConversationRepo, EntryRepo, Orchestrator, RoutineRepo, RoutineScheduler, userActor } from "../../src/ports/index.ts"
+import {
+  botActor,
+  ConversationRepo,
+  EntryRepo,
+  Orchestrator,
+  RoutineRepo,
+  RoutineScheduler,
+  userActor,
+} from "../../src/ports/index.ts"
 import { RoutineSchedulerLive } from "../../src/services/automation/index.ts"
 import { DONE_ONCE_RETENTION_MS } from "../../src/services/automation/RoutineScheduler.ts"
 import {
@@ -35,7 +43,8 @@ const hourly: RoutineSpec = {
 
 const deliveries = Effect.flatMap(OrchestratorFake, (o) => o.deliveries)
 const deliveryCount = (n: number) => Effect.map(deliveries, (all) => all.length === n)
-const runsOf = (id: Parameters<RoutineScheduler["Service"]["runs"]>[0]) => Effect.flatMap(RoutineScheduler, (s) => s.runs(id))
+const runsOf = (id: Parameters<RoutineScheduler["Service"]["runs"]>[0]) =>
+  Effect.flatMap(RoutineScheduler, (s) => s.runs(id))
 const routineEvents = Effect.flatMap(ConversationServiceFake, (c) => c.written).pipe(
   Effect.map((all) => all.filter((e): e is Extract<TranscriptEntry, { kind: "event" }> => e.kind === "event")),
 )
@@ -43,7 +52,7 @@ const routineEvents = Effect.flatMap(ConversationServiceFake, (c) => c.written).
 describe("RoutineScheduler", () => {
   test("an interval routine fires on schedule with TestClock, closes its run and reschedules", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
         const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: hourly })
@@ -80,21 +89,34 @@ describe("RoutineScheduler", () => {
       summary: "All done: 3 new items.",
     })
     expect(out.firstRuns[0]!.turnId).toBeDefined()
-    expect(out.afterFirst).toMatchObject({ lastRunAt: 60 * 60_000, lastRunStatus: "succeeded", nextRunAt: 120 * 60_000 })
+    expect(out.afterFirst).toMatchObject({
+      lastRunAt: 60 * 60_000,
+      lastRunStatus: "succeeded",
+      nextRunAt: 120 * 60_000,
+    })
     // The "Routine ‹name› started" event line is updated with the final status.
     const runEvent = out.events.findLast((e) => e.event.type === "routine-run")
-    expect(runEvent).toMatchObject({ conversationId: DM_A.id, event: { type: "routine-run", routineName: "Inbox sweep", status: "succeeded" } })
+    expect(runEvent).toMatchObject({
+      conversationId: DM_A.id,
+      event: { type: "routine-run", routineName: "Inbox sweep", status: "succeeded" },
+    })
     expect(runEvent!.revision).toBeGreaterThan(0)
   })
 
   test("a once routine switches itself off after its scheduled run; Run now is tagged manual; done ones are removed after 7 days", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
         const routine = yield* scheduler.create(userActor, {
           botId: BOT_A.id,
-          spec: { name: "BOO reminder", prompt: "Say BOO", trigger: { type: "once", at: 5 * 60_000 }, enabled: true, output: "direct" },
+          spec: {
+            name: "BOO reminder",
+            prompt: "Say BOO",
+            trigger: { type: "once", at: 5 * 60_000 },
+            enabled: true,
+            output: "direct",
+          },
         })
         yield* advance("5 minutes")
         yield* eventually(deliveryCount(1))
@@ -102,7 +124,9 @@ describe("RoutineScheduler", () => {
         const afterRun = yield* scheduler.get(routine.id)
         yield* scheduler.runNow(routine.id)
         yield* eventually(deliveryCount(2))
-        yield* eventually(Effect.map(runsOf(routine.id), (runs) => runs.length === 2 && runs.every((r) => r.status === "succeeded")))
+        yield* eventually(
+          Effect.map(runsOf(routine.id), (runs) => runs.length === 2 && runs.every((r) => r.status === "succeeded")),
+        )
         const afterManual = yield* scheduler.get(routine.id)
         yield* advance(`${Math.ceil(DONE_ONCE_RETENTION_MS / 3_600_000) + 2} hours`)
         const gone = yield* Effect.exit(scheduler.get(routine.id))
@@ -123,16 +147,20 @@ describe("RoutineScheduler", () => {
   test("a cron routine fires at the next matching time in its timezone", async () => {
     const start = Date.parse("2026-10-15T06:00:00Z")
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         // Move the clock before the scheduler starts: TestClock would otherwise replay its hourly
         // re-checks across the whole jump.
         yield* setTime(start)
         yield* seed
-        return yield* Effect.gen(function*() {
+        return yield* Effect.gen(function* () {
           const scheduler = yield* RoutineScheduler
           const routine = yield* scheduler.create(userActor, {
             botId: BOT_A.id,
-            spec: { ...hourly, name: "Morning brief", trigger: { type: "cron", schedule: "0 9 * * *", timezone: "Europe/Berlin" } },
+            spec: {
+              ...hourly,
+              name: "Morning brief",
+              trigger: { type: "cron", schedule: "0 9 * * *", timezone: "Europe/Berlin" },
+            },
           })
           yield* advance("59 minutes")
           const before = (yield* deliveries).length
@@ -150,7 +178,7 @@ describe("RoutineScheduler", () => {
 
   test("keeps only the last 20 runs, newest first", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
         const routine = yield* scheduler.create(userActor, {
@@ -173,15 +201,20 @@ describe("RoutineScheduler", () => {
 
   test("runNow starts a test run; a second runNow while it runs is a Conflict; completion closes it", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
-        const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: { ...hourly, trigger: { type: "manual" } } })
+        const routine = yield* scheduler.create(userActor, {
+          botId: BOT_A.id,
+          spec: { ...hourly, trigger: { type: "manual" } },
+        })
         const run = yield* scheduler.runNow(routine.id)
         const conflict = yield* Effect.exit(scheduler.runNow(routine.id))
         const delivery = (yield* deliveries)[0]!
         yield* (yield* OrchestratorFake).complete(delivery.id, { status: "failed" })
-        yield* eventually(Effect.map(runsOf(routine.id), (runs) => runs.find((r) => r.id === run.id)?.status === "failed"))
+        yield* eventually(
+          Effect.map(runsOf(routine.id), (runs) => runs.find((r) => r.id === run.id)?.status === "failed"),
+        )
         const second = yield* scheduler.runNow(routine.id)
         return { routine, run, conflict, runs: yield* runsOf(routine.id), second }
       }),
@@ -191,23 +224,37 @@ describe("RoutineScheduler", () => {
     expect(out.run).toMatchObject({ firedBy: "manual", status: "running" })
     expect(out.run.turnId).toBeDefined()
     expect(Exit.isFailure(out.conflict) && JSON.stringify(out.conflict.cause)).toContain("Conflict")
-    expect(out.runs.find((r) => r.id === out.run.id)).toMatchObject({ status: "failed", error: "The bot's turn failed." })
+    expect(out.runs.find((r) => r.id === out.run.id)).toMatchObject({
+      status: "failed",
+      error: "The bot's turn failed.",
+    })
     expect(out.second.status).toBe("running")
   })
 
   test("boot catch-up: one run for a routine missed within 24 h; older misses only reschedule", async () => {
     const now = 10 * 24 * 60 * 60_000
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         yield* setTime(now)
         const repo = yield* RoutineRepo
         const recent = makeRoutine({ id: routineId("rtn_recent"), botId: BOT_A.id, nextRunAt: now - 60 * 60_000 })
-        const stale = makeRoutine({ id: routineId("rtn_stale"), name: "Stale", botId: BOT_A.id, nextRunAt: now - 30 * 60 * 60_000 })
-        const paused = makeRoutine({ id: routineId("rtn_paused"), name: "Paused", botId: BOT_A.id, enabled: false, nextRunAt: now - 1 })
+        const stale = makeRoutine({
+          id: routineId("rtn_stale"),
+          name: "Stale",
+          botId: BOT_A.id,
+          nextRunAt: now - 30 * 60 * 60_000,
+        })
+        const paused = makeRoutine({
+          id: routineId("rtn_paused"),
+          name: "Paused",
+          botId: BOT_A.id,
+          enabled: false,
+          nextRunAt: now - 1,
+        })
         for (const r of [recent, stale, paused]) yield* repo.upsert(r)
         // Build the scheduler now (as at brain boot), after the clock moved.
-        return yield* Effect.gen(function*() {
+        return yield* Effect.gen(function* () {
           yield* eventually(deliveryCount(1))
           const scheduler = yield* RoutineScheduler
           return {
@@ -231,10 +278,13 @@ describe("RoutineScheduler", () => {
 
   test("own-conversation output opens a routine-run conversation per run", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
-        const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: { ...hourly, output: "own-conversation" } })
+        const routine = yield* scheduler.create(userActor, {
+          botId: BOT_A.id,
+          spec: { ...hourly, output: "own-conversation" },
+        })
         const run = yield* scheduler.runNow(routine.id)
         const conversation = yield* Effect.flatMap(ConversationRepo, (r) => r.get(run.conversationId)).pipe(
           Effect.map(Option.getOrThrow),
@@ -243,22 +293,32 @@ describe("RoutineScheduler", () => {
       }),
       layer(),
     )
-    expect(out.conversation).toMatchObject({ kind: "routine-run", botId: BOT_A.id, runId: out.run.id, title: "Inbox sweep" })
+    expect(out.conversation).toMatchObject({
+      kind: "routine-run",
+      botId: BOT_A.id,
+      runId: out.run.id,
+      title: "Inbox sweep",
+    })
     expect(out.delivery.conversationId).toBe(out.run.conversationId)
   })
 
   test("validation, ownership, pause/resume and the transcript notes", async () => {
     const claimsA = makeClaims({ botId: BOT_A.id, conversationId: DM_A.id })
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
-        const notMine = yield* Effect.exit(scheduler.create(botActor({ claims: claimsA }), { botId: BOT_B.id, spec: hourly }))
+        const notMine = yield* Effect.exit(
+          scheduler.create(botActor({ claims: claimsA }), { botId: BOT_B.id, spec: hourly }),
+        )
         const past = yield* Effect.exit(
           scheduler.create(userActor, { botId: BOT_A.id, spec: { ...hourly, trigger: { type: "once", at: 0 } } }),
         )
         const badCron = yield* Effect.exit(
-          scheduler.create(userActor, { botId: BOT_A.id, spec: { ...hourly, trigger: { type: "cron", schedule: "x", timezone: "UTC" } } }),
+          scheduler.create(userActor, {
+            botId: BOT_A.id,
+            spec: { ...hourly, trigger: { type: "cron", schedule: "x", timezone: "UTC" } },
+          }),
         )
         const created = yield* scheduler.create(botActor({ claims: claimsA }), { botId: BOT_A.id, spec: hourly })
         const duplicate = yield* Effect.exit(scheduler.create(userActor, { botId: BOT_A.id, spec: hourly }))
@@ -266,7 +326,10 @@ describe("RoutineScheduler", () => {
         const resumedAt = 30 * 60_000
         yield* advance("30 minutes")
         const resumed = yield* scheduler.setEnabled(created.id, true)
-        const renamed = yield* scheduler.update(userActor, { routineId: created.id, spec: { ...hourly, name: "Renamed" } })
+        const renamed = yield* scheduler.update(userActor, {
+          routineId: created.id,
+          spec: { ...hourly, name: "Renamed" },
+        })
         yield* scheduler.delete(created.id)
         const gone = yield* Effect.exit(scheduler.get(created.id))
         const written = yield* (yield* ConversationServiceFake).written
@@ -291,7 +354,9 @@ describe("RoutineScheduler", () => {
       card: { type: "routine", action: "created", name: "Inbox sweep", triggerSummary: "Every hour" },
       state: { status: "info" },
     })
-    const changes = out.written.flatMap((e) => (e.kind === "event" && e.event.type === "routine-changed" ? [e.event.action] : []))
+    const changes = out.written.flatMap((e) =>
+      e.kind === "event" && e.event.type === "routine-changed" ? [e.event.action] : [],
+    )
     expect(changes).toEqual(["disabled", "enabled", "updated", "deleted"])
   })
 })
@@ -299,16 +364,21 @@ describe("RoutineScheduler", () => {
 describe("a run whose delivery dies or is cancelled", () => {
   const withDeliver = (deliver: Effect.Effect<never>) =>
     RoutineSchedulerLive.pipe(
-      Layer.provide(Layer.effect(Orchestrator, Effect.gen(function*() {
-        return Orchestrator.of({ ...(yield* Orchestrator), deliver: () => deliver })
-      }))),
+      Layer.provide(
+        Layer.effect(
+          Orchestrator,
+          Effect.gen(function* () {
+            return Orchestrator.of({ ...(yield* Orchestrator), deliver: () => deliver })
+          }),
+        ),
+      ),
       Layer.provideMerge(baseLayer()),
     )
   const manual: RoutineSpec = { ...hourly, trigger: { type: "manual" } }
 
   test("a defect closes the run as failed and the routine can run again", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
         const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: manual })
@@ -319,12 +389,15 @@ describe("a run whose delivery dies or is cancelled", () => {
       withDeliver(Effect.die("boom")),
     )
     expect(JSON.stringify(out.second)).not.toContain("Conflict")
-    expect(out.runs.map((r) => [r.status, r.error])).toEqual([["failed", "Internal error."], ["failed", "Internal error."]])
+    expect(out.runs.map((r) => [r.status, r.error])).toEqual([
+      ["failed", "Internal error."],
+      ["failed", "Internal error."],
+    ])
   })
 
   test("an interruption closes the run as interrupted", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
         const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: manual })
@@ -340,7 +413,9 @@ describe("a run whose delivery dies or is cancelled", () => {
 })
 
 describe("routine runs with nothing to say", () => {
-  const silentLayer = RoutineSchedulerLive.pipe(Layer.provideMerge(baseLayer({ autoComplete: { status: "completed" } })))
+  const silentLayer = RoutineSchedulerLive.pipe(
+    Layer.provideMerge(baseLayer({ autoComplete: { status: "completed" } })),
+  )
   const dmEntries = Effect.flatMap(EntryRepo, (repo) => repo.page({ conversationId: DM_A.id, limit: 100 })).pipe(
     Effect.orDie,
     Effect.map((page) => page.entries),
@@ -348,13 +423,15 @@ describe("routine runs with nothing to say", () => {
 
   test("a run that ends without a message leaves no line in the chat; the run is still recorded", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const scheduler = yield* RoutineScheduler
         const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: hourly })
         yield* scheduler.runNow(routine.id)
         yield* eventually(Effect.map(runsOf(routine.id), (runs) => runs[0]?.status === "succeeded"))
-        yield* eventually(Effect.map(dmEntries, (all) => !all.some((e) => e.kind === "event" && e.event.type === "routine-run")))
+        yield* eventually(
+          Effect.map(dmEntries, (all) => !all.some((e) => e.kind === "event" && e.event.type === "routine-run")),
+        )
         return { runs: yield* runsOf(routine.id), entries: yield* dmEntries }
       }),
       silentLayer,
@@ -371,24 +448,45 @@ describe("routine runs with nothing to say", () => {
         conversationId: DM_A.id,
         createdAt: at,
         updatedAt: at,
-        event: { type: "routine-run", routineId: routineId("rtn_brief"), routineName: "Briefing", runId: routineRunId(`run_${id}`), status: "succeeded" },
+        event: {
+          type: "routine-run",
+          routineId: routineId("rtn_brief"),
+          routineName: "Briefing",
+          runId: routineRunId(`run_${id}`),
+          status: "succeeded",
+        },
       })
-    const seeded = Layer.effectDiscard(Effect.gen(function*() {
-      yield* seed
-      const repo = yield* EntryRepo
-      for (
-        const entry of [
+    const seeded = Layer.effectDiscard(
+      Effect.gen(function* () {
+        yield* seed
+        const repo = yield* EntryRepo
+        for (const entry of [
           run("1", 1_000),
           run("2", 2_000),
-          makeMessageEntry({ id: entryId("ent_said"), conversationId: DM_A.id, createdAt: 2_500, updatedAt: 2_500, role: "bot", author: { kind: "bot", botId: BOT_A.id }, text: "Meeting at 3" }),
+          makeMessageEntry({
+            id: entryId("ent_said"),
+            conversationId: DM_A.id,
+            createdAt: 2_500,
+            updatedAt: 2_500,
+            role: "bot",
+            author: { kind: "bot", botId: BOT_A.id },
+            text: "Meeting at 3",
+          }),
           run("3", 3_000),
-          makeMessageEntry({ id: entryId("ent_owner"), conversationId: DM_A.id, createdAt: 3_500, updatedAt: 3_500, text: "thanks" }),
+          makeMessageEntry({
+            id: entryId("ent_owner"),
+            conversationId: DM_A.id,
+            createdAt: 3_500,
+            updatedAt: 3_500,
+            text: "thanks",
+          }),
           run("4", 4_000),
-        ]
-      ) yield* repo.upsert(entry).pipe(Effect.orDie)
-    }))
+        ])
+          yield* repo.upsert(entry).pipe(Effect.orDie)
+      }),
+    )
     const remaining = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* eventually(Effect.map(dmEntries, (all) => all.length === 3))
         return (yield* dmEntries).map((e) => e.id)
       }),

@@ -4,10 +4,36 @@
  * packages/contracts/src/domain.ts (docs/interfaces.md §8.9). Keep the arrays in the same order.
  */
 
-export const AvatarColors = ["black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray"] as const
+export const AvatarColors = [
+  "black",
+  "brown",
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "cyan",
+  "blue",
+  "violet",
+  "magenta",
+  "gray",
+] as const
 export type AvatarColor = (typeof AvatarColors)[number]
 
-export const AvatarShapes = ["blob", "cloud", "square", "sparkle", "clover", "heart", "flower", "teardrop", "tablet", "wedge", "house", "star", "hex"] as const
+export const AvatarShapes = [
+  "blob",
+  "cloud",
+  "square",
+  "sparkle",
+  "clover",
+  "heart",
+  "flower",
+  "teardrop",
+  "tablet",
+  "wedge",
+  "house",
+  "star",
+  "hex",
+] as const
 export type AvatarShape = (typeof AvatarShapes)[number]
 
 export const AvatarExpressions = ["neutral", "happy", "surprised", "sleepy", "inspecting"] as const
@@ -32,11 +58,15 @@ export const defaultBotAvatar = (id: string): { readonly shape: AvatarShape; rea
   }
 }
 
-export const isAvatarColor = (value: string): value is AvatarColor => (AvatarColors as ReadonlyArray<string>).includes(value)
-export const isAvatarShape = (value: string): value is AvatarShape => (AvatarShapes as ReadonlyArray<string>).includes(value)
+export const isAvatarColor = (value: string): value is AvatarColor =>
+  (AvatarColors as ReadonlyArray<string>).includes(value)
+export const isAvatarShape = (value: string): value is AvatarShape =>
+  (AvatarShapes as ReadonlyArray<string>).includes(value)
 
 /** Stored avatars are open strings; unknown values fall back so old/new data never breaks rendering. */
-export const normalizeAvatar = (avatar: { readonly shape?: string; readonly color?: string } | undefined): { shape: AvatarShape; color: AvatarColor } => ({
+export const normalizeAvatar = (
+  avatar: { readonly shape?: string; readonly color?: string } | undefined,
+): { shape: AvatarShape; color: AvatarColor } => ({
   shape: avatar?.shape && isAvatarShape(avatar.shape) ? avatar.shape : "blob",
   color: avatar?.color && isAvatarColor(avatar.color) ? avatar.color : "gray",
 })

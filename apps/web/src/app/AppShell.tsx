@@ -27,7 +27,17 @@ const write = (key: string, v: number) => {
   } catch {}
 }
 
-function ResizeHandle({ side, label, onDrag, onEnd }: { readonly side: "left" | "right"; readonly label: string; readonly onDrag: (dx: number) => void; readonly onEnd: () => void }): ReactNode {
+function ResizeHandle({
+  side,
+  label,
+  onDrag,
+  onEnd,
+}: {
+  readonly side: "left" | "right"
+  readonly label: string
+  readonly onDrag: (dx: number) => void
+  readonly onEnd: () => void
+}): ReactNode {
   const [dragging, setDragging] = useState(false)
   const last = useRef(0)
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -93,18 +103,29 @@ function PhoneShell({ sidebar, chat, details, overlay, home = false }: AppShellP
       </div>
       {!home && <div className="absolute inset-0 z-10 animate-push-in bg-chrome shadow-modal">{chat}</div>}
       {!home && details && (
-        <div className="fixed inset-0 z-[2000] animate-push-in overflow-hidden bg-chrome">
-          {details}
-        </div>
+        <div className="fixed inset-0 z-[2000] animate-push-in overflow-hidden bg-chrome">{details}</div>
       )}
       {overlay && <div className="fixed inset-0 z-[2500] animate-sheet-up bg-black">{overlay}</div>}
     </div>
   )
 }
 
-function GridShell({ sidebar, chat, details, overlay, compact, onCompactChange, onCloseDetails, tablet }: AppShellProps & { readonly tablet: boolean }): ReactNode {
-  const [sidebarW, setSidebarW] = useState(() => read("openbot.sidebar.width", SIDEBAR.default, SIDEBAR.min, SIDEBAR.max))
-  const [detailsW, setDetailsW] = useState(() => read("openbot.details.width", DETAILS.default, DETAILS.min, DETAILS.max))
+function GridShell({
+  sidebar,
+  chat,
+  details,
+  overlay,
+  compact,
+  onCompactChange,
+  onCloseDetails,
+  tablet,
+}: AppShellProps & { readonly tablet: boolean }): ReactNode {
+  const [sidebarW, setSidebarW] = useState(() =>
+    read("openbot.sidebar.width", SIDEBAR.default, SIDEBAR.min, SIDEBAR.max),
+  )
+  const [detailsW, setDetailsW] = useState(() =>
+    read("openbot.details.width", DETAILS.default, DETAILS.min, DETAILS.max),
+  )
   const raw = useRef(sidebarW)
   const toggleCompact = useCallback(() => onCompactChange(!compact), [compact, onCompactChange])
 
@@ -150,10 +171,19 @@ function GridShell({ sidebar, chat, details, overlay, compact, onCompactChange, 
       {tablet && details && (
         <div className="fixed inset-0 z-[2000]">
           <div className="absolute inset-0 animate-fade-in bg-scrim" onClick={onCloseDetails} aria-hidden />
-          <div className="absolute inset-y-0 end-0 w-[min(400px,100%)] animate-slide-in-end overflow-hidden bg-chrome shadow-modal">{details}</div>
+          <div className="absolute inset-y-0 end-0 w-[min(400px,100%)] animate-slide-in-end overflow-hidden bg-chrome shadow-modal">
+            {details}
+          </div>
         </div>
       )}
-      <aside className={cn("relative min-h-0 min-w-0 overflow-hidden bg-chrome", details != null && !tablet && "border-s-[0.5px] border-line-tertiary")} aria-label="Details" hidden={!details || tablet}>
+      <aside
+        className={cn(
+          "relative min-h-0 min-w-0 overflow-hidden bg-chrome",
+          details != null && !tablet && "border-s-[0.5px] border-line-tertiary",
+        )}
+        aria-label="Details"
+        hidden={!details || tablet}
+      >
         {details && !tablet && (
           <>
             <ResizeHandle

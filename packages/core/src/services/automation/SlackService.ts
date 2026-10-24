@@ -22,15 +22,16 @@ export const SLACK_DRAFT_MAX_CHARS = 12_000
 
 type DraftCardEntry = Extract<KnownTranscriptEntry, { kind: "card" }> & { readonly card: typeof SlackDraftCard.Type }
 
-const isDraft = (entry: KnownTranscriptEntry): entry is DraftCardEntry => entry.kind === "card" && entry.card.type === "slack-draft"
+const isDraft = (entry: KnownTranscriptEntry): entry is DraftCardEntry =>
+  entry.kind === "card" && entry.card.type === "slack-draft"
 
 /** "DM with Alice Smith", "group DM with Alice, Bob", "#general". */
 export const describeSlackPlace = (conversation: SlackConversation): string =>
   conversation.kind === "dm"
     ? `DM with ${conversation.label}`
     : conversation.kind === "group-dm"
-    ? `group DM with ${conversation.label}`
-    : conversation.label
+      ? `group DM with ${conversation.label}`
+      : conversation.label
 
 const sameChannel = (filter: string, conversation: SlackConversation): boolean => {
   const want = filter.trim().replace(/^#/, "").toLowerCase()
@@ -38,7 +39,10 @@ const sameChannel = (filter: string, conversation: SlackConversation): boolean =
 }
 
 /** Whether a Slack routine trigger fires for `event`. */
-export const slackTriggerMatches = (trigger: Extract<RoutineTrigger, { type: "slack" }>, event: SlackEvent): boolean => {
+export const slackTriggerMatches = (
+  trigger: Extract<RoutineTrigger, { type: "slack" }>,
+  event: SlackEvent,
+): boolean => {
   const channel = trigger.channel?.trim()
   if (channel !== undefined && channel.length > 0 && !sameChannel(channel, event.conversation)) return false
   switch (trigger.on) {
@@ -57,7 +61,9 @@ export const slackTriggerMatches = (trigger: Extract<RoutineTrigger, { type: "sl
 
 const clock = (ts: string): string => {
   const d = new Date(Number(ts) * 1000)
-  return Number.isNaN(d.getTime()) ? "" : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+  return Number.isNaN(d.getTime())
+    ? ""
+    : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
 }
 
 /**
@@ -71,24 +77,27 @@ export const slackEventsText = (events: ReadonlyArray<SlackEvent>): string => {
     if (last !== undefined && last.conversation.id === event.conversation.id) last.events.push(event)
     else groups.push({ conversation: event.conversation, events: [event] })
   }
-  return groups.map(({ conversation, events: group }) => {
-    const lines = [`[Slack · ${describeSlackPlace(conversation)}]`]
-    for (const { message } of group) {
-      const files = message.files === undefined || message.files.length === 0 ? "" : ` [files: ${message.files.join(", ")}]`
-      lines.push(`${message.author}, ${clock(message.ts)}: ${truncate(message.text, 4_000)}${files}`)
-    }
-    const latest = group.at(-1)!.message
-    const thread = latest.threadTs !== undefined && latest.threadTs !== latest.ts ? latest.threadTs : undefined
-    lines.push(
-      `(to: ${conversation.id} · ts: ${latest.ts}${thread === undefined ? "" : ` · in thread: ${thread}`} · ${latest.permalink})`,
-    )
-    return lines.join("\n")
-  }).join("\n\n")
+  return groups
+    .map(({ conversation, events: group }) => {
+      const lines = [`[Slack · ${describeSlackPlace(conversation)}]`]
+      for (const { message } of group) {
+        const files =
+          message.files === undefined || message.files.length === 0 ? "" : ` [files: ${message.files.join(", ")}]`
+        lines.push(`${message.author}, ${clock(message.ts)}: ${truncate(message.text, 4_000)}${files}`)
+      }
+      const latest = group.at(-1)!.message
+      const thread = latest.threadTs !== undefined && latest.threadTs !== latest.ts ? latest.threadTs : undefined
+      lines.push(
+        `(to: ${conversation.id} · ts: ${latest.ts}${thread === undefined ? "" : ` · in thread: ${thread}`} · ${latest.permalink})`,
+      )
+      return lines.join("\n")
+    })
+    .join("\n\n")
 }
 
 const notConnected = new Unavailable({ message: "Slack isn't connected (Connect apps › Slack)." })
 
-export const makeSlackService = Effect.gen(function*() {
+export const makeSlackService = Effect.gen(function* () {
   const conversations = yield* ConversationService
   const entries = yield* EntryRepo
   const bots = yield* BotRepo
@@ -103,9 +112,14 @@ export const makeSlackService = Effect.gen(function*() {
 
   const draft = (
     ctx: ToolContext,
-    input: { readonly to: string; readonly text: string; readonly thread?: string | undefined; readonly files?: ReadonlyArray<Attachment> | undefined },
+    input: {
+      readonly to: string
+      readonly text: string
+      readonly thread?: string | undefined
+      readonly files?: ReadonlyArray<Attachment> | undefined
+    },
   ) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const key = ctx.callId === undefined ? undefined : `${ctx.claims.botId}:${ctx.callId}`
       const known = key === undefined ? undefined : byCall.get(key)
       if (known !== undefined) return known
@@ -120,7 +134,8 @@ export const makeSlackService = Effect.gen(function*() {
       if (!status.connected) return yield* notConnected
       if (files.length > 0 && (status.missingScopes ?? []).includes("files:write")) {
         return yield* new InvalidInput({
-          message: "The owner's Slack app can't upload files yet: it needs an update (Connect apps › Slack shows how). Draft the text alone, or tell the owner.",
+          message:
+            "The owner's Slack app can't upload files yet: it needs an update (Connect apps › Slack shows how). Draft the text alone, or tell the owner.",
         })
       }
       const target = yield* connector.resolve({ to: input.to, thread: input.thread })
@@ -131,19 +146,23 @@ export const makeSlackService = Effect.gen(function*() {
         to: target.conversation.label,
         text,
         ...(files.length === 0 ? {} : { files }),
-        ...(target.thread === undefined ? {} : {
-          threadTs: target.thread.threadTs ?? target.thread.ts,
-          threadLabel: truncate(oneLine(`${target.thread.author}: ${target.thread.text}`), 120),
-        }),
+        ...(target.thread === undefined
+          ? {}
+          : {
+              threadTs: target.thread.threadTs ?? target.thread.ts,
+              threadLabel: truncate(oneLine(`${target.thread.author}: ${target.thread.text}`), 120),
+            }),
       }
-      const entry = yield* conversations.appendEntry({
-        kind: "card",
-        conversationId: ctx.claims.conversationId,
-        author: { kind: "bot", botId: ctx.claims.botId },
-        card,
-        state: { status: "pending" },
-        ...(ctx.turnId === undefined ? {} : { turnId: ctx.turnId }),
-      } as EntryDraft).pipe(Effect.mapError(() => new InvalidInput({ message: "This conversation is gone." })))
+      const entry = yield* conversations
+        .appendEntry({
+          kind: "card",
+          conversationId: ctx.claims.conversationId,
+          author: { kind: "bot", botId: ctx.claims.botId },
+          card,
+          state: { status: "pending" },
+          ...(ctx.turnId === undefined ? {} : { turnId: ctx.turnId }),
+        } as EntryDraft)
+        .pipe(Effect.mapError(() => new InvalidInput({ message: "This conversation is gone." })))
       const bot = yield* bots.get(ctx.claims.botId).pipe(Effect.orDie)
       yield* notifier.notify({
         kind: "waiting",
@@ -152,7 +171,11 @@ export const makeSlackService = Effect.gen(function*() {
         title: Option.match(bot, { onNone: () => "Slack", onSome: (b) => b.name }),
         body: `Slack message for ${describeSlackPlace(target.conversation)}: ${truncate(oneLine(text), 120)}`,
       })
-      const result = { entryId: entry.id, to: describeSlackPlace(target.conversation), inThread: target.thread !== undefined }
+      const result = {
+        entryId: entry.id,
+        to: describeSlackPlace(target.conversation),
+        inThread: target.thread !== undefined,
+      }
       if (key !== undefined) {
         byCall.set(key, result)
         if (byCall.size > 500) byCall.delete(byCall.keys().next().value!)
@@ -161,51 +184,70 @@ export const makeSlackService = Effect.gen(function*() {
     })
 
   const pendingDraft = (entryId: EntryId) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const found = yield* entries.get(entryId).pipe(Effect.orDie)
       if (Option.isNone(found) || !isDraft(found.value as KnownTranscriptEntry)) {
         return yield* new NotFound({ entity: "slack draft", id: entryId })
       }
       const entry = found.value as DraftCardEntry
       if (entry.state.status !== "pending") {
-        return yield* new Conflict({ reason: entry.state.status === "resolved" ? "This message was already sent." : "This draft was discarded." })
+        return yield* new Conflict({
+          reason: entry.state.status === "resolved" ? "This message was already sent." : "This draft was discarded.",
+        })
       }
       return entry
     })
 
   const send = (input: { readonly entryId: EntryId; readonly text: string }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (connector === undefined) return yield* notConnected
       const text = input.text.trim()
       if (sending.has(input.entryId)) return yield* new Conflict({ reason: "This message is being sent." })
       const entry = yield* pendingDraft(input.entryId)
       const attached = entry.card.files ?? []
-      if (text.length === 0 && attached.length === 0) return yield* new InvalidInput({ message: "The message is empty." })
+      if (text.length === 0 && attached.length === 0)
+        return yield* new InvalidInput({ message: "The message is empty." })
       // the files on the brain's disk (kept in OpenBot since the Bot drafted them)
       const files: Array<{ readonly name: string; readonly path: string; readonly byteSize: number }> = []
       for (const file of attached) {
         const record = yield* attachments.get(file.id).pipe(Effect.orDie)
-        if (Option.isNone(record)) return yield* new InvalidInput({ message: `${file.name} is no longer in OpenBot; ask the Bot to draft it again.` })
+        if (Option.isNone(record))
+          return yield* new InvalidInput({
+            message: `${file.name} is no longer in OpenBot; ask the Bot to draft it again.`,
+          })
         files.push({ name: record.value.name, path: record.value.path, byteSize: record.value.byteSize })
       }
       sending.add(input.entryId)
-      yield* Effect.gen(function*() {
-        const sent = yield* connector.send({ channelId: entry.card.channelId, text, threadTs: entry.card.threadTs, ...(files.length === 0 ? {} : { files }) })
-        yield* conversations.updateEntry(input.entryId, (current) =>
-          isDraft(current)
-            ? { ...current, card: { ...current.card, text }, state: { status: "resolved", detail: "Sent", link: sent.permalink } }
-            : current).pipe(Effect.catch(() => Effect.void))
+      yield* Effect.gen(function* () {
+        const sent = yield* connector.send({
+          channelId: entry.card.channelId,
+          text,
+          threadTs: entry.card.threadTs,
+          ...(files.length === 0 ? {} : { files }),
+        })
+        yield* conversations
+          .updateEntry(input.entryId, (current) =>
+            isDraft(current)
+              ? {
+                  ...current,
+                  card: { ...current.card, text },
+                  state: { status: "resolved", detail: "Sent", link: sent.permalink },
+                }
+              : current,
+          )
+          .pipe(Effect.catch(() => Effect.void))
       }).pipe(Effect.ensuring(Effect.sync(() => sending.delete(input.entryId))))
     })
 
   const discard = (entryId: EntryId) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (sending.has(entryId)) return yield* new Conflict({ reason: "This message is being sent." })
       yield* pendingDraft(entryId)
-      yield* conversations.updateEntry(entryId, (current) =>
-        isDraft(current) ? { ...current, state: { status: "dismissed", detail: "Discarded" } } : current).pipe(
-          Effect.catch(() => Effect.void),
+      yield* conversations
+        .updateEntry(entryId, (current) =>
+          isDraft(current) ? { ...current, state: { status: "dismissed", detail: "Discarded" } } : current,
         )
+        .pipe(Effect.catch(() => Effect.void))
     })
 
   return SlackService.of({ draft, send, discard })

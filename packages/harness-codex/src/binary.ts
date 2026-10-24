@@ -104,16 +104,14 @@ const whichCodex = (): string | undefined => Bun.which("codex") ?? undefined
 /** Resolution order: config → bundled → PATH (or config → PATH → bundled with `preferPath`). */
 export const resolveCodexBinary = (options: ResolveCodexOptions = {}): CodexBinary | undefined => {
   if (options.binaryPath) {
-    return existsSync(options.binaryPath)
-      ? { path: options.binaryPath, source: "config", pathDirs: [] }
-      : undefined
+    return existsSync(options.binaryPath) ? { path: options.binaryPath, source: "config", pathDirs: [] } : undefined
   }
   const fromPath = (): CodexBinary | undefined => {
     if (options.usePath === false) return undefined
     const found = whichCodex()
     return found ? { path: found, source: "path", pathDirs: [] } : undefined
   }
-  return options.preferPath ? fromPath() ?? findBundledCodex() : findBundledCodex() ?? fromPath()
+  return options.preferPath ? (fromPath() ?? findBundledCodex()) : (findBundledCodex() ?? fromPath())
 }
 
 /**
@@ -126,7 +124,10 @@ export const parseCodexVersion = (userAgent: string): string | undefined => {
 }
 
 const numeric = (version: string): ReadonlyArray<number> =>
-  version.split(/[-+]/)[0]!.split(".").map((part) => Number.parseInt(part, 10) || 0)
+  version
+    .split(/[-+]/)[0]!
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0)
 
 /** -1 / 0 / 1 comparing dotted numeric versions (pre-release suffixes ignored). */
 export const compareVersions = (a: string, b: string): number => {

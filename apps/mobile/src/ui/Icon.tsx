@@ -30,7 +30,23 @@ const ICONS = {
 
 export type IconName = keyof typeof ICONS
 
-export function Icon({ name, size = 18, color }: { readonly name: IconName; readonly size?: number; readonly color: string }): ReactNode {
+export function Icon({
+  name,
+  size = 18,
+  color,
+}: {
+  readonly name: IconName
+  readonly size?: number
+  readonly color: string
+}): ReactNode {
   const symbol = ICONS[name]
-  return <SymbolView name={symbol as never} size={size} tintColor={color} weight="medium" style={{ width: size, height: size }} />
+  return (
+    <SymbolView
+      name={symbol as never}
+      size={size}
+      tintColor={color}
+      weight="medium"
+      style={{ width: size, height: size }}
+    />
+  )
 }

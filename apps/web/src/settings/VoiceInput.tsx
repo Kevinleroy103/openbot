@@ -19,7 +19,9 @@ const describeStatus = (status: SttStatus): string => {
     case "absent":
       return `Dictate messages with the microphone button in the message box. ${privacy} Turning it on downloads about ${megabytes(status.downloadBytes)} MB once.`
     case "installing": {
-      const percent = status.downloadBytes ? Math.floor(((status.downloadedBytes ?? 0) / status.downloadBytes) * 100) : 0
+      const percent = status.downloadBytes
+        ? Math.floor(((status.downloadedBytes ?? 0) / status.downloadBytes) * 100)
+        : 0
       return `Downloading ${status.model}: ${percent}% (${megabytes(status.downloadedBytes)} of ${megabytes(status.downloadBytes)} MB).`
     }
     case "ready":
@@ -46,37 +48,61 @@ export function VoiceInputRow(): ReactNode {
     if (current === undefined || current.state === "unsupported") return undefined
     if (current.state === "ready") {
       return (
-        <PillButton variant="secondary" size="md" loading={remove.pending} onClick={() => void remove.run(undefined as never)} data-testid="voice-input-remove">
+        <PillButton
+          variant="secondary"
+          size="md"
+          loading={remove.pending}
+          onClick={() => void remove.run(undefined as never)}
+          data-testid="voice-input-remove"
+        >
           Turn off
         </PillButton>
       )
     }
     return (
-      <PillButton variant="primary" size="md" loading={installing || install.pending} onClick={() => void install.run(undefined as never)} data-testid="voice-input-install">
+      <PillButton
+        variant="primary"
+        size="md"
+        loading={installing || install.pending}
+        onClick={() => void install.run(undefined as never)}
+        data-testid="voice-input-install"
+      >
         {current.state === "failed" ? "Try again" : "Turn on"}
       </PillButton>
     )
   })()
 
   return (
-    <SettingsRow title="Voice input" description={current === undefined ? undefined : describeStatus(current)} wide control={control}>
+    <SettingsRow
+      title="Voice input"
+      description={current === undefined ? undefined : describeStatus(current)}
+      wide
+      control={control}
+    >
       {current?.state === "ready" && !microphoneAvailable() && (
-        <p className="pt-2 text-sm text-fg-secondary">This browser can't use a microphone here: open OpenBot over https or on this computer's own address.</p>
+        <p className="pt-2 text-sm text-fg-secondary">
+          This browser can't use a microphone here: open OpenBot over https or on this computer's own address.
+        </p>
       )}
-      {(status.error ?? install.error ?? remove.error) && <ErrorLine className="pt-2">{status.error ?? install.error ?? remove.error}</ErrorLine>}
+      {(status.error ?? install.error ?? remove.error) && (
+        <ErrorLine className="pt-2">{status.error ?? install.error ?? remove.error}</ErrorLine>
+      )}
     </SettingsRow>
   )
 }
 
 const describeCalls = (status: VoiceCallStatus, inputReady: boolean): string => {
-  const how = "Talk with a Bot: the call button in its chat. The Bot itself answers; your voice is heard and spoken on this OpenBot (Parakeet, Kokoro) and never leaves it."
+  const how =
+    "Talk with a Bot: the call button in its chat. The Bot itself answers; your voice is heard and spoken on this OpenBot (Parakeet, Kokoro) and never leaves it."
   switch (status.state) {
     case "unsupported":
       return "Voice calls need OpenBot running on Linux (x64) or a Mac with Apple silicon."
     case "absent":
       return `${how} Turning it on downloads about ${megabytes(status.downloadBytes)} MB once.${inputReady ? "" : " It needs voice input on too."}`
     case "installing": {
-      const percent = status.downloadBytes ? Math.floor(((status.downloadedBytes ?? 0) / status.downloadBytes) * 100) : 0
+      const percent = status.downloadBytes
+        ? Math.floor(((status.downloadedBytes ?? 0) / status.downloadBytes) * 100)
+        : 0
       return `Downloading: ${percent}% (${megabytes(status.downloadedBytes)} of ${megabytes(status.downloadBytes)} MB).`
     }
     case "ready":
@@ -105,21 +131,40 @@ export function VoiceCallsRow(): ReactNode {
     if (current === undefined || current.state === "unsupported") return undefined
     if (current.state === "ready") {
       return (
-        <PillButton variant="secondary" size="md" loading={remove.pending} onClick={() => void remove.run(undefined as never)} data-testid="voice-calls-remove">
+        <PillButton
+          variant="secondary"
+          size="md"
+          loading={remove.pending}
+          onClick={() => void remove.run(undefined as never)}
+          data-testid="voice-calls-remove"
+        >
           Turn off
         </PillButton>
       )
     }
     return (
-      <PillButton variant="primary" size="md" loading={installing || install.pending} onClick={() => void install.run(undefined as never)} data-testid="voice-calls-install">
+      <PillButton
+        variant="primary"
+        size="md"
+        loading={installing || install.pending}
+        onClick={() => void install.run(undefined as never)}
+        data-testid="voice-calls-install"
+      >
         {current.state === "failed" ? "Try again" : "Turn on"}
       </PillButton>
     )
   })()
 
   return (
-    <SettingsRow title="Voice calls (experiment)" description={current === undefined ? undefined : describeCalls(current, input.value?.state === "ready")} wide control={control}>
-      {(status.error ?? install.error ?? remove.error) && <ErrorLine className="pt-2">{status.error ?? install.error ?? remove.error}</ErrorLine>}
+    <SettingsRow
+      title="Voice calls (experiment)"
+      description={current === undefined ? undefined : describeCalls(current, input.value?.state === "ready")}
+      wide
+      control={control}
+    >
+      {(status.error ?? install.error ?? remove.error) && (
+        <ErrorLine className="pt-2">{status.error ?? install.error ?? remove.error}</ErrorLine>
+      )}
     </SettingsRow>
   )
 }

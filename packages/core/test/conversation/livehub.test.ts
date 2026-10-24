@@ -26,11 +26,12 @@ const CONV = conversationId("cnv_live")
 const layer = () => LiveHubLive.pipe(Layer.provideMerge(TestPorts()))
 
 const seedConversation = Effect.flatMap(ConversationRepo, (repo) =>
-  Effect.orDie(repo.upsert(makeDirectConversation({ id: CONV, botId: botId("bot_live"), epoch: "epc_initial" }))))
+  Effect.orDie(repo.upsert(makeDirectConversation({ id: CONV, botId: botId("bot_live"), epoch: "epc_initial" }))),
+)
 
 /** Publishes `n` turn changes; returns the last cursor. */
 const publishTurns = (conversation: ConversationId, n: number) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const hub = yield* LiveHub
     let last: StreamCursor | undefined
     for (let i = 1; i <= n; i++) {
@@ -44,14 +45,15 @@ const publishTurns = (conversation: ConversationId, n: number) =>
 
 const firstItems = (input: { readonly after?: StreamCursor; readonly tailLimit?: number }, n: number) =>
   Effect.flatMap(LiveHub, (hub) =>
-    Stream.runCollect(hub.subscribeConversation({ conversationId: CONV, ...input }).pipe(Stream.take(n))))
+    Stream.runCollect(hub.subscribeConversation({ conversationId: CONV, ...input }).pipe(Stream.take(n))),
+  )
 
 const kinds = (items: ReadonlyArray<KnownConversationStreamItem>) => items.map((i) => i.kind)
 
 describe("LiveHub conversation resume", () => {
   test("a fresh subscriber gets snapshot + synchronized; the epoch comes from the conversation", async () => {
     const items = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seedConversation
         yield* publishTurns(CONV, 3)
         return yield* firstItems({}, 2)
@@ -69,11 +71,14 @@ describe("LiveHub conversation resume", () => {
 
   test("a gap of at most 256 is replayed from the log (no snapshot)", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seedConversation
         const head = yield* publishTurns(CONV, 300)
         const small = yield* firstItems({ after: { epoch: head.epoch, sequence: 290 } }, 11)
-        const exact = yield* firstItems({ after: { epoch: head.epoch, sequence: 300 - MAX_REPLAY_GAP } }, MAX_REPLAY_GAP + 1)
+        const exact = yield* firstItems(
+          { after: { epoch: head.epoch, sequence: 300 - MAX_REPLAY_GAP } },
+          MAX_REPLAY_GAP + 1,
+        )
         const upToDate = yield* firstItems({ after: head }, 1)
         return { small, exact, upToDate }
       }),
@@ -90,11 +95,14 @@ describe("LiveHub conversation resume", () => {
 
   test("a gap over 256, a stale epoch or a cursor ahead of the head gets a snapshot", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seedConversation
         const head = yield* publishTurns(CONV, 300)
         return {
-          tooFar: yield* firstItems({ after: { epoch: head.epoch, sequence: 300 - MAX_REPLAY_GAP - 1 }, tailLimit: 5 }, 2),
+          tooFar: yield* firstItems(
+            { after: { epoch: head.epoch, sequence: 300 - MAX_REPLAY_GAP - 1 }, tailLimit: 5 },
+            2,
+          ),
           staleEpoch: yield* firstItems({ after: { epoch: "epc_other", sequence: 299 } }, 2),
           ahead: yield* firstItems({ after: { epoch: head.epoch, sequence: 301 } }, 2),
         }
@@ -109,28 +117,51 @@ describe("LiveHub conversation resume", () => {
 
   test("resetConversation: live subscribers get reset + snapshot + synchronized; old cursors re-snapshot", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const hub = yield* LiveHub
         yield* seedConversation
         const before = yield* publishTurns(CONV, 2)
         const live = yield* collect(hub.subscribeConversation({ conversationId: CONV }))
-        yield* eventually(Effect.map(live.items, (items) => items.length === 2), "initial snapshot")
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length === 2),
+          "initial snapshot",
+        )
         yield* publishTurns(CONV, 1)
         const epoch = yield* hub.resetConversation(CONV, "new-session")
-        yield* eventually(Effect.map(live.items, (items) => items.length === 6), "reset items")
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length === 6),
+          "reset items",
+        )
         const after = yield* hub.publishConversation(CONV, {
           type: "turn.upserted",
           turn: makeTurn({ id: turnId("trn_after"), conversationId: CONV }),
         })
-        yield* eventually(Effect.map(live.items, (items) => items.length === 7), "post-reset change")
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length === 7),
+          "post-reset change",
+        )
         const resumed = yield* firstItems({ after: before }, 2)
-        return { epoch, before, after, live: (yield* live.items) as ReadonlyArray<KnownConversationStreamItem>, resumed }
+        return {
+          epoch,
+          before,
+          after,
+          live: (yield* live.items) as ReadonlyArray<KnownConversationStreamItem>,
+          resumed,
+        }
       }),
       layer(),
     )
     expect(out.epoch).not.toBe(out.before.epoch)
     expect(out.after).toEqual({ epoch: out.epoch, sequence: 1 })
-    expect(kinds(out.live)).toEqual(["snapshot", "synchronized", "change", "reset", "snapshot", "synchronized", "change"])
+    expect(kinds(out.live)).toEqual([
+      "snapshot",
+      "synchronized",
+      "change",
+      "reset",
+      "snapshot",
+      "synchronized",
+      "change",
+    ])
     expect(out.live[3]).toEqual({ kind: "reset", epoch: out.epoch, reason: "new-session" })
     expect(out.live[4]!.kind === "snapshot" && out.live[4]!.cursor).toEqual({ epoch: out.epoch, sequence: 0 })
     expect(out.live[6]!.kind === "change" && out.live[6]!.cursor).toEqual({ epoch: out.epoch, sequence: 1 })
@@ -141,7 +172,8 @@ describe("LiveHub conversation resume", () => {
   test("subscribing to an unknown conversation fails with NotFound", async () => {
     const error = await runTest(
       Effect.flatMap(LiveHub, (hub) =>
-        Effect.flip(Stream.runCollect(hub.subscribeConversation({ conversationId: conversationId("cnv_nope") })))),
+        Effect.flip(Stream.runCollect(hub.subscribeConversation({ conversationId: conversationId("cnv_nope") }))),
+      ),
       layer(),
     )
     expect(error._tag).toBe("NotFound")
@@ -151,16 +183,22 @@ describe("LiveHub conversation resume", () => {
 describe("LiveHub roster", () => {
   test("activities are deduplicated, snapshotted and node changes are forwarded", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const hub = yield* LiveHub
         const nodes = yield* NodeDirectoryFake
         const live = yield* collect(hub.subscribeRoster({}))
-        yield* eventually(Effect.map(live.items, (items) => items.length === 2), "roster snapshot")
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length === 2),
+          "roster snapshot",
+        )
         const activity = { botId: botId("bot_x"), state: "thinking" as const, since: 1 }
         yield* hub.setActivity(activity)
         yield* hub.setActivity({ ...activity, since: 2 })
         yield* nodes.upsert(remoteNodeSummary("nod_far"))
-        yield* eventually(Effect.map(live.items, (items) => items.length === 4), "roster changes")
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length === 4),
+          "roster changes",
+        )
         const snapshot = yield* Stream.runCollect(hub.subscribeRoster({}).pipe(Stream.take(1)))
         return {
           live: (yield* live.items) as ReadonlyArray<KnownRosterStreamItem>,
@@ -178,6 +216,9 @@ describe("LiveHub roster", () => {
     ])
     expect(out.activities).toHaveLength(1)
     // Activities of unknown bots are not part of a snapshot (bots are filtered against BotRepo).
-    expect(out.snapshot.kind === "snapshot" && out.snapshot.nodes.map((n): string => n.id)).toEqual(["node_local", "nod_far"])
+    expect(out.snapshot.kind === "snapshot" && out.snapshot.nodes.map((n): string => n.id)).toEqual([
+      "node_local",
+      "nod_far",
+    ])
   })
 })

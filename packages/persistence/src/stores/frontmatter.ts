@@ -21,7 +21,7 @@ const FENCE = "---"
 
 const unquote = (raw: string): string => {
   const value = raw.trim()
-  if (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
     try {
       const parsed: unknown = JSON.parse(value)
       if (typeof parsed === "string") return parsed
@@ -36,7 +36,8 @@ const unquote = (raw: string): string => {
 
 /** Quotes a scalar when plain YAML would change its meaning. */
 export const quote = (value: string): string => {
-  const plain = value.length > 0 &&
+  const plain =
+    value.length > 0 &&
     value === value.trim() &&
     !/[\n\r\t]/.test(value) &&
     !/^[-?:,[\]{}#&*!|>'"%@`]/.test(value) &&
@@ -87,9 +88,14 @@ export const parseFrontmatter = (text: string): Frontmatter => {
       while (lines.length > 0 && (lines.at(-1) ?? "").trim() === "") lines.pop()
       const indent = Math.min(...lines.filter((l) => l.trim() !== "").map((l) => l.length - l.trimStart().length))
       const text = lines.map((l) => l.slice(Number.isFinite(indent) ? indent : 0))
-      const value = blockStyle[1] === "|"
-        ? text.join("\n")
-        : text.reduce((acc, line) => (line === "" ? `${acc}\n` : acc === "" || acc.endsWith("\n") ? `${acc}${line}` : `${acc} ${line}`), "")
+      const value =
+        blockStyle[1] === "|"
+          ? text.join("\n")
+          : text.reduce(
+              (acc, line) =>
+                line === "" ? `${acc}\n` : acc === "" || acc.endsWith("\n") ? `${acc}${line}` : `${acc} ${line}`,
+              "",
+            )
       fields.set(key, { kind: "scalar", value })
       continue
     }
@@ -123,10 +129,10 @@ export const parseFrontmatter = (text: string): Frontmatter => {
       isMap
         ? { kind: "map", entries }
         : plainText
-        ? { kind: "scalar", value: block.map((line) => line.trim()).join(" ") }
-        : block.length === 0
-        ? { kind: "scalar", value: "" }
-        : { kind: "raw", lines: block },
+          ? { kind: "scalar", value: block.map((line) => line.trim()).join(" ") }
+          : block.length === 0
+            ? { kind: "scalar", value: "" }
+            : { kind: "raw", lines: block },
     )
   }
   return { fields, body }

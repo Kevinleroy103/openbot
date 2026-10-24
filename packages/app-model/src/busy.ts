@@ -11,10 +11,10 @@ export const whereOf = (other: ConversationSummary | undefined): string =>
   other === undefined
     ? "another chat"
     : other.kind === "group"
-    ? `“${other.title}”`
-    : other.kind === "routine-run"
-    ? `routine “${other.title}”`
-    : "its DM with you"
+      ? `“${other.title}”`
+      : other.kind === "routine-run"
+        ? `routine “${other.title}”`
+        : "its DM with you"
 
 export interface BusyElsewhere {
   readonly botId: BotId
@@ -54,7 +54,8 @@ export const handlingHere = (input: {
 }): ReadonlyArray<BotId> => {
   const busy = new Set<BotId>()
   for (const t of input.tasks?.values() ?? []) {
-    if (t.conversationId === input.conversationId && (t.status === "queued" || t.status === "running")) busy.add(t.botId)
+    if (t.conversationId === input.conversationId && (t.status === "queued" || t.status === "running"))
+      busy.add(t.botId)
   }
   return input.botIds.filter((id) => busy.has(id))
 }
@@ -93,15 +94,19 @@ export const chatStatuses = (input: {
   const away = new Map(busyElsewhere(input).map((e) => [e.botId, e]))
   const handling = new Set(handlingHere(input))
   // a queued turn of a bot busy elsewhere waits: that bot's line says where it is
-  const turnBots = new Set<BotId>(input.turns.filter((t) => t.status !== "queued" || !away.has(t.botId)).map((t) => t.botId))
+  const turnBots = new Set<BotId>(
+    input.turns.filter((t) => t.status !== "queued" || !away.has(t.botId)).map((t) => t.botId),
+  )
   for (const [botId, a] of input.activities) {
-    if (a.conversationId === input.conversationId && (a.state === "thinking" || a.state === "working")) turnBots.add(botId)
+    if (a.conversationId === input.conversationId && (a.state === "thinking" || a.state === "working"))
+      turnBots.add(botId)
   }
   const out: Array<ChatStatus> = [...turnBots].map((botId) => ({ kind: "turn" as const, botId }))
   for (const botId of input.botIds) {
     if (turnBots.has(botId)) continue
     const elsewhere = away.get(botId)
-    if (elsewhere !== undefined && (elsewhere.queued || !handling.has(botId))) out.push({ kind: "elsewhere", ...elsewhere })
+    if (elsewhere !== undefined && (elsewhere.queued || !handling.has(botId)))
+      out.push({ kind: "elsewhere", ...elsewhere })
     else if (handling.has(botId)) out.push({ kind: "handling", botId })
   }
   return out

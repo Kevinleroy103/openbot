@@ -35,7 +35,13 @@ import type {
 import { ROUTINE_RUNS_KEPT } from "@openbot/contracts"
 import { Context, Effect, Layer, Option } from "effect"
 import { RepoError } from "../ports/errors.ts"
-import { indexMemoryEntry, indexMemoryTask, makeMemorySearchIndex, makeMemorySearchRepo, type MemorySearchIndex } from "./memorySearch.ts"
+import {
+  indexMemoryEntry,
+  indexMemoryTask,
+  makeMemorySearchIndex,
+  makeMemorySearchRepo,
+  type MemorySearchIndex,
+} from "./memorySearch.ts"
 import { McpTokenRepo, type McpTokenRecord } from "../ports/Mcp.ts"
 import { ProcessLedger, type ProcessRecord } from "../ports/ProcessLedger.ts"
 import {
@@ -97,7 +103,7 @@ export const makeMemorySectionRepo = () =>
     const sections = new Map<SectionId, Section>()
     return SectionRepo.of({
       list: Effect.sync(() =>
-        [...sections.values()].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+        [...sections.values()].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
       ),
       get: (id) => Effect.sync(() => option(sections.get(id))),
       upsert: (section) => Effect.sync(() => void sections.set(section.id, section)),
@@ -128,7 +134,7 @@ export const makeMemoryConversationRepo = () =>
             .filter((c) => filter?.kind === undefined || c.kind === filter.kind)
             .filter((c) => filter?.botId === undefined || conversationMembers(c).includes(filter.botId))
             .filter((c) => filter?.includeHidden !== false || !c.hiddenFromSidebar)
-            .sort((a, b) => b.lastActivityAt - a.lastActivityAt || (a.id < b.id ? -1 : 1))
+            .sort((a, b) => b.lastActivityAt - a.lastActivityAt || (a.id < b.id ? -1 : 1)),
         ),
       upsert: (conversation) => Effect.sync(() => void conversations.set(conversation.id, conversation)),
       delete: (id) => Effect.sync(() => conversations.delete(id)),
@@ -149,7 +155,8 @@ export const compareEntries = (
 ) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
 /** Opaque page cursor `"<createdAt>:<id>"` (ids never contain ':'). */
-export const encodeEntryCursor = (entry: { readonly createdAt: number; readonly id: string }) => `${entry.createdAt}:${entry.id}`
+export const encodeEntryCursor = (entry: { readonly createdAt: number; readonly id: string }) =>
+  `${entry.createdAt}:${entry.id}`
 export const decodeEntryCursor = (cursor: string): { createdAt: number; id: string } | undefined => {
   const index = cursor.indexOf(":")
   if (index <= 0) return undefined
@@ -172,9 +179,10 @@ export const makeMemoryEntryRepo = (index?: MemorySearchIndex) =>
           const current = entries.get(entry.id)
           if (current !== undefined && current.revision >= entry.revision) return { applied: false, current }
           // createdAt is immutable once written.
-          const value: TranscriptEntry = current !== undefined && current.createdAt !== entry.createdAt
-            ? { ...entry, createdAt: current.createdAt }
-            : entry
+          const value: TranscriptEntry =
+            current !== undefined && current.createdAt !== entry.createdAt
+              ? { ...entry, createdAt: current.createdAt }
+              : entry
           entries.set(entry.id, value)
           if (index !== undefined) indexMemoryEntry(index, value)
           return { applied: true, value }
@@ -185,7 +193,7 @@ export const makeMemoryEntryRepo = (index?: MemorySearchIndex) =>
           return entries.delete(id)
         }),
       page: ({ conversationId, before, limit }) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const all = inConversation(conversationId)
           let end = all.length
           if (before !== undefined) {
@@ -209,7 +217,7 @@ export const makeMemoryEntryRepo = (index?: MemorySearchIndex) =>
           return result
         }),
       pageAfter: ({ conversationId, after, limit }) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const cursor = decodeEntryCursor(after)
           if (cursor === undefined) {
             return yield* new RepoError({ op: "EntryRepo.pageAfter", message: `Invalid cursor: ${after}` })
@@ -228,9 +236,12 @@ export const makeMemoryEntryRepo = (index?: MemorySearchIndex) =>
       listExchange: ({ botIds: [a, b], conversationIds, direction, from, limit }) =>
         Effect.sync((): ExchangeSlice => {
           const all = [...entries.values()]
-            .filter((e) =>
-              conversationIds.includes(e.conversationId) && e.kind === "message" && e.author.kind === "bot" &&
-              ((e.author.botId === a && e.toBotId === b) || (e.author.botId === b && e.toBotId === a))
+            .filter(
+              (e) =>
+                conversationIds.includes(e.conversationId) &&
+                e.kind === "message" &&
+                e.author.kind === "bot" &&
+                ((e.author.botId === a && e.toBotId === b) || (e.author.botId === b && e.toBotId === a)),
             )
             .sort(compareEntries)
           const size = Math.max(0, Math.floor(limit))
@@ -246,9 +257,10 @@ export const makeMemoryEntryRepo = (index?: MemorySearchIndex) =>
         Effect.sync(() => {
           const all = inConversation(conversationId)
           const anchor = afterEntryId === undefined ? undefined : entries.get(afterEntryId)
-          const rest = anchor === undefined || anchor.conversationId !== conversationId
-            ? all
-            : all.filter((e) => compareEntries(e, anchor) > 0)
+          const rest =
+            anchor === undefined || anchor.conversationId !== conversationId
+              ? all
+              : all.filter((e) => compareEntries(e, anchor) > 0)
           return rest.slice(0, Math.max(0, limit))
         }),
       findByClientNonce: (conversationId, clientNonce) =>
@@ -257,13 +269,18 @@ export const makeMemoryEntryRepo = (index?: MemorySearchIndex) =>
             [...entries.values()].find(
               (e) => e.conversationId === conversationId && e.kind === "message" && e.clientNonce === clientNonce,
             ),
-          )
+          ),
         ),
       findByNativeId: (conversationId, nativeId) =>
         Effect.sync(() =>
-          option([...entries.values()].find((e) => e.conversationId === conversationId && e.harnessRef?.nativeId === nativeId))
+          option(
+            [...entries.values()].find(
+              (e) => e.conversationId === conversationId && e.harnessRef?.nativeId === nativeId,
+            ),
+          ),
         ),
-      listByTurn: (turnId) => Effect.sync(() => [...entries.values()].filter((e) => e.turnId === turnId).sort(compareEntries)),
+      listByTurn: (turnId) =>
+        Effect.sync(() => [...entries.values()].filter((e) => e.turnId === turnId).sort(compareEntries)),
     })
   })
 
@@ -282,11 +299,11 @@ export const makeMemoryRequestRepo = () =>
             .filter((r) => filter?.botId === undefined || r.botId === filter.botId)
             .filter((r) => filter?.turnId === undefined || r.turnId === filter.turnId)
             .filter((r) => filter?.statuses === undefined || filter.statuses.includes(r.status))
-            .sort(byCreatedAt)
+            .sort(byCreatedAt),
         ),
       findByNativeId: (botId, nativeRequestId) =>
         Effect.sync(() =>
-          option([...requests.values()].find((r) => r.botId === botId && r.source.nativeRequestId === nativeRequestId))
+          option([...requests.values()].find((r) => r.botId === botId && r.source.nativeRequestId === nativeRequestId)),
         ),
       deleteByConversation: (conversationId) =>
         Effect.sync(() => {
@@ -311,7 +328,9 @@ export const makeMemoryTurnRepo = () =>
           const all = [...turns.values()].filter((t) => t.conversationId === conversationId).sort(byStart)
           return limit <= 0 ? [] : all.slice(-limit)
         }),
-      listActive: Effect.sync(() => [...turns.values()].filter((t) => ACTIVE_TURN_STATUSES.includes(t.status)).sort(byStart)),
+      listActive: Effect.sync(() =>
+        [...turns.values()].filter((t) => ACTIVE_TURN_STATUSES.includes(t.status)).sort(byStart),
+      ),
       deleteByConversation: (conversationId) =>
         Effect.sync(() => {
           for (const [id, turn] of turns) if (turn.conversationId === conversationId) turns.delete(id)
@@ -365,11 +384,16 @@ export const makeMemoryRoutineRepo = () =>
   Effect.sync(() => {
     const routines = new Map<RoutineId, Routine>()
     const runs = new Map<RoutineRunId, RoutineRun>()
-    const newestFirst = (a: RoutineRun, b: RoutineRun) => b.startedAt - a.startedAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
+    const newestFirst = (a: RoutineRun, b: RoutineRun) =>
+      b.startedAt - a.startedAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
     return RoutineRepo.of({
       get: (id) => Effect.sync(() => option(routines.get(id))),
       list: (filter) =>
-        Effect.sync(() => [...routines.values()].filter((r) => filter?.botId === undefined || r.botId === filter.botId).sort(byCreatedAt)),
+        Effect.sync(() =>
+          [...routines.values()]
+            .filter((r) => filter?.botId === undefined || r.botId === filter.botId)
+            .sort(byCreatedAt),
+        ),
       upsert: (routine) => Effect.sync(() => void routines.set(routine.id, routine)),
       delete: (id) =>
         Effect.sync(() => {
@@ -383,7 +407,8 @@ export const makeMemoryRoutineRepo = () =>
           for (const stale of own.slice(ROUTINE_RUNS_KEPT)) runs.delete(stale.id)
         }),
       getRun: (id) => Effect.sync(() => option(runs.get(id))),
-      listRuns: (routineId) => Effect.sync(() => [...runs.values()].filter((r) => r.routineId === routineId).sort(newestFirst)),
+      listRuns: (routineId) =>
+        Effect.sync(() => [...runs.values()].filter((r) => r.routineId === routineId).sort(newestFirst)),
     })
   })
 
@@ -396,7 +421,8 @@ export const makeMemoryNodeRepo = () =>
     return NodeRepo.of({
       get: (id) => Effect.sync(() => option(nodes.get(id))),
       list: Effect.sync(() => [...nodes.values()].sort(byCreatedAt)),
-      findByPublicKey: (publicKey) => Effect.sync(() => option([...nodes.values()].find((n) => n.publicKey === publicKey))),
+      findByPublicKey: (publicKey) =>
+        Effect.sync(() => option([...nodes.values()].find((n) => n.publicKey === publicKey))),
       upsert: (node) => Effect.sync(() => void nodes.set(node.id, node)),
       delete: (id) => Effect.sync(() => nodes.delete(id)),
       putPairingCode: (record) => Effect.sync(() => void codes.set(record.code, record)),
@@ -421,7 +447,7 @@ export const makeMemoryApprovalRuleRepo = () =>
         Effect.sync(() =>
           [...rules.values()]
             .filter((r) => filter?.botId === undefined || r.botId === undefined || r.botId === filter.botId)
-            .sort(byCreatedAt)
+            .sort(byCreatedAt),
         ),
       upsert: (rule) => Effect.sync(() => void rules.set(rule.id, rule)),
       delete: (id) => Effect.sync(() => rules.delete(id)),
@@ -433,7 +459,7 @@ export const makeMemoryApprovalRuleRepo = () =>
 /** Values are deep-copied through JSON, like a real store (catches non-serializable values early). */
 const jsonCopy = (op: string, value: unknown) =>
   Effect.try({
-    try: () => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)) as unknown),
+    try: () => (value === undefined ? undefined : (JSON.parse(JSON.stringify(value)) as unknown)),
     catch: (cause) => new RepoError({ op, message: "Value is not JSON-serializable", cause }),
   })
 
@@ -451,7 +477,8 @@ export const makeMemorySettingsRepo = (initial?: Readonly<Record<string, unknown
 // ============================================================================ usage
 
 export const addUsage = (a: Usage, b: Usage): Usage => {
-  const sumOptional = (x: number | undefined, y: number | undefined) => (x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0))
+  const sumOptional = (x: number | undefined, y: number | undefined) =>
+    x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0)
   const cached = sumOptional(a.cachedInputTokens, b.cachedInputTokens)
   const reasoning = sumOptional(a.reasoningTokens, b.reasoningTokens)
   const cost = sumOptional(a.costUsd, b.costUsd)
@@ -476,7 +503,12 @@ export const makeMemoryUsageRepo = () =>
             if (sinceMs !== undefined && r.at < sinceMs) continue
             const current = totals.get(r.botId)
             if (current === undefined) {
-              totals.set(r.botId, { usage: r.usage, records: 1, turns: new Set(r.turnId === undefined ? [] : [r.turnId]), lastAt: r.at })
+              totals.set(r.botId, {
+                usage: r.usage,
+                records: 1,
+                turns: new Set(r.turnId === undefined ? [] : [r.turnId]),
+                lastAt: r.at,
+              })
             } else {
               current.usage = addUsage(current.usage, r.usage)
               current.records += 1
@@ -485,7 +517,13 @@ export const makeMemoryUsageRepo = () =>
             }
           }
           return [...totals.entries()]
-            .map(([botId, t]): UsageTotals => ({ botId, usage: t.usage, records: t.records, turnCount: t.turns.size, lastAt: t.lastAt }))
+            .map(([botId, t]): UsageTotals => ({
+              botId,
+              usage: t.usage,
+              records: t.records,
+              turnCount: t.turns.size,
+              lastAt: t.lastAt,
+            }))
             .sort((a, b) => (a.botId < b.botId ? -1 : a.botId > b.botId ? 1 : 0))
         }),
       list: (filter) =>
@@ -494,7 +532,7 @@ export const makeMemoryUsageRepo = () =>
             (r) =>
               (filter?.botId === undefined || r.botId === filter.botId) &&
               (filter?.sinceMs === undefined || r.at >= filter.sinceMs),
-          )
+          ),
         ),
     })
   })
@@ -508,7 +546,7 @@ export const makeMemoryReplicaLog = (window: number = REPLICA_LOG_WINDOW) =>
     return ReplicaLog.of({
       head: (replicaKey) => Effect.sync(() => option(heads.get(replicaKey))),
       append: (record) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const head = heads.get(record.replicaKey)
           if (head !== undefined && (head.epoch !== record.epoch || record.sequence !== head.sequence + 1)) {
             return yield* new RepoError({
@@ -592,16 +630,19 @@ export const MemoryTaskRepo = Layer.effect(TaskRepo, makeMemoryTaskRepo())
  * `EntryRepo`, `TaskRepo` and `SearchRepo` over one search index (what `MemoryPersistence` uses):
  * writes to entries and tasks are searchable at once. Needs `ConversationRepo` and `TurnRepo`.
  */
-export const MemorySearchableTranscript: Layer.Layer<EntryRepo | TaskRepo | SearchRepo, never, ConversationRepo | TurnRepo> = Layer
-  .effectContext(
-    Effect.gen(function*() {
-      const index = makeMemorySearchIndex()
-      return Context.make(EntryRepo, yield* makeMemoryEntryRepo(index)).pipe(
-        Context.add(TaskRepo, yield* makeMemoryTaskRepo(index)),
-        Context.add(SearchRepo, yield* makeMemorySearchRepo(index)),
-      )
-    }),
-  )
+export const MemorySearchableTranscript: Layer.Layer<
+  EntryRepo | TaskRepo | SearchRepo,
+  never,
+  ConversationRepo | TurnRepo
+> = Layer.effectContext(
+  Effect.gen(function* () {
+    const index = makeMemorySearchIndex()
+    return Context.make(EntryRepo, yield* makeMemoryEntryRepo(index)).pipe(
+      Context.add(TaskRepo, yield* makeMemoryTaskRepo(index)),
+      Context.add(SearchRepo, yield* makeMemorySearchRepo(index)),
+    )
+  }),
+)
 export const MemoryRoutineRepo = Layer.effect(RoutineRepo, makeMemoryRoutineRepo())
 export const MemoryNodeRepo = Layer.effect(NodeRepo, makeMemoryNodeRepo())
 export const MemoryApprovalRuleRepo = Layer.effect(ApprovalRuleRepo, makeMemoryApprovalRuleRepo())

@@ -1,13 +1,46 @@
 // A chat (Grok iOS): floating glass back button, the Bot's name pill and a "…" menu over the
 // transcript; the glass composer at the bottom. Rows come from the shared `layoutTranscript`.
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
-import { activityPhrase, chatStatuses, type ChatStatus, layoutTranscript, type PendingMessage, requestForCard, type Row } from "@openbot/app-model"
-import { commands, conversationAtom, interruptTurnAtom, loadOlderAtom, outboxAtom, retrySendAtom, sendMessageAtom } from "@openbot/client"
-import { type Bot, type BotId, type ConversationId, DEFAULT_SETTINGS, emptyConversationState, transcriptOf } from "@openbot/contracts"
+import {
+  activityPhrase,
+  chatStatuses,
+  type ChatStatus,
+  layoutTranscript,
+  type PendingMessage,
+  requestForCard,
+  type Row,
+} from "@openbot/app-model"
+import {
+  commands,
+  conversationAtom,
+  interruptTurnAtom,
+  loadOlderAtom,
+  outboxAtom,
+  retrySendAtom,
+  sendMessageAtom,
+} from "@openbot/client"
+import {
+  type Bot,
+  type BotId,
+  type ConversationId,
+  DEFAULT_SETTINGS,
+  emptyConversationState,
+  transcriptOf,
+} from "@openbot/contracts"
 import { Exit } from "effect"
 import { router, useLocalSearchParams } from "expo-router"
 import { type ReactElement, type ReactNode, useEffect } from "react"
-import { ActionSheetIOS, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native"
+import {
+  ActionSheetIOS,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Composer } from "../../src/chat/Composer.tsx"
 import { RowView, StatusLine } from "../../src/chat/Rows.tsx"
@@ -20,7 +53,9 @@ import { Glass, GlassCircle } from "../../src/ui/glass.tsx"
 
 const ACTIVE = new Set(["queued", "running", "waiting"])
 
-type Item = { readonly kind: "row"; readonly row: Row } | { readonly kind: "status"; readonly status: ChatStatus; readonly key: string }
+type Item =
+  | { readonly kind: "row"; readonly row: Row }
+  | { readonly kind: "status"; readonly status: ChatStatus; readonly key: string }
 
 export default function Chat(): ReactNode {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -49,7 +84,9 @@ export default function Chat(): ReactNode {
     : ((summary?.botIds ?? []) as ReadonlyArray<BotId>)
   const members = botIds.map((b) => roster.botById(b)).filter((b): b is Bot => b !== undefined)
   const primary = members[0]
-  const title = isGroup ? (conversation?.title || summary?.title || members.map((m) => m.name).join(", ")) : (primary?.name ?? summary?.title ?? "")
+  const title = isGroup
+    ? conversation?.title || summary?.title || members.map((m) => m.name).join(", ")
+    : (primary?.name ?? summary?.title ?? "")
   const settings = roster.state.settings ?? DEFAULT_SETTINGS
 
   // read once it is on screen
@@ -69,11 +106,33 @@ export default function Chat(): ReactNode {
   const nonces = new Set(entries.flatMap((e) => (e.kind === "message" && e.clientNonce ? [e.clientNonce] : [])))
   const pending: ReadonlyArray<PendingMessage> = outbox
     .filter((o) => !nonces.has(o.clientNonce))
-    .map((o) => ({ clientNonce: o.clientNonce, text: o.input.text, createdAt: o.createdAt, status: o.status, error: o.error }))
-  const rows = layoutTranscript({ entries, turns: stateTurns, pending, showSteps, showCompactions: settings.showCompactions, direct: !isGroup })
+    .map((o) => ({
+      clientNonce: o.clientNonce,
+      text: o.input.text,
+      createdAt: o.createdAt,
+      status: o.status,
+      error: o.error,
+    }))
+  const rows = layoutTranscript({
+    entries,
+    turns: stateTurns,
+    pending,
+    showSteps,
+    showCompactions: settings.showCompactions,
+    direct: !isGroup,
+  })
   const turns = [...stateTurns.values()].filter((t) => ACTIVE.has(t.status)).sort((a, b) => a.startedAt - b.startedAt)
-  const statuses = chatStatuses({ conversationId, botIds, activities: roster.state.activities, turns, conversations: roster.state.conversations, tasks: roster.state.tasks })
-  const streaming = new Set(entries.flatMap((e) => (e.kind === "message" && e.streaming && e.author.kind === "bot" ? [e.author.botId] : [])))
+  const statuses = chatStatuses({
+    conversationId,
+    botIds,
+    activities: roster.state.activities,
+    turns,
+    conversations: roster.state.conversations,
+    tasks: roster.state.tasks,
+  })
+  const streaming = new Set(
+    entries.flatMap((e) => (e.kind === "message" && e.streaming && e.author.kind === "bot" ? [e.author.botId] : [])),
+  )
   const working = statuses.some((s) => s.kind === "turn")
 
   // inverted list: newest first
@@ -84,12 +143,19 @@ export default function Chat(): ReactNode {
 
   const statusText = (s: ChatStatus): string =>
     s.kind === "turn"
-      ? activityPhrase({ activity: roster.state.activities.get(s.botId), turn: turns.find((t) => t.botId === s.botId), streaming: streaming.has(s.botId) })
+      ? activityPhrase({
+          activity: roster.state.activities.get(s.botId),
+          turn: turns.find((t) => t.botId === s.botId),
+          streaming: streaming.has(s.botId),
+        })
       : s.kind === "handling"
-      ? "Handling…"
-      : `Busy in ${s.where}${s.queued ? " · your message is queued" : ""}`
+        ? "Handling…"
+        : `Busy in ${s.where}${s.queued ? " · your message is queued" : ""}`
 
-  const hasScreen = !isGroup && primary !== undefined && (roster.state.nodes.get(primary.hostNodeId)?.capabilities ?? []).some((c) => /^(desktop|screen|browser)@/.test(c))
+  const hasScreen =
+    !isGroup &&
+    primary !== undefined &&
+    (roster.state.nodes.get(primary.hostNodeId)?.capabilities ?? []).some((c) => /^(desktop|screen|browser)@/.test(c))
   const menu = () => {
     const options = [...(hasScreen ? [`${primary!.name}'s computer`] : []), "Open in web app", "Cancel"]
     const run = (i: number) => {
@@ -97,8 +163,13 @@ export default function Chat(): ReactNode {
       if (label === `${primary?.name}'s computer`) openWeb(`#/computer/${encodeURIComponent(primary!.id)}`, label)
       if (label === "Open in web app") openWeb(`#/c/${encodeURIComponent(conversationId)}`, title)
     }
-    if (Platform.OS === "ios") ActionSheetIOS.showActionSheetWithOptions({ options, cancelButtonIndex: options.length - 1 }, run)
-    else Alert.alert(title, undefined, [...options.slice(0, -1).map((t, i) => ({ text: t, onPress: () => run(i) })), { text: "Cancel", style: "cancel" as const }])
+    if (Platform.OS === "ios")
+      ActionSheetIOS.showActionSheetWithOptions({ options, cancelButtonIndex: options.length - 1 }, run)
+    else
+      Alert.alert(title, undefined, [
+        ...options.slice(0, -1).map((t, i) => ({ text: t, onPress: () => run(i) })),
+        { text: "Cancel", style: "cancel" as const },
+      ])
   }
 
   const ctx = {
@@ -113,19 +184,32 @@ export default function Chat(): ReactNode {
 
   let emptyState: ReactElement | undefined
   if (failed) {
-    emptyState = <Text accessibilityRole="alert" style={[styles.loading, { color: theme.fgSecondary }]}>Couldn't load this conversation. Go back and try again.</Text>
+    emptyState = (
+      <Text accessibilityRole="alert" style={[styles.loading, { color: theme.fgSecondary }]}>
+        Couldn't load this conversation. Go back and try again.
+      </Text>
+    )
   } else if (!state.synchronized) {
     emptyState = <Text style={[styles.loading, { color: theme.fgTertiary }]}>Loading…</Text>
   }
 
   const top = insets.top + 6
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <FlatList
         inverted
         data={failed ? [] : items}
         keyExtractor={(item) => (item.kind === "row" ? item.row.key : item.key)}
-        renderItem={({ item }) => (item.kind === "row" ? <RowView row={item.row} ctx={ctx} /> : <StatusLine bot={roster.botById(item.status.botId)} text={statusText(item.status)} theme={theme} />)}
+        renderItem={({ item }) =>
+          item.kind === "row" ? (
+            <RowView row={item.row} ctx={ctx} />
+          ) : (
+            <StatusLine bot={roster.botById(item.status.botId)} text={statusText(item.status)} theme={theme} />
+          )
+        }
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: top + 64 }}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
@@ -135,27 +219,50 @@ export default function Chat(): ReactNode {
         }}
         ListEmptyComponent={emptyState}
       />
-      {!failed && <View style={{ paddingBottom: Math.max(insets.bottom, 10), paddingTop: 6 }}>
-        <Composer
-          conversationId={conversationId}
-          theme={theme}
-          working={working}
-          placeholder={isGroup ? `Message ${title}` : `Ask ${primary?.name ?? "your Bot"}`}
-          onSend={(text, attachmentIds) => send({ conversationId, text, ...(attachmentIds.length > 0 ? { attachmentIds: [...attachmentIds] as never } : {}) })}
-          onStop={async () => {
-            const exit = await interrupt({ conversationId })
-            if (Exit.isFailure(exit)) Alert.alert("Couldn't stop", failureText(exit))
-          }}
-        />
-      </View>}
+      {!failed && (
+        <View style={{ paddingBottom: Math.max(insets.bottom, 10), paddingTop: 6 }}>
+          <Composer
+            conversationId={conversationId}
+            theme={theme}
+            working={working}
+            placeholder={isGroup ? `Message ${title}` : `Ask ${primary?.name ?? "your Bot"}`}
+            onSend={(text, attachmentIds) =>
+              send({
+                conversationId,
+                text,
+                ...(attachmentIds.length > 0 ? { attachmentIds: [...attachmentIds] as never } : {}),
+              })
+            }
+            onStop={async () => {
+              const exit = await interrupt({ conversationId })
+              if (Exit.isFailure(exit)) Alert.alert("Couldn't stop", failureText(exit))
+            }}
+          />
+        </View>
+      )}
 
       {/* floating header */}
       <View style={[styles.header, { top }]} pointerEvents="box-none">
-        <GlassCircle icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
-        <Pressable onPress={menu} accessibilityRole="button" accessibilityLabel={`${title}, options`} style={styles.titleWrap}>
+        <GlassCircle
+          icon="back"
+          label="Back"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+        />
+        <Pressable
+          onPress={menu}
+          accessibilityRole="button"
+          accessibilityLabel={`${title}, options`}
+          style={styles.titleWrap}
+        >
           <Glass interactive style={styles.titlePill}>
-            {isGroup ? <AvatarStack avatars={members.map((m) => m.avatar)} size={26} outline={theme.elevated} /> : <Avatar avatar={primary?.avatar} size={26} />}
-            <Text numberOfLines={1} style={[styles.title, { color: theme.fg }]}>{title}</Text>
+            {isGroup ? (
+              <AvatarStack avatars={members.map((m) => m.avatar)} size={26} outline={theme.elevated} />
+            ) : (
+              <Avatar avatar={primary?.avatar} size={26} />
+            )}
+            <Text numberOfLines={1} style={[styles.title, { color: theme.fg }]}>
+              {title}
+            </Text>
           </Glass>
         </Pressable>
         <GlassCircle icon="more" label="More" onPress={menu} />
@@ -165,9 +272,26 @@ export default function Chat(): ReactNode {
 }
 
 const styles = StyleSheet.create({
-  header: { position: "absolute", left: 16, right: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  header: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   titleWrap: { flexShrink: 1 },
-  titlePill: { height: 44, borderRadius: 22, flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 10, paddingRight: 16, maxWidth: 240 },
+  titlePill: {
+    height: 44,
+    borderRadius: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingLeft: 10,
+    paddingRight: 16,
+    maxWidth: 240,
+  },
   title: { fontSize: 17, fontWeight: "600", flexShrink: 1 },
   loading: { textAlign: "center", marginVertical: 40, fontSize: 15, transform: [{ scaleY: -1 }] },
 })

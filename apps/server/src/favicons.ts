@@ -26,7 +26,10 @@ export interface Icon {
 /** The answer for a site without an icon: a 1×1 transparent PNG. A 404 would show up as an error in
  * the browser's console for every such link; the apps take a 1-pixel image as "no icon" (the globe). */
 export const NO_ICON: Icon = {
-  bytes: Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0)),
+  bytes: Uint8Array.from(
+    atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="),
+    (c) => c.charCodeAt(0),
+  ),
   type: "image/png",
 }
 
@@ -62,11 +65,28 @@ export const faviconHost = (raw: string): string | undefined => {
 }
 
 const BLOCKED = new BlockList()
-for (const [net, prefix] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["224.0.0.0", 4], ["240.0.0.0", 4]] as const) {
+for (const [net, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.168.0.0", 16],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const) {
   BLOCKED.addSubnet(net, prefix, "ipv4")
 }
 // ::/96 holds :: and ::1 and the IPv4-compatible forms; IPv4-mapped ones are checked against the IPv4 rules
-for (const [net, prefix] of [["::", 96], ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8]] as const) {
+for (const [net, prefix] of [
+  ["::", 96],
+  ["fc00::", 7],
+  ["fe80::", 10],
+  ["fec0::", 10],
+  ["ff00::", 8],
+] as const) {
   BLOCKED.addSubnet(net, prefix, "ipv6")
 }
 
@@ -77,7 +97,8 @@ export const blockedAddress = (address: string): boolean => {
   return family === 0 || BLOCKED.check(ip, family === 4 ? "ipv4" : "ipv6")
 }
 
-const resolveHost = async (host: string): Promise<ReadonlyArray<string>> => (await dnsLookup(host, { all: true })).map((a) => a.address)
+const resolveHost = async (host: string): Promise<ReadonlyArray<string>> =>
+  (await dnsLookup(host, { all: true })).map((a) => a.address)
 
 const pinnedFetch = (url: string, address: string, init: RequestInit): Promise<Response> => {
   const target = new URL(url)
@@ -123,7 +144,10 @@ export const iconLinks = (html: string, base: string): ReadonlyArray<IconLink> =
     try {
       const url = new URL(href, base)
       if (url.protocol !== "https:" && url.protocol !== "http:" && url.protocol !== "data:") continue
-      links.push({ href: url.href, score: scoreOf(rel, attrs.get("sizes") ?? "", (attrs.get("type") ?? "").toLowerCase(), url.href) })
+      links.push({
+        href: url.href,
+        score: scoreOf(rel, attrs.get("sizes") ?? "", (attrs.get("type") ?? "").toLowerCase(), url.href),
+      })
     } catch {}
   }
   return links.sort((a, b) => b.score - a.score)
@@ -137,9 +161,15 @@ export const imageType = (bytes: Uint8Array): string | undefined => {
   if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png"
   if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif"
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg"
-  if (b.length >= 12 && String.fromCharCode(...b.subarray(0, 4)) === "RIFF" && String.fromCharCode(...b.subarray(8, 12)) === "WEBP") return "image/webp"
+  if (
+    b.length >= 12 &&
+    String.fromCharCode(...b.subarray(0, 4)) === "RIFF" &&
+    String.fromCharCode(...b.subarray(8, 12)) === "WEBP"
+  )
+    return "image/webp"
   const text = new TextDecoder().decode(b.subarray(0, 1024)).trimStart().toLowerCase()
-  if (text.startsWith("<svg") || ((text.startsWith("<?xml") || text.startsWith("<!--")) && text.includes("<svg"))) return "image/svg+xml"
+  if (text.startsWith("<svg") || ((text.startsWith("<?xml") || text.startsWith("<!--")) && text.includes("<svg")))
+    return "image/svg+xml"
   return undefined
 }
 
@@ -151,8 +181,10 @@ const rgbOf = (value: string): readonly [number, number, number] | undefined => 
   const v = value.trim().toLowerCase()
   if (v in NAMED) return NAMED[v]
   const hex = /^#([0-9a-f]{3,8})$/.exec(v)?.[1]
-  if (hex !== undefined && (hex.length === 3 || hex.length === 4)) return [0, 1, 2].map((i) => parseInt(hex[i]! + hex[i]!, 16)) as unknown as [number, number, number]
-  if (hex !== undefined && (hex.length === 6 || hex.length === 8)) return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)) as unknown as [number, number, number]
+  if (hex !== undefined && (hex.length === 3 || hex.length === 4))
+    return [0, 1, 2].map((i) => parseInt(hex[i]! + hex[i]!, 16)) as unknown as [number, number, number]
+  if (hex !== undefined && (hex.length === 6 || hex.length === 8))
+    return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)) as unknown as [number, number, number]
   const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/.exec(v)
   return rgb === null ? undefined : [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
 }
@@ -179,11 +211,20 @@ export const recolorMonoSvg = (svg: string, screen: "dark" | "light"): string | 
   if (colours.some(([r, g, b]) => (Math.max(r, g, b) - Math.min(r, g, b)) / 255 > 0.2)) return undefined
   // no colour given at all: drawn in the default black
   const tones = colours.length === 0 ? [0] : colours.map(lum)
-  const to = screen === "dark" && tones.every((t) => t < 0.3) ? "#e8e8e8" : screen === "light" && tones.every((t) => t > 0.75) ? "#2a2a2a" : undefined
+  const to =
+    screen === "dark" && tones.every((t) => t < 0.3)
+      ? "#e8e8e8"
+      : screen === "light" && tones.every((t) => t > 0.75)
+        ? "#2a2a2a"
+        : undefined
   if (to === undefined) return undefined
-  const redrawn = svg.replace(COLOUR, (all, lead: string, value: string) => (rgbOf(value) === undefined ? all : `${lead}${to}`))
+  const redrawn = svg.replace(COLOUR, (all, lead: string, value: string) =>
+    rgbOf(value) === undefined ? all : `${lead}${to}`,
+  )
   // shapes without a fill of their own take the root's
-  return redrawn.replace(/<svg\b([^>]*)>/i, (tag, attrs: string) => (/\bfill\s*=/.test(attrs) ? tag : `<svg${attrs} fill="${to}">`))
+  return redrawn.replace(/<svg\b([^>]*)>/i, (tag, attrs: string) =>
+    /\bfill\s*=/.test(attrs) ? tag : `<svg${attrs} fill="${to}">`,
+  )
 }
 
 // ---------------------------------------------------------------------------- fetching
@@ -219,7 +260,9 @@ const readCapped = async (response: Response, max: number, truncate: boolean): P
 const dataIcon = (href: string): Icon | undefined => {
   const m = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(href)
   if (m === null) return undefined
-  const bytes = m[2] ? Uint8Array.from(atob(m[3]!), (c) => c.charCodeAt(0)) : new TextEncoder().encode(decodeURIComponent(m[3]!))
+  const bytes = m[2]
+    ? Uint8Array.from(atob(m[3]!), (c) => c.charCodeAt(0))
+    : new TextEncoder().encode(decodeURIComponent(m[3]!))
   const type = imageType(bytes)
   return type === undefined || bytes.length > ICON_BYTES ? undefined : { bytes, type }
 }
@@ -231,7 +274,10 @@ export const makeFavicons = (options: FaviconsOptions) => {
   const inFlight = new Map<string, Promise<Icon | undefined>>()
 
   /** The response at `url` after its redirects, and the url it came from; throws for a host it must not ask. */
-  const request = async (url: string, accept: string): Promise<{ readonly response: Response; readonly url: string }> => {
+  const request = async (
+    url: string,
+    accept: string,
+  ): Promise<{ readonly response: Response; readonly url: string }> => {
     const signal = AbortSignal.timeout(TIMEOUT_MS)
     for (let hop = 0; ; hop++) {
       const target = new URL(url)
@@ -239,7 +285,11 @@ export const makeFavicons = (options: FaviconsOptions) => {
       const host = target.hostname.replace(/^\[(.*)\]$/, "$1")
       const addresses = isIP(host) === 0 ? await resolve(host) : [host]
       if (addresses.some(blockedAddress)) throw new Error(`not fetched: ${url}`)
-      const response = await fetchFn(url, addresses[0]!, { redirect: "manual", signal, headers: { ...HEADERS, accept, host: target.host } })
+      const response = await fetchFn(url, addresses[0]!, {
+        redirect: "manual",
+        signal,
+        headers: { ...HEADERS, accept, host: target.host },
+      })
       const location = response.headers.get("location")
       if (response.status < 300 || response.status > 399 || location === null) return { response, url }
       await response.body?.cancel().catch(() => {})
@@ -278,9 +328,14 @@ export const makeFavicons = (options: FaviconsOptions) => {
     return fetchIcon(`https://${host}/favicon.ico`)
   }
 
-  const cachePaths = (host: string) => ({ meta: join(options.dir, `${host}.json`), bytes: join(options.dir, `${host}.icon`) })
+  const cachePaths = (host: string) => ({
+    meta: join(options.dir, `${host}.json`),
+    bytes: join(options.dir, `${host}.icon`),
+  })
 
-  const readCache = async (host: string): Promise<{ readonly at: number; readonly icon: Icon | undefined } | undefined> => {
+  const readCache = async (
+    host: string,
+  ): Promise<{ readonly at: number; readonly icon: Icon | undefined } | undefined> => {
     try {
       const paths = cachePaths(host)
       const meta = JSON.parse(await readFile(paths.meta, "utf8")) as { at: number; type?: string }

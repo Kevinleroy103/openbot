@@ -16,12 +16,14 @@ const SEARCH_LIMIT = 20
 const TIMEOUT = Duration.seconds(15)
 
 const SearchResponse = Schema.Struct({
-  skills: Schema.Array(Schema.Struct({
-    id: Schema.String,
-    name: Schema.String,
-    source: Schema.optionalKey(Schema.String),
-    installs: Schema.optionalKey(Schema.Number),
-  })),
+  skills: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      source: Schema.optionalKey(Schema.String),
+      installs: Schema.optionalKey(Schema.Number),
+    }),
+  ),
 })
 
 const DownloadResponse = Schema.Struct({
@@ -30,7 +32,9 @@ const DownloadResponse = Schema.Struct({
 })
 
 const unavailable = (what: string) => (cause: unknown) =>
-  new Unavailable({ message: `skills.sh did not answer (${what}): ${cause instanceof Error ? cause.message : String(cause)}` })
+  new Unavailable({
+    message: `skills.sh did not answer (${what}): ${cause instanceof Error ? cause.message : String(cause)}`,
+  })
 
 /** GET `url` as JSON (`undefined` on 404). */
 const getJson = (url: string, what: string, fetchImpl: typeof fetch) =>
@@ -44,7 +48,10 @@ const getJson = (url: string, what: string, fetchImpl: typeof fetch) =>
     },
     catch: unavailable(what),
   }).pipe(
-    Effect.timeoutOrElse({ duration: TIMEOUT, orElse: () => Effect.fail(new Unavailable({ message: `skills.sh did not answer in time (${what}).` })) }),
+    Effect.timeoutOrElse({
+      duration: TIMEOUT,
+      orElse: () => Effect.fail(new Unavailable({ message: `skills.sh did not answer in time (${what}).` })),
+    }),
   )
 
 export const makeSkillsSh = (options?: { readonly baseUrl?: string; readonly fetch?: typeof fetch }) => {
@@ -52,10 +59,12 @@ export const makeSkillsSh = (options?: { readonly baseUrl?: string; readonly fet
   const fetchImpl = options?.fetch ?? fetch
   return SkillDirectory.of({
     search: (query) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const params = new URLSearchParams({ q: query, limit: String(SEARCH_LIMIT) })
         const body = yield* getJson(`${base}/api/search?${params}`, "search", fetchImpl)
-        const decoded = yield* Schema.decodeUnknownEffect(SearchResponse)(body ?? { skills: [] }).pipe(Effect.mapError(unavailable("search")))
+        const decoded = yield* Schema.decodeUnknownEffect(SearchResponse)(body ?? { skills: [] }).pipe(
+          Effect.mapError(unavailable("search")),
+        )
         return decoded.skills.map((skill): SkillSearchResult => ({
           id: skill.id,
           name: skill.name,
@@ -64,11 +73,13 @@ export const makeSkillsSh = (options?: { readonly baseUrl?: string; readonly fet
         }))
       }),
     download: (id) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const path = id.split("/").map(encodeURIComponent).join("/")
         const body = yield* getJson(`${base}/api/download/${path}`, "download", fetchImpl)
         if (body === undefined) return yield* new NotFound({ entity: "skill", id })
-        const decoded = yield* Schema.decodeUnknownEffect(DownloadResponse)(body).pipe(Effect.mapError(unavailable("download")))
+        const decoded = yield* Schema.decodeUnknownEffect(DownloadResponse)(body).pipe(
+          Effect.mapError(unavailable("download")),
+        )
         return { files: decoded.files, ...(decoded.hash === undefined ? {} : { hash: decoded.hash }) }
       }),
   })

@@ -53,10 +53,19 @@ describe("pairing codes", () => {
   })
 
   test("POST /node/pair schemas decode JSON bodies", () => {
-    const req = Schema.decodeUnknownSync(PairRequest)({ code: "ABCD-2345", publicKey: "k", hostname: "h", platform: "linux" })
+    const req = Schema.decodeUnknownSync(PairRequest)({
+      code: "ABCD-2345",
+      publicKey: "k",
+      hostname: "h",
+      platform: "linux",
+    })
     expect(req.code).toBe("ABCD-2345")
     expect(() => Schema.decodeUnknownSync(PairRequest)({ code: "x" })).toThrow()
-    const res = Schema.decodeUnknownSync(PairResponse)({ nodeId: "nod_1", brainPublicKey: "k", brainOrigin: "https://b" })
+    const res = Schema.decodeUnknownSync(PairResponse)({
+      nodeId: "nod_1",
+      brainPublicKey: "k",
+      brainOrigin: "https://b",
+    })
     expect(res.nodeId).toBe("nod_1")
   })
 })

@@ -20,7 +20,11 @@ export interface FixtureFrame {
 }
 
 export const loadJsonl = async <A>(path: string): Promise<Array<A>> =>
-  (await Bun.file(path).text()).trim().split("\n").filter((l) => l.length > 0).map((l) => JSON.parse(l) as A)
+  (await Bun.file(path).text())
+    .trim()
+    .split("\n")
+    .filter((l) => l.length > 0)
+    .map((l) => JSON.parse(l) as A)
 
 export const CONTRACT_FIXTURES = join(import.meta.dir, "../../contracts/test/fixtures")
 export const LOCAL_FIXTURES = join(import.meta.dir, "fixtures")
@@ -56,7 +60,8 @@ class FrameChannel {
   }
   next(): Promise<IteratorResult<unknown, void>> {
     if (this.buffer.length > 0) return Promise.resolve({ value: this.buffer.shift(), done: false })
-    if (this.done) return this.error === undefined ? Promise.resolve({ value: undefined, done: true }) : Promise.reject(this.error)
+    if (this.done)
+      return this.error === undefined ? Promise.resolve({ value: undefined, done: true }) : Promise.reject(this.error)
     return new Promise((resolve, reject) => {
       this.waiters.push(resolve)
       this.failWaiters.push(reject)
@@ -107,8 +112,8 @@ export class FakeQuery implements ClaudeQueryHandle {
   ) {
     this.options = params.options as Record<string, unknown>
     // Like the CLI: the session id is the requested one (new) or the resumed one.
-    this.sessionId = (this.options.sessionId as string | undefined) ?? (this.options.resume as string | undefined) ??
-      fallbackSessionId
+    this.sessionId =
+      (this.options.sessionId as string | undefined) ?? (this.options.resume as string | undefined) ?? fallbackSessionId
     void this.consume(params.prompt)
   }
 
@@ -121,9 +126,13 @@ export class FakeQuery implements ClaudeQueryHandle {
       this.raw.push(raw as Record<string, unknown>)
       const msg = raw as { uuid: string; message: { content: unknown }; priority?: string }
       const content = msg.message.content
-      const text = typeof content === "string"
-        ? content
-        : (content as Array<{ type: string; text?: string }>).filter((b) => b.type === "text").map((b) => b.text ?? "").join("")
+      const text =
+        typeof content === "string"
+          ? content
+          : (content as Array<{ type: string; text?: string }>)
+              .filter((b) => b.type === "text")
+              .map((b) => b.text ?? "")
+              .join("")
       const input: UserInput = { uuid: msg.uuid, text, content, ...(msg.priority ? { priority: msg.priority } : {}) }
       this.received.push(input)
       void Promise.resolve(this.script(this, input)).catch((e) => this.frames.end(e))
@@ -195,7 +204,10 @@ export const frames = {
     type: "stream_event",
     parent_tool_use_id: null,
     api_message_id: id,
-    event: { type: "message_start", message: { id, usage: { input_tokens: 100, output_tokens: 1, cache_read_input_tokens: 50 } } },
+    event: {
+      type: "message_start",
+      message: { id, usage: { input_tokens: 100, output_tokens: 1, cache_read_input_tokens: 50 } },
+    },
   }),
   blockStart: (id: string, index: number, block: Record<string, unknown>) => ({
     type: "stream_event",
@@ -268,7 +280,11 @@ export const cliFrames = {
     ...extra,
   }),
   /** A complete text reply of a CLI turn that took no client send (a task notification answered). */
-  notificationReply: (fake: { emit: (frame: Record<string, unknown>) => void }, text: string, extra: Record<string, unknown> = {}) => {
+  notificationReply: (
+    fake: { emit: (frame: Record<string, unknown>) => void },
+    text: string,
+    extra: Record<string, unknown> = {},
+  ) => {
     const id = nextMsgId()
     fake.emit(frames.init())
     fake.emit(cliFrames.requesting())
@@ -328,7 +344,13 @@ export const makeSessionInput = (
       sections: { base: "You are Scout, an OpenBot.", persona: "", team: "", memoryIndex: "", placement: "" },
       hash: "h1",
     },
-    mcp: [{ name: "openbot", url: "http://127.0.0.1:4555/mcp/bot_test", headers: { authorization: "Bearer secret-token-xyz" } }],
+    mcp: [
+      {
+        name: "openbot",
+        url: "http://127.0.0.1:4555/mcp/bot_test",
+        headers: { authorization: "Bearer secret-token-xyz" },
+      },
+    ],
     model: "haiku",
     effort: undefined,
     onRequest,
@@ -348,21 +370,25 @@ export interface Collector {
 
 /** Collects a session's events in a background fiber (scoped). */
 export const collect = (events: Stream.Stream<HarnessEvent>) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const seen: Array<HarnessEvent> = []
     const fiber = yield* Stream.runForEach(events, (e) => Effect.sync(() => seen.push(e))).pipe(
       Effect.forkScoped({ startImmediately: true }),
     )
     const waitFor = (predicate: (events: ReadonlyArray<HarnessEvent>) => boolean, label = "condition") =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         for (let i = 0; i < 400; i++) {
           if (predicate(seen)) return
           yield* Effect.sleep(5)
         }
-        return yield* Effect.die(new Error(`timed out waiting for ${label}; events: ${seen.map((e) => e._tag).join(",")}`))
+        return yield* Effect.die(
+          new Error(`timed out waiting for ${label}; events: ${seen.map((e) => e._tag).join(",")}`),
+        )
       })
     return { events: seen, waitFor, done: Fiber.join(fiber) } satisfies Collector
   })
 
-export const has = (tag: HarnessEvent["_tag"], predicate: (e: HarnessEvent) => boolean = () => true) =>
-(events: ReadonlyArray<HarnessEvent>) => events.some((e) => e._tag === tag && predicate(e))
+export const has =
+  (tag: HarnessEvent["_tag"], predicate: (e: HarnessEvent) => boolean = () => true) =>
+  (events: ReadonlyArray<HarnessEvent>) =>
+    events.some((e) => e._tag === tag && predicate(e))

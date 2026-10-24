@@ -15,8 +15,9 @@ export function ScreenPermissionsNote({
 }): ReactNode {
   return (
     <p className={cn("text-sm text-fg-secondary", className)} data-testid="screen-permissions">
-      On <span className="whitespace-nowrap">{nodeName}</span>, allow {describeMissing(missing)} for openbot-node in System Settings › Privacy &amp; Security.
-      If it isn't listed, add <code className="font-mono text-xs">~/.local/bin/openbot-node</code> with the + button.
+      On <span className="whitespace-nowrap">{nodeName}</span>, allow {describeMissing(missing)} for openbot-node in
+      System Settings › Privacy &amp; Security. If it isn't listed, add{" "}
+      <code className="font-mono text-xs">~/.local/bin/openbot-node</code> with the + button.
     </p>
   )
 }

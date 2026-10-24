@@ -37,7 +37,11 @@ function Waveform({ active, className }: { readonly active: boolean; readonly cl
   return (
     <div className={cn("flex items-center justify-between px-1", className)} aria-hidden>
       {Array.from({ length: DOTS }, (_, i) => (
-        <span key={i} ref={(el) => void (dots.current[i] = el)} className="h-1 w-1 rounded-full bg-accent transition-transform duration-75" />
+        <span
+          key={i}
+          ref={(el) => void (dots.current[i] = el)}
+          className="h-1 w-1 rounded-full bg-accent transition-transform duration-75"
+        />
       ))}
     </div>
   )
@@ -69,7 +73,11 @@ export function CallBar(): ReactNode {
   const bot = roster.botById(call.botId)
   const ended = call.phase === "ended"
   const button = phone ? 36 : 44
-  const phase = <span className={cn("text-fg-tertiary", phone ? "text-[11px] leading-3" : "w-20 text-xs")} data-testid="call-phase">{ended ? "Call ended" : call.muted ? "Muted" : PHASE_LABEL[call.phase]}</span>
+  const phase = (
+    <span className={cn("text-fg-tertiary", phone ? "text-[11px] leading-3" : "w-20 text-xs")} data-testid="call-phase">
+      {ended ? "Call ended" : call.muted ? "Muted" : PHASE_LABEL[call.phase]}
+    </span>
+  )
   return (
     <div
       className="pointer-events-none absolute inset-x-0 top-14 z-40 flex flex-col items-center gap-2 px-3 pt-[env(safe-area-inset-top)]"
@@ -83,7 +91,14 @@ export function CallBar(): ReactNode {
         )}
         aria-label={`Call with ${bot?.name ?? "Bot"}`}
       >
-        {bot !== undefined && <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={phone ? 32 : 36} working={call.phase === "speaking"} />}
+        {bot !== undefined && (
+          <Avatar
+            shape={bot.avatar.shape}
+            color={bot.avatar.color}
+            size={phone ? 32 : 36}
+            working={call.phase === "speaking"}
+          />
+        )}
         {phone ? (
           <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5">
             <Waveform active={!ended && !call.muted} className="h-4 w-full max-w-28" />
@@ -95,27 +110,59 @@ export function CallBar(): ReactNode {
             {phase}
           </>
         )}
-        {bot !== undefined && <IconButton icon={Settings} label="Voice" size={button} variant={panel === "voices" ? "secondary" : "ghost"} onClick={() => toggle("voices")} />}
-        <IconButton icon={MessageCircle} label={transcript ? "Hide transcript" : "Show transcript"} size={button} variant={transcript ? "secondary" : "ghost"} onClick={() => toggle("transcript")} />
-        {!ended && <IconButton icon={call.muted ? MicOff : Mic} label={call.muted ? "Unmute" : "Mute"} size={button} variant={call.muted ? "secondary" : "ghost"} onClick={() => setMuted(!call.muted)} />}
+        {bot !== undefined && (
+          <IconButton
+            icon={Settings}
+            label="Voice"
+            size={button}
+            variant={panel === "voices" ? "secondary" : "ghost"}
+            onClick={() => toggle("voices")}
+          />
+        )}
+        <IconButton
+          icon={MessageCircle}
+          label={transcript ? "Hide transcript" : "Show transcript"}
+          size={button}
+          variant={transcript ? "secondary" : "ghost"}
+          onClick={() => toggle("transcript")}
+        />
+        {!ended && (
+          <IconButton
+            icon={call.muted ? MicOff : Mic}
+            label={call.muted ? "Unmute" : "Mute"}
+            size={button}
+            variant={call.muted ? "secondary" : "ghost"}
+            onClick={() => setMuted(!call.muted)}
+          />
+        )}
         <button
           type="button"
           aria-label={ended ? "Close" : "End call"}
           title={ended ? "Close" : "End call"}
           onClick={ended ? dismissCall : hangUp}
-          className={cn("inline-flex shrink-0 items-center justify-center rounded-full bg-danger text-white transition-opacity hover:opacity-85", phone ? "size-9" : "size-11")}
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center rounded-full bg-danger text-white transition-opacity hover:opacity-85",
+            phone ? "size-9" : "size-11",
+          )}
         >
           <X className="size-5" strokeWidth={2} />
         </button>
       </div>
-      {call.error !== undefined && <p className="pointer-events-auto rounded-full bg-elevated px-4 py-2 text-sm text-danger-fg shadow">{call.error}</p>}
+      {call.error !== undefined && (
+        <p className="pointer-events-auto rounded-full bg-elevated px-4 py-2 text-sm text-danger-fg shadow">
+          {call.error}
+        </p>
+      )}
       {panel === "voices" && bot !== undefined && (
         <div className="pointer-events-auto max-h-[50vh] w-full max-w-[360px] overflow-y-auto overscroll-contain rounded-3xl bg-elevated/95 p-3 shadow-lg backdrop-blur hairline border-line-tertiary">
           <VoicePicker bot={bot} />
         </div>
       )}
       {transcript && call.lines.length > 0 && (
-        <div className="pointer-events-auto max-h-[40vh] w-full max-w-[520px] overflow-y-auto rounded-3xl bg-elevated/95 p-4 text-sm shadow-lg backdrop-blur hairline border-line-tertiary" data-testid="call-transcript">
+        <div
+          className="pointer-events-auto max-h-[40vh] w-full max-w-[520px] overflow-y-auto rounded-3xl bg-elevated/95 p-4 text-sm shadow-lg backdrop-blur hairline border-line-tertiary"
+          data-testid="call-transcript"
+        >
           {call.lines.map((line) => (
             <p key={line.id} className={cn("py-1", line.who === "you" ? "text-fg" : "text-fg-secondary")}>
               {line.who === "you" ? "You: " : `${bot?.name ?? "Bot"}: `}

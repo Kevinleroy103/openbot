@@ -151,7 +151,10 @@ const parseBool = (value: string | undefined): boolean | undefined => {
 const isHarnessName = (name: string): name is HarnessName => (KnownHarnessKinds as ReadonlyArray<string>).includes(name)
 
 const parseHarnesses = (values: ReadonlyArray<string>, from: string): ReadonlyArray<HarnessName> => {
-  const names = values.flatMap((v) => v.split(",")).map((v) => v.trim().toLowerCase()).filter((v) => v !== "")
+  const names = values
+    .flatMap((v) => v.split(","))
+    .map((v) => v.trim().toLowerCase())
+    .filter((v) => v !== "")
   const out: Array<HarnessName> = ["fake"]
   for (const name of names) {
     if (name === "all") {
@@ -166,7 +169,16 @@ const parseHarnesses = (values: ReadonlyArray<string>, from: string): ReadonlyAr
   return out
 }
 
-const VALUE_FLAGS = ["--data-dir", "--port", "--host", "--public-origin", "--harness", "--claude-path", "--max-file-mb", "--desktop-idle"] as const
+const VALUE_FLAGS = [
+  "--data-dir",
+  "--port",
+  "--host",
+  "--public-origin",
+  "--harness",
+  "--claude-path",
+  "--max-file-mb",
+  "--desktop-idle",
+] as const
 type ValueFlag = (typeof VALUE_FLAGS)[number]
 
 /**
@@ -233,18 +245,18 @@ export const parseCommand = (
   }
 
   const dataDirInput = last("--data-dir", "OPENBOT_DATA_DIR")
-  const dataDir = dataDirInput === undefined
-    ? defaultDataDir(env, system.home)
-    : resolvePath(dataDirInput.value.trim(), system.home, system.cwd)
+  const dataDir =
+    dataDirInput === undefined
+      ? defaultDataDir(env, system.home)
+      : resolvePath(dataDirInput.value.trim(), system.home, system.cwd)
 
   const portInput = last("--port", "OPENBOT_PORT")
   const port = portInput === undefined ? DEFAULT_PORT : parsePort(portInput.value, portInput.from)
 
   const host = last("--host", "OPENBOT_HOST")?.value.trim() ?? DEFAULT_HOST
 
-  const originInputs = values["--public-origin"].length > 0
-    ? values["--public-origin"]
-    : (env["OPENBOT_PUBLIC_ORIGIN"] ?? "").split(",")
+  const originInputs =
+    values["--public-origin"].length > 0 ? values["--public-origin"] : (env["OPENBOT_PUBLIC_ORIGIN"] ?? "").split(",")
   const publicOrigins: Array<string> = []
   for (const raw of originInputs) {
     if (raw.trim() === "") continue
@@ -252,17 +264,20 @@ export const parseCommand = (
     if (!publicOrigins.includes(origin)) publicOrigins.push(origin)
   }
 
-  const harnessInputs = values["--harness"].length > 0
-    ? { list: values["--harness"], from: "--harness" }
-    : env["OPENBOT_HARNESSES"] !== undefined && env["OPENBOT_HARNESSES"].trim() !== ""
-    ? { list: [env["OPENBOT_HARNESSES"]], from: "OPENBOT_HARNESSES" }
-    : undefined
-  const harnesses = harnessInputs === undefined ? DEFAULT_HARNESSES : parseHarnesses(harnessInputs.list, harnessInputs.from)
+  const harnessInputs =
+    values["--harness"].length > 0
+      ? { list: values["--harness"], from: "--harness" }
+      : env["OPENBOT_HARNESSES"] !== undefined && env["OPENBOT_HARNESSES"].trim() !== ""
+        ? { list: [env["OPENBOT_HARNESSES"]], from: "OPENBOT_HARNESSES" }
+        : undefined
+  const harnesses =
+    harnessInputs === undefined ? DEFAULT_HARNESSES : parseHarnesses(harnessInputs.list, harnessInputs.from)
 
   const claudeInput = last("--claude-path", "OPENBOT_CLAUDE_PATH")
-  const claudePath = claudeInput === undefined || claudeInput.value.trim() === "bundled"
-    ? undefined
-    : resolvePath(claudeInput.value.trim(), system.home, system.cwd)
+  const claudePath =
+    claudeInput === undefined || claudeInput.value.trim() === "bundled"
+      ? undefined
+      : resolvePath(claudeInput.value.trim(), system.home, system.cwd)
 
   const maxFileInput = last("--max-file-mb", "OPENBOT_MAX_FILE_MB")
   let maxFileBytes: number | undefined
@@ -287,21 +302,24 @@ export const parseCommand = (
   const skillsShInput = env["OPENBOT_SKILLS_SH_URL"]?.trim()
   let skillsShUrl: string | undefined
   if (skillsShInput !== undefined && skillsShInput !== "") {
-    if (!/^https?:\/\/[^/\s]+/i.test(skillsShInput)) throw new ConfigError(`OPENBOT_SKILLS_SH_URL: "${skillsShInput}" is not an http(s) URL`)
+    if (!/^https?:\/\/[^/\s]+/i.test(skillsShInput))
+      throw new ConfigError(`OPENBOT_SKILLS_SH_URL: "${skillsShInput}" is not an http(s) URL`)
     skillsShUrl = skillsShInput.replace(/\/+$/, "")
   }
 
   const slackInput = env["OPENBOT_SLACK_API_URL"]?.trim()
   let slackApiUrl: string | undefined
   if (slackInput !== undefined && slackInput !== "") {
-    if (!/^https?:\/\/[^/\s]+/i.test(slackInput)) throw new ConfigError(`OPENBOT_SLACK_API_URL: "${slackInput}" is not an http(s) URL`)
+    if (!/^https?:\/\/[^/\s]+/i.test(slackInput))
+      throw new ConfigError(`OPENBOT_SLACK_API_URL: "${slackInput}" is not an http(s) URL`)
     slackApiUrl = slackInput.replace(/\/+$/, "")
   }
 
   const harkInput = env["OPENBOT_HARK_URL"]?.trim()
   let harkUrl: string | undefined
   if (harkInput !== undefined && harkInput !== "") {
-    if (!/^https?:\/\/[^/\s]+/i.test(harkInput)) throw new ConfigError(`OPENBOT_HARK_URL: "${harkInput}" is not an http(s) URL`)
+    if (!/^https?:\/\/[^/\s]+/i.test(harkInput))
+      throw new ConfigError(`OPENBOT_HARK_URL: "${harkInput}" is not an http(s) URL`)
     harkUrl = harkInput.replace(/\/+$/, "")
   }
 

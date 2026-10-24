@@ -15,7 +15,20 @@
 import { delimiter } from "node:path"
 import type { ProcessRecord } from "@openbot/core"
 import type { HarnessError, RepoError } from "@openbot/core"
-import { Cause, Clock, Deferred, type Duration, Effect, Exit, Option, Queue, Scope, Semaphore, Sink, Stream } from "effect"
+import {
+  Cause,
+  Clock,
+  Deferred,
+  type Duration,
+  Effect,
+  Exit,
+  Option,
+  Queue,
+  Scope,
+  Semaphore,
+  Sink,
+  Stream,
+} from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { type CodexBinary, parseCodexVersion } from "./binary.ts"
 import { type CodexPeerError, harnessError, RpcErrorCodes, toHarnessError } from "./errors.ts"
@@ -43,13 +56,13 @@ export interface AppServerInfo {
 export type ThreadMessage =
   | { readonly _tag: "Notification"; readonly method: string; readonly params: Record<string, unknown> }
   | {
-    readonly _tag: "Request"
-    readonly id: string | number
-    readonly method: string
-    readonly params: Record<string, unknown>
-    /** Complete exactly once; `NoReply` when Codex withdrew the request. */
-    readonly reply: Deferred.Deferred<RequestReply>
-  }
+      readonly _tag: "Request"
+      readonly id: string | number
+      readonly method: string
+      readonly params: Record<string, unknown>
+      /** Complete exactly once; `NoReply` when Codex withdrew the request. */
+      readonly reply: Deferred.Deferred<RequestReply>
+    }
   | { readonly _tag: "Closed"; readonly reason: string }
 
 export type ThreadMailbox = Queue.Dequeue<ThreadMessage, Cause.Done>
@@ -109,7 +122,7 @@ export const threadIdOf = (params: unknown): string | undefined => {
   return undefined
 }
 
-export const connectAppServer = Effect.fnUntraced(function*(options: ConnectOptions) {
+export const connectAppServer = Effect.fnUntraced(function* (options: ConnectOptions) {
   const mailboxes = new Map<string, Queue.Queue<ThreadMessage, Cause.Done>>()
   const orphans = new Map<string, Array<ThreadMessage>>()
   let closedReason: string | undefined
@@ -133,10 +146,12 @@ export const connectAppServer = Effect.fnUntraced(function*(options: ConnectOpti
       const params = isRecord(notification.params) ? notification.params : {}
       const threadId = threadIdOf(params)
       if (threadId === undefined) {
-        const level = notification.method === "configWarning" || notification.method === "deprecationNotice" ||
-            notification.method === "warning"
-          ? "Warn"
-          : "Debug"
+        const level =
+          notification.method === "configWarning" ||
+          notification.method === "deprecationNotice" ||
+          notification.method === "warning"
+            ? "Warn"
+            : "Debug"
         return Effect.logWithLevel(level)(`Codex app-server: ${notification.method}`).pipe(
           Effect.annotateLogs({ method: notification.method }),
         )
@@ -218,7 +233,10 @@ export const connectAppServer = Effect.fnUntraced(function*(options: ConnectOpti
         }
         const previous = mailboxes.get(threadId)
         if (previous) {
-          Queue.offerUnsafe(previous, { _tag: "Closed", reason: "Another OpenBot session took over this Codex thread." })
+          Queue.offerUnsafe(previous, {
+            _tag: "Closed",
+            reason: "Another OpenBot session took over this Codex thread.",
+          })
           Queue.endUnsafe(previous)
         }
         for (const message of orphans.get(threadId) ?? []) Queue.offerUnsafe(mailbox, message)
@@ -296,11 +314,11 @@ export const appServerEnv = (
 const STDERR_TAIL_LINES = 40
 
 /** Spawns `codex app-server` as a detached child (own process group) of the brain. */
-export const makeChildProcessLauncher = Effect.gen(function*() {
+export const makeChildProcessLauncher = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
   const encoder = new TextEncoder()
   const launcher: AppServerLauncher = (spec) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const handle = yield* spawner
         .spawn(
           ChildProcess.make(spec.binary.path, [...spec.args], {
@@ -313,7 +331,7 @@ export const makeChildProcessLauncher = Effect.gen(function*() {
         )
         .pipe(
           Effect.mapError((cause) =>
-            harnessError("not-installed", `Could not start Codex (${spec.binary.path}): ${cause.message}`, cause)
+            harnessError("not-installed", `Could not start Codex (${spec.binary.path}): ${cause.message}`, cause),
           ),
         )
       const tail: Array<string> = []
@@ -324,7 +342,7 @@ export const makeChildProcessLauncher = Effect.gen(function*() {
           Effect.sync(() => {
             tail.push(line)
             if (tail.length > STDERR_TAIL_LINES) tail.shift()
-          })
+          }),
         ),
         Effect.ignore,
         Effect.forkScoped,
@@ -335,7 +353,9 @@ export const makeChildProcessLauncher = Effect.gen(function*() {
         terminationReason: handle.exitCode.pipe(
           Effect.timeoutOption("2 seconds"),
           Effect.map((code) =>
-            Option.isSome(code) ? `Codex app-server exited with code ${code.value}` : "Codex app-server closed its output"
+            Option.isSome(code)
+              ? `Codex app-server exited with code ${code.value}`
+              : "Codex app-server closed its output",
           ),
           Effect.catch(() => Effect.succeed("Codex app-server closed its output")),
         ),
@@ -379,14 +399,14 @@ export interface CodexRuntime {
   ) => Effect.Effect<A, E | HarnessError>
 }
 
-export const makeCodexRuntime = Effect.fnUntraced(function*(options: CodexRuntimeOptions) {
+export const makeCodexRuntime = Effect.fnUntraced(function* (options: CodexRuntimeOptions) {
   const runtimeScope = yield* Effect.scope
   const lock = yield* Semaphore.make(1)
   let current: { readonly connection: AppServerConnection; readonly scope: Scope.Closeable } | undefined
 
   /** Launches and initializes an app-server whose lifetime is `scope`. */
   const start = (scope: Scope.Scope): Effect.Effect<AppServerConnection, HarnessError> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const binary = options.binary()
       if (!binary) {
         return yield* harnessError(
@@ -407,11 +427,13 @@ export const makeCodexRuntime = Effect.fnUntraced(function*(options: CodexRuntim
         const ledger = options.ledger
         const startedAt = yield* Clock.currentTimeMillis
         // Detached → the child leads its own process group (pgid = pid).
-        yield* ledger.record({ pid, pgid: pid, kind: "codex-app-server", label: options.codexHome, startedAt }).pipe(
-          Effect.catchCause((cause) => Effect.logWarning("Could not record the Codex app-server pid", cause)),
-        )
+        yield* ledger
+          .record({ pid, pgid: pid, kind: "codex-app-server", label: options.codexHome, startedAt })
+          .pipe(Effect.catchCause((cause) => Effect.logWarning("Could not record the Codex app-server pid", cause)))
         yield* Effect.addFinalizer(() =>
-          ledger.remove(pid).pipe(Effect.catchCause((cause) => Effect.logWarning("Could not remove the Codex pid", cause)))
+          ledger
+            .remove(pid)
+            .pipe(Effect.catchCause((cause) => Effect.logWarning("Could not remove the Codex pid", cause))),
         )
       }
       return yield* connectAppServer({
@@ -421,13 +443,11 @@ export const makeCodexRuntime = Effect.fnUntraced(function*(options: CodexRuntim
         clientInfo: { name: "openbot", title: "OpenBot", version: options.clientVersion ?? "0.0.0" },
         initializeTimeout: options.initializeTimeout,
         log: options.log,
-      }).pipe(
-        Effect.mapError((error) => toHarnessError("open-failed", error, "Codex app-server did not initialize")),
-      )
+      }).pipe(Effect.mapError((error) => toHarnessError("open-failed", error, "Codex app-server did not initialize")))
     }).pipe(Scope.provide(scope))
 
   const acquire: Effect.Effect<AppServerConnection, HarnessError> = lock.withPermits(1)(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const existing = current
       if (existing && !(yield* existing.connection.isClosed)) return existing.connection
       const scope = yield* Scope.fork(runtimeScope, "sequential")
@@ -439,11 +459,13 @@ export const makeCodexRuntime = Effect.fnUntraced(function*(options: CodexRuntim
         Effect.tap((reason) =>
           Effect.logWarning(`Codex app-server stopped: ${reason}`).pipe(
             Effect.annotateLogs({ stderr: connection.stderrTail().slice(-5).join("\n") }),
-          )
+          ),
         ),
-        Effect.andThen(Effect.sync(() => {
-          if (current === entry) current = undefined
-        })),
+        Effect.andThen(
+          Effect.sync(() => {
+            if (current === entry) current = undefined
+          }),
+        ),
         Effect.andThen(Scope.close(scope, Exit.void)),
         Effect.forkIn(runtimeScope),
       )
@@ -451,18 +473,18 @@ export const makeCodexRuntime = Effect.fnUntraced(function*(options: CodexRuntim
     }),
   )
 
-  const currentConnection = Effect.gen(function*() {
+  const currentConnection = Effect.gen(function* () {
     const existing = current
     if (!existing) return undefined
     return (yield* existing.connection.isClosed) ? undefined : existing.connection
   })
 
   const withConnection = <A, E>(f: (connection: AppServerConnection) => Effect.Effect<A, E>) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const live = yield* currentConnection
       if (live) return yield* f(live)
       return yield* Effect.scoped(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const scope = yield* Effect.scope
           const connection = yield* start(scope)
           return yield* f(connection)

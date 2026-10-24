@@ -17,7 +17,12 @@ export const makeRegistry = (url: string, overrides?: Partial<ClientConfig>): At
   AtomRegistry.make({ initialValues: [[clientConfigAtom, testConfig(url, overrides)]] })
 
 /** Resolves with the first value of `atom` that satisfies `predicate` (the atom stays mounted meanwhile). */
-export const waitFor = <A>(registry: AtomRegistry.AtomRegistry, atom: Atom.Atom<A>, predicate: (a: A) => boolean, timeoutMs = 5000): Promise<A> =>
+export const waitFor = <A>(
+  registry: AtomRegistry.AtomRegistry,
+  atom: Atom.Atom<A>,
+  predicate: (a: A) => boolean,
+  timeoutMs = 5000,
+): Promise<A> =>
   new Promise<A>((resolve, reject) => {
     let last: A | undefined
     let done = false
@@ -33,23 +38,33 @@ export const waitFor = <A>(registry: AtomRegistry.AtomRegistry, atom: Atom.Atom<
       last = a
       if (predicate(a)) finish(() => resolve(a))
     }
-    const timer = setTimeout(() => finish(() => reject(new Error(`waitFor timed out; last value: ${describe(last)}`))), timeoutMs)
+    const timer = setTimeout(
+      () => finish(() => reject(new Error(`waitFor timed out; last value: ${describe(last)}`))),
+      timeoutMs,
+    )
     unsubscribe = registry.subscribe(atom, check, { immediate: true })
   })
 
 const describe = (value: unknown): string => {
   try {
-    return JSON.stringify(value, (_k, v) => (v instanceof Map ? Object.fromEntries(v) : v))?.slice(0, 600) ?? String(value)
+    return (
+      JSON.stringify(value, (_k, v) => (v instanceof Map ? Object.fromEntries(v) : v))?.slice(0, 600) ?? String(value)
+    )
   } catch {
     return String(value)
   }
 }
 
 /** The success value of an AsyncResult (or undefined). */
-export const valueOf = <A, E>(result: AsyncResult.AsyncResult<A, E>): A | undefined => (result._tag === "Success" ? result.value : undefined)
+export const valueOf = <A, E>(result: AsyncResult.AsyncResult<A, E>): A | undefined =>
+  result._tag === "Success" ? result.value : undefined
 
 /** Runs a fn atom once and awaits its exit. */
-export const runFn = <W, A, E>(registry: AtomRegistry.AtomRegistry, atom: Atom.Writable<AsyncResult.AsyncResult<A, E>, W>, value: W): Promise<Exit.Exit<A, E>> => {
+export const runFn = <W, A, E>(
+  registry: AtomRegistry.AtomRegistry,
+  atom: Atom.Writable<AsyncResult.AsyncResult<A, E>, W>,
+  value: W,
+): Promise<Exit.Exit<A, E>> => {
   registry.set(atom, value)
   return Effect.runPromiseExit(AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }))
 }

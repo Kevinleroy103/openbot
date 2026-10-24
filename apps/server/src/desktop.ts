@@ -51,7 +51,11 @@ const sha256 = (data: Uint8Array | string) => createHash("sha256").update(data).
 
 const run = async (cmd: ReadonlyArray<string>, cwd?: string) => {
   const proc = Bun.spawn([...cmd], { cwd, stdout: "pipe", stderr: "pipe" })
-  const [code, out, err] = await Promise.all([proc.exited, new Response(proc.stdout).text(), new Response(proc.stderr).text()])
+  const [code, out, err] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ])
   if (code !== 0) throw new Error(`${cmd[0]} failed: ${(err || out).trim().split("\n").slice(-3).join(" ")}`)
   return out
 }
@@ -79,7 +83,9 @@ const desktopPackage = async () =>
 /** Electron's release zip for the target (cached). */
 const electronZip = async (cacheDir: string, version: string, target: DesktopTarget) => {
   const name = `electron-v${version}-${target}.zip`
-  const checksums = JSON.parse(await readFile(path.join(APP_DIR, "node_modules/electron/checksums.json"), "utf8")) as Record<string, string>
+  const checksums = JSON.parse(
+    await readFile(path.join(APP_DIR, "node_modules/electron/checksums.json"), "utf8"),
+  ) as Record<string, string>
   const expected = checksums[name]
   if (expected === undefined) throw new Error(`no checksum for ${name}`)
   const file = path.join(cacheDir, "electron", name)
@@ -89,7 +95,8 @@ const electronZip = async (cacheDir: string, version: string, target: DesktopTar
 
 /** How to sign a macOS bundle ad hoc on this brain. */
 const macSigner = async (cacheDir: string): Promise<(app: string) => Promise<void>> => {
-  if (platform() === "darwin") return async (app) => void (await run(["codesign", "--force", "--deep", "--sign", "-", app]))
+  if (platform() === "darwin")
+    return async (app) => void (await run(["codesign", "--force", "--deep", "--sign", "-", app]))
   const cpu = arch() === "arm64" ? "aarch64" : "x86_64"
   const name = `apple-codesign-${RCODESIGN_VERSION}-${cpu}-unknown-linux-musl`
   const base = `https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}`
@@ -115,30 +122,49 @@ const stageApp = async (into: string, origin: string, version: string, build: st
   })
   if (!built.success) throw new Error(`bundling the desktop app failed: ${built.logs.map(String).join(" ")}`)
   await cp(path.join(APP_DIR, "src/connect.html"), path.join(into, "connect.html"))
-  for (const icon of ["icon.png", "tray.png", "tray@2x.png"]) await cp(path.join(APP_DIR, "assets", icon), path.join(into, icon))
+  for (const icon of ["icon.png", "tray.png", "tray@2x.png"])
+    await cp(path.join(APP_DIR, "assets", icon), path.join(into, icon))
   await writeFile(path.join(into, "openbot.json"), JSON.stringify({ origin, version, build }))
   await writeFile(
     path.join(into, "package.json"),
-    JSON.stringify({ name: "openbot", productName: "OpenBot", version, main: "main.js", desktopName: "openbot.desktop" }),
+    JSON.stringify({
+      name: "openbot",
+      productName: "OpenBot",
+      version,
+      main: "main.js",
+      desktopName: "openbot.desktop",
+    }),
   )
 }
 
 const setPlistString = (plist: string, key: string, value: string) => {
   const entry = new RegExp(`(<key>${key}</key>\\s*<string>)[^<]*(</string>)`)
-  return entry.test(plist) ? plist.replace(entry, `$1${value}$2`) : plist.replace(/<dict>/, `<dict>\n\t<key>${key}</key>\n\t<string>${value}</string>`)
+  return entry.test(plist)
+    ? plist.replace(entry, `$1${value}$2`)
+    : plist.replace(/<dict>/, `<dict>\n\t<key>${key}</key>\n\t<string>${value}</string>`)
 }
 
 /** A hash of what goes into a build: a different app, Electron or address is a different file. */
 const buildKey = async (origin: string, electron: string): Promise<string> => {
-  const files = (await Promise.all(["src", "assets"].map(async (dir) => (await readdir(path.join(APP_DIR, dir))).map((f) => `${dir}/${f}`))))
+  const files = (
+    await Promise.all(
+      ["src", "assets"].map(async (dir) => (await readdir(path.join(APP_DIR, dir))).map((f) => `${dir}/${f}`)),
+    )
+  )
     .flat()
     .sort()
-  const parts = await Promise.all(files.map(async (f) => Buffer.concat([Buffer.from(`${f}\n`), await readFile(path.join(APP_DIR, f))])))
-  return sha256(Buffer.concat([...parts, Buffer.from(`${origin}\n${electron}\n${JSON.stringify(MAC_USAGE_DESCRIPTIONS)}`)])).slice(0, 12)
+  const parts = await Promise.all(
+    files.map(async (f) => Buffer.concat([Buffer.from(`${f}\n`), await readFile(path.join(APP_DIR, f))])),
+  )
+  return sha256(
+    Buffer.concat([...parts, Buffer.from(`${origin}\n${electron}\n${JSON.stringify(MAC_USAGE_DESCRIPTIONS)}`)]),
+  ).slice(0, 12)
 }
 
 /** The build this brain serves now (`/desktop/latest`): the app compares it with its own to update. */
-export const latestDesktopBuild = async (origin: string): Promise<{ readonly build: string; readonly version: string }> => {
+export const latestDesktopBuild = async (
+  origin: string,
+): Promise<{ readonly build: string; readonly version: string }> => {
   const pkg = await desktopPackage()
   return { build: await buildKey(origin, pkg.devDependencies.electron.replace(/^[\^~]/, "")), version: pkg.version }
 }
@@ -167,7 +193,8 @@ const buildTarget = async (cacheDir: string, origin: string, target: DesktopTarg
       plist = setPlistString(plist, "CFBundleDisplayName", "OpenBot")
       plist = setPlistString(plist, "CFBundleIdentifier", BUNDLE_ID)
       plist = setPlistString(plist, "CFBundleShortVersionString", pkg.version)
-      for (const [usageKey, description] of Object.entries(MAC_USAGE_DESCRIPTIONS)) plist = setPlistString(plist, usageKey, description)
+      for (const [usageKey, description] of Object.entries(MAC_USAGE_DESCRIPTIONS))
+        plist = setPlistString(plist, usageKey, description)
       if (!plist.includes("CFBundleURLSchemes")) {
         plist = plist.replace(
           /<dict>/,
@@ -177,7 +204,9 @@ const buildTarget = async (cacheDir: string, origin: string, target: DesktopTarg
       await writeFile(plistPath, plist)
       const app = path.join(stage, "OpenBot.app")
       await rename(bundle, app)
-      await (await macSigner(cacheDir))(app)
+      await (
+        await macSigner(cacheDir)
+      )(app)
       await run(["zip", "-qry", `${out}.tmp`, "OpenBot.app"], stage)
     } else {
       const root = path.join(stage, "OpenBot")
@@ -197,7 +226,8 @@ const buildTarget = async (cacheDir: string, origin: string, target: DesktopTarg
     await rename(`${out}.tmp`, out)
     // older builds of this target (another app version or address) are not served any more
     for (const name of await readdir(path.dirname(out))) {
-      if (name.endsWith(desktopFileName(target)) && name !== path.basename(out)) await rm(path.join(path.dirname(out), name), { force: true })
+      if (name.endsWith(desktopFileName(target)) && name !== path.basename(out))
+        await rm(path.join(path.dirname(out), name), { force: true })
     }
     return out
   } finally {
@@ -214,7 +244,9 @@ export const makeDesktopBuilds = (input: { readonly cacheDir: string }) => {
       const id = `${target} ${origin}`
       const existing = builds.get(id)
       if (existing) return existing
-      const started = mkdir(path.join(input.cacheDir, "out"), { recursive: true }).then(() => buildTarget(input.cacheDir, origin, target))
+      const started = mkdir(path.join(input.cacheDir, "out"), { recursive: true }).then(() =>
+        buildTarget(input.cacheDir, origin, target),
+      )
       builds.set(id, started)
       started.catch(() => builds.delete(id))
       return started
@@ -285,64 +317,73 @@ esac
 `
 
 /** `/desktop/install.sh` and `/desktop/download/:target` (public, like the node's: nothing secret is in them). */
-export const DesktopRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter | BrainNodesConfig | DataDir> = Layer.effectDiscard(
-  Effect.gen(function*() {
-    const router = yield* HttpRouter.HttpRouter
-    const config = yield* BrainNodesConfig
-    const dataDir = yield* DataDir
-    const builds = makeDesktopBuilds({ cacheDir: path.join(dataDir.root, "desktop-builds") })
-    yield* router.add(
-      "GET",
-      "/desktop/install.sh",
-      Effect.map(config.brainOrigin, (origin) =>
-        HttpServerResponse.text(desktopInstallScript(origin), {
-          contentType: "text/x-shellscript; charset=utf-8",
-          headers: { "cache-control": "no-store" },
-        })),
-    )
-    const latest = new Map<string, Promise<{ readonly build: string; readonly version: string }>>()
-    yield* router.add(
-      "GET",
-      "/desktop/latest",
-      Effect.gen(function*() {
-        const origin = yield* config.brainOrigin
-        // the release's files never change while it runs: computed once per address
-        let found = latest.get(origin)
-        if (found === undefined) {
-          found = latestDesktopBuild(origin)
-          latest.set(origin, found)
-          found.catch(() => latest.delete(origin))
-        }
-        const result = yield* Effect.result(Effect.tryPromise(() => found))
-        if (result._tag === "Failure") return HttpServerResponse.text("unknown", { status: 500 })
-        return HttpServerResponse.text(JSON.stringify(result.success), { contentType: "application/json", headers: { "cache-control": "no-store" } })
-      }),
-    )
-    yield* router.add(
-      "GET",
-      "/desktop/download/:target",
-      Effect.gen(function*() {
-        const target = (yield* HttpRouter.params)["target"] ?? ""
-        if (!isDesktopTarget(target)) {
-          return HttpServerResponse.text(`unknown target "${target}" (one of ${DESKTOP_TARGETS.join(", ")})`, { status: 404 })
-        }
-        const origin = yield* config.brainOrigin
-        const built = yield* Effect.result(Effect.tryPromise(() => builds.get(target, origin)))
-        if (built._tag === "Failure") {
-          yield* Effect.logWarning("could not build the desktop app", { target, cause: built.failure })
-          return HttpServerResponse.text("OpenBot could not prepare the app for that computer. Check its log.", { status: 500 })
-        }
-        const file = Bun.file(built.success)
-        return HttpServerResponse.raw(file, {
-          status: 200,
-          headers: {
-            "content-type": "application/octet-stream",
-            "content-disposition": `attachment; filename="${desktopFileName(target)}"`,
-            "content-length": String(file.size),
-            "cache-control": "no-store",
-          },
-        })
-      }),
-    )
-  }),
-)
+export const DesktopRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter | BrainNodesConfig | DataDir> =
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const router = yield* HttpRouter.HttpRouter
+      const config = yield* BrainNodesConfig
+      const dataDir = yield* DataDir
+      const builds = makeDesktopBuilds({ cacheDir: path.join(dataDir.root, "desktop-builds") })
+      yield* router.add(
+        "GET",
+        "/desktop/install.sh",
+        Effect.map(config.brainOrigin, (origin) =>
+          HttpServerResponse.text(desktopInstallScript(origin), {
+            contentType: "text/x-shellscript; charset=utf-8",
+            headers: { "cache-control": "no-store" },
+          }),
+        ),
+      )
+      const latest = new Map<string, Promise<{ readonly build: string; readonly version: string }>>()
+      yield* router.add(
+        "GET",
+        "/desktop/latest",
+        Effect.gen(function* () {
+          const origin = yield* config.brainOrigin
+          // the release's files never change while it runs: computed once per address
+          let found = latest.get(origin)
+          if (found === undefined) {
+            found = latestDesktopBuild(origin)
+            latest.set(origin, found)
+            found.catch(() => latest.delete(origin))
+          }
+          const result = yield* Effect.result(Effect.tryPromise(() => found))
+          if (result._tag === "Failure") return HttpServerResponse.text("unknown", { status: 500 })
+          return HttpServerResponse.text(JSON.stringify(result.success), {
+            contentType: "application/json",
+            headers: { "cache-control": "no-store" },
+          })
+        }),
+      )
+      yield* router.add(
+        "GET",
+        "/desktop/download/:target",
+        Effect.gen(function* () {
+          const target = (yield* HttpRouter.params)["target"] ?? ""
+          if (!isDesktopTarget(target)) {
+            return HttpServerResponse.text(`unknown target "${target}" (one of ${DESKTOP_TARGETS.join(", ")})`, {
+              status: 404,
+            })
+          }
+          const origin = yield* config.brainOrigin
+          const built = yield* Effect.result(Effect.tryPromise(() => builds.get(target, origin)))
+          if (built._tag === "Failure") {
+            yield* Effect.logWarning("could not build the desktop app", { target, cause: built.failure })
+            return HttpServerResponse.text("OpenBot could not prepare the app for that computer. Check its log.", {
+              status: 500,
+            })
+          }
+          const file = Bun.file(built.success)
+          return HttpServerResponse.raw(file, {
+            status: 200,
+            headers: {
+              "content-type": "application/octet-stream",
+              "content-disposition": `attachment; filename="${desktopFileName(target)}"`,
+              "content-length": String(file.size),
+              "cache-control": "no-store",
+            },
+          })
+        }),
+      )
+    }),
+  )

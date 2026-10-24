@@ -57,7 +57,7 @@ export class NodeGateway extends Context.Service<NodeGateway, NodeGatewayShape>(
 
 const decodePairRequest = Schema.decodeUnknownOption(PairRequest)
 
-export const makeNodeGateway = Effect.gen(function*() {
+export const makeNodeGateway = Effect.gen(function* () {
   const config = yield* BrainNodesConfig
   const identity = yield* BrainIdentity
   const registry = yield* NodeRegistry
@@ -70,18 +70,20 @@ export const makeNodeGateway = Effect.gen(function*() {
   /** Public key of a paired, non-revoked remote node. */
   const activeKey = (nodeId: string) =>
     Effect.map(registry.record(nodeId), (r) =>
-      Option.isSome(r) && r.value.revokedAt === undefined && r.value.kind === "remote" ? r.value.publicKey : undefined)
+      Option.isSome(r) && r.value.revokedAt === undefined && r.value.kind === "remote" ? r.value.publicKey : undefined,
+    )
   /** Public key of a revoked node (to recognise it and close with 4401). */
   const revokedKey = (nodeId: string) =>
     Effect.map(registry.record(nodeId), (r) =>
-      Option.isSome(r) && r.value.revokedAt !== undefined && r.value.kind === "remote" ? r.value.publicKey : undefined)
+      Option.isSome(r) && r.value.revokedAt !== undefined && r.value.kind === "remote" ? r.value.publicKey : undefined,
+    )
 
   /** Verify against every accepted origin; returns the origin the node signed for. */
   const verify = (
     header: string | undefined,
     lookupKey: (nodeId: string) => Effect.Effect<string | undefined>,
   ): Effect.Effect<Result.Result<{ readonly auth: VerifiedUpgrade; readonly origin: string }, UpgradeAuthError>> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const origins = yield* acceptedOrigins(config)
       let last: UpgradeAuthError | undefined
       for (const origin of origins) {
@@ -96,7 +98,7 @@ export const makeNodeGateway = Effect.gen(function*() {
   /** One control connection, from upgrade to close. Runs in the route fiber (finalizers detach). */
   const runConnection = (socket: Socket.Socket, auth: VerifiedUpgrade, origin: string) =>
     Effect.scoped(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const nodeId = auth.nodeId as NodeId
         const peer = yield* makePeer({
           socket,
@@ -140,7 +142,7 @@ export const makeNodeGateway = Effect.gen(function*() {
       }),
     ).pipe(Effect.catchCause((cause) => Effect.logWarning("node connection failed", { nodeId: auth.nodeId, cause })))
 
-  const control: Handler = Effect.gen(function*() {
+  const control: Handler = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const header = request.headers["authorization"]
     const verified = yield* verify(header, activeKey)
@@ -164,7 +166,7 @@ export const makeNodeGateway = Effect.gen(function*() {
     return HttpServerResponse.empty()
   })
 
-  const pair: Handler = Effect.gen(function*() {
+  const pair: Handler = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const body = yield* Effect.result(request.json)
     const decoded = Result.isSuccess(body) ? decodePairRequest(body.success) : Option.none()
@@ -192,11 +194,5 @@ export const makeNodeGateway = Effect.gen(function*() {
 export const NodeGatewayLive: Layer.Layer<
   NodeGateway,
   never,
-  | BrainNodesConfig
-  | BrainIdentity
-  | NodeRegistry
-  | StreamBroker
-  | ApprovalService
-  | BotRepo
-  | InternalAddress
+  BrainNodesConfig | BrainIdentity | NodeRegistry | StreamBroker | ApprovalService | BotRepo | InternalAddress
 > = Layer.effect(NodeGateway, makeNodeGateway).pipe(Layer.provide(BrainSide.layer))

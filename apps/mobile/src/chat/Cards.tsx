@@ -17,7 +17,15 @@ type Status = CardState["status"]
 
 /** A request's live status wins over the card's stored one. */
 const statusOf = (state: CardState, request: RuntimeRequest | undefined): Status =>
-  request === undefined ? state.status : request.status === "pending" ? "pending" : request.status === "resolved" ? "resolved" : request.status === "expired" ? "expired" : "cancelled"
+  request === undefined
+    ? state.status
+    : request.status === "pending"
+      ? "pending"
+      : request.status === "resolved"
+        ? "resolved"
+        : request.status === "expired"
+          ? "expired"
+          : "cancelled"
 
 const useRespond = (requestId: string | undefined) => {
   const set = useAtomSet(respondRequestAtom(requestId ?? "none"), { mode: "promiseExit" })
@@ -75,7 +83,9 @@ export function CardView(props: CardProps): ReactNode {
       return (
         <Shell theme={props.theme}>
           <Text style={[styles.title, { color: props.theme.fg }]}>{card.title}</Text>
-          {card.description ? <Text style={[styles.body, { color: props.theme.fgSecondary }]}>{card.description}</Text> : null}
+          {card.description ? (
+            <Text style={[styles.body, { color: props.theme.fgSecondary }]}>{card.description}</Text>
+          ) : null}
           {statusOf(props.state, props.request) === "pending" ? (
             <Button theme={props.theme} label="Fill in" primary onPress={() => openWeb("#/", "OpenBot")} />
           ) : (
@@ -86,7 +96,9 @@ export function CardView(props: CardProps): ReactNode {
     default:
       return (
         <Shell theme={props.theme}>
-          <Text style={[styles.body, { color: props.theme.fgSecondary }]}>This card can't be shown in this version of the app.</Text>
+          <Text style={[styles.body, { color: props.theme.fgSecondary }]}>
+            This card can't be shown in this version of the app.
+          </Text>
         </Shell>
       )
   }
@@ -96,15 +108,36 @@ function Shell({ theme, children }: { readonly theme: Theme; readonly children: 
   return <View style={[styles.card, { backgroundColor: theme.bubbleBot }]}>{children}</View>
 }
 
-function Button({ theme, label, onPress, primary = false, busy = false, disabled = false }: { readonly theme: Theme; readonly label: string; readonly onPress: () => void; readonly primary?: boolean; readonly busy?: boolean; readonly disabled?: boolean }): ReactNode {
+function Button({
+  theme,
+  label,
+  onPress,
+  primary = false,
+  busy = false,
+  disabled = false,
+}: {
+  readonly theme: Theme
+  readonly label: string
+  readonly onPress: () => void
+  readonly primary?: boolean
+  readonly busy?: boolean
+  readonly disabled?: boolean
+}): ReactNode {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || busy}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.button, { backgroundColor: primary ? theme.primary : theme.secondary, opacity: pressed || disabled ? 0.6 : 1 }]}
+      style={({ pressed }) => [
+        styles.button,
+        { backgroundColor: primary ? theme.primary : theme.secondary, opacity: pressed || disabled ? 0.6 : 1 },
+      ]}
     >
-      {busy ? <ActivityIndicator color={primary ? theme.onPrimary : theme.fg} /> : <Text style={[styles.buttonText, { color: primary ? theme.onPrimary : theme.fg }]}>{label}</Text>}
+      {busy ? (
+        <ActivityIndicator color={primary ? theme.onPrimary : theme.fg} />
+      ) : (
+        <Text style={[styles.buttonText, { color: primary ? theme.onPrimary : theme.fg }]}>{label}</Text>
+      )}
     </Pressable>
   )
 }
@@ -120,7 +153,12 @@ function Done({ theme, text }: { readonly theme: Theme; readonly text: string })
 
 // ------------------------------------------------------------------------------------- question
 
-function QuestionCard({ card, state, request, theme }: CardProps & { readonly card: Extract<Card, { type: "question" }> }): ReactNode {
+function QuestionCard({
+  card,
+  state,
+  request,
+  theme,
+}: CardProps & { readonly card: Extract<Card, { type: "question" }> }): ReactNode {
   const status = statusOf(state, request)
   const { respond, busy } = useRespond(request?.id ?? card.requestId)
   const [picked, setPicked] = useState<Record<string, ReadonlyArray<string>>>({})
@@ -135,7 +173,18 @@ function QuestionCard({ card, state, request, theme }: CardProps & { readonly ca
     return (
       <Shell theme={theme}>
         <Text style={[styles.title, { color: theme.fg }]}>{card.questions[0]?.prompt ?? card.title}</Text>
-        <Done theme={theme} text={answers.length > 0 ? answers.join(", ") : status === "resolved" ? "Answered in the chat" : status === "expired" ? "Expired" : "Closed"} />
+        <Done
+          theme={theme}
+          text={
+            answers.length > 0
+              ? answers.join(", ")
+              : status === "resolved"
+                ? "Answered in the chat"
+                : status === "expired"
+                  ? "Expired"
+                  : "Closed"
+          }
+        />
       </Shell>
     )
   }
@@ -143,7 +192,10 @@ function QuestionCard({ card, state, request, theme }: CardProps & { readonly ca
   const choose = (label: string) => {
     const current = picked[q.id] ?? []
     if (q.multiSelect) {
-      setPicked({ ...picked, [q.id]: current.includes(label) ? current.filter((l) => l !== label) : [...current, label] })
+      setPicked({
+        ...picked,
+        [q.id]: current.includes(label) ? current.filter((l) => l !== label) : [...current, label],
+      })
       return
     }
     const next = { ...picked, [q.id]: [label] }
@@ -156,7 +208,11 @@ function QuestionCard({ card, state, request, theme }: CardProps & { readonly ca
     <Shell theme={theme}>
       <View style={{ flexDirection: "row", gap: 10 }}>
         <Text style={[styles.title, { color: theme.fg, flex: 1 }]}>{q.prompt}</Text>
-        <Pressable onPress={() => void respond({ type: "dismiss" }, "dismiss")} hitSlop={10} accessibilityLabel="Skip question">
+        <Pressable
+          onPress={() => void respond({ type: "dismiss" }, "dismiss")}
+          hitSlop={10}
+          accessibilityLabel="Skip question"
+        >
           <Icon name="close" size={18} color={theme.iconSecondary} />
         </Pressable>
       </View>
@@ -168,14 +224,22 @@ function QuestionCard({ card, state, request, theme }: CardProps & { readonly ca
               key={o.label}
               onPress={() => choose(o.label)}
               disabled={busy !== null}
-              style={({ pressed }) => [styles.option, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.lineSecondary }, pressed && { backgroundColor: theme.secondary }]}
+              style={({ pressed }) => [
+                styles.option,
+                i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.lineSecondary },
+                pressed && { backgroundColor: theme.secondary },
+              ]}
             >
               <View style={[styles.letter, { backgroundColor: on ? theme.primary : theme.secondary }]}>
-                <Text style={{ color: on ? theme.onPrimary : theme.fgSecondary, fontSize: 14, fontWeight: "500" }}>{String.fromCharCode(65 + i)}</Text>
+                <Text style={{ color: on ? theme.onPrimary : theme.fgSecondary, fontSize: 14, fontWeight: "500" }}>
+                  {String.fromCharCode(65 + i)}
+                </Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: theme.fg, fontSize: 17 }}>{o.label}</Text>
-                {o.description ? <Text style={{ color: theme.fgTertiary, fontSize: 14, marginTop: 2 }}>{o.description}</Text> : null}
+                {o.description ? (
+                  <Text style={{ color: theme.fgTertiary, fontSize: 14, marginTop: 2 }}>{o.description}</Text>
+                ) : null}
               </View>
               {busy === o.label && <ActivityIndicator color={theme.fg} />}
             </Pressable>
@@ -189,7 +253,11 @@ function QuestionCard({ card, state, request, theme }: CardProps & { readonly ca
           label={last ? "Send" : "Next"}
           busy={busy === "multi"}
           disabled={(picked[q.id] ?? []).length === 0}
-          onPress={() => (last ? void respond({ type: "answers", answers: picked as Record<string, Array<string>> }, "multi") : setStep(step + 1))}
+          onPress={() =>
+            last
+              ? void respond({ type: "answers", answers: picked as Record<string, Array<string>> }, "multi")
+              : setStep(step + 1)
+          }
         />
       )}
       <Text style={{ color: theme.fgTertiary, fontSize: 15 }}>Or answer in the chat below</Text>
@@ -199,7 +267,12 @@ function QuestionCard({ card, state, request, theme }: CardProps & { readonly ca
 
 // ------------------------------------------------------------------------------------- approval
 
-function ApprovalCard({ card, state, request, theme }: CardProps & { readonly card: Extract<Card, { type: "approval" }> }): ReactNode {
+function ApprovalCard({
+  card,
+  state,
+  request,
+  theme,
+}: CardProps & { readonly card: Extract<Card, { type: "approval" }> }): ReactNode {
   const status = statusOf(state, request)
   const { respond, busy } = useRespond(request?.id ?? card.requestId)
   const response = state.response ?? (request?.response as CardState["response"])
@@ -211,18 +284,51 @@ function ApprovalCard({ card, state, request, theme }: CardProps & { readonly ca
       {card.summary ? <Text style={[styles.body, { color: theme.fgSecondary }]}>{card.summary}</Text> : null}
       {card.command ? (
         <View style={[styles.command, { backgroundColor: theme.codeBg }]}>
-          <Text selectable style={{ color: theme.fg, fontFamily: "Menlo", fontSize: 13 }}>{card.command}</Text>
+          <Text selectable style={{ color: theme.fg, fontFamily: "Menlo", fontSize: 13 }}>
+            {card.command}
+          </Text>
         </View>
       ) : null}
       {status === "pending" ? (
         <View style={styles.row}>
-          <Button theme={theme} primary label="Allow" busy={busy === "allow"} onPress={() => void respond({ type: "decision", decision: "allow-once" }, "allow")} />
-          {card.suggestedRule ? <Button theme={theme} label="Always" busy={busy === "always"} onPress={() => void respond({ type: "decision", decision: "allow-always" }, "always")} /> : null}
+          <Button
+            theme={theme}
+            primary
+            label="Allow"
+            busy={busy === "allow"}
+            onPress={() => void respond({ type: "decision", decision: "allow-once" }, "allow")}
+          />
+          {card.suggestedRule ? (
+            <Button
+              theme={theme}
+              label="Always"
+              busy={busy === "always"}
+              onPress={() => void respond({ type: "decision", decision: "allow-always" }, "always")}
+            />
+          ) : null}
           <View style={{ flex: 1 }} />
-          <Button theme={theme} label="Deny" busy={busy === "deny"} onPress={() => void respond({ type: "decision", decision: "deny" }, "deny")} />
+          <Button
+            theme={theme}
+            label="Deny"
+            busy={busy === "deny"}
+            onPress={() => void respond({ type: "decision", decision: "deny" }, "deny")}
+          />
         </View>
       ) : (
-        <Done theme={theme} text={status === "resolved" ? (decided === "deny" ? "Denied" : decided === "allow-always" ? "Always allowed" : "Allowed") : status === "expired" ? "Expired" : (state.detail ?? "Closed")} />
+        <Done
+          theme={theme}
+          text={
+            status === "resolved"
+              ? decided === "deny"
+                ? "Denied"
+                : decided === "allow-always"
+                  ? "Always allowed"
+                  : "Allowed"
+              : status === "expired"
+                ? "Expired"
+                : (state.detail ?? "Closed")
+          }
+        />
       )}
     </Shell>
   )
@@ -230,7 +336,13 @@ function ApprovalCard({ card, state, request, theme }: CardProps & { readonly ca
 
 // ------------------------------------------------------------------------------------- hand-off
 
-function HandoffCard({ card, state, request, bot, theme }: CardProps & { readonly card: Extract<Card, { type: "handoff" }> }): ReactNode {
+function HandoffCard({
+  card,
+  state,
+  request,
+  bot,
+  theme,
+}: CardProps & { readonly card: Extract<Card, { type: "handoff" }> }): ReactNode {
   const status = statusOf(state, request)
   const { respond, busy } = useRespond(request?.id ?? card.requestId)
   const botId = bot?.id ?? request?.botId
@@ -241,22 +353,48 @@ function HandoffCard({ card, state, request, bot, theme }: CardProps & { readonl
     <Shell theme={theme}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Icon name="computer" size={17} color={theme.iconSecondary} />
-        <Text style={[styles.kicker, { color: status === "pending" ? theme.success : theme.fgSecondary, marginBottom: 0 }]}>
-          {status === "pending" ? "Action needed" : status === "resolved" ? (skipped ? "Skipped" : "You took over · Done") : status === "expired" ? "Expired" : "Closed"}
+        <Text
+          style={[styles.kicker, { color: status === "pending" ? theme.success : theme.fgSecondary, marginBottom: 0 }]}
+        >
+          {status === "pending"
+            ? "Action needed"
+            : status === "resolved"
+              ? skipped
+                ? "Skipped"
+                : "You took over · Done"
+              : status === "expired"
+                ? "Expired"
+                : "Closed"}
         </Text>
       </View>
       <Text style={[styles.title, { color: theme.fg }]}>{card.instruction}</Text>
       {status === "pending" && botId !== undefined && (
         <View style={styles.row}>
-          <Button theme={theme} primary label="Take over" onPress={() => openWeb(`#/computer/${encodeURIComponent(botId)}?control=1`, `${bot?.name ?? "Bot"}'s computer`)} />
+          <Button
+            theme={theme}
+            primary
+            label="Take over"
+            onPress={() =>
+              openWeb(`#/computer/${encodeURIComponent(botId)}?control=1`, `${bot?.name ?? "Bot"}'s computer`)
+            }
+          />
           <Button
             theme={theme}
             label="I'm done"
             busy={busy === "done"}
-            onPress={() => void lease({ botId: botId as never, take: false }).then((exit) => Exit.isFailure(exit) && Alert.alert("Couldn't hand it back", failureText(exit)))}
+            onPress={() =>
+              void lease({ botId: botId as never, take: false }).then(
+                (exit) => Exit.isFailure(exit) && Alert.alert("Couldn't hand it back", failureText(exit)),
+              )
+            }
           />
           <View style={{ flex: 1 }} />
-          <Button theme={theme} label="Skip" busy={busy === "skip"} onPress={() => void respond({ type: "acknowledge", action: "skip" }, "skip")} />
+          <Button
+            theme={theme}
+            label="Skip"
+            busy={busy === "skip"}
+            onPress={() => void respond({ type: "acknowledge", action: "skip" }, "skip")}
+          />
         </View>
       )}
     </Shell>
@@ -265,7 +403,12 @@ function HandoffCard({ card, state, request, bot, theme }: CardProps & { readonl
 
 // ------------------------------------------------------------------------------------- secret
 
-function SecretCard({ card, state, request, theme }: CardProps & { readonly card: Extract<Card, { type: "secret-request" }> }): ReactNode {
+function SecretCard({
+  card,
+  state,
+  request,
+  theme,
+}: CardProps & { readonly card: Extract<Card, { type: "secret-request" }> }): ReactNode {
   const status = statusOf(state, request)
   const { respond, busy } = useRespond(request?.id ?? card.requestId)
   const [value, setValue] = useState("")
@@ -286,9 +429,21 @@ function SecretCard({ card, state, request, theme }: CardProps & { readonly card
             style={[styles.secret, { color: theme.fg, backgroundColor: theme.bg, borderColor: theme.lineSecondary }]}
           />
           <View style={styles.row}>
-            <Button theme={theme} primary label="Save" busy={busy === "save"} disabled={value === ""} onPress={() => void respond({ type: "secret", value }, "save").then((ok) => ok && setValue(""))} />
+            <Button
+              theme={theme}
+              primary
+              label="Save"
+              busy={busy === "save"}
+              disabled={value === ""}
+              onPress={() => void respond({ type: "secret", value }, "save").then((ok) => ok && setValue(""))}
+            />
             <View style={{ flex: 1 }} />
-            <Button theme={theme} label="Skip" busy={busy === "skip"} onPress={() => void respond({ type: "dismiss" }, "skip")} />
+            <Button
+              theme={theme}
+              label="Skip"
+              busy={busy === "skip"}
+              onPress={() => void respond({ type: "dismiss" }, "skip")}
+            />
           </View>
         </>
       ) : (
@@ -301,7 +456,12 @@ function SecretCard({ card, state, request, theme }: CardProps & { readonly card
 // ------------------------------------------------------------------------------------ Slack draft
 
 /** A Slack message a Bot drafted (D3.4): edit it, then Send (it goes out as you, with its files) or Discard. */
-function SlackDraftCard({ card, state, entryId, theme }: CardProps & { readonly card: Extract<Card, { type: "slack-draft" }> }): ReactNode {
+function SlackDraftCard({
+  card,
+  state,
+  entryId,
+  theme,
+}: CardProps & { readonly card: Extract<Card, { type: "slack-draft" }> }): ReactNode {
   const [text, setText] = useState(card.text)
   const send = useAtomSet(commandAtom("slack.sendDraft", entryId ?? "none"), { mode: "promiseExit" })
   const discard = useAtomSet(commandAtom("slack.discardDraft", entryId ?? "none"), { mode: "promiseExit" })
@@ -312,7 +472,8 @@ function SlackDraftCard({ card, state, entryId, theme }: CardProps & { readonly 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined)
     try {
       const exit = which === "send" ? await send({ entryId, text: text.trim() }) : await discard({ entryId })
-      if (Exit.isFailure(exit)) Alert.alert(which === "send" ? "Couldn't send it" : "Couldn't discard it", failureText(exit))
+      if (Exit.isFailure(exit))
+        Alert.alert(which === "send" ? "Couldn't send it" : "Couldn't discard it", failureText(exit))
     } finally {
       setBusy(null)
     }
@@ -323,7 +484,9 @@ function SlackDraftCard({ card, state, entryId, theme }: CardProps & { readonly 
     ["Workspace", card.team],
     ["To", card.to],
     ["Thread", card.threadLabel ?? "New message"],
-    ...(files.length === 0 ? [] : [[files.length === 1 ? "File" : "Files", files.map((f) => f.name).join(", ")] as [string, string]]),
+    ...(files.length === 0
+      ? []
+      : [[files.length === 1 ? "File" : "Files", files.map((f) => f.name).join(", ")] as [string, string]]),
   ]
   return (
     <Shell theme={theme}>
@@ -331,7 +494,7 @@ function SlackDraftCard({ card, state, entryId, theme }: CardProps & { readonly 
       <View style={{ gap: 2 }}>
         {facts.map(([label, value]) => (
           <Text key={label} style={[styles.body, { color: theme.fg }]} numberOfLines={1}>
-            <Text style={{ color: theme.fgSecondary }}>{label}  </Text>
+            <Text style={{ color: theme.fgSecondary }}>{label} </Text>
             {value}
           </Text>
         ))}
@@ -346,14 +509,31 @@ function SlackDraftCard({ card, state, entryId, theme }: CardProps & { readonly 
             style={[styles.draft, { color: theme.fg, backgroundColor: theme.bg, borderColor: theme.lineSecondary }]}
           />
           <View style={styles.row}>
-            <Button theme={theme} primary label="Send" busy={busy === "send"} disabled={(text.trim() === "" && files.length === 0) || entryId === undefined} onPress={() => void act("send")} />
+            <Button
+              theme={theme}
+              primary
+              label="Send"
+              busy={busy === "send"}
+              disabled={(text.trim() === "" && files.length === 0) || entryId === undefined}
+              onPress={() => void act("send")}
+            />
             <View style={{ flex: 1 }} />
-            <Button theme={theme} label="Discard" busy={busy === "discard"} disabled={entryId === undefined} onPress={() => void act("discard")} />
+            <Button
+              theme={theme}
+              label="Discard"
+              busy={busy === "discard"}
+              disabled={entryId === undefined}
+              onPress={() => void act("discard")}
+            />
           </View>
         </>
       ) : (
         <>
-          {card.text !== "" && <Text style={[styles.body, { color: state.status === "resolved" ? theme.fg : theme.fgTertiary }]}>{card.text}</Text>}
+          {card.text !== "" && (
+            <Text style={[styles.body, { color: state.status === "resolved" ? theme.fg : theme.fgTertiary }]}>
+              {card.text}
+            </Text>
+          )}
           {state.status === "resolved" && state.link !== undefined ? (
             <Pressable onPress={() => void Linking.openURL(state.link!)} accessibilityRole="link">
               <Done theme={theme} text="Sent · Open in Slack" />
@@ -376,10 +556,27 @@ const styles = StyleSheet.create({
   option: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 14, paddingVertical: 13 },
   letter: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   row: { flexDirection: "row", gap: 8, alignItems: "center", flexWrap: "wrap" },
-  button: { height: 40, borderRadius: 20, paddingHorizontal: 18, alignItems: "center", justifyContent: "center", minWidth: 72 },
+  button: {
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 72,
+  },
   buttonText: { fontSize: 15, fontWeight: "600" },
   done: { flexDirection: "row", alignItems: "center", gap: 6 },
   command: { borderRadius: 10, padding: 10 },
   secret: { height: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, fontSize: 16 },
-  draft: { minHeight: 88, maxHeight: 240, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, lineHeight: 22, textAlignVertical: "top" },
+  draft: {
+    minHeight: 88,
+    maxHeight: 240,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlignVertical: "top",
+  },
 })

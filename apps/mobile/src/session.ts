@@ -13,18 +13,23 @@ export interface Connection {
 }
 
 export type ConnectInput =
-  | { readonly origin: string; readonly token: string }
-  | { readonly origin: string; readonly code: string }
+  { readonly origin: string; readonly token: string } | { readonly origin: string; readonly code: string }
 
 const KEY = "openbot.connection.v1"
 
 const store = {
   get: (): Promise<string | null> =>
-    Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.getItem(KEY) ?? null) : SecureStore.getItemAsync(KEY),
+    Platform.OS === "web"
+      ? Promise.resolve(globalThis.localStorage?.getItem(KEY) ?? null)
+      : SecureStore.getItemAsync(KEY),
   set: (value: string): Promise<void> =>
-    Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.setItem(KEY, value)) : SecureStore.setItemAsync(KEY, value),
+    Platform.OS === "web"
+      ? Promise.resolve(globalThis.localStorage?.setItem(KEY, value))
+      : SecureStore.setItemAsync(KEY, value),
   remove: (): Promise<void> =>
-    Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.removeItem(KEY)) : SecureStore.deleteItemAsync(KEY),
+    Platform.OS === "web"
+      ? Promise.resolve(globalThis.localStorage?.removeItem(KEY))
+      : SecureStore.deleteItemAsync(KEY),
 }
 
 export const loadConnection = async (): Promise<Connection | undefined> => {
@@ -32,7 +37,9 @@ export const loadConnection = async (): Promise<Connection | undefined> => {
     const raw = await store.get()
     if (!raw) return undefined
     const c = JSON.parse(raw) as Partial<Connection>
-    return typeof c.origin === "string" && typeof c.sessionToken === "string" ? { origin: c.origin, sessionToken: c.sessionToken } : undefined
+    return typeof c.origin === "string" && typeof c.sessionToken === "string"
+      ? { origin: c.origin, sessionToken: c.sessionToken }
+      : undefined
   } catch {
     return undefined
   }
@@ -68,7 +75,8 @@ export const parseConnectInput = (text: string): ConnectInput | string => {
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return "That isn't an OpenBot link."
   const token = url.searchParams.get("token")
-  if (!token) return "That link has no login token. Use the login link OpenBot printed, or the code under Settings › iPhone app."
+  if (!token)
+    return "That link has no login token. Use the login link OpenBot printed, or the code under Settings › iPhone app."
   return { origin: url.origin, token }
 }
 
@@ -82,7 +90,9 @@ export const connect = async (input: ConnectInput): Promise<Connection> => {
       body: JSON.stringify("code" in input ? { code: input.code } : { token: input.token }),
     })
   } catch {
-    throw new Error(`Can't reach ${new URL(input.origin).host}. Is this phone on the same network (Tailscale) as OpenBot?`)
+    throw new Error(
+      `Can't reach ${new URL(input.origin).host}. Is this phone on the same network (Tailscale) as OpenBot?`,
+    )
   }
   const body = (await res.json().catch(() => ({}))) as { sessionToken?: string; error?: string }
   if (!res.ok || typeof body.sessionToken !== "string") throw new Error(body.error ?? `OpenBot answered ${res.status}.`)

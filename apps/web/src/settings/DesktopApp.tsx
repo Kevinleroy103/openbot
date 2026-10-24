@@ -4,7 +4,12 @@
 import { PillButton, Switch } from "@openbot/ui"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import { type DesktopUpdateState, updateReady, useDesktopUpdate } from "../app/desktopUpdate.ts"
-import { desktopApp, notificationsSupported, setNotificationsEnabled, useNotificationsEnabled } from "../app/notifications.ts"
+import {
+  desktopApp,
+  notificationsSupported,
+  setNotificationsEnabled,
+  useNotificationsEnabled,
+} from "../app/notifications.ts"
 import { CommandBlock } from "../details/kit.tsx"
 import { SettingsRow } from "./layout.tsx"
 
@@ -49,17 +54,25 @@ function RunningApp({ version }: { readonly version: string }): ReactNode {
   return (
     <SettingsRow
       title="Desktop app"
-      description={update.supported
-        ? `Version ${version}. It updates itself from this OpenBot, and keeps running when you close its window so notifications keep coming.`
-        : `Version ${version}. Install it once more (below) to get automatic updates from now on.`}
+      description={
+        update.supported
+          ? `Version ${version}. It updates itself from this OpenBot, and keeps running when you close its window so notifications keep coming.`
+          : `Version ${version}. Install it once more (below) to get automatic updates from now on.`
+      }
       wide
-      control={update.supported
-        ? (
-          <PillButton variant="secondary" size="md" loading={checking} onClick={() => void check()} data-testid="desktop-check-updates">
+      control={
+        update.supported ? (
+          <PillButton
+            variant="secondary"
+            size="md"
+            loading={checking}
+            onClick={() => void check()}
+            data-testid="desktop-check-updates"
+          >
             Check for updates
           </PillButton>
-        )
-        : undefined}
+        ) : undefined
+      }
     >
       {result && <p className="pt-2 text-sm text-fg-secondary">{result}</p>}
       {!update.supported && desktopApp()?.platform !== "win32" && (
@@ -89,7 +102,12 @@ function DownloadApp(): ReactNode {
       wide
       control={
         // an attachment: the page stays where it is
-        <PillButton variant="secondary" size="md" onClick={() => window.location.assign(href(target))} data-testid="desktop-download">
+        <PillButton
+          variant="secondary"
+          size="md"
+          onClick={() => window.location.assign(href(target))}
+          data-testid="desktop-download"
+        >
           Download for {primary.label}
         </PillButton>
       }
@@ -109,14 +127,17 @@ function DownloadApp(): ReactNode {
         </span>
         {unix && (
           <>
-            <span>Or install it from a terminal{target.startsWith("darwin") ? " (on a Mac this skips the security prompt below)" : ""}:</span>
+            <span>
+              Or install it from a terminal
+              {target.startsWith("darwin") ? " (on a Mac this skips the security prompt below)" : ""}:
+            </span>
             <CommandBlock command={`curl -fsSL ${location.origin}/desktop/install.sh | sh`} />
           </>
         )}
         {target.startsWith("darwin") && (
           <span>
-            Downloaded with the browser, macOS asks once before the first start: open System Settings › Privacy &amp; Security and click
-            Open Anyway next to OpenBot.
+            Downloaded with the browser, macOS asks once before the first start: open System Settings › Privacy &amp;
+            Security and click Open Anyway next to OpenBot.
           </span>
         )}
       </div>
@@ -137,8 +158,12 @@ const MANUAL_SHORTCUT = [
 /** Quick send: the shortcut and the Share menu in the desktop app, the bookmarklet everywhere. */
 export function QuickSendRow(): ReactNode {
   const bridge = desktopApp()?.quickSend
-  const [info, setInfo] = useState<{ readonly shortcut: string; readonly registered: boolean; readonly platform: string } | undefined>()
-  const [shortcut, setShortcut] = useState<{ readonly state: "idle" | "busy" | "done" } | { readonly state: "error"; readonly message: string }>({ state: "idle" })
+  const [info, setInfo] = useState<
+    { readonly shortcut: string; readonly registered: boolean; readonly platform: string } | undefined
+  >()
+  const [shortcut, setShortcut] = useState<
+    { readonly state: "idle" | "busy" | "done" } | { readonly state: "error"; readonly message: string }
+  >({ state: "idle" })
   const bookmarklet = useRef<HTMLAnchorElement>(null)
   useEffect(() => {
     void bridge?.info().then((i) => setInfo(i as typeof info))
@@ -150,41 +175,71 @@ export function QuickSendRow(): ReactNode {
   const addToShareMenu = async () => {
     setShortcut({ state: "busy" })
     const result = (await bridge?.installShortcut()) as { ok?: boolean; error?: string } | undefined
-    setShortcut(result?.ok ? { state: "done" } : { state: "error", message: result?.error ?? "Shortcuts did not take it." })
+    setShortcut(
+      result?.ok ? { state: "done" } : { state: "error", message: result?.error ?? "Shortcuts did not take it." },
+    )
   }
   const mac = info?.platform === "darwin"
   return (
     <SettingsRow
       title="Quick send"
-      description={bridge === undefined
-        ? "Send the page you're on to a Bot from any browser: drag the button below to your bookmarks bar, then click it on a page (select text first to send that too)."
-        : `Press ${info?.shortcut ?? "the shortcut"} anywhere to send what you're looking at to a Bot: the page open in your browser, something you just copied, or a screenshot.${mac ? " OpenBot asks once to read each browser's page." : ""}`}
+      description={
+        bridge === undefined
+          ? "Send the page you're on to a Bot from any browser: drag the button below to your bookmarks bar, then click it on a page (select text first to send that too)."
+          : `Press ${info?.shortcut ?? "the shortcut"} anywhere to send what you're looking at to a Bot: the page open in your browser, something you just copied, or a screenshot.${mac ? " OpenBot asks once to read each browser's page." : ""}`
+      }
       wide
-      control={mac
-        ? (
-          <PillButton variant="secondary" size="md" loading={shortcut.state === "busy"} onClick={() => void addToShareMenu()} data-testid="quick-send-share-menu">
+      control={
+        mac ? (
+          <PillButton
+            variant="secondary"
+            size="md"
+            loading={shortcut.state === "busy"}
+            onClick={() => void addToShareMenu()}
+            data-testid="quick-send-share-menu"
+          >
             Add to the Share menu
           </PillButton>
-        )
-        : undefined}
+        ) : undefined
+      }
     >
       <div className="flex flex-col gap-2 pt-2 text-sm text-fg-secondary">
         {shortcut.state === "done" && (
-          <span>Click Add Shortcut in the window that opened. Then use Share › Send to OpenBot, or select text and right-click › Services › Send to OpenBot.</span>
+          <span>
+            Click Add Shortcut in the window that opened. Then use Share › Send to OpenBot, or select text and
+            right-click › Services › Send to OpenBot.
+          </span>
         )}
         {shortcut.state === "error" && (
           <span className="flex flex-col gap-1">
             <span>Shortcuts didn't take it ({shortcut.message}). It takes a minute by hand:</span>
-            {MANUAL_SHORTCUT.map((step, i) => <span key={step}>{i + 1}. {step}</span>)}
+            {MANUAL_SHORTCUT.map((step, i) => (
+              <span key={step}>
+                {i + 1}. {step}
+              </span>
+            ))}
           </span>
         )}
         {bridge !== undefined && info !== undefined && (info.platform === "linux" || !info.registered) && (
           <span>
-            {info.registered ? "Or bind" : "Your desktop didn't let OpenBot add the shortcut: bind"} a key to <code className="font-mono text-fg">openbot-desktop --quick-send</code>
-            {info.platform === "linux" ? <> (Hyprland: <code className="font-mono text-fg">bind = SUPER ALT, O, exec, openbot-desktop --quick-send</code>)</> : null}.
+            {info.registered ? "Or bind" : "Your desktop didn't let OpenBot add the shortcut: bind"} a key to{" "}
+            <code className="font-mono text-fg">openbot-desktop --quick-send</code>
+            {info.platform === "linux" ? (
+              <>
+                {" "}
+                (Hyprland:{" "}
+                <code className="font-mono text-fg">bind = SUPER ALT, O, exec, openbot-desktop --quick-send</code>)
+              </>
+            ) : null}
+            .
           </span>
         )}
-        {bridge !== undefined && <span>Raycast, Alfred and other tools can open <code className="font-mono text-fg">openbot://send?text=…</code> (also <code className="font-mono text-fg">url</code>, <code className="font-mono text-fg">to</code>).</span>}
+        {bridge !== undefined && (
+          <span>
+            Raycast, Alfred and other tools can open <code className="font-mono text-fg">openbot://send?text=…</code>{" "}
+            (also <code className="font-mono text-fg">url</code>, <code className="font-mono text-fg">to</code>).
+          </span>
+        )}
         <span className="flex flex-wrap items-center gap-2">
           {bridge !== undefined && <span>In any browser:</span>}
           <a
@@ -211,9 +266,11 @@ export function NotificationsRow(): ReactNode {
   return (
     <SettingsRow
       title="Notifications on this device"
-      description={inApp
-        ? "Show your Bots' updates as notifications on this computer: when they finish, need you or write to you."
-        : "Show your Bots' updates as notifications while OpenBot is open in this browser. The desktop app shows them even when its window is closed."}
+      description={
+        inApp
+          ? "Show your Bots' updates as notifications on this computer: when they finish, need you or write to you."
+          : "Show your Bots' updates as notifications while OpenBot is open in this browser. The desktop app shows them even when its window is closed."
+      }
       control={
         <Switch
           checked={enabled}
@@ -223,7 +280,11 @@ export function NotificationsRow(): ReactNode {
         />
       }
     >
-      {denied && <p className="pt-2 text-sm text-warn-fg">This browser blocked notifications for OpenBot. Allow them in its site settings, then turn this on again.</p>}
+      {denied && (
+        <p className="pt-2 text-sm text-warn-fg">
+          This browser blocked notifications for OpenBot. Allow them in its site settings, then turn this on again.
+        </p>
+      )}
     </SettingsRow>
   )
 }

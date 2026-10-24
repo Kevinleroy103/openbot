@@ -15,13 +15,7 @@
  * in-memory socket pair.
  */
 import type { NodeId } from "@openbot/contracts"
-import {
-  mintStreamTicket,
-  parseStreamAuth,
-  safeEqual,
-  StreamRefused,
-  type StreamTicket,
-} from "@openbot/node-protocol"
+import { mintStreamTicket, parseStreamAuth, safeEqual, StreamRefused, type StreamTicket } from "@openbot/node-protocol"
 import { makeMemorySocketPair } from "@openbot/node-protocol/testing"
 import { Clock, Context, Deferred, Effect, Exit, Fiber, Layer, Result, Scope } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -51,7 +45,10 @@ export interface StreamClaim {
 
 export interface StreamBrokerShape {
   /** Mint a ticket for a stream the node will dial. The ticket is revoked when the scope closes. */
-  readonly expect: (input: { readonly nodeId: NodeId; readonly kind: string }) => Effect.Effect<ExpectedStream, never, Scope.Scope>
+  readonly expect: (input: {
+    readonly nodeId: NodeId
+    readonly kind: string
+  }) => Effect.Effect<ExpectedStream, never, Scope.Scope>
   /** Claim a presented ticket (single use). Fails with `StreamRefused` for unknown, used, expired or bad tokens. */
   readonly claim: (streamId: string, token: string | undefined) => Effect.Effect<StreamClaim, StreamRefused>
   /** Local node: dial a ticket in-process. Returns the NODE end of an in-memory socket pair. */
@@ -60,7 +57,9 @@ export interface StreamBrokerShape {
   readonly pendingCount: Effect.Effect<number>
 }
 
-export class StreamBroker extends Context.Service<StreamBroker, StreamBrokerShape>()("openbot/brain-nodes/StreamBroker") {}
+export class StreamBroker extends Context.Service<StreamBroker, StreamBrokerShape>()(
+  "openbot/brain-nodes/StreamBroker",
+) {}
 
 type EntryState = "pending" | "claimed" | "delivered" | "closed"
 
@@ -75,7 +74,7 @@ interface Entry {
   socket: Socket.Socket | undefined
 }
 
-export const makeStreamBroker = Effect.gen(function*() {
+export const makeStreamBroker = Effect.gen(function* () {
   const config = yield* BrainNodesConfig
   const ttl = config.streamTokenTtlMs
   const entries = new Map<string, Entry>()
@@ -83,7 +82,7 @@ export const makeStreamBroker = Effect.gen(function*() {
   const refused = (kind: string, reason: string) => new StreamRefused({ kind, reason })
 
   const expect: StreamBrokerShape["expect"] = ({ kind, nodeId }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const ticket = mintStreamTicket()
       const at = yield* Clock.currentTimeMillis
       const deferred = yield* Deferred.make<Socket.Socket, StreamRefused>()
@@ -132,7 +131,7 @@ export const makeStreamBroker = Effect.gen(function*() {
     })
 
   const claim: StreamBrokerShape["claim"] = (streamId, token) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const entry = entries.get(streamId)
       // a wrong token does not burn the ticket (the stream id appears in URLs; the token does not)
       if (entry === undefined || entry.state !== "pending" || token === undefined || !safeEqual(token, entry.token)) {
@@ -167,7 +166,7 @@ export const makeStreamBroker = Effect.gen(function*() {
     })
 
   const dialLocal: StreamBrokerShape["dialLocal"] = (ticket, _kind) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const claimed = yield* claim(ticket.streamId, ticket.streamToken)
       // frames are not recorded: data streams (transfers) may carry hundreds of MB
       const pair = makeMemorySocketPair({ record: false })
@@ -184,7 +183,10 @@ export const makeStreamBroker = Effect.gen(function*() {
   })
 })
 
-export const StreamBrokerLive: Layer.Layer<StreamBroker, never, BrainNodesConfig> = Layer.effect(StreamBroker, makeStreamBroker)
+export const StreamBrokerLive: Layer.Layer<StreamBroker, never, BrainNodesConfig> = Layer.effect(
+  StreamBroker,
+  makeStreamBroker,
+)
 
 /**
  * `GET /node/stream/:id` (public listener). Verifies the one-time bearer, upgrades, and hands the
@@ -194,7 +196,7 @@ export const handleStreamUpgrade = (
   broker: StreamBrokerShape,
   streamId: string,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, never, HttpServerRequest.HttpServerRequest> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const token = parseStreamAuth(request.headers["authorization"])
     const claimed = yield* Effect.result(broker.claim(streamId, token))
@@ -224,14 +226,19 @@ export const openNodeStream = <A, E, R>(
     readonly kind: string
     readonly open: (ticket: StreamTicket) => Effect.Effect<A, E, R>
   },
-): Effect.Effect<{ readonly socket: Socket.Socket; readonly opened: Effect.Effect<A, E> }, E | StreamRefused, R | Scope.Scope> =>
-  Effect.gen(function*() {
+): Effect.Effect<
+  { readonly socket: Socket.Socket; readonly opened: Effect.Effect<A, E> },
+  E | StreamRefused,
+  R | Scope.Scope
+> =>
+  Effect.gen(function* () {
     const stream = yield* Scope.fork(yield* Effect.scope, "sequential")
     const expected = yield* broker.expect({ nodeId: input.nodeId, kind: input.kind }).pipe(Scope.provide(stream))
     const opening = yield* Effect.forkIn(input.open(expected.ticket), stream, { startImmediately: true })
     // a failed `open` wins the race; a successful one waits for the socket
     const failedOpen = Effect.flatMap(Fiber.await(opening), (exit) =>
-      Exit.isFailure(exit) ? Effect.failCause(exit.cause) : Effect.never)
+      Exit.isFailure(exit) ? Effect.failCause(exit.cause) : Effect.never,
+    )
     const socket = yield* Effect.raceFirst(expected.socket, failedOpen).pipe(
       Effect.onError(() => Scope.close(stream, Exit.void)),
     )

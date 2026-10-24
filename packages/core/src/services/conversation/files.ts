@@ -139,11 +139,13 @@ export const sniffMime = (head: Uint8Array, ext = ""): string | undefined => {
     if (kind === "AVI ") return "video/x-msvideo"
   }
   if (ascii(head, 4, 4) === "ftyp") return ftypType(ascii(head, 8, 4), ext)
-  if (startsWith(head, [0x1a, 0x45, 0xdf, 0xa3])) return ext === "mkv" ? "video/x-matroska" : ext === "weba" ? "audio/webm" : "video/webm"
+  if (startsWith(head, [0x1a, 0x45, 0xdf, 0xa3]))
+    return ext === "mkv" ? "video/x-matroska" : ext === "weba" ? "audio/webm" : "video/webm"
   if (ascii(head, 0, 5) === "%PDF-") return "application/pdf"
   if (ascii(head, 0, 4) === "OggS") return ext === "ogv" ? "video/ogg" : "audio/ogg"
   if (ascii(head, 0, 4) === "fLaC") return "audio/flac"
-  if (ascii(head, 0, 3) === "ID3" || (head.length >= 2 && head[0] === 0xff && (head[1]! & 0xe6) === 0xe2)) return "audio/mpeg"
+  if (ascii(head, 0, 3) === "ID3" || (head.length >= 2 && head[0] === 0xff && (head[1]! & 0xe6) === 0xe2))
+    return "audio/mpeg"
   if (startsWith(head, [0x50, 0x4b, 0x03, 0x04]) || startsWith(head, [0x50, 0x4b, 0x05, 0x06])) {
     const byExt = EXTENSIONS[ext]
     return byExt !== undefined && (byExt.includes("zip") || byExt.startsWith("application/vnd.") || ext === "jar")
@@ -155,7 +157,8 @@ export const sniffMime = (head: Uint8Array, ext = ""): string | undefined => {
   if (startsWith(head, [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00])) return "application/x-xz"
   if (ascii(head, 0, 3) === "BZh") return "application/x-bzip2"
   if (startsWith(head, [0x28, 0xb5, 0x2f, 0xfd])) return "application/zstd"
-  if (ascii(head, 0, 7) === "Rar!\u001a\u0007\u0000" || ascii(head, 0, 6) === "Rar!\u001a\u0007") return "application/vnd.rar"
+  if (ascii(head, 0, 7) === "Rar!\u001a\u0007\u0000" || ascii(head, 0, 6) === "Rar!\u001a\u0007")
+    return "application/vnd.rar"
   if (ascii(head, 257, 5) === "ustar") return "application/x-tar"
   if (startsWith(head, [0x00, 0x61, 0x73, 0x6d])) return "application/wasm"
   if (startsWith(head, [0x49, 0x49, 0x2a, 0x00]) || startsWith(head, [0x4d, 0x4d, 0x00, 0x2a])) return "image/tiff"
@@ -184,7 +187,10 @@ export const detectMime = (name: string, head: Uint8Array): string => {
   const byExt = EXTENSIONS[ext]
   if (byExt !== undefined) {
     // a "text" extension on binary content is not text
-    if ((byExt.startsWith("text/") || byExt === "application/json" || byExt === "image/svg+xml") && !looksLikeText(head)) {
+    if (
+      (byExt.startsWith("text/") || byExt === "application/json" || byExt === "image/svg+xml") &&
+      !looksLikeText(head)
+    ) {
       return "application/octet-stream"
     }
     return byExt
@@ -195,13 +201,17 @@ export const detectMime = (name: string, head: Uint8Array): string => {
 const u16le = (b: Uint8Array, at: number) => b[at]! | (b[at + 1]! << 8)
 const u16be = (b: Uint8Array, at: number) => (b[at]! << 8) | b[at + 1]!
 const u24le = (b: Uint8Array, at: number) => b[at]! | (b[at + 1]! << 8) | (b[at + 2]! << 16)
-const u32be = (b: Uint8Array, at: number) => ((b[at]! << 24) >>> 0) + (b[at + 1]! << 16) + (b[at + 2]! << 8) + b[at + 3]!
+const u32be = (b: Uint8Array, at: number) =>
+  ((b[at]! << 24) >>> 0) + (b[at + 1]! << 16) + (b[at + 2]! << 8) + b[at + 3]!
 
 const sane = (width: number, height: number) =>
   width > 0 && height > 0 && width <= 100_000 && height <= 100_000 ? { width, height } : undefined
 
 /** Pixel size of a PNG, GIF, WebP or JPEG from its first bytes (undefined when not in `head`). */
-export const imageDimensions = (mime: string, head: Uint8Array): { readonly width: number; readonly height: number } | undefined => {
+export const imageDimensions = (
+  mime: string,
+  head: Uint8Array,
+): { readonly width: number; readonly height: number } | undefined => {
   switch (mime) {
     case "image/png":
       return head.length >= 24 && ascii(head, 12, 4) === "IHDR" ? sane(u32be(head, 16), u32be(head, 20)) : undefined
@@ -213,7 +223,10 @@ export const imageDimensions = (mime: string, head: Uint8Array): { readonly widt
       if (chunk === "VP8 " && head.length >= 30) return sane(u16le(head, 26) & 0x3fff, u16le(head, 28) & 0x3fff)
       if (chunk === "VP8L" && head.length >= 25) {
         const b = head.subarray(21, 25)
-        return sane(1 + (((b[1]! & 0x3f) << 8) | b[0]!), 1 + (((b[3]! & 0x0f) << 10) | (b[2]! << 2) | ((b[1]! & 0xc0) >> 6)))
+        return sane(
+          1 + (((b[1]! & 0x3f) << 8) | b[0]!),
+          1 + (((b[3]! & 0x0f) << 10) | (b[2]! << 2) | ((b[1]! & 0xc0) >> 6)),
+        )
       }
       return undefined
     }

@@ -13,7 +13,15 @@
  * RPC edge (`computer.ensure`) and be rendered by the gateway as `ERROR: Node ‹label› is offline`.
  * Errors of individual node RPCs (`PathDenied`, `PolicyRefused`, …) come from `@openbot/node-protocol`.
  */
-import type { Forbidden, InvalidInput, NodeId, NodeSummary, NodeUnavailable, NotFound, PairingCode } from "@openbot/contracts"
+import type {
+  Forbidden,
+  InvalidInput,
+  NodeId,
+  NodeSummary,
+  NodeUnavailable,
+  NotFound,
+  PairingCode,
+} from "@openbot/contracts"
 import type { NodeRpcs } from "@openbot/node-protocol"
 import { Context, Effect, Stream } from "effect"
 import type { RpcClient, RpcClientError } from "effect/rpc"
@@ -47,15 +55,18 @@ export interface NodeDirectoryShape {
 export class NodeDirectory extends Context.Service<NodeDirectory, NodeDirectoryShape>()("openbot/core/NodeDirectory") {}
 
 /** Owner-facing node management for the `nodes.*` RPCs (§4.1.1). */
-export class NodeAdmin extends Context.Service<NodeAdmin, {
-  /** `nodes.createPairingCode`: 8 chars, single use, 10 min TTL; includes a ready-to-paste command. */
-  readonly createPairingCode: Effect.Effect<PairingCode>
-  readonly rename: (nodeId: NodeId, label: string) => Effect.Effect<NodeSummary, NotFound | InvalidInput>
-  /** Revokes the node's key and closes its socket with 4401. The local node → `Forbidden`. */
-  readonly revoke: (nodeId: NodeId) => Effect.Effect<void, NotFound | Forbidden>
-  /** Sets the owner-approved capabilities; effective = declared ∩ approved. */
-  readonly setCapabilities: (
-    nodeId: NodeId,
-    approved: ReadonlyArray<string>,
-  ) => Effect.Effect<NodeSummary, NotFound | InvalidInput>
-}>()("openbot/core/NodeAdmin") {}
+export class NodeAdmin extends Context.Service<
+  NodeAdmin,
+  {
+    /** `nodes.createPairingCode`: 8 chars, single use, 10 min TTL; includes a ready-to-paste command. */
+    readonly createPairingCode: Effect.Effect<PairingCode>
+    readonly rename: (nodeId: NodeId, label: string) => Effect.Effect<NodeSummary, NotFound | InvalidInput>
+    /** Revokes the node's key and closes its socket with 4401. The local node → `Forbidden`. */
+    readonly revoke: (nodeId: NodeId) => Effect.Effect<void, NotFound | Forbidden>
+    /** Sets the owner-approved capabilities; effective = declared ∩ approved. */
+    readonly setCapabilities: (
+      nodeId: NodeId,
+      approved: ReadonlyArray<string>,
+    ) => Effect.Effect<NodeSummary, NotFound | InvalidInput>
+  }
+>()("openbot/core/NodeAdmin") {}

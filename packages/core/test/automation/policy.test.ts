@@ -13,7 +13,11 @@ import { botId, makeRule } from "../../src/testing/index.ts"
 const BOT = botId("bot_a")
 const OTHER = botId("bot_b")
 let n = 0
-const rule = (action: ApprovalAction, scope: "bot" | "global" | "other", overrides?: Partial<ApprovalRule>): ApprovalRule =>
+const rule = (
+  action: ApprovalAction,
+  scope: "bot" | "global" | "other",
+  overrides?: Partial<ApprovalRule>,
+): ApprovalRule =>
   makeRule({
     id: `rul_${++n}` as ApprovalRule["id"],
     action,
@@ -44,7 +48,10 @@ describe("evaluateRules precedence (bot deny > bot ask > bot allow > global deny
       test(`${hs} ${ha} beats ${ls} ${la}`, () => {
         const high = rule(ha, hs)
         const low = rule(la, ls)
-        for (const rules of [[high, low], [low, high]]) {
+        for (const rules of [
+          [high, low],
+          [low, high],
+        ]) {
           const decision = evaluateRules(rules, BOT, subject)
           expect(decision.action).toBe(ha)
           expect(decision.rule?.id).toBe(high.id)
@@ -115,7 +122,9 @@ describe("matching helpers", () => {
       surface: "shell",
       match: { toolName: "Bash", commandPrefix: "git push" },
     })
-    expect(suggestRule({ surface: "file-edit", toolName: "Edit", paths: ["/w/app/src/a.ts", "/w/app/test/b.ts"] })).toEqual({
+    expect(
+      suggestRule({ surface: "file-edit", toolName: "Edit", paths: ["/w/app/src/a.ts", "/w/app/test/b.ts"] }),
+    ).toEqual({
       surface: "file-edit",
       match: { toolName: "Edit", pathPrefix: "/w/app" },
     })
@@ -142,11 +151,13 @@ describe("matching helpers", () => {
     })
   })
 
-  test("regression: env assignments and wrappers are never the program (\"Run f=scenes/…/main.rs commands\")", () => {
+  test('regression: env assignments and wrappers are never the program ("Run f=scenes/…/main.rs commands")', () => {
     // the command behind the bug: a shell variable set first, the program later in the chain
     expect(suggestCommandPrefix("f=scenes/cache-demo/src/main.rs; wc -l $f")).toBe("wc")
     expect(suggestCommandPrefix("f=scenes/cache-demo/src/main.rs && sed -n 1,80p $f")).toBe("sed")
-    expect(suggestRule({ surface: "shell", toolName: "Bash", command: "f=scenes/cache-demo/src/main.rs; wc -l $f" })).toEqual({
+    expect(
+      suggestRule({ surface: "shell", toolName: "Bash", command: "f=scenes/cache-demo/src/main.rs; wc -l $f" }),
+    ).toEqual({
       surface: "shell",
       match: { toolName: "Bash", commandPrefix: "wc" },
     })
@@ -168,7 +179,9 @@ describe("matching helpers", () => {
     expect(suggestCommandPrefix("./scripts/render.sh --fast")).toBe("./scripts/render.sh")
     for (const command of ["A=1 B=/x/y z=2", "f=a/b.rs; g=c/d.rs", "VAR=x env Y=z time nice -n 3 cmd"]) {
       const prefix = suggestCommandPrefix(command)
-      expect(prefix === undefined || (!prefix.split(" ")[0]!.includes("=") && !/^[^./~][^ ]*\//.test(prefix))).toBe(true)
+      expect(prefix === undefined || (!prefix.split(" ")[0]!.includes("=") && !/^[^./~][^ ]*\//.test(prefix))).toBe(
+        true,
+      )
     }
     expect(suggestCommandPrefix("VAR=x env Y=z time nice -n 3 cmd")).toBe("cmd")
   })

@@ -25,7 +25,8 @@ export interface ExchangeWindow {
   readonly afterCursor: string | null
 }
 
-const order = (x: MessageEntry, y: MessageEntry): number => x.createdAt - y.createdAt || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0)
+const order = (x: MessageEntry, y: MessageEntry): number =>
+  x.createdAt - y.createdAt || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0)
 
 /** Messages merged by id (the higher revision wins), in `(createdAt, id)` order. */
 export const mergeMessages = (...lists: ReadonlyArray<ReadonlyArray<MessageEntry>>): ReadonlyArray<MessageEntry> => {
@@ -46,9 +47,14 @@ const messagesOf = (entries: ReadonlyArray<TranscriptEntry>): ReadonlyArray<Mess
  * The window after a page arrives: the first page starts it; an older / newer page extends it on
  * that side and moves only that side's cursor.
  */
-export const applyPage = (window: ExchangeWindow | undefined, page: ExchangePage, side: "older" | "newer" | "first"): ExchangeWindow => {
+export const applyPage = (
+  window: ExchangeWindow | undefined,
+  page: ExchangePage,
+  side: "older" | "newer" | "first",
+): ExchangeWindow => {
   const items = messagesOf(page.entries)
-  if (window === undefined || side === "first") return { items: mergeMessages(items), beforeCursor: page.beforeCursor, afterCursor: page.afterCursor }
+  if (window === undefined || side === "first")
+    return { items: mergeMessages(items), beforeCursor: page.beforeCursor, afterCursor: page.afterCursor }
   return {
     items: mergeMessages(window.items, items),
     beforeCursor: side === "older" ? page.beforeCursor : window.beforeCursor,
@@ -65,7 +71,8 @@ export const withLive = (window: ExchangeWindow, live: ReadonlyArray<MessageEntr
   const known = new Set(window.items.map((e) => e.id))
   const first = window.items[0]
   const joins = (e: MessageEntry) =>
-    known.has(e.id) || (window.afterCursor === null && (first === undefined ? window.beforeCursor === null : order(e, first) > 0))
+    known.has(e.id) ||
+    (window.afterCursor === null && (first === undefined ? window.beforeCursor === null : order(e, first) > 0))
   const extra = live.filter(joins)
   return extra.length === 0 ? window.items : mergeMessages(window.items, extra)
 }
@@ -76,7 +83,11 @@ export const targetIdsIn = (items: ReadonlyArray<MessageEntry>, target: Exchange
   const byId = items.filter((e) => wanted.has(e.id)).map((e) => e.id)
   if (byId.length > 0 || target.fromBotId === undefined) return byId
   const match = items.findLast(
-    (e) => e.createdAt <= target.at && e.author.kind === "bot" && e.author.botId === target.fromBotId && e.toBotId === target.toBotId,
+    (e) =>
+      e.createdAt <= target.at &&
+      e.author.kind === "bot" &&
+      e.author.botId === target.fromBotId &&
+      e.toBotId === target.toBotId,
   )
   return match ? [match.id] : []
 }

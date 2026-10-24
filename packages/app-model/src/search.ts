@@ -2,7 +2,16 @@
 // `search.query` payload they make, the results list across pages, the Find bar's position among a
 // chat's hits, and the client-side term matching that highlights hits in the chat (the same folding
 // the brain's index uses: case-insensitive, diacritics removed).
-import { type BotId, type ConversationId, DEFAULT_SEARCH_KINDS, type EntryId, type SearchHit, type SearchKind, type SearchPage, type SearchSender } from "@openbot/contracts"
+import {
+  type BotId,
+  type ConversationId,
+  DEFAULT_SEARCH_KINDS,
+  type EntryId,
+  type SearchHit,
+  type SearchKind,
+  type SearchPage,
+  type SearchSender,
+} from "@openbot/contracts"
 
 // ------------------------------------------------------------------------------------- filters
 
@@ -17,10 +26,13 @@ const KINDS_OF: Readonly<Record<SearchType, ReadonlyArray<SearchKind>>> = {
   steps: ["tool-call"],
 }
 /** Everything but tool steps (`DEFAULT_SEARCH_KINDS`); "Steps" is off until the owner turns it on. */
-export const DEFAULT_SEARCH_TYPES: ReadonlyArray<SearchType> = SEARCH_TYPES.filter((t) => KINDS_OF[t].every((k) => DEFAULT_SEARCH_KINDS.includes(k)))
+export const DEFAULT_SEARCH_TYPES: ReadonlyArray<SearchType> = SEARCH_TYPES.filter((t) =>
+  KINDS_OF[t].every((k) => DEFAULT_SEARCH_KINDS.includes(k)),
+)
 
 /** Any time, the last 24 h / 7 / 30 days, or a range of local days (`YYYY-MM-DD`, both inclusive). */
-export type SearchDate = "any" | "24h" | "7d" | "30d" | { readonly from?: string | undefined; readonly to?: string | undefined }
+export type SearchDate =
+  "any" | "24h" | "7d" | "30d" | { readonly from?: string | undefined; readonly to?: string | undefined }
 
 /** The owner's search: what the Search view shows and the URL keeps (`#/search?…`). */
 export interface SearchFilters {
@@ -35,10 +47,17 @@ export interface SearchFilters {
   readonly sort: "relevance" | "newest"
 }
 
-export const searchFilters = (q = ""): SearchFilters => ({ q, botIds: [], date: "any", types: DEFAULT_SEARCH_TYPES, sort: "relevance" })
+export const searchFilters = (q = ""): SearchFilters => ({
+  q,
+  botIds: [],
+  date: "any",
+  types: DEFAULT_SEARCH_TYPES,
+  sort: "relevance",
+})
 
 /** Same types, in `SEARCH_TYPES` order, without repeats. */
-export const normalizeTypes = (types: ReadonlyArray<SearchType>): ReadonlyArray<SearchType> => SEARCH_TYPES.filter((t) => types.includes(t))
+export const normalizeTypes = (types: ReadonlyArray<SearchType>): ReadonlyArray<SearchType> =>
+  SEARCH_TYPES.filter((t) => types.includes(t))
 
 export const isDefaultTypes = (types: ReadonlyArray<SearchType>): boolean => {
   const n = normalizeTypes(types)
@@ -53,7 +72,9 @@ export const dayStart = (day: string): number | undefined => {
   const m = ISO_DAY.exec(day)
   if (!m) return undefined
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-  return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]) ? d.getTime() : undefined
+  return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3])
+    ? d.getTime()
+    : undefined
 }
 
 /** The local day of `at` as `YYYY-MM-DD`. */
@@ -77,7 +98,8 @@ export const dateRangeOf = (date: SearchDate, now: number): { readonly from?: nu
       const from = date.from === undefined ? undefined : dayStart(date.from)
       const end = date.to === undefined ? undefined : dayStart(date.to)
       // the end day is whole: up to the last millisecond before the next local midnight
-      const to = end === undefined ? undefined : new Date(new Date(end).setDate(new Date(end).getDate() + 1)).getTime() - 1
+      const to =
+        end === undefined ? undefined : new Date(new Date(end).setDate(new Date(end).getDate() + 1)).getTime() - 1
       return { ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) }
     }
   }
@@ -99,9 +121,13 @@ export interface SearchQueryInput {
  * The query the filters make. `groupIds`: the group chats ("Group chats" searches those);
  * defaults are left out so the brain's own defaults apply.
  */
-export const searchQueryOf = (filters: SearchFilters, context: { readonly now: number; readonly groupIds: ReadonlyArray<ConversationId> }): SearchQueryInput => {
+export const searchQueryOf = (
+  filters: SearchFilters,
+  context: { readonly now: number; readonly groupIds: ReadonlyArray<ConversationId> },
+): SearchQueryInput => {
   const range = dateRangeOf(filters.date, context.now)
-  const conversationIds = filters.chat === undefined ? undefined : filters.chat === "groups" ? context.groupIds : [filters.chat]
+  const conversationIds =
+    filters.chat === undefined ? undefined : filters.chat === "groups" ? context.groupIds : [filters.chat]
   return {
     query: filters.q.trim(),
     ...(conversationIds === undefined ? {} : { conversationIds }),
@@ -119,10 +145,12 @@ export const SEARCH_MIN_CHARS = 2
 export const isSearchable = (q: string): boolean => q.trim().length >= SEARCH_MIN_CHARS
 
 /** Where a hit opens: its entry, a task's report (when the brain found one); undefined = the chat. */
-export const hitEntryId = (hit: SearchHit): EntryId | undefined => (hit.ref.kind === "entry" ? hit.ref.entryId : hit.jumpEntryId)
+export const hitEntryId = (hit: SearchHit): EntryId | undefined =>
+  hit.ref.kind === "entry" ? hit.ref.entryId : hit.jumpEntryId
 
 /** A stable key per hit (entries and tasks have separate id spaces). */
-export const hitKey = (hit: SearchHit): string => (hit.ref.kind === "entry" ? `e:${hit.ref.entryId}` : `t:${hit.ref.taskId}`)
+export const hitKey = (hit: SearchHit): string =>
+  hit.ref.kind === "entry" ? `e:${hit.ref.entryId}` : `t:${hit.ref.taskId}`
 
 // ------------------------------------------------------------------------------------- results
 
@@ -138,7 +166,13 @@ export interface SearchResults {
 /** The results after a page arrives: the first starts them, a later one appends (repeats dropped). */
 export const appendPage = (results: SearchResults | undefined, page: SearchPage): SearchResults => {
   if (results === undefined) {
-    return { hits: page.hits, nextCursor: page.nextCursor, totalCapped: page.totalCapped, terms: page.terms, indexing: page.indexing === true }
+    return {
+      hits: page.hits,
+      nextCursor: page.nextCursor,
+      totalCapped: page.totalCapped,
+      terms: page.terms,
+      indexing: page.indexing === true,
+    }
   }
   const seen = new Set(results.hits.map(hitKey))
   return {
@@ -155,9 +189,15 @@ export const resultCount = (total: number, cap: number): string =>
   `${total >= cap ? `${cap.toLocaleString("en-US")}+` : total.toLocaleString("en-US")} ${total === 1 ? "result" : "results"}`
 
 /** A snippet cut into plain and highlighted parts (ranges in UTF-16 units, clamped, overlaps merged). */
-export const highlightParts = (text: string, ranges: ReadonlyArray<{ readonly start: number; readonly end: number }>): ReadonlyArray<{ readonly text: string; readonly mark: boolean }> => {
+export const highlightParts = (
+  text: string,
+  ranges: ReadonlyArray<{ readonly start: number; readonly end: number }>,
+): ReadonlyArray<{ readonly text: string; readonly mark: boolean }> => {
   const sorted = ranges
-    .map((r) => ({ start: Math.max(0, Math.min(r.start, text.length)), end: Math.max(0, Math.min(r.end, text.length)) }))
+    .map((r) => ({
+      start: Math.max(0, Math.min(r.start, text.length)),
+      end: Math.max(0, Math.min(r.end, text.length)),
+    }))
     .filter((r) => r.end > r.start)
     .sort((a, b) => a.start - b.start)
   const parts: Array<{ text: string; mark: boolean }> = []
@@ -229,7 +269,10 @@ const WORD = /[\p{L}\p{N}]/u
  * Where the search terms occur in `text`, as `[start, end)` ranges of the original: a term matches
  * at the start of a word (the index matches words and prefixes), case- and diacritic-insensitively.
  */
-export const termRanges = (text: string, terms: ReadonlyArray<string>): ReadonlyArray<{ readonly start: number; readonly end: number }> => {
+export const termRanges = (
+  text: string,
+  terms: ReadonlyArray<string>,
+): ReadonlyArray<{ readonly start: number; readonly end: number }> => {
   const wanted = [...new Set(terms.map(fold).filter((t) => t.length > 0))]
   if (wanted.length === 0 || text.length === 0) return []
   const { folded, map } = foldWithMap(text)

@@ -12,10 +12,13 @@
  */
 import { Context, Effect, Layer } from "effect"
 
-export class InternalAddress extends Context.Service<InternalAddress, {
-  /** e.g. `http://127.0.0.1:43123` (no trailing slash). Waits until the listener is bound. */
-  readonly baseUrl: Effect.Effect<string>
-}>()("openbot/core/InternalAddress") {
+export class InternalAddress extends Context.Service<
+  InternalAddress,
+  {
+    /** e.g. `http://127.0.0.1:43123` (no trailing slash). Waits until the listener is bound. */
+    readonly baseUrl: Effect.Effect<string>
+  }
+>()("openbot/core/InternalAddress") {
   /** A fixed address (tests, or a server that binds before building layers). */
   static readonly layer = (baseUrl: string): Layer.Layer<InternalAddress> =>
     Layer.succeed(InternalAddress, InternalAddress.of({ baseUrl: Effect.succeed(baseUrl.replace(/\/+$/, "")) }))

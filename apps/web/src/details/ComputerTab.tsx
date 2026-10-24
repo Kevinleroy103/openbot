@@ -13,7 +13,18 @@ import { ScreenPermissionsNote } from "../computer/ScreenPermissionsNote.tsx"
 import { computerInitialTabAtom, useComputer } from "../computer/useComputer.ts"
 import { ScreenThumbnail } from "../computer/ScreenThumbnail.tsx"
 import { useComputerView, useSettingsDialog } from "../contracts.ts"
-import { ConfirmDialog, Section, SectionSheet, SheetLine, StatusDot, capabilityName, formatAgo, nodeTone, useCommand, useRosterValue } from "./kit.tsx"
+import {
+  ConfirmDialog,
+  Section,
+  SectionSheet,
+  SheetLine,
+  StatusDot,
+  capabilityName,
+  formatAgo,
+  nodeTone,
+  useCommand,
+  useRosterValue,
+} from "./kit.tsx"
 
 export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
   const nodes = useRosterValue<ReadonlyArray<NodeSummary>>(nodesAtom, [])
@@ -38,12 +49,27 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
 
   return (
     <div className="flex flex-col gap-6">
-      <ScreenThumbnail botId={bot.id} botName={bot.name} nodeLabel={node ? (node.kind === "local" ? "this server" : node.label) : undefined} onOpen={() => open("screen")} className="pt-1" />
+      <ScreenThumbnail
+        botId={bot.id}
+        botName={bot.name}
+        nodeLabel={node ? (node.kind === "local" ? "this server" : node.label) : undefined}
+        onOpen={() => open("screen")}
+        className="pt-1"
+      />
       <Section title="Computer">
         <SectionSheet>
-          <SheetLine label={node ? (node.kind === "local" ? "This server" : node.label) : bot.hostNodeId} hint={node ? `${node.hostname} · ${node.platform}` : "Unknown computer"}>
+          <SheetLine
+            label={node ? (node.kind === "local" ? "This server" : node.label) : bot.hostNodeId}
+            hint={node ? `${node.hostname} · ${node.platform}` : "Unknown computer"}
+          >
             <StatusPill tone={nodeTone(node)} dot className="h-[22px] text-xs">
-              {node?.status === "online" ? "Online" : node?.status === "degraded" ? "Degraded" : node?.lastSeenAt ? `Offline · ${formatAgo(node.lastSeenAt)}` : "Offline"}
+              {node?.status === "online"
+                ? "Online"
+                : node?.status === "degraded"
+                  ? "Degraded"
+                  : node?.lastSeenAt
+                    ? `Offline · ${formatAgo(node.lastSeenAt)}`
+                    : "Offline"}
             </StatusPill>
           </SheetLine>
           {node && (
@@ -74,9 +100,18 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
             </SheetLine>
           )}
         </SectionSheet>
-        {missing.length > 0 && (status.value?.surface === "screen"
-          ? <ScreenPermissionsNote missing={missing} nodeName={nodeName} className="px-1" />
-          : <DesktopSetupNote missing={missing} nodeName={nodeName} platform={node?.platform} local={node?.kind === "local"} className="px-1" />)}
+        {missing.length > 0 &&
+          (status.value?.surface === "screen" ? (
+            <ScreenPermissionsNote missing={missing} nodeName={nodeName} className="px-1" />
+          ) : (
+            <DesktopSetupNote
+              missing={missing}
+              nodeName={nodeName}
+              platform={node?.platform}
+              local={node?.kind === "local"}
+              className="px-1"
+            />
+          ))}
         <div className="flex flex-wrap items-center gap-2 px-1">
           <PillButton
             size="md"
@@ -90,11 +125,21 @@ export function ComputerTab({ bot }: { readonly bot: Bot }): ReactNode {
             Open terminal
           </PillButton>
           {canReset && (
-            <PillButton size="md" variant="secondary" leadingIcon={RotateCcw} onClick={() => setConfirmReset(true)} data-testid="reset-computer">
+            <PillButton
+              size="md"
+              variant="secondary"
+              leadingIcon={RotateCcw}
+              onClick={() => setConfirmReset(true)}
+              data-testid="reset-computer"
+            >
               Reset computer
             </PillButton>
           )}
-          <button type="button" className="ms-auto px-2 text-sm text-fg-secondary transition-colors hover:text-fg" onClick={() => settings.show("computers")}>
+          <button
+            type="button"
+            className="ms-auto px-2 text-sm text-fg-secondary transition-colors hover:text-fg"
+            onClick={() => settings.show("computers")}
+          >
             Manage computers
           </button>
         </div>

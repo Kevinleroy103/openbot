@@ -59,7 +59,7 @@ const killGroup = (pid: number, signal: NodeJS.Signals) => {
 
 /** Spawns and verifies `opencode serve`; the server is stopped when the scope closes. */
 export const spawnServer = (options: SpawnServerOptions): Effect.Effect<OpenCodeTransport, HarnessError, Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const startTimeoutMs = options.startTimeoutMs ?? 30_000
     const proc = yield* Effect.acquireRelease(
       Effect.try({
@@ -72,7 +72,12 @@ export const spawnServer = (options: SpawnServerOptions): Effect.Effect<OpenCode
             stderr: "pipe",
             detached: true,
           }),
-        catch: (cause) => harnessError("not-installed", `Could not start "${options.binary} serve": ${describeClientError(cause)}`, cause),
+        catch: (cause) =>
+          harnessError(
+            "not-installed",
+            `Could not start "${options.binary} serve": ${describeClientError(cause)}`,
+            cause,
+          ),
       }),
       (child) =>
         Effect.promise(async () => {
@@ -140,11 +145,13 @@ export const spawnServer = (options: SpawnServerOptions): Effect.Effect<OpenCode
         if (typeof parsed.url !== "string") throw new Error(`unexpected first line: ${line.slice(0, 200)}`)
         return parsed.url
       },
-      catch: (cause) => harnessError("open-failed", withStderr(`OpenCode server did not start: ${describeClientError(cause)}`), cause),
+      catch: (cause) =>
+        harnessError("open-failed", withStderr(`OpenCode server did not start: ${describeClientError(cause)}`), cause),
     }).pipe(
       Effect.timeoutOrElse({
         duration: startTimeoutMs,
-        orElse: () => Effect.fail(harnessError("open-failed", withStderr("Timed out waiting for the OpenCode server to start."))),
+        orElse: () =>
+          Effect.fail(harnessError("open-failed", withStderr("Timed out waiting for the OpenCode server to start."))),
       }),
     )
 
@@ -181,7 +188,12 @@ export const verifyServer = (client: OpenCodeApi, timeoutMs = 10_000): Effect.Ef
     Effect.flatMap((info) =>
       typeof info?.version === "string" && /^2\./.test(info.version)
         ? Effect.succeed(info.version)
-        : Effect.fail(harnessError("not-installed", `OpenCode ${String(info?.version)} is not supported; OpenBot needs OpenCode 2.x.`))
+        : Effect.fail(
+            harnessError(
+              "not-installed",
+              `OpenCode ${String(info?.version)} is not supported; OpenBot needs OpenCode 2.x.`,
+            ),
+          ),
     ),
   )
 
@@ -192,7 +204,11 @@ export const resolveOpenCodeBinary = (explicit: string | undefined): string | un
   if (found) return found
   const home = process.env.HOME
   if (!home) return undefined
-  for (const candidate of [`${home}/.bun/bin/opencode`, `${home}/.opencode/bin/opencode`, `${home}/.local/bin/opencode`]) {
+  for (const candidate of [
+    `${home}/.bun/bin/opencode`,
+    `${home}/.opencode/bin/opencode`,
+    `${home}/.local/bin/opencode`,
+  ]) {
     const resolved = Bun.which(candidate)
     if (resolved) return resolved
   }

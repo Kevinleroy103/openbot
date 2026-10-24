@@ -150,7 +150,16 @@ export const makeNodeBuilds = (input: { readonly entry: string; readonly outDir:
     const out = path.join(input.outDir, `openbot-node-${target}`)
     const tmp = `${out}.${process.pid}.tmp`
     const proc = Bun.spawn(
-      [input.bun ?? process.execPath, "build", "--compile", "--minify", `--target=bun-${target}`, input.entry, "--outfile", tmp],
+      [
+        input.bun ?? process.execPath,
+        "build",
+        "--compile",
+        "--minify",
+        `--target=bun-${target}`,
+        input.entry,
+        "--outfile",
+        tmp,
+      ],
       { stdout: "ignore", stderr: "pipe", cwd: path.dirname(input.entry) },
     )
     const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()])
@@ -176,7 +185,7 @@ export const makeNodeBuilds = (input: { readonly entry: string; readonly outDir:
 
 /** `/node/install.sh` and `/node/download/:target`, when the brain can build the node (`nodeInstall`). */
 export const addInstallRoutes = (router: HttpRouter.HttpRouter) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const config = yield* BrainNodesConfig
     const dataDir = yield* DataDir
     const install = config.nodeInstall
@@ -189,20 +198,25 @@ export const addInstallRoutes = (router: HttpRouter.HttpRouter) =>
         HttpServerResponse.text(installScript(origin), {
           contentType: "text/x-shellscript; charset=utf-8",
           headers: { "cache-control": "no-store" },
-        })),
+        }),
+      ),
     )
     yield* router.add(
       "GET",
       "/node/download/:target",
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const target = (yield* HttpRouter.params)["target"] ?? ""
         if (!isTarget(target)) {
-          return HttpServerResponse.text(`unknown target "${target}" (one of ${INSTALL_TARGETS.join(", ")})`, { status: 404 })
+          return HttpServerResponse.text(`unknown target "${target}" (one of ${INSTALL_TARGETS.join(", ")})`, {
+            status: 404,
+          })
         }
         const built = yield* Effect.result(Effect.tryPromise(() => builds.get(target)))
         if (built._tag === "Failure") {
           yield* Effect.logWarning("could not build the node", { target, cause: built.failure })
-          return HttpServerResponse.text("This OpenBot could not build the node for that computer. Check its log.", { status: 500 })
+          return HttpServerResponse.text("This OpenBot could not build the node for that computer. Check its log.", {
+            status: 500,
+          })
         }
         const file = Bun.file(built.success)
         return HttpServerResponse.raw(file, {

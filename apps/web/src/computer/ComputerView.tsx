@@ -12,7 +12,20 @@ import { useAtom } from "@effect/atom-react"
 import { botAtom, pendingRequestsQueryAtom } from "@openbot/client"
 import type { Bot } from "@openbot/contracts"
 import { Avatar, Icon, PillButton, ShimmerText, Spinner, cn } from "@openbot/ui"
-import { Eye, Globe, Keyboard, Minimize2, MonitorOff, Moon, MousePointer2, RotateCcw, Settings2, Smartphone, TriangleAlert, Unplug } from "lucide-react"
+import {
+  Eye,
+  Globe,
+  Keyboard,
+  Minimize2,
+  MonitorOff,
+  Moon,
+  MousePointer2,
+  RotateCcw,
+  Settings2,
+  Smartphone,
+  TriangleAlert,
+  Unplug,
+} from "lucide-react"
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useIsPhone, useIsTouch } from "../app/layout.ts"
 import { useBackDismiss } from "../app/nav.ts"
@@ -45,7 +58,10 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
   useEffect(() => () => setInitialTab("screen"), [setInitialTab])
 
   const { status, availability, ensure, lease } = useComputer(botId)
-  const surface = availability.kind === "stream" || availability.kind === "absent" ? availability.surface : (status.value?.surface ?? "browser")
+  const surface =
+    availability.kind === "stream" || availability.kind === "absent"
+      ? availability.surface
+      : (status.value?.surface ?? "browser")
   const desktop = surface === "desktop"
   // lease holder: the latest of computer.status, the socket's Lease notices and our own lease calls
   const [holder, setHolder] = useState<"user" | "bot">("bot")
@@ -87,7 +103,7 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
   })
 
   const live = desktop ? desk.state.phase === "live" : screencast.state.phase === "live"
-  const pageTitle = !desktop && live ? (screencast.state.page?.title || screencast.state.page?.url) : undefined
+  const pageTitle = !desktop && live ? screencast.state.page?.title || screencast.state.page?.url : undefined
 
   // ------------------------------------------------------------------ hand-off + lease
   const pending = useQuery(pendingRequestsQueryAtom("*"))
@@ -178,7 +194,9 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
   const keyboardRef = useRef<HTMLTextAreaElement>(null)
   const showKeyboard = desktop && controlling && live && touch
   const aspect = desktopAspect(status.value)
-  const overlay = notice ? <ScreenMessage notice={notice} pending={ensure.pending} error={ensure.error} onAction={(a) => void runAction(a)} /> : undefined
+  const overlay = notice ? (
+    <ScreenMessage notice={notice} pending={ensure.pending} error={ensure.error} onAction={(a) => void runAction(a)} />
+  ) : undefined
 
   return (
     <div
@@ -192,17 +210,26 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
       {/* top bar (44, black 55 %) */}
       <div className="ob-overlay-top grid h-[calc(44px+env(safe-area-inset-top))] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 bg-black/55 ps-3 pe-2 pt-[env(safe-area-inset-top)]">
         <div className="flex min-w-0 items-center gap-2">
-          {bot && <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={22} working={controlling ? false : live} />}
+          {bot && (
+            <Avatar shape={bot.avatar.shape} color={bot.avatar.color} size={22} working={controlling ? false : live} />
+          )}
           <span className="truncate text-sm font-medium text-white/90">{phone ? name : `${name}'s computer`}</span>
           {pageTitle && (
-            <span className="ms-1 hidden min-w-0 items-center gap-1 truncate text-xs text-white/55 md:inline-flex" title={screencast.state.page?.url}>
+            <span
+              className="ms-1 hidden min-w-0 items-center gap-1 truncate text-xs text-white/55 md:inline-flex"
+              title={screencast.state.page?.url}
+            >
               <Icon icon={Globe} size="xs" className="text-white/45" />
               <span className="truncate">{pageTitle}</span>
             </span>
           )}
         </div>
         {/* always-dark segmented control (the cover is dark in both themes) */}
-        <div role="tablist" aria-label="Computer view" className="inline-flex items-center gap-0.5 rounded-full bg-white/[.06] p-0.5">
+        <div
+          role="tablist"
+          aria-label="Computer view"
+          className="inline-flex items-center gap-0.5 rounded-full bg-white/[.06] p-0.5"
+        >
           {(["screen", "terminal"] as const).map((t) => (
             <button
               key={t}
@@ -226,7 +253,10 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
             aria-label="Exit fullscreen"
             title="Exit fullscreen"
             onClick={() => void close()}
-            className={cn("inline-flex items-center justify-center text-white/85 transition-colors hover:bg-white/10", phone ? "size-10 rounded-full" : "size-6 rounded-md")}
+            className={cn(
+              "inline-flex items-center justify-center text-white/85 transition-colors hover:bg-white/10",
+              phone ? "size-10 rounded-full" : "size-6 rounded-md",
+            )}
           >
             <Icon icon={Minimize2} size={phone ? "md" : "xs"} />
           </button>
@@ -235,7 +265,10 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
 
       {/* what the bot asked for (request_takeover) */}
       {handoff && tab === "screen" && (
-        <div data-testid="handoff-banner" className="flex shrink-0 items-start gap-2 border-b-[0.5px] border-white/10 bg-[rgba(245,166,35,.14)] px-4 py-2 text-sm text-white/90">
+        <div
+          data-testid="handoff-banner"
+          className="flex shrink-0 items-start gap-2 border-b-[0.5px] border-white/10 bg-[rgba(245,166,35,.14)] px-4 py-2 text-sm text-white/90"
+        >
           <Icon icon={TriangleAlert} size="sm" className="mt-0.5 shrink-0 text-[#f5b14c]" />
           <span className="min-w-0 flex-1 line-clamp-2 break-words">
             <span className="font-medium text-[#f5c477]">{name} needs you: </span>
@@ -245,7 +278,12 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
       )}
 
       {/* stage (room at the bottom for the control pill, so it never covers the dock) */}
-      <div className={cn("relative min-h-0 flex-1 p-2", tab === "screen" && streaming && "pb-[calc(64px+env(safe-area-inset-bottom))]")}>
+      <div
+        className={cn(
+          "relative min-h-0 flex-1 p-2",
+          tab === "screen" && streaming && "pb-[calc(64px+env(safe-area-inset-bottom))]",
+        )}
+      >
         <div className={cn("h-full w-full", tab !== "screen" && "hidden")}>
           {desktop ? (
             <DesktopStage
@@ -261,7 +299,11 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
             <ScreenStage
               canvasRef={canvasRef}
               state={screencast.state}
-              interactive={controlling && screencast.state.meta !== undefined && (screencast.state.phase === "live" || screencast.state.phase === "waiting")}
+              interactive={
+                controlling &&
+                screencast.state.meta !== undefined &&
+                (screencast.state.phase === "live" || screencast.state.phase === "waiting")
+              }
               send={screencast.send}
               label={`${name}'s screen`}
               frameClassName="rounded-md bg-white/[.04] ring-[0.5px] ring-white/10"
@@ -279,12 +321,19 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
         {tab === "screen" && streaming && (
           <div className="pointer-events-none absolute inset-x-0 bottom-[calc(16px+env(safe-area-inset-bottom))] flex flex-col items-center gap-2 px-3">
             {desktop && live && phone && portrait && !controlling && (
-              <div data-testid="landscape-hint" className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-xs text-white/70">
+              <div
+                data-testid="landscape-hint"
+                className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-xs text-white/70"
+              >
                 <Icon icon={Smartphone} size="xs" className="rotate-90" />
                 Turn your phone sideways for a bigger screen
               </div>
             )}
-            {lease.error && <div className="pointer-events-auto max-w-full rounded-full bg-black/70 px-3 py-1 text-center text-xs text-white/85">{lease.error}</div>}
+            {lease.error && (
+              <div className="pointer-events-auto max-w-full rounded-full bg-black/70 px-3 py-1 text-center text-xs text-white/85">
+                {lease.error}
+              </div>
+            )}
             <div
               data-testid="control-pill"
               className="pointer-events-auto flex h-9 max-w-full items-center gap-2 rounded-full bg-elevated ps-3 pe-1 hairline border-line-secondary shadow-popover"
@@ -305,7 +354,13 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
                       <Icon icon={Keyboard} size="sm" />
                     </button>
                   )}
-                  <PillButton variant="primary" size="sm" className="shrink-0" loading={lease.pending} onClick={() => void done()}>
+                  <PillButton
+                    variant="primary"
+                    size="sm"
+                    className="shrink-0"
+                    loading={lease.pending}
+                    onClick={() => void done()}
+                  >
                     I'm done
                   </PillButton>
                 </>
@@ -313,7 +368,14 @@ export function ComputerView({ botId, onClose }: ComputerViewProps): ReactNode {
                 <>
                   <Icon icon={Eye} size="sm" className="shrink-0 text-icon-secondary" />
                   <span className="truncate text-sm font-medium text-fg-secondary">Watching</span>
-                  <PillButton variant="primary" size="sm" className="shrink-0" loading={lease.pending} disabled={!live} onClick={() => void takeControl()}>
+                  <PillButton
+                    variant="primary"
+                    size="sm"
+                    className="shrink-0"
+                    loading={lease.pending}
+                    disabled={!live}
+                    onClick={() => void takeControl()}
+                  >
                     Take control
                   </PillButton>
                 </>
@@ -334,7 +396,11 @@ const subscribePortrait = (onChange: () => void) => {
   return () => m?.removeEventListener("change", onChange)
 }
 const usePortrait = (): boolean =>
-  useSyncExternalStore(subscribePortrait, () => (typeof matchMedia === "undefined" ? false : matchMedia(PORTRAIT_QUERY).matches), () => false)
+  useSyncExternalStore(
+    subscribePortrait,
+    () => (typeof matchMedia === "undefined" ? false : matchMedia(PORTRAIT_QUERY).matches),
+    () => false,
+  )
 
 /**
  * The phone's soft keyboard for the remote desktop: an off-screen textarea that, once focused (the
@@ -401,13 +467,23 @@ function ScreenMessage({
     notice.icon === "spinner" ? (
       <Spinner size={18} className="text-white/60" />
     ) : (
-      <Icon icon={notice.icon === "unplug" ? Unplug : notice.icon === "asleep" ? Moon : MonitorOff} size="xl" className="text-white/45" />
+      <Icon
+        icon={notice.icon === "unplug" ? Unplug : notice.icon === "asleep" ? Moon : MonitorOff}
+        size="xl"
+        className="text-white/45"
+      />
     )
   const action = notice.action
   return (
-    <div className="flex max-w-[360px] flex-col items-center gap-2 px-6 text-center" data-testid="screen-message" data-notice={notice.icon}>
+    <div
+      className="flex max-w-[360px] flex-col items-center gap-2 px-6 text-center"
+      data-testid="screen-message"
+      data-notice={notice.icon}
+    >
       {icon}
-      <div className="text-base text-white/90">{notice.busy ? <ShimmerText className="[--ob-shimmer-ink:#fff]">{notice.title}</ShimmerText> : notice.title}</div>
+      <div className="text-base text-white/90">
+        {notice.busy ? <ShimmerText className="[--ob-shimmer-ink:#fff]">{notice.title}</ShimmerText> : notice.title}
+      </div>
       {(error ?? notice.body) && <div className="text-sm text-white/55">{error ?? notice.body}</div>}
       {action && (
         <div className="mt-2">

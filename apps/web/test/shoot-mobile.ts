@@ -11,8 +11,10 @@ import { join } from "node:path"
 import { type Browser, type BrowserContextOptions, chromium, type Locator, type Page } from "playwright-core"
 import { chromiumPath, screenshotDir, startMock } from "./shoot.ts"
 
-const IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
-const IPAD_UA = "Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
+const IOS_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
+const IPAD_UA =
+  "Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
 
 export interface Device {
   readonly name: string
@@ -22,18 +24,36 @@ export interface Device {
 }
 export const IPHONE: Device = {
   name: "iphone",
-  options: { viewport: { width: 393, height: 852 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IOS_UA },
+  options: {
+    viewport: { width: 393, height: 852 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: IOS_UA,
+  },
   insets: { top: 59, bottom: 34 },
 }
 /** The iPhone turned sideways (852 wide: the tablet layout). */
 export const IPHONE_LANDSCAPE: Device = {
   name: "iphone-landscape",
-  options: { viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: IOS_UA },
+  options: {
+    viewport: { width: 852, height: 393 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: IOS_UA,
+  },
   insets: { top: 0, bottom: 21 },
 }
 export const IPAD: Device = {
   name: "ipad",
-  options: { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: IPAD_UA },
+  options: {
+    viewport: { width: 820, height: 1180 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: IPAD_UA,
+  },
   insets: { top: 24, bottom: 20 },
 }
 
@@ -44,14 +64,23 @@ export interface DevicePage {
 }
 
 /** A fresh device context on `url` + `route` (theme also seeded for the first paint). */
-export const openDevice = async (browser: Browser, url: string, device: Device, theme: "dark" | "light", route = ""): Promise<DevicePage> => {
+export const openDevice = async (
+  browser: Browser,
+  url: string,
+  device: Device,
+  theme: "dark" | "light",
+  route = "",
+): Promise<DevicePage> => {
   const context = await browser.newContext({ ...device.options, colorScheme: theme })
   await context.addInitScript((t) => localStorage.setItem("openbot.theme", t), theme)
   const page = await context.newPage()
   page.setDefaultTimeout(10_000)
   try {
     const cdp = await context.newCDPSession(page)
-    await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets: { top: device.insets.top, bottom: device.insets.bottom, left: 0, right: 0 } } as never)
+    await cdp.send(
+      "Emulation.setSafeAreaInsetsOverride" as never,
+      { insets: { top: device.insets.top, bottom: device.insets.bottom, left: 0, right: 0 } } as never,
+    )
   } catch {
     // older Chromium: no safe-area emulation (env() resolves to 0)
   }
@@ -261,12 +290,16 @@ export const SCENES: ReadonlyArray<Scene> = [
       await page.getByTestId("chat-computer").tap()
       await page.getByTestId("computer-view").waitFor()
       // the bot's whole desktop (noVNC against the mock's fake RFB desktop), watching
-      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+      await page
+        .locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]')
+        .waitFor({ timeout: 10_000 })
       await page.getByTestId("landscape-hint").waitFor()
       await settle(page, 600)
       await shot()
       await page.getByTestId("control-pill").getByRole("button", { name: "Take control" }).tap()
-      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live][data-interactive]').waitFor({ timeout: 10_000 })
+      await page
+        .locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live][data-interactive]')
+        .waitFor({ timeout: 10_000 })
       await page.getByTestId("desktop-keyboard").waitFor()
       await settle(page, 600)
       await shot("control")
@@ -282,14 +315,17 @@ export const SCENES: ReadonlyArray<Scene> = [
       const card = page.locator('[data-card="handoff"][data-status="pending"]')
       // an earlier run answered the seeded hand-off: ask again
       await page.locator('[data-card="handoff"]').first().waitFor()
-      if ((await card.count()) === 0) await page.evaluate(() => fetch("/api/mock/takeover/bot_scout", { method: "POST" }))
+      if ((await card.count()) === 0)
+        await page.evaluate(() => fetch("/api/mock/takeover/bot_scout", { method: "POST" }))
       await card.waitFor()
       await card.scrollIntoViewIfNeeded()
       await card.locator('[data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
       await settle(page, 600)
       await shot("card")
       await card.getByRole("button", { name: "Take over" }).tap()
-      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live][data-interactive]').waitFor({ timeout: 10_000 })
+      await page
+        .locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live][data-interactive]')
+        .waitFor({ timeout: 10_000 })
       await page.getByTestId("handoff-banner").waitFor()
       await settle(page, 600)
       await shot("control")
@@ -306,7 +342,9 @@ export const SCENES: ReadonlyArray<Scene> = [
     route: "#/c/cnv_chief",
     run: async (page, shot) => {
       await page.getByTestId("chat-computer").tap()
-      await page.locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]').waitFor({ timeout: 10_000 })
+      await page
+        .locator('[data-testid="computer-view"] [data-testid="desktop-screen"][data-live]')
+        .waitFor({ timeout: 10_000 })
       await settle(page, 600)
       await shot()
     },
@@ -334,7 +372,11 @@ export const SCENES: ReadonlyArray<Scene> = [
       await page.getByRole("button", { name: "Account" }).tap()
       await page.getByRole("menuitem", { name: /Settings/ }).tap()
       await page.getByTestId("settings-nav-computers").tap()
-      await page.getByTestId("node-row").filter({ hasText: "vps-1" }).getByRole("button", { name: "Show details" }).tap()
+      await page
+        .getByTestId("node-row")
+        .filter({ hasText: "vps-1" })
+        .getByRole("button", { name: "Show details" })
+        .tap()
       await page.getByTestId("desktop-setup").scrollIntoViewIfNeeded()
       await settle(page)
       await shot()
@@ -366,8 +408,17 @@ export const SCENES: ReadonlyArray<Scene> = [
     route: "#/c/cnv_sales",
     run: async (page, shot) => {
       // a full-screen sheet, opened at the tapped run of messages
-      await page.getByTestId("transcript").locator('button[data-exchange="bot_scout"]').filter({ hasText: "3 messages with" }).nth(1).tap()
-      await page.getByRole("dialog", { name: "Sales Outreach and Research Scout" }).locator("[data-exchange-item][data-target]").first().waitFor()
+      await page
+        .getByTestId("transcript")
+        .locator('button[data-exchange="bot_scout"]')
+        .filter({ hasText: "3 messages with" })
+        .nth(1)
+        .tap()
+      await page
+        .getByRole("dialog", { name: "Sales Outreach and Research Scout" })
+        .locator("[data-exchange-item][data-target]")
+        .first()
+        .waitFor()
       await settle(page)
       await shot()
     },
@@ -438,7 +489,11 @@ export const SCENES: ReadonlyArray<Scene> = [
 
 if (import.meta.main) {
   const args = process.argv.slice(2)
-  const themes: ReadonlyArray<"dark" | "light"> = args.includes("--light") ? ["light"] : args.includes("--dark") ? ["dark"] : ["dark", "light"]
+  const themes: ReadonlyArray<"dark" | "light"> = args.includes("--light")
+    ? ["light"]
+    : args.includes("--dark")
+      ? ["dark"]
+      : ["dark", "light"]
   const wanted = args.filter((a) => !a.startsWith("--"))
   const mock = await startMock(0, ["--fast"])
   let emptyMock: Awaited<ReturnType<typeof startMock>> | undefined
@@ -448,9 +503,17 @@ if (import.meta.main) {
     for (const scene of SCENES.filter((s) => wanted.length === 0 || wanted.some((w) => s.name.startsWith(w)))) {
       for (const theme of themes) {
         if (scene.empty) emptyMock ??= await startMock(0, ["--fast", "--empty"])
-        const { page, errors, close } = await openDevice(browser, scene.empty ? emptyMock!.url : mock.url, scene.device, theme, scene.route ?? "")
+        const { page, errors, close } = await openDevice(
+          browser,
+          scene.empty ? emptyMock!.url : mock.url,
+          scene.device,
+          theme,
+          scene.route ?? "",
+        )
         const shot = async (suffix?: string) => {
-          await page.screenshot({ path: join(screenshotDir, `mobile-${scene.name}${suffix ? `-${suffix}` : ""}-${theme}.png`) })
+          await page.screenshot({
+            path: join(screenshotDir, `mobile-${scene.name}${suffix ? `-${suffix}` : ""}-${theme}.png`),
+          })
         }
         try {
           await scene.run(page, shot)
@@ -458,7 +521,9 @@ if (import.meta.main) {
         } catch (e) {
           failed++
           await shot("FAILED").catch(() => {})
-          console.log(`FAIL ${scene.name} (${theme}): ${(e as Error).message.split("\n")[0]}${errors.length ? `  errors: ${errors.join(" | ")}` : ""}`)
+          console.log(
+            `FAIL ${scene.name} (${theme}): ${(e as Error).message.split("\n")[0]}${errors.length ? `  errors: ${errors.join(" | ")}` : ""}`,
+          )
         } finally {
           await close()
         }

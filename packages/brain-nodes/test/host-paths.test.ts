@@ -34,7 +34,7 @@ describe("HostPathsLive", () => {
 
   test("the local node answers home and repo roots; remote nodes answer nothing", async () => {
     const out = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const host = yield* HostPaths
         return {
           home: host.home("node_local" as NodeId),
@@ -48,10 +48,9 @@ describe("HostPathsLive", () => {
   })
 
   test("localProjectRoots: `~` expanded, invalid / duplicate / whole-home entries dropped", () => {
-    expect(localProjectRoots(["~/projects", "/srv/code/", "/srv/code", "/", "relative", "~", "/home/me"], "/home/me")).toEqual([
-      "/home/me/projects",
-      "/srv/code",
-    ])
+    expect(
+      localProjectRoots(["~/projects", "/srv/code/", "/srv/code", "/", "relative", "~", "/home/me"], "/home/me"),
+    ).toEqual(["/home/me/projects", "/srv/code"])
   })
 })
 
@@ -67,7 +66,7 @@ describe("projectFolderRoots (the local node's extra roots)", () => {
   test("shared ∪ per-bot from the roster snapshot, then live changes", async () => {
     const out = await Effect.runPromise(
       Effect.scoped(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const items = yield* Queue.unbounded<KnownRosterStreamItem>()
           const cursor = { epoch: "r", sequence: 0 }
           yield* Queue.offer(items, {
@@ -83,9 +82,17 @@ describe("projectFolderRoots (the local node's extra roots)", () => {
           const hub = Layer.mock(LiveHub, { subscribeRoster: () => Stream.fromQueue(items) })
           const roots = (yield* projectFolderRoots.pipe(Effect.provide(hub)))!
           const initial = { ada: roots(ada.id), bo: roots(bo.id) }
-          yield* Queue.offer(items, { kind: "change", cursor, change: { type: "bot.upserted", bot: { ...bo, projectFolders: ["/srv/bo"] } } })
+          yield* Queue.offer(items, {
+            kind: "change",
+            cursor,
+            change: { type: "bot.upserted", bot: { ...bo, projectFolders: ["/srv/bo"] } },
+          })
           yield* Queue.offer(items, { kind: "change", cursor, change: { type: "bot.removed", botId: ada.id } })
-          yield* Queue.offer(items, { kind: "change", cursor, change: { type: "settings.updated", settings: DEFAULT_SETTINGS } })
+          yield* Queue.offer(items, {
+            kind: "change",
+            cursor,
+            change: { type: "settings.updated", settings: DEFAULT_SETTINGS },
+          })
           for (let i = 0; i < 100 && roots(bo.id).join() !== "/srv/bo"; i++) yield* Effect.yieldNow
           return { initial, later: { ada: roots(ada.id), bo: roots(bo.id) } }
         }),

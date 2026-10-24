@@ -129,7 +129,7 @@ const isAlive = (pid: number): boolean => {
  * same process (a `bun --hot` reload) may retake it.
  */
 export const DataDirLockLive: Layer.Layer<never, StartupError, DataDir> = Layer.effectDiscard(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const dataDir = yield* DataDir
     const lockPath = `${dataDir.root}/brain.pid`
     yield* Effect.acquireRelease(
@@ -150,9 +150,10 @@ export const DataDirLockLive: Layer.Layer<never, StartupError, DataDir> = Layer.
         },
         catch: (error) =>
           new StartupError({
-            message: error instanceof Error && error.message.startsWith("another OpenBot brain")
-              ? error.message
-              : `cannot use the data dir ${dataDir.root}: ${error instanceof Error ? error.message : String(error)}`,
+            message:
+              error instanceof Error && error.message.startsWith("another OpenBot brain")
+                ? error.message
+                : `cannot use the data dir ${dataDir.root}: ${error instanceof Error ? error.message : String(error)}`,
           }),
       }),
       () =>
@@ -174,13 +175,17 @@ export class BootReport extends Context.Service<BootReport, BootRecoveryReport>(
 
 export const BootReportLive: Layer.Layer<BootReport, StartupError, BootRecovery> = Layer.effect(
   BootReport,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const recovery = yield* BootRecovery
     const report = yield* recovery.run.pipe(
       Effect.mapError((error) => new StartupError({ message: `boot recovery failed: ${error.message}` })),
     )
-    const changed = report.killedProcesses.length + report.interruptedTurns.length + report.expiredRequests.length +
-      report.interruptedRuns.length + report.interruptedTasks.length
+    const changed =
+      report.killedProcesses.length +
+      report.interruptedTurns.length +
+      report.expiredRequests.length +
+      report.interruptedRuns.length +
+      report.interruptedTasks.length
     if (changed > 0) {
       yield* Effect.logInfo("Recovered from the previous run", {
         killedProcesses: report.killedProcesses.length,
@@ -196,7 +201,7 @@ export const BootReportLive: Layer.Layer<BootReport, StartupError, BootRecovery>
 
 /** Step 7: `Orchestrator.recover(report)` (before any runner, scheduler or listener starts). */
 export const RecoveredLive: Layer.Layer<never, never, BootReport | Orchestrator> = Layer.effectDiscard(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const report = yield* BootReport
     yield* (yield* Orchestrator).recover(report)
   }),
@@ -208,7 +213,7 @@ export const RecoveredLive: Layer.Layer<never, never, BootReport | Orchestrator>
  * where they were (`Orchestrator.resume`), cut-off background tasks run again (`BackgroundTasks.recover`).
  */
 export const ResumeLive: Layer.Layer<never, never, BootReport | Orchestrator | BackgroundTasks> = Layer.effectDiscard(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const report = yield* BootReport
     yield* (yield* Orchestrator).resume(report)
     yield* (yield* BackgroundTasks).recover(report)
@@ -221,11 +226,13 @@ export const ResumeLive: Layer.Layer<never, never, BootReport | Orchestrator | B
  * Searches meanwhile report `indexing`.
  */
 export const SearchIndexLive: Layer.Layer<never, never, SearchRepo> = Layer.effectDiscard(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const search = yield* SearchRepo
     yield* Effect.forkScoped(
       search.ensure.pipe(
-        Effect.tap((report) => report.rebuilt || report.indexed > 0 ? Effect.logInfo("Message search index ready", report) : Effect.void),
+        Effect.tap((report) =>
+          report.rebuilt || report.indexed > 0 ? Effect.logInfo("Message search index ready", report) : Effect.void,
+        ),
         Effect.catchCause((cause) => Effect.logError("Message search index failed", cause)),
       ),
     )
@@ -239,7 +246,7 @@ const NODE_ENTRY = fileURLToPath(new URL("../../node/src/main.ts", import.meta.u
 
 export const BrainNodesConfigLive: Layer.Layer<BrainNodesConfig, never, ServerConfig | PublicListener> = Layer.effect(
   BrainNodesConfig,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const config = yield* ServerConfig
     const listener = yield* PublicListener
     return makeBrainNodesConfig({
@@ -255,7 +262,7 @@ export const BrainNodesConfigLive: Layer.Layer<BrainNodesConfig, never, ServerCo
 )
 
 export const WebAuthLive: Layer.Layer<WebAuth, never, DataDir | PublicListener> = Layer.unwrap(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const dataDir = yield* DataDir
     const listener = yield* PublicListener
     return WebAuthLayer({
@@ -271,7 +278,8 @@ const BrainIdentityLive: Layer.Layer<BrainIdentity, StartupError, DataDir> = Lay
   Effect.flatMap(DataDir, (dataDir) =>
     loadOrCreateIdentity(dataDir.brainIdentity).pipe(
       Effect.mapError((error) => new StartupError({ message: `brain identity (${error.path}): ${error.message}` })),
-    )),
+    ),
+  ),
 )
 
 // ============================================================================ step 8: drivers
@@ -281,7 +289,9 @@ export const harnessDrivers = (config: ServerConfigShape): Layer.Layer<never, ne
   const layers: Array<Layer.Layer<never, never, HarnessRegistry | DataDir>> = [FakeHarnessLive]
   if (config.harnesses.includes("claude")) {
     // default: the SDK's bundled CLI (version-matched with the SDK); `--claude-path` overrides
-    layers.push(ClaudeHarnessLive({ executable: config.claudePath ?? "bundled", clientApp: `openbot/${OPENBOT_VERSION}` }))
+    layers.push(
+      ClaudeHarnessLive({ executable: config.claudePath ?? "bundled", clientApp: `openbot/${OPENBOT_VERSION}` }),
+    )
   }
   if (config.harnesses.includes("codex")) layers.push(CodexHarnessLive({ clientVersion: OPENBOT_VERSION }))
   if (config.harnesses.includes("opencode")) layers.push(OpenCodeHarnessLive())
@@ -297,54 +307,56 @@ export interface ReadyOptions {
 
 /** Prints the login URL; on shutdown hands work off, stops runners and disconnects nodes before the listeners go. */
 export const ReadyLive = (options?: ReadyOptions) =>
-  Layer.effectDiscard(Effect.gen(function*() {
-    const config = yield* ServerConfig
-    const listener = yield* PublicListener
-    const internal = yield* InternalListener
-    const auth = yield* WebAuth
-    const orchestrator = yield* Orchestrator
-    const registry = yield* NodeRegistry
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const config = yield* ServerConfig
+      const listener = yield* PublicListener
+      const internal = yield* InternalListener
+      const auth = yield* WebAuth
+      const orchestrator = yield* Orchestrator
+      const registry = yield* NodeRegistry
 
-    yield* Effect.addFinalizer(() =>
-      Effect.gen(function*() {
-        yield* Effect.logInfo("OpenBot is shutting down")
-        setShutdownPhase("stopping harness sessions")
-        // What runs or waits is saved for the next boot first, then the sessions stop. Budgeted: the
-        // whole shutdown has OPENBOT_SHUTDOWN_TIMEOUT_MS (default 5 s) before the watchdog kills
-        // every child process group (main.ts, shutdown.ts)
-        yield* orchestrator.handOff.pipe(
-          Effect.timeoutOrElse({
-            duration: "3 seconds",
-            orElse: () => Effect.logWarning("Some harness sessions did not stop within 3 s"),
-          }),
-        )
-        setShutdownPhase("closing node connections")
-        yield* registry.closeAll(1001, "brain shutting down")
-        setShutdownPhase("releasing services (listeners, local node, harness drivers, SQLite)")
-      }).pipe(Effect.catchCause((cause) => Effect.logWarning("Shutdown step failed", cause)))
-    )
+      yield* Effect.addFinalizer(() =>
+        Effect.gen(function* () {
+          yield* Effect.logInfo("OpenBot is shutting down")
+          setShutdownPhase("stopping harness sessions")
+          // What runs or waits is saved for the next boot first, then the sessions stop. Budgeted: the
+          // whole shutdown has OPENBOT_SHUTDOWN_TIMEOUT_MS (default 5 s) before the watchdog kills
+          // every child process group (main.ts, shutdown.ts)
+          yield* orchestrator.handOff.pipe(
+            Effect.timeoutOrElse({
+              duration: "3 seconds",
+              orElse: () => Effect.logWarning("Some harness sessions did not stop within 3 s"),
+            }),
+          )
+          setShutdownPhase("closing node connections")
+          yield* registry.closeAll(1001, "brain shutting down")
+          setShutdownPhase("releasing services (listeners, local node, harness drivers, SQLite)")
+        }).pipe(Effect.catchCause((cause) => Effect.logWarning("Shutdown step failed", cause))),
+      )
 
-    yield* Effect.logInfo("OpenBot started", {
-      version: OPENBOT_VERSION,
-      dataDir: config.dataDir,
-      public: listener.selfBase,
-      internal: internal.baseUrl,
-      web: listener.web.mode,
-      harnesses: config.harnesses,
-      localNode: config.localNode,
-    })
-    if (options?.quiet !== true) {
-      const token = encodeURIComponent(auth.ownerToken)
-      const lines = [
-        "",
-        `OpenBot is running → ${listener.loginBase}/?token=${token}`,
-        ...listener.publicOrigins.map((origin) => `                also at ${origin}/?token=${token}`),
-        `Data: ${config.dataDir}${config.dev ? "  (dev mode)" : ""}`,
-        "",
-      ]
-      console.log(lines.join("\n"))
-    }
-  }))
+      yield* Effect.logInfo("OpenBot started", {
+        version: OPENBOT_VERSION,
+        dataDir: config.dataDir,
+        public: listener.selfBase,
+        internal: internal.baseUrl,
+        web: listener.web.mode,
+        harnesses: config.harnesses,
+        localNode: config.localNode,
+      })
+      if (options?.quiet !== true) {
+        const token = encodeURIComponent(auth.ownerToken)
+        const lines = [
+          "",
+          `OpenBot is running → ${listener.loginBase}/?token=${token}`,
+          ...listener.publicOrigins.map((origin) => `                also at ${origin}/?token=${token}`),
+          `Data: ${config.dataDir}${config.dev ? "  (dev mode)" : ""}`,
+          "",
+        ]
+        console.log(lines.join("\n"))
+      }
+    }),
+  )
 
 // ============================================================================ the whole brain
 
@@ -369,9 +381,10 @@ export interface ServerOptions {
  */
 export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) => {
   // `--max-file-mb`: the send_file cap (core's `SendFileLimits` reference; default 200 MB)
-  const limits = config.maxFileBytes === undefined
-    ? Layer.empty
-    : Layer.succeed(SendFileLimits, { maxFileBytes: config.maxFileBytes, maxFiles: MAX_SENT_FILES })
+  const limits =
+    config.maxFileBytes === undefined
+      ? Layer.empty
+      : Layer.succeed(SendFileLimits, { maxFileBytes: config.maxFileBytes, maxFiles: MAX_SENT_FILES })
   const base = Layer.mergeAll(ServerConfig.layer(config), DataDir.layer(config.dataDir), IdGen.layer, limits)
   const listeners = Layer.mergeAll(PublicListenerLive, InternalListenerLive)
   // HostPathsLive: the local computer's home and git repo roots (project folders, "Allow in ‹folder›").
@@ -415,12 +428,19 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
   )
   // steps 6-10: core services, recovery, drivers, local node
   const services = SkillServiceLive.pipe(
-    Layer.provide(options?.skillDirectory ?? SkillsShLive(config.skillsShUrl === undefined ? undefined : { baseUrl: config.skillsShUrl })), // skills.sh import (D5.5)
+    Layer.provide(
+      options?.skillDirectory ??
+        SkillsShLive(config.skillsShUrl === undefined ? undefined : { baseUrl: config.skillsShUrl }),
+    ), // skills.sh import (D5.5)
     Layer.provideMerge(BotServiceLive),
   ).pipe(
     Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive, SlackShortcutsLive)), // 10 (+ Slack's "Send to OpenBot")
     // voice calls (experiment): <data>/voice, and voice input's Parakeet + sherpa-onnx
-    Layer.provideMerge(VoiceCallsLive(options?.voiceCalls ?? { dir: makeDataDir(config.dataDir).voice, sttDir: makeDataDir(config.dataDir).stt })),
+    Layer.provideMerge(
+      VoiceCallsLive(
+        options?.voiceCalls ?? { dir: makeDataDir(config.dataDir).voice, sttDir: makeDataDir(config.dataDir).stt },
+      ),
+    ),
     Layer.provideMerge(LocalNodeDaemonLive(options?.localNode)), // 9
     Layer.provideMerge(HarnessProfilesLayer(options?.profiles)), // 8b: added accounts (profiles.ts)
     Layer.provideMerge(options?.drivers ?? harnessDrivers(config)), // 8
@@ -439,7 +459,8 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
   // steps 11-14: gateways, both listeners' routes, ready. The two `HttpRouter.serve` layers are
   // SIBLINGS: a serve layer's output context carries its router (and memo map), so stacking one on
   // the other would mount every route on both listeners.
-  return Layer.mergeAll(ResumeLive, DrainOnSignalLive, SearchIndexLive).pipe( // 15
+  return Layer.mergeAll(ResumeLive, DrainOnSignalLive, SearchIndexLive).pipe(
+    // 15
     Layer.provideMerge(ReadyLive({ quiet: options?.quiet })), // 14
     Layer.provideMerge(Layer.mergeAll(internalServed, publicServed)), // 13
     Layer.provideMerge(RpcHandlersLive),

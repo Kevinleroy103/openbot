@@ -36,11 +36,16 @@ export const joinChunks = (chunks: ReadonlyArray<Float32Array>): Float32Array =>
 export const toBase64 = (bytes: Uint8Array): string => {
   const CHUNK = 0x8000
   let binary = ""
-  for (let offset = 0; offset < bytes.length; offset += CHUNK) binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK))
+  for (let offset = 0; offset < bytes.length; offset += CHUNK)
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK))
   return btoa(binary)
 }
 
-export const insertDictation = (draft: string, caret: number, spoken: string): { readonly text: string; readonly caret: number } => {
+export const insertDictation = (
+  draft: string,
+  caret: number,
+  spoken: string,
+): { readonly text: string; readonly caret: number } => {
   if (spoken.length === 0) return { text: draft, caret }
   const before = draft.slice(0, caret)
   const after = draft.slice(caret)

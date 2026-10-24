@@ -147,9 +147,7 @@ export const makeToolCallEntry = (
 })
 
 /** An approval card for `requestId` (pending). */
-export const makeCardEntry = (
-  overrides?: Partial<Mutable<TranscriptEntryOf<"card">>>,
-): TranscriptEntryOf<"card"> => ({
+export const makeCardEntry = (overrides?: Partial<Mutable<TranscriptEntryOf<"card">>>): TranscriptEntryOf<"card"> => ({
   id: entryId("ent_card"),
   conversationId: conversationId("cnv_test"),
   revision: 0,

@@ -2,7 +2,15 @@
  * Test harness: the real gateway + real `McpBindingIssuerLive` over core's in-memory ports and
  * service fakes, served by `Bun.serve` on an ephemeral port, driven by the MCP SDK `Client`.
  */
-import type { Bot, BotId, ConversationId, EntryId, HarnessRequestResolution, NodeSummary, Settings } from "@openbot/contracts"
+import type {
+  Bot,
+  BotId,
+  ConversationId,
+  EntryId,
+  HarnessRequestResolution,
+  NodeSummary,
+  Settings,
+} from "@openbot/contracts"
 import {
   BotRepo,
   BotService,
@@ -62,7 +70,9 @@ export interface Harness {
   readonly run: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A>
   readonly messagingCalls: Array<MessagingCall>
   /** Mints a token (real issuer); `revoke` closes its scope. */
-  readonly issue: (claims: Partial<McpClaims>) => Promise<{ readonly binding: McpBinding; readonly revoke: () => Promise<void> }>
+  readonly issue: (
+    claims: Partial<McpClaims>,
+  ) => Promise<{ readonly binding: McpBinding; readonly revoke: () => Promise<void> }>
   readonly connect: (binding: McpBinding) => Promise<Client>
   readonly close: () => Promise<void>
 }
@@ -87,7 +97,8 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
     port: 0,
     hostname: "127.0.0.1",
     idleTimeout: 0,
-    fetch: (request) => (gatewayHandle === undefined ? new Response("starting", { status: 503 }) : gatewayHandle(request)),
+    fetch: (request) =>
+      gatewayHandle === undefined ? new Response("starting", { status: 503 }) : gatewayHandle(request),
   })
   const baseUrl = `http://127.0.0.1:${server.port}`
 
@@ -104,7 +115,11 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
     react: (ctx, input) =>
       Effect.sync(() => {
         record("react", ctx, input)
-        return { conversationId: ctx.claims.conversationId, entryId: (input.messageId ?? "ent_trigger") as EntryId, emoji: input.emoji }
+        return {
+          conversationId: ctx.claims.conversationId,
+          entryId: (input.messageId ?? "ent_trigger") as EntryId,
+          emoji: input.emoji,
+        }
       }),
     messageBot: (ctx, input) =>
       Effect.sync(() => {
@@ -125,7 +140,12 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
     handoffTask: (ctx, input) =>
       Effect.sync(() => {
         record("handoffTask", ctx, input)
-        return { recipientBotId: BOT_B, conversationId: botB.directConversationId, entryId: "ent_3" as EntryId, deliveryId: "dlv_h" }
+        return {
+          recipientBotId: BOT_B,
+          conversationId: botB.directConversationId,
+          entryId: "ent_3" as EntryId,
+          deliveryId: "dlv_h",
+        }
       }),
   })
   const BotServiceTest = Layer.mock(BotService, {
@@ -155,7 +175,10 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
       }),
     deleteSection: (id) =>
       Effect.sync(() => {
-        sections.splice(sections.findIndex((x) => x.id === id), 1)
+        sections.splice(
+          sections.findIndex((x) => x.id === id),
+          1,
+        )
         record("deleteSection", { claims: undefined as never }, { id })
       }),
     create: (input, options) =>
@@ -177,15 +200,19 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
     TestPorts({ nodes: options?.nodes ?? [localNodeSummary(), remoteNodeSummary(REMOTE)] }),
     InternalAddress.layer(baseUrl),
   )
-  const orchestrator = OrchestratorFake.layer(options?.toolApproval === undefined ? undefined : { toolApproval: options.toolApproval })
-  const messaging = options?.realMessaging === true
-    ? MessagingLive.pipe(
-      Layer.provideMerge(Layer.mergeAll(orchestrator, ConversationServiceFake.layer, SettingsServiceFake.layer())),
-      Layer.provideMerge(LiveHubFake.layer),
-    )
-    : Layer.merge(MessagingTest, orchestrator)
+  const orchestrator = OrchestratorFake.layer(
+    options?.toolApproval === undefined ? undefined : { toolApproval: options.toolApproval },
+  )
+  const messaging =
+    options?.realMessaging === true
+      ? MessagingLive.pipe(
+          Layer.provideMerge(Layer.mergeAll(orchestrator, ConversationServiceFake.layer, SettingsServiceFake.layer())),
+          Layer.provideMerge(LiveHubFake.layer),
+        )
+      : Layer.merge(MessagingTest, orchestrator)
   // the real SearchService over the in-memory repositories (the search tools' access rules live there)
-  const settings = options?.realMessaging === true ? Layer.empty : SettingsServiceFake.layer({ initial: options?.settings ?? {} })
+  const settings =
+    options?.realMessaging === true ? Layer.empty : SettingsServiceFake.layer({ initial: options?.settings ?? {} })
   const services = Layer.mergeAll(
     ApprovalServiceFake.layer(),
     BackgroundTasksFake.layer(),
@@ -224,7 +251,9 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
       const scope = await run(Scope.make())
       scopes.push(scope)
       const binding = await run(
-        Effect.flatMap(McpBindingIssuer, (service) => service.issue(makeClaims({ botId: BOT_A, ...claims }))).pipe(Scope.provide(scope)),
+        Effect.flatMap(McpBindingIssuer, (service) => service.issue(makeClaims({ botId: BOT_A, ...claims }))).pipe(
+          Scope.provide(scope),
+        ),
       )
       return { binding, revoke: () => run(Scope.close(scope, Exit.void)) }
     },
@@ -250,7 +279,8 @@ export const startHarness = async (options?: HarnessOptions): Promise<Harness> =
 export const setNodeClient = (h: Harness, nodeId: NodeId, client: Partial<Record<string, unknown>>) =>
   h.run(Effect.flatMap(NodeDirectoryFake, (fake) => fake.setClient(nodeId, client as unknown as NodeClient)))
 
-export const upsertNode = (h: Harness, node: NodeSummary) => h.run(Effect.flatMap(NodeDirectoryFake, (fake) => fake.upsert(node)))
+export const upsertNode = (h: Harness, node: NodeSummary) =>
+  h.run(Effect.flatMap(NodeDirectoryFake, (fake) => fake.upsert(node)))
 
 export const orchestratorCalls = (h: Harness) => h.run(Effect.flatMap(OrchestratorFake, (fake) => fake.calls))
 export const toolRequests = (h: Harness) => h.run(Effect.flatMap(ApprovalServiceFake, (fake) => fake.toolRequests))

@@ -57,7 +57,10 @@ export const readBounded = async (response: Response): Promise<BoundedRead> => {
   return { kind: "text", text: new TextDecoder("utf-8").decode(bytes) }
 }
 
-export function FilePreview({ attachment, onClose }: {
+export function FilePreview({
+  attachment,
+  onClose,
+}: {
   readonly attachment: Attachment
   readonly onClose: () => void
 }): ReactNode {
@@ -66,7 +69,9 @@ export function FilePreview({ attachment, onClose }: {
   // roster's bots so `@Bot` becomes an avatar + coloured span. Without it the mention rule is not
   // even active and the text degrades to plain.
   const roster = useRoster()
-  const [state, setState] = useState<PreviewState>(() => (previewTooLarge(attachment.byteSize) ? { kind: "too-large" } : { kind: "loading" }))
+  const [state, setState] = useState<PreviewState>(() =>
+    previewTooLarge(attachment.byteSize) ? { kind: "too-large" } : { kind: "loading" },
+  )
   const oversized = previewTooLarge(attachment.byteSize)
 
   useEffect(() => {
@@ -119,7 +124,13 @@ export function FilePreview({ attachment, onClose }: {
   )
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} width="min(720px, calc(100vw - 32px))" label={attachment.name} className="ob-phone-full">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      width="min(720px, calc(100vw - 32px))"
+      label={attachment.name}
+      className="ob-phone-full"
+    >
       <div data-testid="file-preview" data-preview-state={state.kind} className="flex min-h-0 flex-1 flex-col">
         <DialogHeader title={attachment.name} description={meta || undefined} onClose={onClose} />
         <DialogBody className="ob-md-preview">
@@ -128,14 +139,18 @@ export function FilePreview({ attachment, onClose }: {
               <Spinner size={16} label="Loading" />
             </div>
           )}
-          {state.kind === "ready" && (kind === "markdown" ? <Markdown text={state.text} bots={roster.bots} /> : (
-            <pre className="ob-md-preview-code">
-              <code>{state.text}</code>
-            </pre>
-          ))}
+          {state.kind === "ready" &&
+            (kind === "markdown" ? (
+              <Markdown text={state.text} bots={roster.bots} />
+            ) : (
+              <pre className="ob-md-preview-code">
+                <code>{state.text}</code>
+              </pre>
+            ))}
           {state.kind === "too-large" && (
             <p className="py-6 text-center text-sm text-fg-secondary">
-              This file is too large to preview (limit {Math.round(MAX_PREVIEW_BYTES / 1024 / 1024)} MB). Download it to view it.
+              This file is too large to preview (limit {Math.round(MAX_PREVIEW_BYTES / 1024 / 1024)} MB). Download it to
+              view it.
             </p>
           )}
           {state.kind === "error" && <p className="py-6 text-center text-sm text-fg-secondary">{state.message}</p>}

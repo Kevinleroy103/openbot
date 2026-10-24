@@ -9,7 +9,9 @@ import { SettingsRow } from "./layout.tsx"
 const loopback = (origin: string) => /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)
 
 export function IphoneAppRow(): ReactNode {
-  const [code, setCode] = useState<{ readonly link: string; readonly svg: string; readonly expiresAt: number } | undefined>()
+  const [code, setCode] = useState<
+    { readonly link: string; readonly svg: string; readonly expiresAt: number } | undefined
+  >()
   const [error, setError] = useState<string | undefined>()
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -24,7 +26,12 @@ export function IphoneAppRow(): ReactNode {
       const body = (await res.json()) as { code?: string; expiresInSeconds?: number; error?: string }
       if (!res.ok || !body.code) throw new Error(body.error ?? `OpenBot answered ${res.status}`)
       const link = `openbot://connect?origin=${encodeURIComponent(location.origin)}&code=${encodeURIComponent(body.code)}`
-      const svg = await QRCode.toString(link, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#121212", light: "#ffffff" } })
+      const svg = await QRCode.toString(link, {
+        type: "svg",
+        margin: 1,
+        errorCorrectionLevel: "M",
+        color: { dark: "#121212", light: "#ffffff" },
+      })
       setCode({ link, svg, expiresAt: Date.now() + (body.expiresInSeconds ?? 300) * 1000 })
       setNow(Date.now())
     } catch (e) {
@@ -53,9 +60,16 @@ export function IphoneAppRow(): ReactNode {
             // generated from our own link by the qrcode library
             dangerouslySetInnerHTML={{ __html: code.svg }}
           />
-          <span className="text-sm text-fg-secondary">{expired ? "This code expired." : `Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`}</span>
+          <span className="text-sm text-fg-secondary">
+            {expired
+              ? "This code expired."
+              : `Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`}
+          </span>
           {loopback(location.origin) && (
-            <span className="text-center text-sm text-warn-fg">This page is open on this computer's own address, which your iPhone can't reach. Open OpenBot through its network address and show the code there.</span>
+            <span className="text-center text-sm text-warn-fg">
+              This page is open on this computer's own address, which your iPhone can't reach. Open OpenBot through its
+              network address and show the code there.
+            </span>
           )}
           <div className="w-full">
             <CommandBlock command={code.link} />

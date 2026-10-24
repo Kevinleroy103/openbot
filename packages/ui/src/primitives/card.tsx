@@ -57,11 +57,30 @@ const toneClass: Record<StatusTone, string> = {
   accent: "bg-accent-soft text-accent-fg",
   neutral: "bg-secondary text-fg-secondary",
 }
-const toneDot: Record<StatusTone, string> = { warn: "bg-warn", success: "bg-success", danger: "bg-danger", accent: "bg-accent", neutral: "bg-icon-tertiary" }
+const toneDot: Record<StatusTone, string> = {
+  warn: "bg-warn",
+  success: "bg-success",
+  danger: "bg-danger",
+  accent: "bg-accent",
+  neutral: "bg-icon-tertiary",
+}
 
-export function StatusPill({ tone = "neutral", children, dot = false, spinner = false, className }: StatusPillProps): ReactNode {
+export function StatusPill({
+  tone = "neutral",
+  children,
+  dot = false,
+  spinner = false,
+  className,
+}: StatusPillProps): ReactNode {
   return (
-    <span role="status" className={cn("inline-flex h-6 shrink-0 animate-fade-in items-center gap-1.5 rounded-full px-2.5 text-sm whitespace-nowrap", toneClass[tone], className)}>
+    <span
+      role="status"
+      className={cn(
+        "inline-flex h-6 shrink-0 animate-fade-in items-center gap-1.5 rounded-full px-2.5 text-sm whitespace-nowrap",
+        toneClass[tone],
+        className,
+      )}
+    >
       {spinner ? <Spinner size={12} /> : dot ? <span className={cn("size-1.5 rounded-full", toneDot[tone])} /> : null}
       {children}
     </span>
@@ -104,7 +123,15 @@ export interface CardHeaderProps {
   readonly className?: string
 }
 
-export function CardHeader({ title, subtitle, status, icon, onClose, closeLabel = "Dismiss", className }: CardHeaderProps): ReactNode {
+export function CardHeader({
+  title,
+  subtitle,
+  status,
+  icon,
+  onClose,
+  closeLabel = "Dismiss",
+  className,
+}: CardHeaderProps): ReactNode {
   return (
     <div className={cn("flex items-start gap-2", className)}>
       {icon && <span className="mt-0.5 shrink-0">{icon}</span>}
@@ -127,14 +154,27 @@ export function CardHeader({ title, subtitle, status, icon, onClose, closeLabel 
   )
 }
 
-export function CardBody({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
+export function CardBody({
+  children,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
   return <div className={cn("text-lg text-fg", className)}>{children}</div>
 }
 
 /** "View the full request ›" style link inside cards. */
 export function CardLink({ children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>): ReactNode {
   return (
-    <button type="button" className={cn("inline-flex w-fit items-center gap-0.5 text-base text-fg-secondary transition-colors hover:text-fg", className)} {...rest}>
+    <button
+      type="button"
+      className={cn(
+        "inline-flex w-fit items-center gap-0.5 text-base text-fg-secondary transition-colors hover:text-fg",
+        className,
+      )}
+      {...rest}
+    >
       {children}
       <Icon icon={ChevronRight} size="sm" />
     </button>
@@ -142,14 +182,26 @@ export function CardLink({ children, className, ...rest }: ButtonHTMLAttributes<
 }
 
 /** Card footer: buttons start-aligned; put a `ms-auto` element for a right-aligned tertiary action. */
-export function CardActions({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
+export function CardActions({
+  children,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
   return <div className={cn("flex flex-wrap items-center gap-2 pt-1", className)}>{children}</div>
 }
 
 // ------------------------------------------------------------------------------------------- Sheet
 
 /** Inner white sheet in a card: radius 10, rows split by hairlines. */
-export function Sheet({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
+export function Sheet({
+  children,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
   return (
     <div
       className={cn(
@@ -169,7 +221,15 @@ export interface SheetRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /** Clickable sheet row (question option, connector row). */
-export function SheetRow({ leading, trailing, selected, className, children, type = "button", ...rest }: SheetRowProps): ReactNode {
+export function SheetRow({
+  leading,
+  trailing,
+  selected,
+  className,
+  children,
+  type = "button",
+  ...rest
+}: SheetRowProps): ReactNode {
   return (
     <button
       type={type}
@@ -198,7 +258,15 @@ export function OptionRow({ optionKey, children, ...rest }: SheetRowProps & { re
 }
 
 /** Label / value row inside a sheet (email draft From/To, harness details). */
-export function SheetField({ label, children, className }: { readonly label: ReactNode; readonly children: ReactNode; readonly className?: string }): ReactNode {
+export function SheetField({
+  label,
+  children,
+  className,
+}: {
+  readonly label: ReactNode
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
   return (
     <div className={cn("flex min-h-[38px] items-center gap-3 px-3 py-2 text-base", className)}>
       <span className="w-20 shrink-0 text-fg-secondary">{label}</span>

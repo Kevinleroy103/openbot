@@ -61,7 +61,7 @@ export const makeBrainSideHandlers: Effect.Effect<
   BrainSideHandlers,
   never,
   ApprovalService | NodeRegistry | StreamBroker | BotRepo | InternalAddress | Scope.Scope
-> = Effect.gen(function*() {
+> = Effect.gen(function* () {
   const approvals = yield* ApprovalService
   const registry = yield* NodeRegistry
   const broker = yield* StreamBroker
@@ -74,7 +74,7 @@ export const makeBrainSideHandlers: Effect.Effect<
     kind === "mcp-http" ? Effect.map(internal.baseUrl, targetFromUrl) : Effect.succeed(undefined)
 
   const openStream: BrainSideHandlers["openStream"] = (nodeId, { botId, kind }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const bot = Option.getOrUndefined(yield* Effect.orDie(bots.get(botId as BotId)))
       if (bot === undefined) return yield* new StreamRefused({ kind, reason: `unknown bot ${botId}` })
       if (bot.hostNodeId !== nodeId && !bot.boundNodeIds.includes(nodeId)) {
@@ -84,16 +84,14 @@ export const makeBrainSideHandlers: Effect.Effect<
       if (target === undefined) return yield* new StreamRefused({ kind, reason: `no brain target for ${kind}` })
       const ticket = yield* Deferred.make<StreamTicket>()
       const forward = Effect.scoped(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const expected = yield* broker.expect({ nodeId, kind })
           yield* Deferred.succeed(ticket, expected.ticket)
           const nodeSide = yield* open(yield* expected.socket)
           const brainSide = yield* open(yield* makeNet({ host: target.host, port: target.port }))
           yield* splice(nodeSide, brainSide)
         }),
-      ).pipe(
-        Effect.catchCause((cause) => Effect.logDebug("node-initiated stream ended", { nodeId, kind, cause })),
-      )
+      ).pipe(Effect.catchCause((cause) => Effect.logDebug("node-initiated stream ended", { nodeId, kind, cause })))
       yield* Effect.forkIn(forward, layerScope, { startImmediately: true })
       return yield* Deferred.await(ticket)
     })
@@ -105,7 +103,7 @@ export const makeBrainSideHandlers: Effect.Effect<
           Effect.as(Effect.logWarning("node approval failed; denying", { nodeId, cause }), {
             decision: "deny" as const,
             by: "error",
-          })
+          }),
         ),
       ),
     openStream,
@@ -143,17 +141,20 @@ export const brainRpcsHandlersLayer = (handlers: BrainSideHandlers) =>
  * The built brain-side handlers: the plain functions (for the local node's in-process `BrainLink`)
  * and the `BrainRpcs` handler context (for `makePeer` on remote control connections).
  */
-export class BrainSide extends Context.Service<BrainSide, {
-  readonly handlers: BrainSideHandlers
-  readonly rpcContext: Context.Context<Rpc.ToHandler<RpcGroup.Rpcs<typeof BrainRpcs>>>
-}>()("openbot/brain-nodes/BrainSide") {
+export class BrainSide extends Context.Service<
+  BrainSide,
+  {
+    readonly handlers: BrainSideHandlers
+    readonly rpcContext: Context.Context<Rpc.ToHandler<RpcGroup.Rpcs<typeof BrainRpcs>>>
+  }
+>()("openbot/brain-nodes/BrainSide") {
   static readonly layer: Layer.Layer<
     BrainSide,
     never,
     ApprovalService | NodeRegistry | StreamBroker | BotRepo | InternalAddress
   > = Layer.effect(
     BrainSide,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const handlers = yield* makeBrainSideHandlers
       const rpcContext = yield* Layer.build(brainRpcsHandlersLayer(handlers))
       return { handlers, rpcContext }

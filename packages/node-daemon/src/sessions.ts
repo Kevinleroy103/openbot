@@ -88,11 +88,17 @@ export const startSession = <A>(
     return yield* Deferred.await(ready)
   })
 
-export const dialSession = (deps: SessionDeps, ticket: StreamTicket, kind: string): Effect.Effect<Duplex, TunnelFailed, Scope.Scope> =>
+export const dialSession = (
+  deps: SessionDeps,
+  ticket: StreamTicket,
+  kind: string,
+): Effect.Effect<Duplex, TunnelFailed, Scope.Scope> =>
   deps.dialer.dial({ ticket, kind }).pipe(
     Effect.mapError((e) => new TunnelFailed({ kind, reason: `stream refused: ${e.reason}` })),
     Effect.flatMap((socket) => openDuplex(socket)),
-    Effect.mapError((e) => (e instanceof TunnelFailed ? e : new TunnelFailed({ kind, reason: `stream failed: ${reasonOf(e)}` }))),
+    Effect.mapError((e) =>
+      e instanceof TunnelFailed ? e : new TunnelFailed({ kind, reason: `stream failed: ${reasonOf(e)}` }),
+    ),
   )
 
 /** Pull frames until the socket closes; returns the close error. */
@@ -104,7 +110,9 @@ const readFrames = (io: Duplex, onFrame: (f: string | Uint8Array) => void): Effe
 /** Drain an output queue into the socket until the queue ends. */
 const writeOut = (io: Duplex, out: Queue.Queue<Uint8Array | string, Cause.Done>): Effect.Effect<void> =>
   Effect.forever(
-    Effect.flatMap(Queue.takeBetween(out, 1, 256), (chunks) => io.writer.writeAll(chunks as unknown as readonly [Uint8Array | string, ...Array<Uint8Array | string>])),
+    Effect.flatMap(Queue.takeBetween(out, 1, 256), (chunks) =>
+      io.writer.writeAll(chunks as unknown as readonly [Uint8Array | string, ...Array<Uint8Array | string>]),
+    ),
   ).pipe(Effect.ignore)
 
 // ---------------------------------------------------------------- pty.open
@@ -172,7 +180,11 @@ export const makePtyOpen = (deps: SessionDeps) => (p: PtyPayload) =>
           readFrames(io, (f) => {
             if (typeof f === "string") {
               const ctl = decodeControlFrame(PtyControl, f)
-              if (ctl && "resize" in ctl) proc.terminal?.resize(Math.max(1, Math.floor(ctl.resize.cols)), Math.max(1, Math.floor(ctl.resize.rows)))
+              if (ctl && "resize" in ctl)
+                proc.terminal?.resize(
+                  Math.max(1, Math.floor(ctl.resize.cols)),
+                  Math.max(1, Math.floor(ctl.resize.rows)),
+                )
               return
             }
             proc.terminal?.write(f)
@@ -184,7 +196,13 @@ export const makePtyOpen = (deps: SessionDeps) => (p: PtyPayload) =>
         )
         if (ended === "exit") {
           yield* Effect.sleep(50) // let the pty deliver its last bytes
-          yield* Queue.offer(out, JSON.stringify({ exit: proc.signalCode ? null : proc.exitCode, signal: proc.signalCode === null ? null : String(proc.signalCode) }))
+          yield* Queue.offer(
+            out,
+            JSON.stringify({
+              exit: proc.signalCode ? null : proc.exitCode,
+              signal: proc.signalCode === null ? null : String(proc.signalCode),
+            }),
+          )
           yield* Queue.end(out)
           yield* Fiber.await(writer).pipe(Effect.timeoutOption(2000))
           yield* Effect.ignore(io.writer.write(new Socket.CloseEvent(1000, "exit")))
@@ -296,7 +314,8 @@ export const connectTcp = (port: number, kind = "tcp"): Effect.Effect<net.Socket
   Effect.acquireRelease(
     Effect.callback<net.Socket, TunnelFailed>((resume) => {
       const sock = net.connect(port, "127.0.0.1")
-      const onError = (e: Error) => resume(Effect.fail(new TunnelFailed({ kind, reason: `connect 127.0.0.1:${port}: ${e.message}` })))
+      const onError = (e: Error) =>
+        resume(Effect.fail(new TunnelFailed({ kind, reason: `connect 127.0.0.1:${port}: ${e.message}` })))
       sock.once("error", onError)
       sock.once("connect", () => {
         sock.off("error", onError)
@@ -310,7 +329,10 @@ export const makeTunnelOpen = (deps: SessionDeps) => (p: TunnelPayload) =>
   Effect.gen(function* () {
     const { config } = deps
     if (p.kind === "claude.cli") {
-      return yield* new TunnelFailed({ kind: p.kind, reason: "claude.cli tunnels are not supported by this node yet (v1 uses brain-side Claude)" })
+      return yield* new TunnelFailed({
+        kind: p.kind,
+        reason: "claude.cli tunnels are not supported by this node yet (v1 uses brain-side Claude)",
+      })
     }
     if (p.kind === "tcp") {
       const port = p.port
@@ -351,7 +373,12 @@ export const makeTunnelOpen = (deps: SessionDeps) => (p: TunnelPayload) =>
                 stdin: "pipe",
                 stdout: "pipe",
                 stderr: Bun.file(path.join(home, "stderr.log")),
-                env: baseEnv({ ...filterEnv(p.env), CODEX_HOME: home, OPENBOT_NODE_ID: config.nodeId, OPENBOT_BOT_ID: p.inv.botId }),
+                env: baseEnv({
+                  ...filterEnv(p.env),
+                  CODEX_HOME: home,
+                  OPENBOT_NODE_ID: config.nodeId,
+                  OPENBOT_BOT_ID: p.inv.botId,
+                }),
               }),
             catch: (e) => new TunnelFailed({ kind: p.kind, reason: `could not start codex: ${reasonOf(e)}` }),
           }),
@@ -372,7 +399,12 @@ export interface ServiceRegistry {
 
 export const makeServiceStart =
   (deps: SessionDeps, registry: ServiceRegistry) =>
-  (p: { readonly inv: Invocation; readonly kind: "opencode.serve"; readonly env: Readonly<Record<string, string>>; readonly cwd: string }) =>
+  (p: {
+    readonly inv: Invocation
+    readonly kind: "opencode.serve"
+    readonly env: Readonly<Record<string, string>>
+    readonly cwd: string
+  }) =>
     Effect.gen(function* () {
       const bin = deps.config.binaries.opencode
       if (!bin) return yield* new TunnelFailed({ kind: p.kind, reason: "opencode is not installed on this node" })
@@ -433,14 +465,17 @@ export const makeServiceStart =
             }).pipe(
               Effect.timeoutOrElse({
                 duration: 30_000,
-                orElse: () => Effect.fail(new TunnelFailed({ kind: p.kind, reason: "opencode did not report a port within 30 s" })),
+                orElse: () =>
+                  Effect.fail(new TunnelFailed({ kind: p.kind, reason: "opencode did not report a port within 30 s" })),
               }),
             )
             yield* Deferred.succeed(ready, { port, pid: proc.pid })
             yield* Effect.promise(() => proc.exited)
           }),
         ).pipe(
-          Effect.catchCause((cause) => Deferred.fail(ready, new TunnelFailed({ kind: p.kind, reason: reasonOf(Cause.squash(cause)) }))),
+          Effect.catchCause((cause) =>
+            Deferred.fail(ready, new TunnelFailed({ kind: p.kind, reason: reasonOf(Cause.squash(cause)) })),
+          ),
           Effect.ensuring(Effect.sync(() => void registry.services.delete(serviceId))),
         ),
       )
@@ -450,8 +485,7 @@ export const makeServiceStart =
     })
 
 export const makeServiceStop =
-  (registry: ServiceRegistry) =>
-  (p: { readonly inv: Invocation; readonly serviceId: string }) =>
+  (registry: ServiceRegistry) => (p: { readonly inv: Invocation; readonly serviceId: string }) =>
     Effect.gen(function* () {
       const s = registry.services.get(p.serviceId)
       if (!s || s.botId !== p.inv.botId) return
@@ -466,15 +500,18 @@ type ForwardAddress = { readonly port: number | null; readonly path: string | nu
  * Idempotent per (bot, kind, transport): a repeated call (e.g. a retried tool call) returns the
  * listener that is already open instead of opening another one.
  */
-export const makeForwardListen = (deps: SessionDeps, runFork: <A, E>(effect: Effect.Effect<A, E>) => Fiber.Fiber<A, E>) => {
+export const makeForwardListen = (
+  deps: SessionDeps,
+  runFork: <A, E>(effect: Effect.Effect<A, E>) => Fiber.Fiber<A, E>,
+) => {
   const listeners = new Map<string, Deferred.Deferred<ForwardAddress, TunnelFailed>>()
   return (p: { readonly inv: Invocation; readonly kind: BrainStreamKind; readonly transport: "tcp" | "unix" }) =>
     Effect.gen(function* () {
       const botId = p.inv.botId
       if (!SAFE_ID.test(botId)) return yield* new TunnelFailed({ kind: p.kind, reason: "invalid bot id" })
-      yield* deps.guard.check({ inv: p.inv, action: "forward", target: `${p.kind}/${p.transport}` }).pipe(
-        Effect.mapError((e) => new TunnelFailed({ kind: p.kind, reason: e.reason })),
-      )
+      yield* deps.guard
+        .check({ inv: p.inv, action: "forward", target: `${p.kind}/${p.transport}` })
+        .pipe(Effect.mapError((e) => new TunnelFailed({ kind: p.kind, reason: e.reason })))
       const key = `${botId}\u0000${p.kind}\u0000${p.transport}`
       const existing = listeners.get(key)
       if (existing) return yield* Deferred.await(existing)
@@ -520,7 +557,10 @@ const openForward = (
         if ("path" in target) server.listen(target.path, () => resume(Effect.void))
         else server.listen(target.port, target.host, () => resume(Effect.void))
       })
-    yield* Scope.addFinalizer(deps.scope, Effect.sync(() => server.close()))
+    yield* Scope.addFinalizer(
+      deps.scope,
+      Effect.sync(() => server.close()),
+    )
     if (p.transport === "unix") {
       const dir = path.join(deps.config.dataDir, "run")
       const sockPath = path.join(dir, `${p.kind}-${botId}.sock`)

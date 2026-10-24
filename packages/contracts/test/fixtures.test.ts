@@ -39,7 +39,14 @@ const conversation: Conversation = {
   epoch: "ep1",
 }
 
-const resp = (r: any) => (!r ? "-" : r.type === "decision" ? r.decision : r.type === "answers" ? Object.values(r.answers).flat().join("|") : r.type)
+const resp = (r: any) =>
+  !r
+    ? "-"
+    : r.type === "decision"
+      ? r.decision
+      : r.type === "answers"
+        ? Object.values(r.answers).flat().join("|")
+        : r.type
 const summarize = (e: TranscriptEntry): string => {
   switch (e.kind) {
     case "message":
@@ -65,7 +72,8 @@ const encodeItem = Schema.encodeSync(Schema.fromJsonString(KnownConversationStre
 const decodeItem = Schema.decodeUnknownSync(Schema.fromJsonString(ConversationStreamItem))
 /** Send stream items over a JSON "wire" like RpcSerialization.layerJson would. */
 const wire = (items: ReadonlyArray<KnownConversationStreamItem>) => items.map((i) => decodeItem(encodeItem(i)))
-const feed = (state: ConversationState, items: ReadonlyArray<KnownConversationStreamItem>) => wire(items).reduce(applyConversationStreamItem, state)
+const feed = (state: ConversationState, items: ReadonlyArray<KnownConversationStreamItem>) =>
+  wire(items).reduce(applyConversationStreamItem, state)
 
 type Case = {
   name: string
@@ -107,7 +115,12 @@ const cases: Case[] = [
       "message:bot:Still here after the interrupt.",
     ],
     turns: ["completed", "completed", "completed", "completed", "interrupted", "completed"],
-    noHome: ["rate_limit_event", "stream_event:content_block_delta:signature_delta", "system/thinking_tokens", "user:text[Request interrupted by user]"],
+    noHome: [
+      "rate_limit_event",
+      "stream_event:content_block_delta:signature_delta",
+      "system/thinking_tokens",
+      "user:text[Request interrupted by user]",
+    ],
   },
   {
     name: "codex",
@@ -139,7 +152,12 @@ const cases: Case[] = [
       "message:bot:Blue it is.",
     ],
     turns: ["completed", "completed", "completed", "completed", "interrupted", "completed"],
-    noHome: ["account/rateLimits/updated", "mcpServer/startupStatus/updated", "remoteControl/status/changed", "thread/settings/updated"],
+    noHome: [
+      "account/rateLimits/updated",
+      "mcpServer/startupStatus/updated",
+      "remoteControl/status/changed",
+      "thread/settings/updated",
+    ],
   },
   {
     name: "opencode",
@@ -192,7 +210,8 @@ const cases: Case[] = [
   },
 ]
 
-const sortById = <T extends { readonly id: string }>(xs: Iterable<T>) => [...xs].sort((x, y) => x.id.localeCompare(y.id))
+const sortById = <T extends { readonly id: string }>(xs: Iterable<T>) =>
+  [...xs].sort((x, y) => x.id.localeCompare(y.id))
 
 const loaded = await Promise.all(cases.map(async (c) => ({ c, frames: await readFixture(`${FIX}/${c.file}`) })))
 for (const { c, frames } of loaded) {
@@ -226,7 +245,8 @@ for (const { c, frames } of loaded) {
           expect(ids).toContain("deny")
         }
       }
-      for (const e of entries.values()) if (e.kind === "tool-call" && e.requestId) expect(requests.has(e.requestId)).toBe(true)
+      for (const e of entries.values())
+        if (e.kind === "tool-call" && e.requestId) expect(requests.has(e.requestId)).toBe(true)
     })
 
     test("projection: fresh, mid-stream + live, resumed with `after`, stale epoch", () => {
@@ -292,7 +312,9 @@ for (const { c, frames } of loaded) {
 
     test("native events with no home in the contract are pinned (review when this list changes)", async () => {
       expect(ledger.keys("no-home")).toEqual(c.noHome)
-      const rows = [...ledger.rows].map(([k, r]) => `${r.disposition.padEnd(9)} ${String(r.count).padStart(3)}  ${k}${r.note ? `  -- ${r.note}` : ""}`)
+      const rows = [...ledger.rows].map(
+        ([k, r]) => `${r.disposition.padEnd(9)} ${String(r.count).padStart(3)}  ${k}${r.note ? `  -- ${r.note}` : ""}`,
+      )
       const text = rows.join("\n") + "\n"
       const path = `${FIX}/${c.ledger}`
       if (process.env.OPENBOT_UPDATE_LEDGERS === "1") await Bun.write(path, text)

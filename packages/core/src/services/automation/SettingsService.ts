@@ -5,7 +5,13 @@
  * (`settings.updated`) and emitted on `changes`.
  */
 import type { ApprovalRule, ApprovalRuleId, Settings, SettingsPatch } from "@openbot/contracts"
-import { applySettingsPatch, cleanProjectFolders, InvalidInput, NotFound, SettingsPatch as SettingsPatchSchema } from "@openbot/contracts"
+import {
+  applySettingsPatch,
+  cleanProjectFolders,
+  InvalidInput,
+  NotFound,
+  SettingsPatch as SettingsPatchSchema,
+} from "@openbot/contracts"
 import { Clock, Effect, Layer, Option, Result, Schema, Semaphore, SubscriptionRef } from "effect"
 import { IdGen } from "../../ports/IdGen.ts"
 import { ApprovalRuleRepo, BotRepo, readSettings, SettingsRepo, writeSettings } from "../../ports/repos.ts"
@@ -14,7 +20,7 @@ import { validateRuleMatch } from "./policy.ts"
 
 const decodePatch = Schema.decodeUnknownResult(SettingsPatchSchema)
 
-export const makeSettingsService = Effect.gen(function*() {
+export const makeSettingsService = Effect.gen(function* () {
   const repo = yield* SettingsRepo
   const rulesRepo = yield* ApprovalRuleRepo
   const bots = yield* BotRepo
@@ -26,32 +32,37 @@ export const makeSettingsService = Effect.gen(function*() {
   const lock = yield* Semaphore.make(1)
 
   const update = (patch: SettingsPatch) =>
-    lock.withPermits(1)(Effect.gen(function*() {
-      const decoded = decodePatch(patch)
-      if (Result.isFailure(decoded)) {
-        return yield* new InvalidInput({ message: `Invalid settings: ${String(decoded.failure)}` })
-      }
-      let accepted = decoded.success
-      if (accepted.sharedProjectFolders !== undefined) {
-        const cleaned = cleanProjectFolders(accepted.sharedProjectFolders)
-        if ("problem" in cleaned) return yield* new InvalidInput({ message: cleaned.problem })
-        accepted = { ...accepted, sharedProjectFolders: cleaned.folders }
-      }
-      const next = applySettingsPatch(yield* SubscriptionRef.get(state), accepted)
-      yield* Effect.provideService(writeSettings(next), SettingsRepo, repo).pipe(Effect.orDie)
-      yield* SubscriptionRef.set(state, next)
-      yield* hub.publishRoster({ type: "settings.updated", settings: next })
-      return next
-    }))
+    lock.withPermits(1)(
+      Effect.gen(function* () {
+        const decoded = decodePatch(patch)
+        if (Result.isFailure(decoded)) {
+          return yield* new InvalidInput({ message: `Invalid settings: ${String(decoded.failure)}` })
+        }
+        let accepted = decoded.success
+        if (accepted.sharedProjectFolders !== undefined) {
+          const cleaned = cleanProjectFolders(accepted.sharedProjectFolders)
+          if ("problem" in cleaned) return yield* new InvalidInput({ message: cleaned.problem })
+          accepted = { ...accepted, sharedProjectFolders: cleaned.folders }
+        }
+        const next = applySettingsPatch(yield* SubscriptionRef.get(state), accepted)
+        yield* Effect.provideService(writeSettings(next), SettingsRepo, repo).pipe(Effect.orDie)
+        yield* SubscriptionRef.set(state, next)
+        yield* hub.publishRoster({ type: "settings.updated", settings: next })
+        return next
+      }),
+    )
 
-  const upsertRule = Effect.fn("SettingsService.upsertRule")(function*(input: Parameters<SettingsService["Service"]["upsertRule"]>[0]) {
+  const upsertRule = Effect.fn("SettingsService.upsertRule")(function* (
+    input: Parameters<SettingsService["Service"]["upsertRule"]>[0],
+  ) {
     const problem = validateRuleMatch(input.match)
     if (problem !== undefined) return yield* new InvalidInput({ message: problem })
     if (input.botId !== undefined) {
       const bot = yield* bots.get(input.botId).pipe(Effect.orDie)
       if (Option.isNone(bot)) return yield* new NotFound({ entity: "bot", id: input.botId })
     }
-    const existing = input.id === undefined ? Option.none<ApprovalRule>() : yield* rulesRepo.get(input.id).pipe(Effect.orDie)
+    const existing =
+      input.id === undefined ? Option.none<ApprovalRule>() : yield* rulesRepo.get(input.id).pipe(Effect.orDie)
     if (input.id !== undefined && Option.isNone(existing)) {
       return yield* new NotFound({ entity: "rule", id: input.id })
     }
@@ -78,7 +89,9 @@ export const makeSettingsService = Effect.gen(function*() {
     deleteRule: (ruleId: ApprovalRuleId) =>
       rulesRepo.delete(ruleId).pipe(
         Effect.orDie,
-        Effect.flatMap((deleted) => (deleted ? Effect.void : Effect.fail(new NotFound({ entity: "rule", id: ruleId })))),
+        Effect.flatMap((deleted) =>
+          deleted ? Effect.void : Effect.fail(new NotFound({ entity: "rule", id: ruleId })),
+        ),
       ),
   })
 })

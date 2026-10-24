@@ -42,7 +42,10 @@ export interface DataDirShape {
 
 /** Joins path segments with `/`, collapsing duplicate separators and dropping a trailing one. */
 export const joinPath = (...segments: ReadonlyArray<string>): string => {
-  const joined = segments.filter((s) => s.length > 0).join("/").replace(/\/{2,}/g, "/")
+  const joined = segments
+    .filter((s) => s.length > 0)
+    .join("/")
+    .replace(/\/{2,}/g, "/")
   return joined.length > 1 && joined.endsWith("/") ? joined.slice(0, -1) : joined
 }
 

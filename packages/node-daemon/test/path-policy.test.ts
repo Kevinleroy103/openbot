@@ -109,7 +109,9 @@ describe("PathPolicy containment", () => {
     expect(await denied("certs/server.pem", "write")).toContain("deny-list")
     // the node's own state dir, even when a root contains it
     const nested = makePathPolicy({ roots: [{ id: "all", path: t.path, mode: "rw" }], dataDir })
-    const r = await Effect.runPromise(Effect.result(nested.resolve({ path: path.join(dataDir, "identity.json"), botId: "b", access: "read" })))
+    const r = await Effect.runPromise(
+      Effect.result(nested.resolve({ path: path.join(dataDir, "identity.json"), botId: "b", access: "read" })),
+    )
     expect(r._tag).toBe("Failure")
   })
 
@@ -143,10 +145,19 @@ describe("PathPolicy containment", () => {
   })
 
   test("wildcard roots: <base>/*/workspace", async () => {
-    const wild = makePathPolicy({ roots: [{ id: "ws", path: path.join(t.path, "bots", "*", "workspace"), mode: "rw" }], dataDir })
-    const r = await Effect.runPromise(Effect.result(wild.resolve({ path: path.join(t.path, "bots", "bot_7", "workspace", "x"), botId: "b", access: "write" })))
+    const wild = makePathPolicy({
+      roots: [{ id: "ws", path: path.join(t.path, "bots", "*", "workspace"), mode: "rw" }],
+      dataDir,
+    })
+    const r = await Effect.runPromise(
+      Effect.result(
+        wild.resolve({ path: path.join(t.path, "bots", "bot_7", "workspace", "x"), botId: "b", access: "write" }),
+      ),
+    )
     expect(r._tag).toBe("Success")
-    const bad = await Effect.runPromise(Effect.result(wild.resolve({ path: path.join(t.path, "bots", "bot_7", "other"), botId: "b", access: "read" })))
+    const bad = await Effect.runPromise(
+      Effect.result(wild.resolve({ path: path.join(t.path, "bots", "bot_7", "other"), botId: "b", access: "read" })),
+    )
     expect(bad._tag).toBe("Failure")
   })
 })

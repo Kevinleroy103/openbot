@@ -26,7 +26,8 @@ const handshake = (s: RfbSession) => {
 // noVNC's pixel format: 32 bpp, depth 24, little endian, true colour, red shift 0, green 8, blue 16
 const setPixelFormat = Uint8Array.of(0, 0, 0, 0, 32, 24, 0, 1, ...u16(255), ...u16(255), ...u16(255), 0, 8, 16, 0, 0, 0)
 const setEncodings = (encs: number[]) => Uint8Array.of(2, 0, ...u16(encs.length), ...encs.flatMap(u32))
-const updateRequest = (incremental: boolean, x = 0, y = 0, w = W, h = H) => Uint8Array.of(3, incremental ? 1 : 0, ...u16(x), ...u16(y), ...u16(w), ...u16(h))
+const updateRequest = (incremental: boolean, x = 0, y = 0, w = W, h = H) =>
+  Uint8Array.of(3, incremental ? 1 : 0, ...u16(x), ...u16(y), ...u16(w), ...u16(h))
 
 describe("fake RFB desktop", () => {
   test("handshake: version, None security, ServerInit with the desktop size and name", () => {

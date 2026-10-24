@@ -14,36 +14,38 @@ const BotJson = jsonCodec(Bot, "bot")
 const SectionJson = jsonCodec(Section, "section")
 const SessionJson = jsonCodec(BotSessionRecord, "bot session")
 
-export const makeSqlBotRepo = Effect.gen(function*() {
+export const makeSqlBotRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   const decodeAll = (op: string, rows: ReadonlyArray<PayloadRow>) =>
     Effect.forEach(rows, (row) => BotJson.decode(op, row.payload_json, row.id))
 
   return BotRepo.of({
     get: (id) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM bots WHERE id = ${id}`
         const row = rows[0]
-        return row === undefined ? Option.none() : Option.some(yield* BotJson.decode("BotRepo.get", row.payload_json, row.id))
+        return row === undefined
+          ? Option.none()
+          : Option.some(yield* BotJson.decode("BotRepo.get", row.payload_json, row.id))
       }).pipe(repoOp("BotRepo.get")),
-    list: Effect.gen(function*() {
+    list: Effect.gen(function* () {
       const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM bots ORDER BY created_at, rowid`
       return yield* decodeAll("BotRepo.list", rows)
     }).pipe(repoOp("BotRepo.list")),
     upsert: (bot) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const payload = yield* BotJson.encode("BotRepo.upsert", bot)
         yield* sql`INSERT INTO bots (id, created_at, payload_json) VALUES (${bot.id}, ${bot.createdAt}, ${payload})
           ON CONFLICT (id) DO UPDATE SET created_at = excluded.created_at, payload_json = excluded.payload_json`
       }).pipe(repoOp("BotRepo.upsert")),
     delete: (id) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* sql`DELETE FROM bot_sessions WHERE bot_id = ${id}`
         const rows = yield* sql<{ id: string }>`DELETE FROM bots WHERE id = ${id} RETURNING id`
         return rows.length > 0
       }).pipe(sql.withTransaction, repoOp("BotRepo.delete")),
     getSession: (botId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const rows = yield* sql<{ payload_json: string }>`SELECT payload_json FROM bot_sessions WHERE bot_id = ${botId}`
         const row = rows[0]
         return row === undefined
@@ -51,7 +53,7 @@ export const makeSqlBotRepo = Effect.gen(function*() {
           : Option.some(yield* SessionJson.decode("BotRepo.getSession", row.payload_json, botId))
       }).pipe(repoOp("BotRepo.getSession")),
     setSession: (record) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const payload = yield* SessionJson.encode("BotRepo.setSession", record)
         yield* sql`INSERT INTO bot_sessions (bot_id, driver, native_session_id, updated_at, payload_json)
           VALUES (${record.botId}, ${record.driver}, ${record.nativeSessionId}, ${record.updatedAt}, ${payload})
@@ -63,15 +65,15 @@ export const makeSqlBotRepo = Effect.gen(function*() {
   })
 })
 
-export const makeSqlSectionRepo = Effect.gen(function*() {
+export const makeSqlSectionRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   return SectionRepo.of({
-    list: Effect.gen(function*() {
+    list: Effect.gen(function* () {
       const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM sections ORDER BY sort_order, id`
       return yield* Effect.forEach(rows, (row) => SectionJson.decode("SectionRepo.list", row.payload_json, row.id))
     }).pipe(repoOp("SectionRepo.list")),
     get: (id) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM sections WHERE id = ${id}`
         const row = rows[0]
         return row === undefined
@@ -79,7 +81,7 @@ export const makeSqlSectionRepo = Effect.gen(function*() {
           : Option.some(yield* SectionJson.decode("SectionRepo.get", row.payload_json, row.id))
       }).pipe(repoOp("SectionRepo.get")),
     upsert: (section) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const payload = yield* SectionJson.encode("SectionRepo.upsert", section)
         yield* sql`INSERT INTO sections (id, sort_order, payload_json) VALUES (${section.id}, ${section.order}, ${payload})
           ON CONFLICT (id) DO UPDATE SET sort_order = excluded.sort_order, payload_json = excluded.payload_json`

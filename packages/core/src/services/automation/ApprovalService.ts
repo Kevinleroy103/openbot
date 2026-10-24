@@ -168,16 +168,20 @@ const approvalOptions = (
 const notificationLead = (kind: RuntimeRequestKind): string =>
   kind === "question" ? "Has a question" : kind === "handoff" ? "Needs you on its screen" : "Needs approval"
 
-const answersText = (questions: ReadonlyArray<Question>, answers: Readonly<Record<string, ReadonlyArray<string>>>): string =>
+const answersText = (
+  questions: ReadonlyArray<Question>,
+  answers: Readonly<Record<string, ReadonlyArray<string>>>,
+): string =>
   questions
     .map((q) => {
       const values = answers[q.id] ?? []
-      const shown = q.isSecret === true ? "(provided privately)" : values.length === 0 ? "(no answer)" : values.join(", ")
+      const shown =
+        q.isSecret === true ? "(provided privately)" : values.length === 0 ? "(no answer)" : values.join(", ")
       return `- ${oneLine(q.prompt)}: ${shown}`
     })
     .join("\n")
 
-export const makeApprovalService = Effect.gen(function*() {
+export const makeApprovalService = Effect.gen(function* () {
   const conversations = yield* ConversationService
   const settings = yield* SettingsService
   const notifier = yield* Notifier
@@ -207,17 +211,21 @@ export const makeApprovalService = Effect.gen(function*() {
   const getRequest = (requestId: RequestId) =>
     requests.get(requestId).pipe(
       Effect.orDie,
-      Effect.flatMap(Option.match({
-        onNone: () => Effect.fail(new NotFound({ entity: "request", id: requestId })),
-        onSome: Effect.succeed,
-      })),
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new NotFound({ entity: "request", id: requestId })),
+          onSome: Effect.succeed,
+        }),
+      ),
     )
 
   const setCardState = (cardEntryId: EntryId, state: Extract<KnownTranscriptEntry, { kind: "card" }>["state"]) =>
-    conversations.updateEntry(cardEntryId, (entry) => (entry.kind === "card" ? { ...entry, state } : entry)).pipe(
-      Effect.asVoid,
-      Effect.catch((error) => Effect.logWarning("ApprovalService: card not updated", error)),
-    )
+    conversations
+      .updateEntry(cardEntryId, (entry) => (entry.kind === "card" ? { ...entry, state } : entry))
+      .pipe(
+        Effect.asVoid,
+        Effect.catch((error) => Effect.logWarning("ApprovalService: card not updated", error)),
+      )
 
   /** Persists a terminal state of a request and its card (never fails). */
   const finish = (
@@ -229,7 +237,7 @@ export const makeApprovalService = Effect.gen(function*() {
       readonly cardDetail?: string | undefined
     },
   ) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const next: RuntimeRequest = {
         ...request,
@@ -239,12 +247,15 @@ export const makeApprovalService = Effect.gen(function*() {
         ...(patch.response === undefined ? {} : { response: patch.response }),
         ...(patch.status === "resolved" ? { resolvedBy: { kind: "user" as const, userId: OWNER_USER_ID } } : {}),
       }
-      yield* conversations.upsertRequest(next).pipe(
-        Effect.catch((error) => Effect.logWarning("ApprovalService: request not persisted", error)),
-      )
-      const cardStatus = patch.status === "resolved"
-        ? (patch.response?.type === "dismiss" ? "dismissed" as const : "resolved" as const)
-        : patch.status
+      yield* conversations
+        .upsertRequest(next)
+        .pipe(Effect.catch((error) => Effect.logWarning("ApprovalService: request not persisted", error)))
+      const cardStatus =
+        patch.status === "resolved"
+          ? patch.response?.type === "dismiss"
+            ? ("dismissed" as const)
+            : ("resolved" as const)
+          : patch.status
       yield* setCardState(request.cardEntryId, {
         status: cardStatus,
         ...(patch.response === undefined ? {} : { response: patch.response }),
@@ -258,7 +269,7 @@ export const makeApprovalService = Effect.gen(function*() {
    * stay in the group), notifies.
    */
   const createRequest = (input: NewRequest) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const { approvalExpiryMinutes } = yield* settings.get
       const expiryMinutes = input.expiryMinutes ?? approvalExpiryMinutes
@@ -292,9 +303,10 @@ export const makeApprovalService = Effect.gen(function*() {
         kind: "card",
         conversationId,
         author: { kind: "bot", botId: input.bot.id },
-        card: input.task !== undefined && (card.type === "approval" || card.type === "question")
-          ? { ...card, taskTitle: input.task.title }
-          : card,
+        card:
+          input.task !== undefined && (card.type === "approval" || card.type === "question")
+            ? { ...card, taskTitle: input.task.title }
+            : card,
         state: { status: "pending" },
         ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
       } as EntryDraft
@@ -315,8 +327,12 @@ export const makeApprovalService = Effect.gen(function*() {
    * Waits for the user's answer or expiry. Interruption (turn interrupted / session closed) cancels
    * the request so its card never stays actionable.
    */
-  const awaitOutcome = (request: RuntimeRequest, deferred: Deferred.Deferred<Outcome>, onExpire: HarnessRequestResolution) =>
-    Effect.gen(function*() {
+  const awaitOutcome = (
+    request: RuntimeRequest,
+    deferred: Deferred.Deferred<Outcome>,
+    onExpire: HarnessRequestResolution,
+  ) =>
+    Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const waitMs = Math.max(0, (request.expiresAt ?? now) - now)
       const answered = yield* Deferred.await(deferred).pipe(Effect.timeoutOption(Duration.millis(waitMs)))
@@ -328,36 +344,40 @@ export const makeApprovalService = Effect.gen(function*() {
       return { by: "expired", resolution: onExpire } satisfies Outcome
     }).pipe(
       Effect.onInterrupt(() =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const claimed = yield* takePending(request.id)
           if (Option.isNone(claimed)) return
           const latest = yield* requests.get(request.id).pipe(Effect.orDie, Effect.map(Option.getOrElse(() => request)))
           yield* finish(latest, { status: "cancelled", statusReason: "turn-ended" })
-        })
+        }),
       ),
     )
 
-  const askBlocking = (input: NewRequest, onPending: ApprovalContext["onPending"], onExpire: HarnessRequestResolution) =>
+  const askBlocking = (
+    input: NewRequest,
+    onPending: ApprovalContext["onPending"],
+    onExpire: HarnessRequestResolution,
+  ) =>
     Effect.uninterruptibleMask((restore) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const request = yield* createRequest(input)
         const deferred = yield* Deferred.make<Outcome>()
         pending.set(request.id, { requestId: request.id, deferred })
         return yield* restore(
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             if (onPending !== undefined) yield* onPending(request)
             return yield* awaitOutcome(request, deferred, onExpire)
           }),
         ).pipe(
           // Interrupted before awaitOutcome installed its handler: still cancel the request.
           Effect.onInterrupt(() =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const claimed = yield* takePending(request.id)
               if (Option.isSome(claimed)) yield* finish(request, { status: "cancelled", statusReason: "turn-ended" })
-            })
+            }),
           ),
         )
-      })
+      }),
     )
 
   /**
@@ -369,11 +389,16 @@ export const makeApprovalService = Effect.gen(function*() {
     ctx.turnId !== undefined
       ? Effect.succeed<TurnId | undefined>(ctx.turnId)
       : turns.listActive.pipe(
-        Effect.map((active) =>
-          active.filter((t) => t.botId === ctx.bot.id && t.conversationId === ctx.conversationId && t.status !== "queued").at(-1)?.id
-        ),
-        Effect.orElseSucceed((): TurnId | undefined => undefined),
-      )
+          Effect.map(
+            (active) =>
+              active
+                .filter(
+                  (t) => t.botId === ctx.bot.id && t.conversationId === ctx.conversationId && t.status !== "queued",
+                )
+                .at(-1)?.id,
+          ),
+          Effect.orElseSucceed((): TurnId | undefined => undefined),
+        )
 
   const autoDecided = (
     ctx: Pick<ApprovalContext, "bot" | "conversationId" | "turnId" | "recordDecision">,
@@ -391,13 +416,20 @@ export const makeApprovalService = Effect.gen(function*() {
     }
     // A background task's decisions are its steps, never lines in the conversation (D5.7).
     if (ctx.recordDecision !== undefined) {
-      return ctx.recordDecision(event).pipe(Effect.catchCause((cause) => Effect.logWarning("ApprovalService: auto-decided not recorded", cause)))
+      return ctx
+        .recordDecision(event)
+        .pipe(Effect.catchCause((cause) => Effect.logWarning("ApprovalService: auto-decided not recorded", cause)))
     }
-    return Effect.flatMap(turnOf(ctx), (turnId) => conversations.appendEvent({
-      conversationId: ctx.conversationId,
-      event,
-      ...(turnId === undefined ? {} : { turnId }),
-    })).pipe(Effect.asVoid, Effect.catch((error) => Effect.logWarning("ApprovalService: auto-decided not written", error)))
+    return Effect.flatMap(turnOf(ctx), (turnId) =>
+      conversations.appendEvent({
+        conversationId: ctx.conversationId,
+        event,
+        ...(turnId === undefined ? {} : { turnId }),
+      }),
+    ).pipe(
+      Effect.asVoid,
+      Effect.catch((error) => Effect.logWarning("ApprovalService: auto-decided not written", error)),
+    )
   }
 
   const policySubject = (request: HarnessApprovalRequest): PolicySubject => ({
@@ -407,28 +439,29 @@ export const makeApprovalService = Effect.gen(function*() {
     paths: request.paths,
   })
 
-  const approvalCard = (
-    request: HarnessApprovalRequest,
-    suggested: SuggestedRule,
-    reason: string | undefined,
-    projectFolder: string | undefined,
-  ) =>
-  (requestId: RequestId): KnownCard => ({
-    type: "approval",
-    requestId,
-    requestKind: request.kind,
-    title: request.title,
-    toolName: request.toolName,
-    suggestedRule: suggested,
-    ...(request.detail.length === 0 ? {} : { summary: request.detail }),
-    ...(request.command === undefined ? {} : { command: request.command }),
-    ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
-    ...(request.diff === undefined ? {} : { diff: request.diff }),
-    ...(request.paths === undefined ? {} : { paths: request.paths }),
-    ...(request.nodeId === undefined ? {} : { nodeId: request.nodeId }),
-    ...(reason === undefined ? {} : { reason }),
-    ...(projectFolder === undefined ? {} : { projectFolder }),
-  })
+  const approvalCard =
+    (
+      request: HarnessApprovalRequest,
+      suggested: SuggestedRule,
+      reason: string | undefined,
+      projectFolder: string | undefined,
+    ) =>
+    (requestId: RequestId): KnownCard => ({
+      type: "approval",
+      requestId,
+      requestKind: request.kind,
+      title: request.title,
+      toolName: request.toolName,
+      suggestedRule: suggested,
+      ...(request.detail.length === 0 ? {} : { summary: request.detail }),
+      ...(request.command === undefined ? {} : { command: request.command }),
+      ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
+      ...(request.diff === undefined ? {} : { diff: request.diff }),
+      ...(request.paths === undefined ? {} : { paths: request.paths }),
+      ...(request.nodeId === undefined ? {} : { nodeId: request.nodeId }),
+      ...(reason === undefined ? {} : { reason }),
+      ...(projectFolder === undefined ? {} : { projectFolder }),
+    })
 
   const approvalSubject = (request: HarnessApprovalRequest): RuntimeRequestSubject => ({
     toolName: request.toolName,
@@ -444,7 +477,8 @@ export const makeApprovalService = Effect.gen(function*() {
   /** The workspace path for rule suggestions when the request runs where the workspace is. */
   const suggestionWorkspace = (ctx: ApprovalContext, request: HarnessApprovalRequest): string | undefined => {
     const workspace = ctx.workspace
-    if (workspace === undefined || (request.nodeId !== undefined && request.nodeId !== workspace.nodeId)) return undefined
+    if (workspace === undefined || (request.nodeId !== undefined && request.nodeId !== workspace.nodeId))
+      return undefined
     return (request.paths ?? []).every((p) => isInsideWorkspace(workspace.path, p, request.cwd ?? workspace.path))
       ? workspace.path
       : undefined
@@ -452,7 +486,7 @@ export const makeApprovalService = Effect.gen(function*() {
 
   /** The context's workspace plus the project folders (shared ∪ the bot's) and the node's home. */
   const autonomyWorkspace = (ctx: ApprovalContext) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const workspace = ctx.workspace
       if (workspace === undefined) return undefined
       const { sharedProjectFolders } = yield* settings.get
@@ -469,14 +503,18 @@ export const makeApprovalService = Effect.gen(function*() {
    * directory (when `HostPaths` knows it and it may be offered), else the directory itself.
    */
   const folderOffer = (request: HarnessApprovalRequest, workspace: ApprovalWorkspace | undefined) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (workspace === undefined) return undefined
       const dir = outsideWorkDir(request, workspace)
       if (dir === undefined) return undefined
       const repo = hostPaths === undefined ? undefined : yield* hostPaths.projectRoot(workspace.nodeId, dir)
       if (repo !== undefined && offerableFolder(repo, workspace.home)) return normalizeProjectFolder(repo)
       return offerableFolder(dir, workspace.home) ? normalizeProjectFolder(dir) : undefined
-    }).pipe(Effect.catchDefect((defect) => Effect.logWarning("ApprovalService: no folder offer", defect).pipe(Effect.as(undefined))))
+    }).pipe(
+      Effect.catchDefect((defect) =>
+        Effect.logWarning("ApprovalService: no folder offer", defect).pipe(Effect.as(undefined)),
+      ),
+    )
 
   /**
    * Rules → allow / deny / ask; no matching rule → the bot's autonomy (when `applyAutonomy`) →
@@ -488,7 +526,7 @@ export const makeApprovalService = Effect.gen(function*() {
     source: RuntimeRequest["source"],
     applyAutonomy: boolean,
   ): Effect.Effect<Outcome, NotFound> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const subject = policySubject(request)
       const all = yield* rules.list({ botId: ctx.bot.id }).pipe(Effect.orDie)
       const decision = evaluateRules(all, ctx.bot.id, subject)
@@ -498,7 +536,11 @@ export const makeApprovalService = Effect.gen(function*() {
       }
       if (decision.action === "deny") {
         yield* autoDecided(ctx, request, "denied", { rule: decision.rule })
-        return { by: "rule", decision: "deny", resolution: { decision: "deny", message: BLOCKED_BY_RULES } } satisfies Outcome
+        return {
+          by: "rule",
+          decision: "deny",
+          resolution: { decision: "deny", message: BLOCKED_BY_RULES },
+        } satisfies Outcome
       }
       // An explicit "Ask first" rule always asks; only the default (no rule) defers to autonomy.
       let projectFolder: string | undefined
@@ -515,8 +557,13 @@ export const makeApprovalService = Effect.gen(function*() {
       const suggested = suggestRule(subject, suggestionWorkspace(ctx, request))
       // "Always allow" must name a program: a shell command without one (`$EDITOR x`, a bare
       // relative path) would otherwise save a rule allowing EVERY command of the tool.
-      const offerAlways = !(subject.surface === "shell" && subject.command !== undefined && suggested.match.commandPrefix === undefined)
-      const reason = decision.rule === undefined ? undefined : `Paused by your Ask first rule: ${describeRule(decision.rule)}`
+      const offerAlways = !(
+        subject.surface === "shell" &&
+        subject.command !== undefined &&
+        suggested.match.commandPrefix === undefined
+      )
+      const reason =
+        decision.rule === undefined ? undefined : `Paused by your Ask first rule: ${describeRule(decision.rule)}`
       return yield* askBlocking(
         {
           bot: ctx.bot,
@@ -576,21 +623,26 @@ export const makeApprovalService = Effect.gen(function*() {
             by: "rule",
             resolution: { decision: "deny", message: `OpenBot could not ask the user (${error._tag}).` },
           }),
-        )
+        ),
       ),
       Effect.catchDefect((defect) =>
         Effect.logError("ApprovalService: evaluation failed", defect).pipe(
-          Effect.as<Outcome>({ by: "rule", resolution: { decision: "deny", message: "OpenBot could not evaluate this request." } }),
-        )
+          Effect.as<Outcome>({
+            by: "rule",
+            resolution: { decision: "deny", message: "OpenBot could not evaluate this request." },
+          }),
+        ),
       ),
     )
 
   const evaluate = (ctx: ApprovalContext, request: HarnessRequest) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const requestId = request.nativeRequestId
       const source = { origin: ctx.harness, method: request.kind, nativeRequestId: requestId ?? "" }
       const outcome = yield* failClosed(
-        request.kind === "question" ? evaluateQuestion(ctx, request, source) : evaluateApproval(ctx, request, source, true),
+        request.kind === "question"
+          ? evaluateQuestion(ctx, request, source)
+          : evaluateApproval(ctx, request, source, true),
       )
       return outcome.resolution
     })
@@ -600,46 +652,88 @@ export const makeApprovalService = Effect.gen(function*() {
   const nodeRequest = (input: NodeApprovalInput): HarnessApprovalRequest => {
     const { action, target, reason } = input.request
     const node = input.nodeId
-    const base = { toolName: `node.${action}`, detail: reason, nodeId: node, nativeRequestId: input.request.invocationId }
+    const base = {
+      toolName: `node.${action}`,
+      detail: reason,
+      nodeId: node,
+      nativeRequestId: input.request.invocationId,
+    }
     switch (action) {
       case "run-command":
-        return { ...base, kind: "command-approval", surface: "shell", title: `Run a command on ${node}`, command: target }
+        return {
+          ...base,
+          kind: "command-approval",
+          surface: "shell",
+          title: `Run a command on ${node}`,
+          command: target,
+        }
       case "write-file":
-        return { ...base, kind: "file-approval", surface: "file-edit", title: `Change a file on ${node}`, paths: [target] }
+        return {
+          ...base,
+          kind: "file-approval",
+          surface: "file-edit",
+          title: `Change a file on ${node}`,
+          paths: [target],
+        }
       case "read-file":
-        return { ...base, kind: "file-approval", surface: "file-read", title: `Read a file on ${node}`, paths: [target] }
+        return {
+          ...base,
+          kind: "file-approval",
+          surface: "file-read",
+          title: `Read a file on ${node}`,
+          paths: [target],
+        }
       case "browser":
-        return { ...base, kind: "tool-approval", surface: "browser", title: `Use the browser on ${node}: ${truncate(target, 120)}` }
+        return {
+          ...base,
+          kind: "tool-approval",
+          surface: "browser",
+          title: `Use the browser on ${node}: ${truncate(target, 120)}`,
+        }
       default:
-        return { ...base, kind: "tool-approval", surface: "other", title: `${action} on ${node}: ${truncate(target, 120)}` }
+        return {
+          ...base,
+          kind: "tool-approval",
+          surface: "other",
+          title: `${action} on ${node}: ${truncate(target, 120)}`,
+        }
     }
   }
 
   const evaluateNode = (input: NodeApprovalInput): Effect.Effect<NodeApprovalResponse> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const bot = yield* bots.get(input.request.botId as BotId).pipe(Effect.orDie)
       if (Option.isNone(bot)) return { decision: "deny", by: "rule" } as const
       const key = input.request.runId === undefined ? undefined : parseSessionKey(input.request.runId)
-      const conversationId = key !== undefined && key.botId === bot.value.id ? key.conversationId : bot.value.directConversationId
+      const conversationId =
+        key !== undefined && key.botId === bot.value.id ? key.conversationId : bot.value.directConversationId
       const request = nodeRequest(input)
       const outcome = yield* failClosed(
-        evaluateApproval({ bot: bot.value, conversationId, harness: "openbot" }, request, {
-          origin: "openbot",
-          method: "node.requestApproval",
-          nativeRequestId: input.request.invocationId,
-        }, false),
+        evaluateApproval(
+          { bot: bot.value, conversationId, harness: "openbot" },
+          request,
+          {
+            origin: "openbot",
+            method: "node.requestApproval",
+            nativeRequestId: input.request.invocationId,
+          },
+          false,
+        ),
       )
       const raw = outcome.decision ?? ("decision" in outcome.resolution ? outcome.resolution.decision : "deny")
-      const decision: NodeApprovalResponse["decision"] = raw === "allow-always"
-        ? "allow-always"
-        : raw === "allow-once" || raw === "allow-session"
-        ? "allow-once"
-        : "deny"
+      const decision: NodeApprovalResponse["decision"] =
+        raw === "allow-always"
+          ? "allow-always"
+          : raw === "allow-once" || raw === "allow-session"
+            ? "allow-once"
+            : "deny"
       const by = outcome.by === "cancelled" ? "expired" : outcome.by
       return { decision, by }
     }).pipe(
       Effect.catchDefect((defect) =>
-        Effect.logError("ApprovalService.evaluateNode failed", defect).pipe(Effect.as({ decision: "deny" as const, by: "rule" }))
+        Effect.logError("ApprovalService.evaluateNode failed", defect).pipe(
+          Effect.as({ decision: "deny" as const, by: "rule" }),
+        ),
       ),
     )
 
@@ -649,22 +743,22 @@ export const makeApprovalService = Effect.gen(function*() {
     entry.deliverTo === undefined
       ? Effect.void
       : Queue.offer(answers, {
-        conversationId: entry.deliverTo.conversationId,
-        botId: entry.deliverTo.botId,
-        kind: "user-message",
-        text,
-        urgency: "urgent",
-        sourceEntryId: request.cardEntryId,
-      }).pipe(Effect.asVoid)
+          conversationId: entry.deliverTo.conversationId,
+          botId: entry.deliverTo.botId,
+          kind: "user-message",
+          text,
+          urgency: "urgent",
+          sourceEntryId: request.cardEntryId,
+        }).pipe(Effect.asVoid)
 
   /** The owner holds the bot's control lease right now (false without a ComputerPort or on error). */
   const ownerHoldsScreen = (botId: BotId) =>
     computer === undefined
       ? Effect.succeed(false)
       : computer.status(botId).pipe(
-        Effect.map((status) => status.controller === "user"),
-        Effect.orElseSucceed(() => false),
-      )
+          Effect.map((status) => status.controller === "user"),
+          Effect.orElseSucceed(() => false),
+        )
 
   /**
    * Gives the bot its screen back when the owner holds it (answered hand-offs: the bot is about to
@@ -673,13 +767,13 @@ export const makeApprovalService = Effect.gen(function*() {
   const handBackScreen = (botId: BotId) =>
     computer === undefined
       ? Effect.void
-      : Effect.gen(function*() {
-        if (!(yield* ownerHoldsScreen(botId))) return
-        yield* computer.lease(botId, false)
-      }).pipe(
-        Effect.timeout(Duration.seconds(10)),
-        Effect.catchCause((cause) => Effect.logWarning("ApprovalService: the screen was not handed back", cause)),
-      )
+      : Effect.gen(function* () {
+          if (!(yield* ownerHoldsScreen(botId))) return
+          yield* computer.lease(botId, false)
+        }).pipe(
+          Effect.timeout(Duration.seconds(10)),
+          Effect.catchCause((cause) => Effect.logWarning("ApprovalService: the screen was not handed back", cause)),
+        )
 
   const expiredText = (request: RuntimeRequest, approvalExpiryMinutes: number): string => {
     const title = oneLine(request.title)
@@ -694,14 +788,19 @@ export const makeApprovalService = Effect.gen(function*() {
   }
 
   const expireAsync = (requestId: RequestId): Effect.Effect<void> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const current = yield* getRequest(requestId)
       // a hand-off the owner is still working on (they hold the screen) waits another period
-      if (current.kind === "handoff" && current.status === "pending" && pending.has(requestId) && (yield* ownerHoldsScreen(current.botId))) {
+      if (
+        current.kind === "handoff" &&
+        current.status === "pending" &&
+        pending.has(requestId) &&
+        (yield* ownerHoldsScreen(current.botId))
+      ) {
         const now = yield* Clock.currentTimeMillis
-        yield* conversations.upsertRequest({ ...current, expiresAt: now + HANDOFF_EXPIRY_MINUTES * 60_000 }).pipe(
-          Effect.catch((error) => Effect.logWarning("ApprovalService: hand-off expiry not extended", error)),
-        )
+        yield* conversations
+          .upsertRequest({ ...current, expiresAt: now + HANDOFF_EXPIRY_MINUTES * 60_000 })
+          .pipe(Effect.catch((error) => Effect.logWarning("ApprovalService: hand-off expiry not extended", error)))
         yield* Effect.sleep(Duration.minutes(HANDOFF_EXPIRY_MINUTES))
         return yield* expireAsync(requestId)
       }
@@ -720,25 +819,40 @@ export const makeApprovalService = Effect.gen(function*() {
   const resolveToolBot = (ctx: ToolContext) =>
     bots.get(ctx.claims.botId).pipe(
       Effect.orDie,
-      Effect.flatMap(Option.match({
-        onNone: () => Effect.fail(new InvalidInput({ message: "Unknown bot." })),
-        onSome: Effect.succeed,
-      })),
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new InvalidInput({ message: "Unknown bot." })),
+          onSome: Effect.succeed,
+        }),
+      ),
     )
 
   /** Same tool call id → the same request (D3.3 idempotency). */
   const existingReceipt = (ctx: ToolContext) =>
     ctx.callId === undefined
       ? Effect.succeed(Option.none<PendingRequestReceipt>())
-      : requests.findByNativeId(ctx.claims.botId, ctx.callId).pipe(
-        Effect.orDie,
-        Effect.map(Option.map((r): PendingRequestReceipt => ({ status: "pending", requestId: r.id }))),
-      )
+      : requests
+          .findByNativeId(ctx.claims.botId, ctx.callId)
+          .pipe(
+            Effect.orDie,
+            Effect.map(Option.map((r): PendingRequestReceipt => ({ status: "pending", requestId: r.id }))),
+          )
 
-  const createAsync = (ctx: ToolContext, bot: Bot, input: Omit<NewRequest, "bot" | "originConversationId" | "blocking">) =>
-    Effect.gen(function*() {
-      const request = yield* createRequest({ ...input, bot, originConversationId: ctx.claims.conversationId, blocking: false }).pipe(
-        Effect.catch((error) => Effect.fail(new InvalidInput({ message: `Could not post the request: ${error._tag}.` }))),
+  const createAsync = (
+    ctx: ToolContext,
+    bot: Bot,
+    input: Omit<NewRequest, "bot" | "originConversationId" | "blocking">,
+  ) =>
+    Effect.gen(function* () {
+      const request = yield* createRequest({
+        ...input,
+        bot,
+        originConversationId: ctx.claims.conversationId,
+        blocking: false,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.fail(new InvalidInput({ message: `Could not post the request: ${error._tag}.` })),
+        ),
       )
       pending.set(request.id, {
         requestId: request.id,
@@ -748,7 +862,9 @@ export const makeApprovalService = Effect.gen(function*() {
       yield* FiberMap.run(
         timers,
         request.id,
-        Effect.sleep(Duration.millis(Math.max(0, (request.expiresAt ?? now) - now))).pipe(Effect.andThen(expireAsync(request.id))),
+        Effect.sleep(Duration.millis(Math.max(0, (request.expiresAt ?? now) - now))).pipe(
+          Effect.andThen(expireAsync(request.id)),
+        ),
       )
       return { status: "pending", requestId: request.id } satisfies PendingRequestReceipt
     })
@@ -761,14 +877,18 @@ export const makeApprovalService = Effect.gen(function*() {
       if (seen.has(q.id)) return `Duplicate question id "${q.id}".`
       seen.add(q.id)
       if (q.prompt.trim().length === 0) return `Question "${q.id}" has no prompt.`
-      if (q.options.length > ASK_LIMITS.options) return `Question "${q.id}" has more than ${ASK_LIMITS.options} options.`
+      if (q.options.length > ASK_LIMITS.options)
+        return `Question "${q.id}" has more than ${ASK_LIMITS.options} options.`
       if (q.options.length === 0 && !q.allowFreeText) return `Question "${q.id}" needs options or allowFreeText.`
     }
     return undefined
   }
 
-  const askUser = (ctx: ToolContext, input: { readonly title?: string | undefined; readonly questions: ReadonlyArray<Question> }) =>
-    Effect.gen(function*() {
+  const askUser = (
+    ctx: ToolContext,
+    input: { readonly title?: string | undefined; readonly questions: ReadonlyArray<Question> },
+  ) =>
+    Effect.gen(function* () {
       const existing = yield* existingReceipt(ctx)
       if (Option.isSome(existing)) return existing.value
       const problem = validateQuestions(input.questions)
@@ -777,7 +897,10 @@ export const makeApprovalService = Effect.gen(function*() {
       const title = input.title?.trim()
       return yield* createAsync(ctx, bot, {
         kind: "question",
-        title: truncate(title !== undefined && title.length > 0 ? title : input.questions[0]!.prompt, ASK_LIMITS.titleChars),
+        title: truncate(
+          title !== undefined && title.length > 0 ? title : input.questions[0]!.prompt,
+          ASK_LIMITS.titleChars,
+        ),
         subject: { toolName: "ask_user" },
         responseCapability: { type: "answers", questions: input.questions },
         source: { origin: "openbot", method: "ask_user", nativeRequestId: ctx.callId ?? "" },
@@ -799,11 +922,12 @@ export const makeApprovalService = Effect.gen(function*() {
       readonly paths?: ReadonlyArray<string> | undefined
     },
   ) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const existing = yield* existingReceipt(ctx)
       if (Option.isSome(existing)) return existing.value
       const title = input.title.trim()
-      if (title.length === 0) return yield* new InvalidInput({ message: "request_approval needs a title describing the action." })
+      if (title.length === 0)
+        return yield* new InvalidInput({ message: "request_approval needs a title describing the action." })
       const bot = yield* resolveToolBot(ctx)
       const subject: RuntimeRequestSubject = {
         toolName: "request_approval",
@@ -832,7 +956,7 @@ export const makeApprovalService = Effect.gen(function*() {
     })
 
   const requestTakeover = (ctx: ToolContext, input: { readonly instruction: string }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (ctx.taskId !== undefined) {
         return yield* new InvalidInput({
           message: "Background work cannot hand the screen to the owner. Say what you need from them in your result.",
@@ -842,10 +966,14 @@ export const makeApprovalService = Effect.gen(function*() {
       if (Option.isSome(existing)) return existing.value
       const instruction = input.instruction.trim()
       if (instruction.length === 0) {
-        return yield* new InvalidInput({ message: "request_takeover needs an instruction: what the owner should do on your screen." })
+        return yield* new InvalidInput({
+          message: "request_takeover needs an instruction: what the owner should do on your screen.",
+        })
       }
       if (instruction.length > ASK_LIMITS.instructionChars) {
-        return yield* new InvalidInput({ message: `Keep the instruction under ${ASK_LIMITS.instructionChars} characters.` })
+        return yield* new InvalidInput({
+          message: `Keep the instruction under ${ASK_LIMITS.instructionChars} characters.`,
+        })
       }
       const bot = yield* resolveToolBot(ctx)
       const nodeId = ctx.claims.hostNodeId
@@ -866,9 +994,9 @@ export const makeApprovalService = Effect.gen(function*() {
    * (the card closes as "Done" and the bot is told).
    */
   const answerHandoffs = (botId: BotId) =>
-    Effect.gen(function*() {
-      const open = (yield* requests.list({ statuses: ["pending"], botId }).pipe(Effect.orDie)).filter((r) =>
-        r.kind === "handoff" && !r.blocking && pending.has(r.id)
+    Effect.gen(function* () {
+      const open = (yield* requests.list({ statuses: ["pending"], botId }).pipe(Effect.orDie)).filter(
+        (r) => r.kind === "handoff" && !r.blocking && pending.has(r.id),
       )
       for (const request of open) {
         yield* Effect.ignore(respond({ requestId: request.id, response: { type: "acknowledge", action: "done" } }))
@@ -888,12 +1016,16 @@ export const makeApprovalService = Effect.gen(function*() {
   const invalid = (message: string) => Effect.fail(new InvalidInput({ message }))
 
   /** Checks a response against the request's capability and maps it for the harness. */
-  const interpret = (request: RuntimeRequest, response: RuntimeResponseInput): Effect.Effect<Interpreted, InvalidInput> => {
+  const interpret = (
+    request: RuntimeRequest,
+    response: RuntimeResponseInput,
+  ): Effect.Effect<Interpreted, InvalidInput> => {
     if (response.type === "dismiss") {
       return Effect.succeed({
         stored: response,
         decision: "deny",
-        resolution: request.kind === "question" ? cancelResolution : { decision: "deny", message: "Dismissed by the user." },
+        resolution:
+          request.kind === "question" ? cancelResolution : { decision: "deny", message: "Dismissed by the user." },
         status: "cancelled",
         statusReason: "dismissed",
       })
@@ -906,7 +1038,8 @@ export const makeApprovalService = Effect.gen(function*() {
         if (option === undefined && response.decision !== "deny") {
           return invalid(`"${response.decision}" is not offered for this request.`)
         }
-        if (response.message !== undefined && !capability.allowMessage) return invalid("This request does not take a message.")
+        if (response.message !== undefined && !capability.allowMessage)
+          return invalid("This request does not take a message.")
         if (response.scope === "project-folder") {
           if (request.projectFolder === undefined) return invalid("This request does not offer a project folder.")
           if (response.decision !== "allow-once") return invalid("“Allow in folder” allows once and adds the folder.")
@@ -969,8 +1102,10 @@ export const makeApprovalService = Effect.gen(function*() {
         })
       }
       case "acknowledge": {
-        if (response.type !== "acknowledge") return invalid(`This request expects an acknowledgement, not "${response.type}".`)
-        if (!capability.actions.includes(response.action)) return invalid(`"${response.action}" is not offered for this request.`)
+        if (response.type !== "acknowledge")
+          return invalid(`This request expects an acknowledgement, not "${response.type}".`)
+        if (!capability.actions.includes(response.action))
+          return invalid(`"${response.action}" is not offered for this request.`)
         return Effect.succeed({
           stored: response,
           resolution: { decision: response.action === "skip" ? "deny" : "allow-once" },
@@ -981,7 +1116,7 @@ export const makeApprovalService = Effect.gen(function*() {
   }
 
   const saveAlwaysRule = (request: RuntimeRequest) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const suggested: SuggestedRule = request.suggestedRule ?? {
         surface: "other",
         match: request.subject.toolName === undefined ? {} : { toolName: request.subject.toolName },
@@ -1001,12 +1136,16 @@ export const makeApprovalService = Effect.gen(function*() {
 
   /** Adds `folder` to the bot's project folders (no-op when present) and publishes the bot. */
   const addProjectFolder = (botId: BotId, folder: string) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const found = yield* bots.get(botId).pipe(Effect.orDie)
       if (Option.isNone(found)) return undefined
       const bot = found.value
       if (bot.projectFolders.includes(folder)) return bot
-      const next: Bot = { ...bot, projectFolders: [...bot.projectFolders, folder], updatedAt: yield* Clock.currentTimeMillis }
+      const next: Bot = {
+        ...bot,
+        projectFolders: [...bot.projectFolders, folder],
+        updatedAt: yield* Clock.currentTimeMillis,
+      }
       yield* bots.upsert(next).pipe(Effect.orDie)
       yield* hub.publishRoster({ type: "bot.upserted", bot: next })
       return next
@@ -1026,14 +1165,17 @@ export const makeApprovalService = Effect.gen(function*() {
     }
     if (stored.type === "decision") {
       const verdict = stored.decision === "deny" || stored.decision === "cancel" ? "denied" : "approved"
-      const note = stored.message === undefined || stored.message.trim().length === 0 ? "" : `\nTheir note: ${stored.message.trim()}`
+      const note =
+        stored.message === undefined || stored.message.trim().length === 0
+          ? ""
+          : `\nTheir note: ${stored.message.trim()}`
       return `The user ${verdict} your request "${title}".${note}`
     }
     return `The user responded to your request "${title}".`
   }
 
   const respond = (input: { readonly requestId: RequestId; readonly response: RuntimeResponseInput }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const request = yield* getRequest(input.requestId)
       if (request.status !== "pending") {
         return yield* new RequestNotPending({ requestId: request.id, status: request.status })
@@ -1047,15 +1189,17 @@ export const makeApprovalService = Effect.gen(function*() {
       }
       const entry = claimed.value
       const outcome: Outcome = { by: "user", decision: interpreted.decision, resolution: interpreted.resolution }
-      return yield* Effect.gen(function*() {
+      return yield* Effect.gen(function* () {
         yield* FiberMap.remove(timers, request.id)
         let cardDetail: string | undefined
         if (interpreted.decision === "allow-always" && interpreted.status === "resolved") {
           const rule = yield* saveAlwaysRule(request)
           cardDetail = `Added to your Allow rules: ${describeRule(rule)}`
         } else if (
-          interpreted.stored.type === "decision" && interpreted.stored.scope === "project-folder" &&
-          request.projectFolder !== undefined && interpreted.status === "resolved"
+          interpreted.stored.type === "decision" &&
+          interpreted.stored.scope === "project-folder" &&
+          request.projectFolder !== undefined &&
+          interpreted.status === "resolved"
         ) {
           const bot = yield* addProjectFolder(request.botId, request.projectFolder)
           cardDetail = `Added ${request.projectFolder} to ${bot?.name ?? "the Bot"}'s project folders`
@@ -1090,16 +1234,19 @@ export const makeApprovalService = Effect.gen(function*() {
     readonly reason: string
     readonly cardDetail?: string | undefined
   }) =>
-    Effect.gen(function*() {
-      const matching = (yield* requests.list({
-        statuses: ["pending"],
-        ...(input.botId === undefined ? {} : { botId: input.botId }),
-        ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
-        ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
-      }).pipe(Effect.orDie)).filter((r) =>
-        (input.taskId === undefined || r.taskId === input.taskId) &&
-        (input.kinds === undefined || input.kinds.includes(r.kind)) &&
-        (input.asyncOnly !== true || !r.blocking)
+    Effect.gen(function* () {
+      const matching = (yield* requests
+        .list({
+          statuses: ["pending"],
+          ...(input.botId === undefined ? {} : { botId: input.botId }),
+          ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+          ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
+        })
+        .pipe(Effect.orDie)).filter(
+        (r) =>
+          (input.taskId === undefined || r.taskId === input.taskId) &&
+          (input.kinds === undefined || input.kinds.includes(r.kind)) &&
+          (input.asyncOnly !== true || !r.blocking),
       )
       let count = 0
       for (const request of matching) {
@@ -1113,14 +1260,16 @@ export const makeApprovalService = Effect.gen(function*() {
       }
       return count
     }).pipe(
-      Effect.catchDefect((defect) => Effect.logError("ApprovalService.cancelPending failed", defect).pipe(Effect.as(0))),
+      Effect.catchDefect((defect) =>
+        Effect.logError("ApprovalService.cancelPending failed", defect).pipe(Effect.as(0)),
+      ),
     )
 
   // the owner handed the screen back (computer view "I'm done"): pending hand-offs are done
   if (computer !== undefined) {
     yield* computer.leaseChanges.pipe(
       Stream.runForEach((change) =>
-        change.holder === "bot" && change.cause === "lease" ? answerHandoffs(change.botId) : Effect.void
+        change.holder === "bot" && change.cause === "lease" ? answerHandoffs(change.botId) : Effect.void,
       ),
       Effect.catchCause((cause) => Effect.logWarning("ApprovalService: lease changes ended", cause)),
       Effect.forkScoped({ startImmediately: true }),
@@ -1132,7 +1281,9 @@ export const makeApprovalService = Effect.gen(function*() {
     evaluateNode,
     respond,
     listPending: ({ conversationId }) =>
-      requests.list({ statuses: ["pending"], ...(conversationId === undefined ? {} : { conversationId }) }).pipe(Effect.orDie),
+      requests
+        .list({ statuses: ["pending"], ...(conversationId === undefined ? {} : { conversationId }) })
+        .pipe(Effect.orDie),
     askUser,
     requestApproval,
     requestTakeover,
@@ -1148,5 +1299,13 @@ export const makeApprovalService = Effect.gen(function*() {
 export const ApprovalServiceLive: Layer.Layer<
   ApprovalService,
   never,
-  ConversationService | SettingsService | Notifier | RequestRepo | ApprovalRuleRepo | BotRepo | TurnRepo | IdGen | LiveHub
+  | ConversationService
+  | SettingsService
+  | Notifier
+  | RequestRepo
+  | ApprovalRuleRepo
+  | BotRepo
+  | TurnRepo
+  | IdGen
+  | LiveHub
 > = Layer.effect(ApprovalService, makeApprovalService)

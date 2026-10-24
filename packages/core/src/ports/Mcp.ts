@@ -49,10 +49,13 @@ export interface McpBinding {
   readonly headers: Readonly<Record<string, string>>
 }
 
-export class McpBindingIssuer extends Context.Service<McpBindingIssuer, {
-  /** Mints a per-run bearer bound to `claims`; revoked when the caller's scope closes. */
-  readonly issue: (claims: McpClaims) => Effect.Effect<McpBinding, never, Scope.Scope>
-}>()("openbot/core/McpBindingIssuer") {}
+export class McpBindingIssuer extends Context.Service<
+  McpBindingIssuer,
+  {
+    /** Mints a per-run bearer bound to `claims`; revoked when the caller's scope closes. */
+    readonly issue: (claims: McpClaims) => Effect.Effect<McpBinding, never, Scope.Scope>
+  }
+>()("openbot/core/McpBindingIssuer") {}
 
 /** Stored token row (`mcp_tokens`). */
 export const McpTokenRecord = Schema.Struct({
@@ -65,11 +68,14 @@ export const McpTokenRecord = Schema.Struct({
 })
 export type McpTokenRecord = typeof McpTokenRecord.Type
 
-export class McpTokenRepo extends Context.Service<McpTokenRepo, {
-  readonly put: (record: McpTokenRecord) => Effect.Effect<void, RepoError>
-  /** Returns the record even if revoked/expired; callers check `revoked` and `expiresAt`. */
-  readonly lookup: (hash: string) => Effect.Effect<Option.Option<McpTokenRecord>, RepoError>
-  readonly revoke: (hash: string) => Effect.Effect<void, RepoError>
-  /** Revokes every token of a bot (bot deleted) or every token (`botId` omitted; brain boot). */
-  readonly revokeAll: (botId?: BotId) => Effect.Effect<void, RepoError>
-}>()("openbot/core/McpTokenRepo") {}
+export class McpTokenRepo extends Context.Service<
+  McpTokenRepo,
+  {
+    readonly put: (record: McpTokenRecord) => Effect.Effect<void, RepoError>
+    /** Returns the record even if revoked/expired; callers check `revoked` and `expiresAt`. */
+    readonly lookup: (hash: string) => Effect.Effect<Option.Option<McpTokenRecord>, RepoError>
+    readonly revoke: (hash: string) => Effect.Effect<void, RepoError>
+    /** Revokes every token of a bot (bot deleted) or every token (`botId` omitted; brain boot). */
+    readonly revokeAll: (botId?: BotId) => Effect.Effect<void, RepoError>
+  }
+>()("openbot/core/McpTokenRepo") {}

@@ -12,7 +12,15 @@
 //     render as lines, open no timestamp and never split a bubble group. Denials stay visible lines,
 //   - in a direct conversation, bot replies to another Bot's message (a turn triggered by a
 //     `message_bot` delivery) carry `addressee` (the sender) so the chat labels them "to @Sender".
-import type { ConversationState, EntryId, RuntimeRequest, TranscriptEntry, TranscriptEntryOf, Turn, TurnId } from "@openbot/contracts"
+import type {
+  ConversationState,
+  EntryId,
+  RuntimeRequest,
+  TranscriptEntry,
+  TranscriptEntryOf,
+  Turn,
+  TurnId,
+} from "@openbot/contracts"
 
 export type MessageEntry = TranscriptEntryOf<"message">
 export type ToolCallEntry = TranscriptEntryOf<"tool-call">
@@ -20,7 +28,10 @@ export type ToolCallEntry = TranscriptEntryOf<"tool-call">
 /** OpenBot tools whose card in the chat is their visible step (not repeated in "N steps"). */
 const CARD_TOOLS = new Set(["ask_user", "request_approval"])
 const shownAsCard = (entry: ToolCallEntry): boolean =>
-  entry.mcp?.server === "openbot" && CARD_TOOLS.has(entry.mcp.tool) && entry.status !== "failed" && entry.status !== "declined"
+  entry.mcp?.server === "openbot" &&
+  CARD_TOOLS.has(entry.mcp.tool) &&
+  entry.status !== "failed" &&
+  entry.status !== "declined"
 export type ReasoningEntry = TranscriptEntryOf<"reasoning">
 export type CardEntry = TranscriptEntryOf<"card">
 export type EventEntry = TranscriptEntryOf<"event">
@@ -61,7 +72,13 @@ export type Row =
    * A run of consecutive bot-to-bot messages (`toBotId`, written by message_bot / handoff_task) from
    * one counterpart, collapsed into "N messages with ‹Bot›" (Grok). `ownerBotId` is the recipient.
    */
-  | { readonly type: "exchange"; readonly key: string; readonly peerBotId: string; readonly ownerBotId: string; readonly entries: ReadonlyArray<MessageEntry> }
+  | {
+      readonly type: "exchange"
+      readonly key: string
+      readonly peerBotId: string
+      readonly ownerBotId: string
+      readonly entries: ReadonlyArray<MessageEntry>
+    }
   | { readonly type: "event"; readonly key: string; readonly entry: EventEntry }
   | { readonly type: "notice"; readonly key: string; readonly entry: NoticeEntry }
   | { readonly type: "unknown"; readonly key: string; readonly entry: UnknownEntry }
@@ -94,13 +111,17 @@ export interface LayoutInput {
 
 export const TIMESTAMP_GAP_MS = 15 * 60 * 1000
 
-const isTerminal = (t: Turn | undefined) => t !== undefined && (t.status === "completed" || t.status === "failed" || t.status === "interrupted")
+const isTerminal = (t: Turn | undefined) =>
+  t !== undefined && (t.status === "completed" || t.status === "failed" || t.status === "interrupted")
 
-const sideOf = (entry: MessageEntry): "user" | "bot" => (entry.role === "user" || entry.author.kind === "user" ? "user" : "bot")
-const botOf = (entry: TranscriptEntry): string | undefined => (entry.author.kind === "bot" ? entry.author.botId : undefined)
+const sideOf = (entry: MessageEntry): "user" | "bot" =>
+  entry.role === "user" || entry.author.kind === "user" ? "user" : "bot"
+const botOf = (entry: TranscriptEntry): string | undefined =>
+  entry.author.kind === "bot" ? entry.author.botId : undefined
 
 /** A directed bot-to-bot message (message_bot / handoff_task), shown collapsed, never as a bubble. */
-export const isBotToBot = (entry: MessageEntry): boolean => entry.author.kind === "bot" && entry.toBotId !== undefined && entry.author.botId !== entry.toBotId
+export const isBotToBot = (entry: MessageEntry): boolean =>
+  entry.author.kind === "bot" && entry.toBotId !== undefined && entry.author.botId !== entry.toBotId
 
 /**
  * Both directions of the traffic between bots `a` and `b`: b → a lives in a's direct conversation,
@@ -149,7 +170,9 @@ export const replyAddressee = (
   const input = turn.inputEntryId === undefined ? undefined : byId.get(turn.inputEntryId)
   if (input !== undefined) {
     const from = botOf(input)
-    return input.kind === "message" && from !== undefined && from !== replier && input.toBotId === replier ? from : undefined
+    return input.kind === "message" && from !== undefined && from !== replier && input.toBotId === replier
+      ? from
+      : undefined
   }
   if (turn.trigger !== "bot") return undefined
   for (let i = earlier.length - 1; i >= 0; i--) {
@@ -163,7 +186,10 @@ export const replyAddressee = (
 /** Build the transcript rows. Entries must already be in transcript order (`transcriptOf`). */
 export const layoutTranscript = (input: LayoutInput): ReadonlyArray<Row> => {
   const gap = input.timestampGapMs ?? TIMESTAMP_GAP_MS
-  const turns = input.turns instanceof Map ? input.turns : new Map((input.turns as ReadonlyArray<Turn>).map((t) => [t.id, t] as const))
+  const turns =
+    input.turns instanceof Map
+      ? input.turns
+      : new Map((input.turns as ReadonlyArray<Turn>).map((t) => [t.id, t] as const))
   const rows: Row[] = []
   let lastAt: number | undefined
   let dividerPlaced = false
@@ -223,7 +249,13 @@ export const layoutTranscript = (input: LayoutInput): ReadonlyArray<Row> => {
             ;(last.entries as MessageEntry[]).push(entry)
           } else {
             beforeVisible(entry.id, entry.createdAt, true)
-            rows.push({ type: "exchange", key: `x:${entry.id}`, peerBotId: peer, ownerBotId: entry.toBotId!, entries: [entry] })
+            rows.push({
+              type: "exchange",
+              key: `x:${entry.id}`,
+              peerBotId: peer,
+              ownerBotId: entry.toBotId!,
+              entries: [entry],
+            })
           }
           markTurn(entry)
           break
@@ -258,7 +290,12 @@ export const layoutTranscript = (input: LayoutInput): ReadonlyArray<Row> => {
         break
       case "event":
         // a Bot compacting its context is housekeeping: shown only when the owner asked for it
-        if (entry.event.type === "session-changed" && entry.event.action === "compacted" && input.showCompactions !== true) break
+        if (
+          entry.event.type === "session-changed" &&
+          entry.event.action === "compacted" &&
+          input.showCompactions !== true
+        )
+          break
         beforeVisible(entry.id, entry.createdAt, false)
         rows.push({ type: "event", key: entry.id, entry })
         markTurn(entry)
@@ -285,24 +322,41 @@ export const layoutTranscript = (input: LayoutInput): ReadonlyArray<Row> => {
   }
 
   const reveal = input.revealSteps
-  if ((!input.showSteps && (reveal === undefined || reveal.size === 0)) || (steps.size === 0 && decisions.size === 0)) return rows
+  if ((!input.showSteps && (reveal === undefined || reveal.size === 0)) || (steps.size === 0 && decisions.size === 0))
+    return rows
 
   // Insert the disclosures from the back so earlier indices stay valid.
   const turnIds = new Set<TurnId>([...steps.keys(), ...decisions.keys()])
   const inserts = [...turnIds]
     .filter((turnId) => (input.showSteps && isTerminal(turns.get(turnId))) || reveal?.has(turnId) === true)
-    .map((turnId) => ({ at: anchor.get(turnId) ?? rows.length - 1, turnId, list: steps.get(turnId) ?? [], decided: decisions.get(turnId) ?? [] }))
+    .map((turnId) => ({
+      at: anchor.get(turnId) ?? rows.length - 1,
+      turnId,
+      list: steps.get(turnId) ?? [],
+      decided: decisions.get(turnId) ?? [],
+    }))
     .sort((a, b) => b.at - a.at)
   for (const ins of inserts) {
     const failed = ins.list.some((s) => s.kind === "tool-call" && (s.status === "failed" || s.status === "declined"))
-    const row: Row = { type: "steps", key: `steps:${ins.turnId}`, turnId: ins.turnId, steps: ins.list, decisions: ins.decided, failed }
+    const row: Row = {
+      type: "steps",
+      key: `steps:${ins.turnId}`,
+      turnId: ins.turnId,
+      steps: ins.list,
+      decisions: ins.decided,
+      failed,
+    }
     rows.splice(ins.at + 1, 0, row)
   }
   return rows
 }
 
 /** Bubble corner position of item `index` in a group, given whether a trailing grouped row follows. */
-export const positionIn = (index: number, length: number, continued = false): "single" | "first" | "middle" | "last" => {
+export const positionIn = (
+  index: number,
+  length: number,
+  continued = false,
+): "single" | "first" | "middle" | "last" => {
   const total = continued ? length + 1 : length
   if (total <= 1) return "single"
   if (index === 0) return "first"
@@ -324,7 +378,10 @@ export const failedTurnOf = (turns: ReadonlyArray<Turn>): Turn | undefined => {
 }
 
 /** Pending request for a card entry, if any. */
-export const requestForCard = (entry: CardEntry, requests: ReadonlyMap<string, RuntimeRequest>): RuntimeRequest | undefined => {
+export const requestForCard = (
+  entry: CardEntry,
+  requests: ReadonlyMap<string, RuntimeRequest>,
+): RuntimeRequest | undefined => {
   const card = entry.card as { readonly requestId?: string }
   return card.requestId !== undefined ? requests.get(card.requestId) : undefined
 }
@@ -334,7 +391,9 @@ export const requestForCard = (entry: CardEntry, requests: ReadonlyMap<string, R
  * cached replica renders at once with a stale `conversation` while it catches up), else the
  * boundary when something is unread.
  */
-export const unreadBoundaryOf = (state: Pick<ConversationState, "conversation" | "synchronized">): number | undefined | null => {
+export const unreadBoundaryOf = (
+  state: Pick<ConversationState, "conversation" | "synchronized">,
+): number | undefined | null => {
   if (!state.conversation || !state.synchronized) return null
   return state.conversation.unreadCount > 0 ? state.conversation.unreadBoundaryAt : undefined
 }

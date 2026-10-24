@@ -15,7 +15,8 @@ export interface ContextRingProps {
   readonly usage: ContextUsage
 }
 
-const toneFor = (pct: number) => (pct >= 90 ? "var(--ob-danger)" : pct >= 70 ? "var(--ob-warn)" : "var(--ob-icon-tertiary)")
+const toneFor = (pct: number) =>
+  pct >= 90 ? "var(--ob-danger)" : pct >= 70 ? "var(--ob-warn)" : "var(--ob-icon-tertiary)"
 
 /** A 16 px gauge: hairline ring with a filled pie for the used share (reads as a meter, not a spinner). */
 export function Ring({ pct, size = 16 }: { readonly pct: number; readonly size?: number }): ReactNode {
@@ -27,7 +28,14 @@ export function Ring({ pct, size = 16 }: { readonly pct: number; readonly size?:
   const x = c + inner * Math.sin(a)
   const y = c - inner * Math.cos(a)
   const pie =
-    frac >= 0.999 ? <circle cx={c} cy={c} r={inner} fill={toneFor(pct)} /> : frac > 0 ? <path d={`M${c} ${c}L${c} ${c - inner}A${inner} ${inner} 0 ${frac > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z`} fill={toneFor(pct)} /> : null
+    frac >= 0.999 ? (
+      <circle cx={c} cy={c} r={inner} fill={toneFor(pct)} />
+    ) : frac > 0 ? (
+      <path
+        d={`M${c} ${c}L${c} ${c - inner}A${inner} ${inner} 0 ${frac > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z`}
+        fill={toneFor(pct)}
+      />
+    ) : null
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
       <circle cx={c} cy={c} r={r - 0.25} fill="none" stroke={toneFor(pct)} strokeOpacity={0.7} strokeWidth={1.5} />
@@ -77,7 +85,13 @@ export function ContextRing({ botId, botName, usage }: ContextRingProps): ReactN
             <span className="ms-auto text-fg-secondary tabular-nums">{pct}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-            <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 70 ? toneFor(pct) : "var(--ob-fg-secondary)" }} />
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.min(pct, 100)}%`,
+                background: pct >= 70 ? toneFor(pct) : "var(--ob-fg-secondary)",
+              }}
+            />
           </div>
           <div className="flex text-xs text-fg-secondary">
             <span>Used</span>
@@ -85,12 +99,27 @@ export function ContextRing({ botId, botName, usage }: ContextRingProps): ReactN
               {formatTokens(usage.usedTokens)} / {formatTokens(usage.windowTokens)} tokens
             </span>
           </div>
-          <p className="text-2xs text-fg-quaternary">{botName} has one session for all of its chats (DM, groups, routines). Compacting keeps a summary; a new session starts empty for all of them. Memory and files stay.</p>
+          <p className="text-2xs text-fg-quaternary">
+            {botName} has one session for all of its chats (DM, groups, routines). Compacting keeps a summary; a new
+            session starts empty for all of them. Memory and files stay.
+          </p>
           <div className="flex items-center gap-2">
-            <PillButton size="md" loading={busy === "compact"} disabled={busy !== null} onClick={() => run("compact", close)}>
+            <PillButton
+              size="md"
+              loading={busy === "compact"}
+              disabled={busy !== null}
+              onClick={() => run("compact", close)}
+            >
               {busy === "compact" ? "Compacting…" : "Compact"}
             </PillButton>
-            <PillButton size="md" variant="tertiary" className="ms-auto" loading={busy === "new"} disabled={busy !== null} onClick={() => run("new", close)}>
+            <PillButton
+              size="md"
+              variant="tertiary"
+              className="ms-auto"
+              loading={busy === "new"}
+              disabled={busy !== null}
+              onClick={() => run("new", close)}
+            >
               New session
             </PillButton>
           </div>

@@ -4,7 +4,19 @@
 // secrets and computer hand-off. Answered by one RPC, `requests.respond` (D4.1).
 // Ported from vendor/scratch/contracts/src/runtime-request.ts.
 import { Schema } from "effect"
-import { Author, BotId, ConversationId, EntryId, HarnessKindName, Millis, NodeId, NonEmptyString, RequestId, TaskId, TurnId } from "./base.ts"
+import {
+  Author,
+  BotId,
+  ConversationId,
+  EntryId,
+  HarnessKindName,
+  Millis,
+  NodeId,
+  NonEmptyString,
+  RequestId,
+  TaskId,
+  TurnId,
+} from "./base.ts"
 import { SuggestedRule } from "./policy.ts"
 
 /** Harness-neutral decisions. Adapters map them to native values (domain-contract.md §F.8). */
@@ -47,7 +59,11 @@ export type HandoffAction = typeof HandoffAction.Type
 
 /** What the UI may send back. Drives which buttons/inputs a card renders. */
 export const ResponseCapability = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("decision"), options: Schema.Array(DecisionOption), allowMessage: Schema.Boolean }),
+  Schema.Struct({
+    type: Schema.Literal("decision"),
+    options: Schema.Array(DecisionOption),
+    allowMessage: Schema.Boolean,
+  }),
   Schema.Struct({ type: Schema.Literal("answers"), questions: Schema.Array(Question) }),
   Schema.Struct({ type: Schema.Literal("form"), fields: Schema.Array(FormField) }),
   Schema.Struct({ type: Schema.Literal("secret"), label: Schema.String, envVar: Schema.optionalKey(Schema.String) }),
@@ -87,7 +103,10 @@ export const RuntimeResponse = Schema.Union([
      */
     scope: Schema.optionalKey(Schema.Literal("project-folder")),
   }),
-  Schema.Struct({ type: Schema.Literal("answers"), answers: Schema.Record(Schema.String, Schema.Array(Schema.String)) }),
+  Schema.Struct({
+    type: Schema.Literal("answers"),
+    answers: Schema.Record(Schema.String, Schema.Array(Schema.String)),
+  }),
   Schema.Struct({ type: Schema.Literal("form"), values: Schema.Record(Schema.String, Schema.Unknown) }),
   Schema.Struct({ type: Schema.Literal("secret"), provided: Schema.Literal(true) }),
   Schema.Struct({ type: Schema.Literal("acknowledge"), action: HandoffAction }),

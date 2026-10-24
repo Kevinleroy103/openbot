@@ -4,7 +4,14 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { Icon } from "../src/Icon.tsx"
 import { HeaderPill, IconButton, PillButton } from "../src/primitives/buttons.tsx"
 import { Card, CardHeader, KeyBadge, OptionRow, Sheet, StatusPill } from "../src/primitives/card.tsx"
-import { Bubble, EventChip, EventLine, bubbleCornerClass, bubbleCorners, groupPosition } from "../src/primitives/chat.tsx"
+import {
+  Bubble,
+  EventChip,
+  EventLine,
+  bubbleCornerClass,
+  bubbleCorners,
+  groupPosition,
+} from "../src/primitives/chat.tsx"
 import { SegmentedTabs, Switch, TextField } from "../src/primitives/forms.tsx"
 import { DialogPanel, MenuItem, MenuPanel, filterPaletteItems, placePanel } from "../src/primitives/overlay.tsx"
 
@@ -29,23 +36,47 @@ describe("bubble grouping", () => {
 
   test("Bubble renders side colors", () => {
     expect(renderToStaticMarkup(<Bubble side="user">hi</Bubble>)).toContain("bg-bubble-user")
-    expect(renderToStaticMarkup(<Bubble side="bot" position="last">hi</Bubble>)).toContain("rounded-tl-md")
-    expect(renderToStaticMarkup(<Bubble side="bot" emojiOnly>👍</Bubble>)).not.toContain("bg-bubble-agent")
+    expect(
+      renderToStaticMarkup(
+        <Bubble side="bot" position="last">
+          hi
+        </Bubble>,
+      ),
+    ).toContain("rounded-tl-md")
+    expect(
+      renderToStaticMarkup(
+        <Bubble side="bot" emojiOnly>
+          👍
+        </Bubble>,
+      ),
+    ).not.toContain("bg-bubble-agent")
   })
 })
 
 describe("placePanel", () => {
   const vp = { width: 1000, height: 800 }
   test("places below, aligned start", () => {
-    expect(placePanel({ top: 100, left: 100, width: 40, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "start")).toEqual({ top: 126, left: 100, side: "bottom" })
+    expect(
+      placePanel({ top: 100, left: 100, width: 40, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "start"),
+    ).toEqual({ top: 126, left: 100, side: "bottom" })
   })
   test("flips to top when there is no room below", () => {
-    expect(placePanel({ top: 750, left: 100, width: 40, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "start")).toEqual({ top: 644, left: 100, side: "top" })
+    expect(
+      placePanel({ top: 750, left: 100, width: 40, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "start"),
+    ).toEqual({ top: 644, left: 100, side: "top" })
   })
   test("clamps into the viewport and aligns end/center", () => {
-    expect(placePanel({ top: 100, left: 980, width: 20, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "end").left).toBe(792)
-    expect(placePanel({ top: 100, left: 400, width: 100, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "center").left).toBe(350)
-    expect(placePanel({ top: 100, left: 0, width: 20, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "center").left).toBe(8)
+    expect(
+      placePanel({ top: 100, left: 980, width: 20, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "end").left,
+    ).toBe(792)
+    expect(
+      placePanel({ top: 100, left: 400, width: 100, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "center")
+        .left,
+    ).toBe(350)
+    expect(
+      placePanel({ top: 100, left: 0, width: 20, height: 20 }, { width: 200, height: 100 }, vp, "bottom", "center")
+        .left,
+    ).toBe(8)
   })
 })
 

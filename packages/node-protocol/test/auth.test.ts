@@ -113,17 +113,23 @@ describe("signed upgrade", () => {
     const kp = await run(generateKeyPair)
     const other = await run(generateKeyPair)
     const auth = await run(makeUpgradeAuth({ nodeId: "nod_1", privateKey: kp.privateKey, brainOrigin: ORIGIN }))
-    expect(await failureReason(verifyWith(auth.header, { nod_1: other.publicKey }, makeReplayCache()))).toBe("bad-signature")
-    expect(await failureReason(verifyWith(auth.header, {}, makeReplayCache()))).toBe("unknown-node")
-    expect(await failureReason(verifyWith(auth.header, { nod_1: kp.publicKey }, makeReplayCache(), "https://evil.example"))).toBe(
+    expect(await failureReason(verifyWith(auth.header, { nod_1: other.publicKey }, makeReplayCache()))).toBe(
       "bad-signature",
     )
+    expect(await failureReason(verifyWith(auth.header, {}, makeReplayCache()))).toBe("unknown-node")
+    expect(
+      await failureReason(verifyWith(auth.header, { nod_1: kp.publicKey }, makeReplayCache(), "https://evil.example")),
+    ).toBe("bad-signature")
     const p = parseUpgradeAuth(auth.header)!
     const tampered = formatUpgradeAuth({ ...p, nodeId: "nod_2" })
     expect(await failureReason(verifyWith(tampered, { nod_2: kp.publicKey }, makeReplayCache()))).toBe("bad-signature")
     const tsTampered = formatUpgradeAuth({ ...p, ts: p.ts + 1 })
-    expect(await failureReason(verifyWith(tsTampered, { nod_1: kp.publicKey }, makeReplayCache()))).toBe("bad-signature")
-    expect(await failureReason(verifyWith("OpenBot-Node v1 nope", { nod_1: kp.publicKey }, makeReplayCache()))).toBe("malformed")
+    expect(await failureReason(verifyWith(tsTampered, { nod_1: kp.publicKey }, makeReplayCache()))).toBe(
+      "bad-signature",
+    )
+    expect(await failureReason(verifyWith("OpenBot-Node v1 nope", { nod_1: kp.publicKey }, makeReplayCache()))).toBe(
+      "malformed",
+    )
     expect(await failureReason(verifyWith(undefined, { nod_1: kp.publicKey }, makeReplayCache()))).toBe("malformed")
   })
 
@@ -176,14 +182,24 @@ describe("node.hello brain signature", () => {
       Effect.gen(function* () {
         const brain = yield* generateKeyPair
         const impostor = yield* generateKeyPair
-        const brainSig = yield* signHello({ brainPrivateKey: brain.privateKey, nodeId: "nod_1", nonce: "N1", brainOrigin: ORIGIN })
+        const brainSig = yield* signHello({
+          brainPrivateKey: brain.privateKey,
+          nodeId: "nod_1",
+          nonce: "N1",
+          brainOrigin: ORIGIN,
+        })
         const base = { brainPublicKey: brain.publicKey, nodeId: "nod_1", nonce: "N1", brainOrigin: ORIGIN, brainSig }
         expect(yield* verifyHello(base)).toBe(true)
         expect(yield* verifyHello({ ...base, brainPublicKey: impostor.publicKey })).toBe(false)
         expect(yield* verifyHello({ ...base, nonce: "N2" })).toBe(false)
         expect(yield* verifyHello({ ...base, nodeId: "nod_2" })).toBe(false)
         expect(yield* verifyHello({ ...base, brainOrigin: "https://evil.example" })).toBe(false)
-        const impostorSig = yield* signHello({ brainPrivateKey: impostor.privateKey, nodeId: "nod_1", nonce: "N1", brainOrigin: ORIGIN })
+        const impostorSig = yield* signHello({
+          brainPrivateKey: impostor.privateKey,
+          nodeId: "nod_1",
+          nonce: "N1",
+          brainOrigin: ORIGIN,
+        })
         expect(yield* verifyHello({ ...base, brainSig: impostorSig })).toBe(false)
       }),
     ))

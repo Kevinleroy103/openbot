@@ -78,13 +78,16 @@ export interface NodeUpload {
   readonly skipped: boolean
 }
 
-export class NodeFiles extends Context.Service<NodeFiles, {
-  readonly download: (input: NodeDownloadInput) => Effect.Effect<NodeDownload, NodeDownloadError, Scope.Scope>
-  /**
-   * Brain → node (`fs.upload` + a `transfer` stream the brain writes): files sent to a bot land in
-   * its workspace on its host node. The node checks the path with its PathPolicy (`write-file`
-   * ceiling), verifies sha256/size and renames the file into place; a same-size file already at
-   * `path` is kept (`skipped`).
-   */
-  readonly upload: <E>(input: NodeUploadInput<E>) => Effect.Effect<NodeUpload, NodeDownloadError | E>
-}>()("openbot/core/NodeFiles") {}
+export class NodeFiles extends Context.Service<
+  NodeFiles,
+  {
+    readonly download: (input: NodeDownloadInput) => Effect.Effect<NodeDownload, NodeDownloadError, Scope.Scope>
+    /**
+     * Brain → node (`fs.upload` + a `transfer` stream the brain writes): files sent to a bot land in
+     * its workspace on its host node. The node checks the path with its PathPolicy (`write-file`
+     * ceiling), verifies sha256/size and renames the file into place; a same-size file already at
+     * `path` is kept (`skipped`).
+     */
+    readonly upload: <E>(input: NodeUploadInput<E>) => Effect.Effect<NodeUpload, NodeDownloadError | E>
+  }
+>()("openbot/core/NodeFiles") {}

@@ -13,15 +13,20 @@ export interface StartedTask {
   readonly task: Task
 }
 
-export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
-  readonly started: Effect.Effect<ReadonlyArray<StartedTask>>
-  /** Inserts or replaces a task (and optionally its steps). */
-  readonly put: (task: Task, steps?: ReadonlyArray<TranscriptEntry>) => Effect.Effect<void>
-  readonly cancelled: Effect.Effect<ReadonlyArray<{ readonly taskId: TaskId; readonly by: string }>>
-  /** Updates passed on with `update`, in order. */
-  readonly updates: Effect.Effect<ReadonlyArray<{ readonly taskId: TaskId; readonly message: string }>>
-}>()("openbot/core/testing/BackgroundTasksFake") {
-  static readonly layer = (options?: { readonly maxRunning?: number }): Layer.Layer<BackgroundTasks | BackgroundTasksFake> =>
+export class BackgroundTasksFake extends Context.Service<
+  BackgroundTasksFake,
+  {
+    readonly started: Effect.Effect<ReadonlyArray<StartedTask>>
+    /** Inserts or replaces a task (and optionally its steps). */
+    readonly put: (task: Task, steps?: ReadonlyArray<TranscriptEntry>) => Effect.Effect<void>
+    readonly cancelled: Effect.Effect<ReadonlyArray<{ readonly taskId: TaskId; readonly by: string }>>
+    /** Updates passed on with `update`, in order. */
+    readonly updates: Effect.Effect<ReadonlyArray<{ readonly taskId: TaskId; readonly message: string }>>
+  }
+>()("openbot/core/testing/BackgroundTasksFake") {
+  static readonly layer = (options?: {
+    readonly maxRunning?: number
+  }): Layer.Layer<BackgroundTasks | BackgroundTasksFake> =>
     Layer.effectContext(
       Effect.sync(() => {
         const tasks = new Map<TaskId, Task>()
@@ -34,12 +39,14 @@ export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
           const task = tasks.get(taskId)
           return task === undefined ? Effect.fail(new NotFound({ entity: "task", id: taskId })) : Effect.succeed(task)
         }
-        const list = (botId: BotId) => [...tasks.values()].filter((t) => t.botId === botId).sort((a, b) => b.createdAt - a.createdAt)
+        const list = (botId: BotId) =>
+          [...tasks.values()].filter((t) => t.botId === botId).sort((a, b) => b.createdAt - a.createdAt)
         const service = BackgroundTasks.of({
           start: (ctx, input) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               if (ctx.taskId !== undefined) return yield* new InvalidInput({ message: "Not from a task." })
-              if (input.title.trim() === "" || input.brief.trim() === "") return yield* new InvalidInput({ message: "Title and brief are required." })
+              if (input.title.trim() === "" || input.brief.trim() === "")
+                return yield* new InvalidInput({ message: "Title and brief are required." })
               const now = yield* Clock.currentTimeMillis
               const running = list(ctx.claims.botId).filter((t) => t.status === "running").length
               const task: Task = {
@@ -63,10 +70,12 @@ export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
             Effect.suspend(() => {
               const key = ref.trim().toLowerCase()
               const found = list(botId).find((t) => t.id === ref.trim() || t.title.toLowerCase() === key)
-              return found === undefined ? Effect.fail(new NotFound({ entity: "task", id: ref })) : Effect.succeed(found)
+              return found === undefined
+                ? Effect.fail(new NotFound({ entity: "task", id: ref }))
+                : Effect.succeed(found)
             }),
           cancel: (taskId, by) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const task = yield* read(taskId)
               if (isTerminalTaskStatus(task.status)) return task
               cancelled.push({ taskId, by })
@@ -76,7 +85,7 @@ export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
               return next
             }),
           update: (ctx, input) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               if (ctx.taskId !== undefined) return yield* new InvalidInput({ message: "Not from a task." })
               if (input.message.trim() === "") return yield* new InvalidInput({ message: "The update is empty." })
               const task = yield* read(input.taskId)
@@ -85,9 +94,10 @@ export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
               updates.push({ taskId: task.id, message: input.message.trim() })
               return { task, delivery: task.status === "running" ? ("steered" as const) : ("queued" as const) }
             }),
-          removeBot: (botId) => Effect.sync(() => {
-            for (const t of list(botId)) tasks.delete(t.id)
-          }),
+          removeBot: (botId) =>
+            Effect.sync(() => {
+              for (const t of list(botId)) tasks.delete(t.id)
+            }),
           cancelForConversation: () => Effect.void,
           approve: () => Effect.succeed({ decision: "allow-once" }),
           results: Stream.never,
@@ -97,15 +107,19 @@ export class BackgroundTasksFake extends Context.Service<BackgroundTasksFake, {
           running: Effect.sync(() => [...tasks.values()].filter((t) => t.status === "running").length),
         })
         return Context.make(BackgroundTasks, service).pipe(
-          Context.add(BackgroundTasksFake, BackgroundTasksFake.of({
-            started: Effect.sync(() => [...started]),
-            put: (task, taskSteps) => Effect.sync(() => {
-              tasks.set(task.id, task)
-              if (taskSteps !== undefined) steps.set(task.id, taskSteps)
+          Context.add(
+            BackgroundTasksFake,
+            BackgroundTasksFake.of({
+              started: Effect.sync(() => [...started]),
+              put: (task, taskSteps) =>
+                Effect.sync(() => {
+                  tasks.set(task.id, task)
+                  if (taskSteps !== undefined) steps.set(task.id, taskSteps)
+                }),
+              cancelled: Effect.sync(() => [...cancelled]),
+              updates: Effect.sync(() => [...updates]),
             }),
-            cancelled: Effect.sync(() => [...cancelled]),
-            updates: Effect.sync(() => [...updates]),
-          })),
+          ),
         )
       }),
     )

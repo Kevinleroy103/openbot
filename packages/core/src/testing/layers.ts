@@ -93,7 +93,8 @@ export const MemoryBootRecovery = (options?: {
           runBootRecovery({ killProcessGroup: options?.killProcessGroup ?? (() => Effect.succeed(false)) }),
           context,
         ),
-      })),
+      }),
+    ),
   )
 
 export type TestPortServices =
@@ -158,8 +159,9 @@ export const runTest = <A, E, ROut>(
   effect: Effect.Effect<A, E, ROut | TestClock.TestClock | Scope.Scope>,
   layer?: Layer.Layer<ROut, E>,
 ): Promise<A> => {
-  const withLayer = layer === undefined
-    ? (effect as Effect.Effect<A, E, TestClock.TestClock | Scope.Scope>)
-    : Effect.provide(effect, layer)
+  const withLayer =
+    layer === undefined
+      ? (effect as Effect.Effect<A, E, TestClock.TestClock | Scope.Scope>)
+      : Effect.provide(effect, layer)
   return Effect.runPromise(Effect.scoped(Effect.provide(withLayer, testClock())))
 }

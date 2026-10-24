@@ -34,7 +34,6 @@ import { Cause, Duration, Effect, FiberHandle, Queue, Result, Scope, Stream } fr
 import { makeMcpToolClient, type McpToolClient } from "./mcp.ts"
 import { cap, chunksOf, type Directive, estimateTokens, parseScript } from "./script.ts"
 
-
 /** The `[Attachments: …]` line OpenBot appends to turns that carry files. */
 const ATTACHMENTS_LINE = /^\[Attachments: .*\]$/m
 /** The brief of a new Bot's hidden first turn (core `introductionText`). */
@@ -137,7 +136,7 @@ export const openFakeSession = (
   input: OpenSessionInput,
   config: FakeSessionConfig,
 ): Effect.Effect<HarnessSession, HarnessError, Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const events = yield* Queue.unbounded<HarnessEvent, Cause.Done>()
     const state = {
       closed: false,
@@ -189,7 +188,7 @@ export const openFakeSession = (
       }
 
       const streamMessage = (text: string, delay: Duration.Input): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const key = nextKey("msg")
           yield* activity("Typing…")
           let acc = ""
@@ -204,7 +203,13 @@ export const openFakeSession = (
           }
           yield* Effect.sync(() => {
             activeOf()?.streaming.delete(key)
-            upsert(key, { _tag: "Message", role: "bot", text: acc, streaming: false, phase: "final" } satisfies MessageItem)
+            upsert(key, {
+              _tag: "Message",
+              role: "bot",
+              text: acc,
+              streaming: false,
+              phase: "final",
+            } satisfies MessageItem)
             countOutput(acc)
             if (!recalling) state.lastSaid = acc
           })
@@ -215,7 +220,7 @@ export const openFakeSession = (
       let recalling = false
 
       const reasoning = (text: string): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const key = nextKey("reasoning")
           yield* activity("Thinking…")
           yield* Effect.sync(() => upsert(key, { _tag: "Reasoning", text, streaming: true, source: "thinking" }))
@@ -228,7 +233,7 @@ export const openFakeSession = (
         })
 
       const callTool = (name: string, args: Record<string, unknown>): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const key = nextKey("tool")
           const kind = toolKindOf(name)
           const node = typeof args["node"] === "string" && args["node"] !== "" ? (args["node"] as NodeId) : undefined
@@ -266,7 +271,7 @@ export const openFakeSession = (
               outputPreview: preview.text,
               output: { text: preview.text, ...(preview.truncated ? { truncated: true } : {}) },
               ...(outcome.isError ? { error: preview.text } : {}),
-            })
+            }),
           )
           return yield* reply(
             outcome.isError
@@ -276,7 +281,7 @@ export const openFakeSession = (
         })
 
       const approve = (command: string, at?: string): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const key = nextKey("tool")
           const cwd = at ?? input.placement.workspacePath
           const base: ToolCallItem = {
@@ -315,20 +320,18 @@ export const openFakeSession = (
                 outputPreview: output,
                 output: { text: output },
                 command: { command, cwd, exitCode: 0 },
-              })
+              }),
             )
             return yield* reply(`Approved (${decision}). I ran \`${command}\` (simulated).`)
           }
-          yield* Effect.sync(() =>
-            upsert(key, { ...base, status: "declined", ...(message ? { error: message } : {}) })
-          )
+          yield* Effect.sync(() => upsert(key, { ...base, status: "declined", ...(message ? { error: message } : {}) }))
           return yield* reply(
             `Okay, I did not run \`${command}\` (${decision}).${message ? ` You said: ${message}` : ""}`,
           )
         })
 
       const ask = (prompt: string, options: ReadonlyArray<string>): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const key = nextKey("question")
           const base: ToolCallItem = {
             _tag: "ToolCall",
@@ -344,13 +347,15 @@ export const openFakeSession = (
             title: prompt,
             toolKey: key,
             nativeRequestId: key,
-            questions: [{
-              id: "q1",
-              prompt,
-              options: options.map((label) => ({ label })),
-              multiSelect: false,
-              allowFreeText: true,
-            }],
+            questions: [
+              {
+                id: "q1",
+                prompt,
+                options: options.map((label) => ({ label })),
+                multiSelect: false,
+                allowFreeText: true,
+              },
+            ],
           }
           yield* Effect.sync(() => upsert(key, base))
           yield* activity("Waiting for your answer", "question")
@@ -358,7 +363,7 @@ export const openFakeSession = (
           if (isAnswersResolution(resolution)) {
             const answer = answerText(resolution.answers["q1"])
             yield* Effect.sync(() =>
-              upsert(key, { ...base, status: "completed", outputPreview: answer, output: { text: answer } })
+              upsert(key, { ...base, status: "completed", outputPreview: answer, output: { text: answer } }),
             )
             return yield* reply(`You answered: ${answer === "" ? "(nothing)" : answer}`)
           }
@@ -368,7 +373,11 @@ export const openFakeSession = (
 
       /** `bg:` — starts parallel work through the gateway's `start_task` and replies at once (D5.7). */
       const background = (seconds: number, title: string): Effect.Effect<Outcome> =>
-        bookkeeping("start_task", { title, brief: `work: ${seconds} ${title}` }, `Sure — I'll get back to you about ${title}.`)
+        bookkeeping(
+          "start_task",
+          { title, brief: `work: ${seconds} ${title}` },
+          `Sure — I'll get back to you about ${title}.`,
+        )
 
       /** `upd:` — passes a change on to running work (`update_task`) and replies at once (D5.7). */
       const updateWork = (title: string, message: string): Effect.Effect<Outcome> =>
@@ -376,7 +385,7 @@ export const openFakeSession = (
 
       /** A task tool call through the gateway, then a short reply (`ok`, or why it failed). */
       const bookkeeping = (tool: string, args: Record<string, unknown>, ok: string): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const key = nextKey("tool")
           const base: ToolCallItem = {
             _tag: "ToolCall",
@@ -391,27 +400,30 @@ export const openFakeSession = (
           yield* activity(toolActivityOf(tool), "mcp")
           yield* Effect.sync(() => upsert(key, base))
           const result = mcp === undefined ? undefined : yield* Effect.result(mcp.call(tool, args))
-          const error = result === undefined
-            ? "ERROR: No OpenBot MCP binding was provided to this session."
-            : Result.isFailure(result)
-            ? `ERROR: ${result.failure.message}`
-            : result.success.isError
-            ? result.success.text
-            : undefined
+          const error =
+            result === undefined
+              ? "ERROR: No OpenBot MCP binding was provided to this session."
+              : Result.isFailure(result)
+                ? `ERROR: ${result.failure.message}`
+                : result.success.isError
+                  ? result.success.text
+                  : undefined
           yield* Effect.sync(() =>
             upsert(key, {
               ...base,
               status: error === undefined ? "completed" : "failed",
               ...(error === undefined ? {} : { error }),
-              ...(result !== undefined && Result.isSuccess(result) ? { output: { text: cap(result.success.text, PREVIEW_CAP).text } } : {}),
-            })
+              ...(result !== undefined && Result.isSuccess(result)
+                ? { output: { text: cap(result.success.text, PREVIEW_CAP).text } }
+                : {}),
+            }),
           )
           return yield* reply(error === undefined ? ok : `I couldn't do that: ${error}`)
         })
 
       /** `work:` — a slow piece of work: one step, then the result (a background task's turn). */
       const work = (seconds: number, title: string): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const key = nextKey("tool")
           const base: ToolCallItem = {
             _tag: "ToolCall",
@@ -430,19 +442,23 @@ export const openFakeSession = (
           }
           state.lastWork = title
           const output = `${title}: done after ${seconds}s.`
-          yield* Effect.sync(() => upsert(key, { ...base, status: "completed", outputPreview: output, output: { text: output } }))
+          yield* Effect.sync(() =>
+            upsert(key, { ...base, status: "completed", outputPreview: output, output: { text: output } }),
+          )
           return yield* reply(`Here is ${title}: everything checked out after ${seconds}s of work.`)
         })
 
       const defaultReply = (text: string): string => {
         // a new Bot's hidden first turn (`introduction`): greet instead of echoing the brief
-        if (INTRODUCTION.test(text)) return `Hi, I'm ${input.bot.name}, running on the offline Fake harness. What should I help with first?`
+        if (INTRODUCTION.test(text))
+          return `Hi, I'm ${input.bot.name}, running on the offline Fake harness. What should I help with first?`
         // files arrive inline (images) and/or copied into the workspace (`[Attachments: …]` line)
         const listed = receivedFileNames(text)
         const names = [...new Set([...turn.attachments.map((a) => a.name), ...listed])]
-        const attachments = names.length === 0
-          ? ""
-          : ` I received ${names.length} attachment${names.length === 1 ? "" : "s"}: ${names.join(", ")}.`
+        const attachments =
+          names.length === 0
+            ? ""
+            : ` I received ${names.length} attachment${names.length === 1 ? "" : "s"}: ${names.join(", ")}.`
         const said = cap(text.replace(ATTACHMENTS_LINE, "").trim(), 280).text
         return `Hi, I'm ${input.bot.name}, running on the offline Fake harness.${attachments}${
           said === "" ? "" : ` You said: "${said}"`
@@ -460,7 +476,7 @@ export const openFakeSession = (
           case "Tool":
             return callTool(directive.name, directive.args)
           case "ToolInvalid":
-            return Effect.gen(function*() {
+            return Effect.gen(function* () {
               const key = nextKey("tool")
               const name = directive.name === "" ? "tool" : directive.name
               const error = `ERROR: ${directive.message}`
@@ -473,7 +489,7 @@ export const openFakeSession = (
                   status: "failed",
                   inputSummary: cap(directive.raw, SUMMARY_CAP).text,
                   error,
-                })
+                }),
               )
               return yield* reply(error)
             })
@@ -493,9 +509,11 @@ export const openFakeSession = (
               recalling = true
               const said = state.lastSaid === undefined ? "nothing yet" : `"${cap(state.lastSaid, 200).text}"`
               return reply(`Session ${config.nativeSessionId} · turn ${state.turns} · I last said: ${said}`).pipe(
-                Effect.ensuring(Effect.sync(() => {
-                  recalling = false
-                })),
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    recalling = false
+                  }),
+                ),
               )
             })
           case "Background":
@@ -503,18 +521,22 @@ export const openFakeSession = (
           case "Work":
             return work(directive.seconds, directive.title)
           case "Report":
-            return reply(directive.body === "" ? `${directive.title} is done.` : `Update on ${directive.title}: ${directive.body}`)
+            return reply(
+              directive.body === "" ? `${directive.title} is done.` : `Update on ${directive.title}: ${directive.body}`,
+            )
           case "UpdateWork":
             return updateWork(directive.title, directive.message)
           case "Updated":
-            return reply(`Here is ${state.lastWork ?? "the work"}, now with your update (${directive.message}): everything checked out.`)
+            return reply(
+              `Here is ${state.lastWork ?? "the work"}, now with your update (${directive.message}): everything checked out.`,
+            )
           case "Default":
             return reply(defaultReply(directive.text))
         }
       }
 
       const runInput = (next: TurnInput): Effect.Effect<Outcome> =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* Effect.sync(() => {
             const active = activeOf()
             if (active) active.inputTokens += estimateTokens(next.text) + 256 * next.attachments.length
@@ -559,7 +581,7 @@ export const openFakeSession = (
         emit({ _tag: "TurnInterrupted", turnId })
       }
 
-      const program = Effect.gen(function*() {
+      const program = Effect.gen(function* () {
         yield* activity("Thinking…")
         if (config.reasoning) yield* reasoning(`Planning a reply to: ${cap(turn.text, SUMMARY_CAP).text}`)
         let outcome = yield* runInput(turn)
@@ -583,8 +605,8 @@ export const openFakeSession = (
             finish({
               _tag: "Failed",
               error: { code: "internal", message: Cause.pretty(cause), retryable: false },
-            })
-          )
+            }),
+          ),
         ),
         Effect.onInterrupt(() => Effect.sync(interrupted)),
       )

@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { LOCAL_NODE_ID } from "@openbot/contracts"
 import { McpTokenRepo } from "@openbot/core"
-import { conversationId, localNodeSummary, makeTurn, OrchestratorFake, remoteNodeSummary, turnId } from "@openbot/core/testing"
+import {
+  conversationId,
+  localNodeSummary,
+  makeTurn,
+  OrchestratorFake,
+  remoteNodeSummary,
+  turnId,
+} from "@openbot/core/testing"
 import { DesktopUnavailable, type ExecEvent, LeaseHeld } from "@openbot/node-protocol"
 import type { TaskId } from "@openbot/contracts"
 import { Effect, Option, Stream } from "effect"
@@ -45,7 +52,10 @@ const assertConformant = (result: unknown) => {
   if (r.isError === true) expect(textOf(result).startsWith("ERROR:")).toBe(true)
 }
 
-const execEvents = (output: ReadonlyArray<string>, exit?: Partial<Extract<ExecEvent, { _tag: "Exit" }>>): ReadonlyArray<ExecEvent> => [
+const execEvents = (
+  output: ReadonlyArray<string>,
+  exit?: Partial<Extract<ExecEvent, { _tag: "Exit" }>>,
+): ReadonlyArray<ExecEvent> => [
   { _tag: "Started", pid: 42, pgid: 42 },
   ...output.map((data, seq): ExecEvent => ({ _tag: "Output", stream: "stdout", data, seq })),
   { _tag: "Exit", code: 0, signal: null, timedOut: false, durationMs: 1234, ...exit },
@@ -154,7 +164,9 @@ describe("tools", () => {
 
     const withNode = await h.connect((await h.issue({ toolsets: ["bot", "node"] })).binding)
     const names2 = (await withNode.listTools()).tools.map((t) => t.name)
-    expect(names2).toEqual(expect.arrayContaining(["shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep"]))
+    expect(names2).toEqual(
+      expect.arrayContaining(["shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep"]),
+    )
     expect(names2).not.toContain("browser")
 
     const all = await h.connect((await h.issue({ toolsets: ["bot", "node", "browser"] })).binding)
@@ -206,12 +218,23 @@ describe("tools", () => {
 
   test("one session per bot: each call resolves the conversation of the bot's CURRENT turn, else the token's home (DM)", async () => {
     const issued = await h.issue({ toolsets: ["bot"] })
-    const home = (await h.run(Effect.flatMap(McpTokenRepo, (repo) =>
-      Effect.flatMap(hashMcpToken(issued.binding.headers.Authorization!.replace(/^Bearer /, "")), repo.lookup)))).pipe(Option.getOrThrow).claims
+    const home = (
+      await h.run(
+        Effect.flatMap(McpTokenRepo, (repo) =>
+          Effect.flatMap(hashMcpToken(issued.binding.headers.Authorization!.replace(/^Bearer /, "")), repo.lookup),
+        ),
+      )
+    ).pipe(Option.getOrThrow).claims
     const client = await h.connect(issued.binding)
     const group = conversationId("cnv_group")
-    await h.run(Effect.flatMap(OrchestratorFake, (fake) =>
-      fake.setActiveTurn(BOT_A, makeTurn({ id: turnId("trn_g"), botId: BOT_A, conversationId: group, status: "running" }))))
+    await h.run(
+      Effect.flatMap(OrchestratorFake, (fake) =>
+        fake.setActiveTurn(
+          BOT_A,
+          makeTurn({ id: turnId("trn_g"), botId: BOT_A, conversationId: group, status: "running" }),
+        ),
+      ),
+    )
     await client.callTool({ name: "message_bot", arguments: { to: "Beta", text: "from the group" } })
     await h.run(Effect.flatMap(OrchestratorFake, (fake) => fake.setActiveTurn(BOT_A, undefined)))
     await client.callTool({ name: "message_bot", arguments: { to: "Beta", text: "between turns" } })
@@ -229,7 +252,10 @@ describe("tools", () => {
     expect(textOf(result)).toBe("Reacted 👍 to message ent_trigger.")
     await client.callTool({ name: "react", arguments: { emoji: "✅", message_id: "ent_42" } })
     const calls = h.messagingCalls.filter((c) => c.method === "react")
-    expect(calls.map((c) => c.input)).toEqual([{ emoji: "👍", messageId: undefined }, { emoji: "✅", messageId: "ent_42" }])
+    expect(calls.map((c) => c.input)).toEqual([
+      { emoji: "👍", messageId: undefined },
+      { emoji: "✅", messageId: "ent_42" },
+    ])
   })
 
   test("create_bot creates a teammate with the caller's harness and host node by default; update_bot patches", async () => {
@@ -243,7 +269,14 @@ describe("tools", () => {
     expect(created.isError).toBeFalsy()
     expect(textOf(created)).toContain("@Research Scout")
     const call = h.messagingCalls.find((c) => c.method === "createBot")!
-    const input = call.input as { name: string; label: string; instructions: string; harness: { kind: string }; hostNodeId: string; clientNonce: string }
+    const input = call.input as {
+      name: string
+      label: string
+      instructions: string
+      harness: { kind: string }
+      hostNodeId: string
+      clientNonce: string
+    }
     expect(input.name).toBe("Research Scout")
     expect(input.label).toBe("Research")
     expect(input.instructions).toBe("Find competitor launches.")
@@ -256,22 +289,38 @@ describe("tools", () => {
 
     const updated = await client.callTool({ name: "update_bot", arguments: { bot: "@Beta", instructions: "New job." } })
     expect(updated.isError).toBeFalsy()
-    const upd = h.messagingCalls.find((c) => c.method === "updateBot")!.input as { id: string; patch: { instructions: string } }
+    const upd = h.messagingCalls.find((c) => c.method === "updateBot")!.input as {
+      id: string
+      patch: { instructions: string }
+    }
     expect(upd).toEqual({ id: BOT_B, patch: { instructions: "New job." } })
 
     // bots cannot change autonomy: the tool has no such parameter and never patches it
     await client.callTool({ name: "update_bot", arguments: { bot: "@Beta", name: "Beta", autonomy: "full" } })
-    const escalation = h.messagingCalls.filter((c) => c.method === "updateBot").at(-1)!.input as { patch: Record<string, unknown> }
+    const escalation = h.messagingCalls.filter((c) => c.method === "updateBot").at(-1)!.input as {
+      patch: Record<string, unknown>
+    }
     expect(escalation.patch.autonomy).toBeUndefined()
     const tools = await client.listTools()
     for (const name of ["create_bot", "update_bot"]) {
-      expect(Object.keys(tools.tools.find((t) => t.name === name)!.inputSchema.properties ?? {})).not.toContain("autonomy")
+      expect(Object.keys(tools.tools.find((t) => t.name === name)!.inputSchema.properties ?? {})).not.toContain(
+        "autonomy",
+      )
       // nor project folders (owner-only)
-      expect(Object.keys(tools.tools.find((t) => t.name === name)!.inputSchema.properties ?? {})).not.toContain("projectFolders")
-      expect(Object.keys(tools.tools.find((t) => t.name === name)!.inputSchema.properties ?? {})).not.toContain("project_folders")
+      expect(Object.keys(tools.tools.find((t) => t.name === name)!.inputSchema.properties ?? {})).not.toContain(
+        "projectFolders",
+      )
+      expect(Object.keys(tools.tools.find((t) => t.name === name)!.inputSchema.properties ?? {})).not.toContain(
+        "project_folders",
+      )
     }
-    await client.callTool({ name: "update_bot", arguments: { bot: "@Beta", name: "Beta", projectFolders: ["/"], project_folders: ["/"] } })
-    const folders = h.messagingCalls.filter((c) => c.method === "updateBot").at(-1)!.input as { patch: Record<string, unknown> }
+    await client.callTool({
+      name: "update_bot",
+      arguments: { bot: "@Beta", name: "Beta", projectFolders: ["/"], project_folders: ["/"] },
+    })
+    const folders = h.messagingCalls.filter((c) => c.method === "updateBot").at(-1)!.input as {
+      patch: Record<string, unknown>
+    }
     expect(folders.patch.projectFolders).toBeUndefined()
 
     const nothing = await client.callTool({ name: "update_bot", arguments: { bot: "@Beta" } })
@@ -281,16 +330,24 @@ describe("tools", () => {
 
   test("section tools: move_bot_to_section creates the section, rename/list/delete work", async () => {
     const client = await h.connect((await h.issue({ toolsets: ["bot"] })).binding)
-    const moved = await client.callTool({ name: "move_bot_to_section", arguments: { bot: "@Beta", section: "Engineering" } })
+    const moved = await client.callTool({
+      name: "move_bot_to_section",
+      arguments: { bot: "@Beta", section: "Engineering" },
+    })
     expect(moved.isError).toBeFalsy()
     expect(h.messagingCalls.find((c) => c.method === "createSection")!.input).toEqual({ name: "Engineering" })
-    const upd = h.messagingCalls.find((c) => c.method === "updateBot")!.input as { id: string; patch: { sectionId: string; pinned: boolean } }
+    const upd = h.messagingCalls.find((c) => c.method === "updateBot")!.input as {
+      id: string
+      patch: { sectionId: string; pinned: boolean }
+    }
     expect(upd).toEqual({ id: BOT_B, patch: { sectionId: "sec_1", pinned: false } })
 
     const again = await client.callTool({ name: "create_section", arguments: { name: "engineering" } })
     expect(textOf(again)).toContain("already exists")
 
-    expect((await client.callTool({ name: "rename_section", arguments: { section: "Engineering", name: "Eng" } })).isError).toBeFalsy()
+    expect(
+      (await client.callTool({ name: "rename_section", arguments: { section: "Engineering", name: "Eng" } })).isError,
+    ).toBeFalsy()
     expect(textOf(await client.callTool({ name: "list_sections", arguments: {} }))).toContain("Eng (sec_1)")
 
     const missing = await client.callTool({ name: "rename_section", arguments: { section: "Nope", name: "X" } })
@@ -352,7 +409,11 @@ describe("node tools", () => {
     const client = await h.connect((await h.issue({ toolsets: ["bot", "node"] })).binding)
     const progress: Array<unknown> = []
     const result = await client.callTool(
-      { name: "shell", arguments: { command: "echo hello; echo world", cwd: "sub" }, _meta: { "claudecode/toolUseId": "toolu_sh" } },
+      {
+        name: "shell",
+        arguments: { command: "echo hello; echo world", cwd: "sub" },
+        _meta: { "claudecode/toolUseId": "toolu_sh" },
+      },
       undefined,
       { onprogress: (p) => progress.push(p) },
     )
@@ -486,14 +547,19 @@ describe("screen tools (D1.7)", () => {
     const browserOnly = await names({ toolsets: ["bot", "browser"] })
     expect(browserOnly).toContain("request_takeover")
     expect(browserOnly).not.toContain("computer")
-    expect(await names({ toolsets: ["bot", "browser", "computer"] })).toEqual(expect.arrayContaining(["browser", "computer", "request_takeover"]))
+    expect(await names({ toolsets: ["bot", "browser", "computer"] })).toEqual(
+      expect.arrayContaining(["browser", "computer", "request_takeover"]),
+    )
     const task = await names({ toolsets: ["bot", "computer"], taskId: "tsk_1" as TaskId })
     expect(task).toContain("computer")
     expect(task).not.toContain("request_takeover")
 
     const client = await h.connect((await h.issue({ toolsets: ["computer"] })).binding)
     const tool = (await client.listTools()).tools.find((t) => t.name === "computer")!
-    const props = tool.inputSchema.properties as Record<string, { type: string; items?: unknown; enum?: ReadonlyArray<string> }>
+    const props = tool.inputSchema.properties as Record<
+      string,
+      { type: string; items?: unknown; enum?: ReadonlyArray<string> }
+    >
     expect(props.coordinate).toMatchObject({ type: "array", items: { type: "number" }, minItems: 2 })
     expect(props.region).toMatchObject({ type: "array", items: { type: "number" }, minItems: 4 })
     expect(props.action!.enum).toContain("left_click_drag")
@@ -508,10 +574,13 @@ describe("screen tools (D1.7)", () => {
         acts.push(payload)
         return Effect.succeed(
           payload.action.action === "screenshot"
-            ? { text: "Screenshot 1280x800 (display 1920x1200).", image: { mimeType: "image/png", data: "iVBORw0KGgo=", width: 1280, height: 800 } }
+            ? {
+                text: "Screenshot 1280x800 (display 1920x1200).",
+                image: { mimeType: "image/png", data: "iVBORw0KGgo=", width: 1280, height: 800 },
+              }
             : payload.action.action === "zoom"
-            ? { text: "ERROR: region [x0, y0, x1, y1] is outside the screen" }
-            : { text: "" },
+              ? { text: "ERROR: region [x0, y0, x1, y1] is outside the screen" }
+              : { text: "" },
         )
       },
     })
@@ -523,10 +592,16 @@ describe("screen tools (D1.7)", () => {
     expect(content[1]).toMatchObject({ data: "iVBORw0KGgo=", mimeType: "image/png" })
     expect(textOf(shot)).toContain("1280x800")
 
-    const click = await client.callTool({ name: "computer", arguments: { action: "double_click", coordinate: [640, 400] } })
+    const click = await client.callTool({
+      name: "computer",
+      arguments: { action: "double_click", coordinate: [640, 400] },
+    })
     assertConformant(click)
     expect(textOf(click)).toBe("Done: double_click.")
-    expect(acts.map((a) => a.action)).toEqual([{ action: "screenshot" }, { action: "double_click", coordinate: [640, 400] }])
+    expect(acts.map((a) => a.action)).toEqual([
+      { action: "screenshot" },
+      { action: "double_click", coordinate: [640, 400] },
+    ])
     expect(acts[0]!.inv.botId).toBe(BOT_A)
 
     // no tuples on the wire, but the gateway checks the length
@@ -562,20 +637,32 @@ describe("screen tools (D1.7)", () => {
   })
 
   test("a Mac's own screen (screen@1): the computer works there and its refusals keep the node's words", async () => {
-    const mac = { ...desktopNode, capabilities: ["fs@1", "browser@1", "screen@1"], declaredCapabilities: ["fs@1", "browser@1", "screen@1"] }
+    const mac = {
+      ...desktopNode,
+      capabilities: ["fs@1", "browser@1", "screen@1"],
+      declaredCapabilities: ["fs@1", "browser@1", "screen@1"],
+    }
     h = await startHarness({ nodes: [mac] })
     let failure: unknown = undefined
     await setNodeClient(h, LOCAL_NODE_ID, {
-      "computer.act": () => (failure === undefined ? Effect.succeed({ text: "Screenshot of the screen (1280x800)." }) : Effect.fail(failure)),
+      "computer.act": () =>
+        failure === undefined ? Effect.succeed({ text: "Screenshot of the screen (1280x800)." }) : Effect.fail(failure),
     })
     const client = await h.connect((await h.issue({ toolsets: ["computer"] })).binding)
-    expect(textOf(await client.callTool({ name: "computer", arguments: { action: "screenshot" } }))).toBe("Screenshot of the screen (1280x800).")
-    failure = new LeaseHeld({ botId: BOT_A, holder: "user", reason: "The owner is using this computer right now. Try again in a few minutes, or ask them in the chat." })
+    expect(textOf(await client.callTool({ name: "computer", arguments: { action: "screenshot" } }))).toBe(
+      "Screenshot of the screen (1280x800).",
+    )
+    failure = new LeaseHeld({
+      botId: BOT_A,
+      holder: "user",
+      reason: "The owner is using this computer right now. Try again in a few minutes, or ask them in the chat.",
+    })
     expect(textOf(await client.callTool({ name: "computer", arguments: { action: "screenshot" } }))).toBe(
       "ERROR: The owner is using this computer right now. Try again in a few minutes, or ask them in the chat.",
     )
     failure = new DesktopUnavailable({
-      message: "Allow Screen Recording and Accessibility for openbot-node on the Mac (System Settings › Privacy & Security), then try again.",
+      message:
+        "Allow Screen Recording and Accessibility for openbot-node on the Mac (System Settings › Privacy & Security), then try again.",
       missing: ["Screen Recording", "Accessibility"],
     })
     expect(textOf(await client.callTool({ name: "computer", arguments: { action: "screenshot" } }))).toBe(
@@ -594,7 +681,10 @@ describe("screen tools (D1.7)", () => {
     expect(result.isError).toBeFalsy()
     const requests = await toolRequests(h)
     expect(requests).toHaveLength(1)
-    expect(requests[0]).toMatchObject({ tool: "request_takeover", input: { instruction: "Sign in to GitHub and approve the 2FA prompt" } })
+    expect(requests[0]).toMatchObject({
+      tool: "request_takeover",
+      input: { instruction: "Sign in to GitHub and approve the 2FA prompt" },
+    })
     expect(textOf(result)).toContain("status: pending")
     expect(textOf(result)).toContain(requests[0]!.requestId)
     const empty = await client.callTool({ name: "request_takeover", arguments: { instruction: "" } })

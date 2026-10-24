@@ -96,7 +96,12 @@ describe("shell.exec", () => {
         const { client } = yield* makeTestNode({ dataDir, roots: [root] })
         const t0 = Date.now()
         const events = yield* Stream.runCollect(
-          client["shell.exec"]({ inv: inv(), command: "sleep 30 & echo child=$!; sleep 30", cwd: root, timeoutMs: 400 }),
+          client["shell.exec"]({
+            inv: inv(),
+            command: "sleep 30 & echo child=$!; sleep 30",
+            cwd: root,
+            timeoutMs: 400,
+          }),
         )
         const exit = exitOf(events)
         expect(exit.timedOut).toBe(true)
@@ -179,13 +184,19 @@ describe("shell.exec", () => {
     run(
       Effect.gen(function* () {
         const { client } = yield* makeTestNode({ dataDir, roots: [root] })
-        const out = yield* Effect.flip(Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "true", cwd: "/", timeoutMs: 1000 })))
+        const out = yield* Effect.flip(
+          Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "true", cwd: "/", timeoutMs: 1000 })),
+        )
         expect(out._tag).toBe("PathDenied")
         const missing = yield* Effect.flip(
-          Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "true", cwd: path.join(root, "nope"), timeoutMs: 1000 })),
+          Stream.runCollect(
+            client["shell.exec"]({ inv: inv(), command: "true", cwd: path.join(root, "nope"), timeoutMs: 1000 }),
+          ),
         )
         expect(missing._tag).toBe("PathDenied")
-        const rm = yield* Effect.flip(Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "rm -rf /", cwd: root, timeoutMs: 1000 })))
+        const rm = yield* Effect.flip(
+          Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "rm -rf /", cwd: root, timeoutMs: 1000 })),
+        )
         expect(rm._tag).toBe("PolicyRefused")
         expect(existsSync(root)).toBe(true)
       }),
@@ -196,11 +207,15 @@ describe("shell.exec", () => {
       Effect.gen(function* () {
         const { client, brain } = yield* makeTestNode({ dataDir, roots: [root] })
         brain.decide = () => "deny"
-        const e = yield* Effect.flip(Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "sudo true", cwd: root, timeoutMs: 1000 })))
+        const e = yield* Effect.flip(
+          Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "sudo true", cwd: root, timeoutMs: 1000 })),
+        )
         expect(e._tag).toBe("PolicyRefused")
         expect(brain.approvals.map((a) => a.action)).toEqual(["run-command"])
         brain.decide = () => "allow-once"
-        const ok = yield* Stream.runCollect(client["shell.exec"]({ inv: inv(), command: "echo sudo-ish", cwd: root, timeoutMs: 1000 }))
+        const ok = yield* Stream.runCollect(
+          client["shell.exec"]({ inv: inv(), command: "echo sudo-ish", cwd: root, timeoutMs: 1000 }),
+        )
         expect(stdout(ok)).toBe("sudo-ish\n")
       }),
     ))
@@ -212,7 +227,10 @@ describe("shell.exec", () => {
         const call = inv()
         yield* Stream.runCollect(client["shell.exec"]({ inv: call, command: "exit 7", cwd: root, timeoutMs: 1000 }))
         const day = new Date().toISOString().slice(0, 10)
-        const lines = readFileSync(path.join(dataDir, "audit", `${day}.jsonl`), "utf8").trim().split("\n").map((l) => JSON.parse(l))
+        const lines = readFileSync(path.join(dataDir, "audit", `${day}.jsonl`), "utf8")
+          .trim()
+          .split("\n")
+          .map((l) => JSON.parse(l))
         const mine = lines.filter((l) => l.invocationId === call.invocationId)
         expect(mine.map((l) => l.decision)).toEqual(["allowed", "allowed"])
         expect(mine[1]).toMatchObject({ action: "run-command", outcome: "error", exitCode: 7 })

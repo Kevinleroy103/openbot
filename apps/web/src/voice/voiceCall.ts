@@ -101,7 +101,8 @@ const onMessage = (message: VoiceServerMessage) => {
     }
     case "bot": {
       const last = state.lines.at(-1)
-      if (last?.who === "bot") set({ lines: [...state.lines.slice(0, -1), { ...last, text: `${last.text} ${message.text}` }] })
+      if (last?.who === "bot")
+        set({ lines: [...state.lines.slice(0, -1), { ...last, text: `${last.text} ${message.text}` }] })
       else addLine({ who: "bot", text: message.text })
       return
     }
@@ -201,7 +202,10 @@ export const startCall = async (botId: BotId): Promise<void> => {
   ws.onclose = (event) => {
     if (socket !== ws) return
     teardown()
-    set({ phase: "ended", ...(hungUp || event.code === 1000 ? {} : { error: state.error ?? (event.reason || "The call dropped.") }) })
+    set({
+      phase: "ended",
+      ...(hungUp || event.code === 1000 ? {} : { error: state.error ?? (event.reason || "The call dropped.") }),
+    })
   }
   try {
     const mic = await startMicrophone(sendAudio, () => undefined)

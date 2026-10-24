@@ -7,7 +7,15 @@ import * as path from "node:path"
 import { makeKeyStore } from "@openbot/node-daemon"
 import { BRAIN_ORIGIN, startTestBrain } from "@openbot/node-daemon/testing"
 import { generateKeyPair } from "@openbot/node-protocol"
-import { buildNodeConfig, keyFingerprint, loadFileConfig, parseRootFlag, readStatusFile, runCli, type CliIo } from "../src/index.ts"
+import {
+  buildNodeConfig,
+  keyFingerprint,
+  loadFileConfig,
+  parseRootFlag,
+  readStatusFile,
+  runCli,
+  type CliIo,
+} from "../src/index.ts"
 
 const tmp = realpathSync(mkdtempSync(path.join(tmpdir(), "openbot-node-cli-")))
 afterAll(() => rmSync(tmp, { recursive: true, force: true }))
@@ -65,8 +73,13 @@ describe("openbot-node CLI (in process)", () => {
       hostname: "127.0.0.1",
       async fetch(req) {
         const body = (await req.json()) as { code: string }
-        if (new URL(req.url).pathname !== "/node/pair" || body.code !== "K7M2Q9XZ") return new Response("bad code", { status: 403 })
-        return Response.json({ nodeId: "nod_cli", brainPublicKey: brainKeys.publicKey, brainOrigin: "https://brain.example" })
+        if (new URL(req.url).pathname !== "/node/pair" || body.code !== "K7M2Q9XZ")
+          return new Response("bad code", { status: 403 })
+        return Response.json({
+          nodeId: "nod_cli",
+          brainPublicKey: brainKeys.publicKey,
+          brainOrigin: "https://brain.example",
+        })
       },
     })
     try {
@@ -82,7 +95,13 @@ describe("openbot-node CLI (in process)", () => {
 
       const status = await cli(["status", "--json", "--data-dir", dir])
       expect(status.code).toBe(0)
-      expect(JSON.parse(status.text())).toMatchObject({ paired: true, nodeId: "nod_cli", brainUrl: url, brainOrigin: "https://brain.example", daemon: null })
+      expect(JSON.parse(status.text())).toMatchObject({
+        paired: true,
+        nodeId: "nod_cli",
+        brainUrl: url,
+        brainOrigin: "https://brain.example",
+        daemon: null,
+      })
 
       const again = await cli(["pair", url, "K7M2Q9XZ", "--data-dir", dir])
       expect(again.code).toBe(1)
@@ -107,7 +126,9 @@ describe("openbot-node CLI (in process)", () => {
       }),
     )
     const file = await Effect.runPromise(loadFileConfig(dir))
-    const fromFile = await Effect.runPromise(buildNodeConfig({ identity: { nodeId: "nod_x" }, dataDir: dir, file, flags: {} }))
+    const fromFile = await Effect.runPromise(
+      buildNodeConfig({ identity: { nodeId: "nod_x" }, dataDir: dir, file, flags: {} }),
+    )
     expect(fromFile.roots.map((r) => [r.id, r.mode])).toEqual([
       ["work", "rw"],
       ["docs", "ro"],
@@ -116,7 +137,11 @@ describe("openbot-node CLI (in process)", () => {
     expect(fromFile.policy.actions["run-command"]).toBe("never")
     expect(fromFile.browser.executable).toBe("/opt/chrome")
     expect(fromFile.denyGlobs).toEqual(["**/*.pem"])
-    expect({ w: fromFile.desktop.width, h: fromFile.desktop.height, enabled: fromFile.desktop.enabled }).toEqual({ w: 1600, h: 1000, enabled: true })
+    expect({ w: fromFile.desktop.width, h: fromFile.desktop.height, enabled: fromFile.desktop.enabled }).toEqual({
+      w: 1600,
+      h: 1000,
+      enabled: true,
+    })
 
     const flagged = await Effect.runPromise(
       buildNodeConfig({
@@ -139,7 +164,11 @@ describe("openbot-node CLI (in process)", () => {
     expect(bad.exitCode).toBe(2)
     writeFileSync(path.join(dir, "config.json"), JSON.stringify({ actions: { "launch-missiles": "always" } }))
     const unknownAction = await Effect.runPromise(
-      Effect.flip(Effect.flatMap(loadFileConfig(dir), (f) => buildNodeConfig({ identity: { nodeId: "x" }, dataDir: dir, file: f, flags: {} }))),
+      Effect.flip(
+        Effect.flatMap(loadFileConfig(dir), (f) =>
+          buildNodeConfig({ identity: { nodeId: "x" }, dataDir: dir, file: f, flags: {} }),
+        ),
+      ),
     )
     expect(unknownAction.message).toContain("launch-missiles")
   })
@@ -200,7 +229,9 @@ describe("openbot-node run (spawned)", () => {
             path: "from-brain.txt",
             content: "written by the brain through the daemon",
           })
-          expect(readFileSync(path.join(pre.root, "from-brain.txt"), "utf8")).toBe("written by the brain through the daemon")
+          expect(readFileSync(path.join(pre.root, "from-brain.txt"), "utf8")).toBe(
+            "written by the brain through the daemon",
+          )
 
           // status (another process) sees the running daemon
           let status = readStatusFile(pre.dataDir)
@@ -214,7 +245,10 @@ describe("openbot-node run (spawned)", () => {
           expect(human.text()).toContain(`daemon:    running (pid ${proc.pid}), online since`)
 
           // a second daemon on the same data dir is refused
-          const second = Bun.spawn([process.execPath, MAIN, "run", "--data-dir", pre.dataDir, "--no-browser"], { stdout: "pipe", stderr: "pipe" })
+          const second = Bun.spawn([process.execPath, MAIN, "run", "--data-dir", pre.dataDir, "--no-browser"], {
+            stdout: "pipe",
+            stderr: "pipe",
+          })
           expect(yield* Effect.promise(() => second.exited)).toBe(1)
           expect(yield* Effect.promise(() => new Response(second.stderr).text())).toContain("already running")
 

@@ -51,10 +51,12 @@ export interface SessionDeps {
   /** "process-group" (default on POSIX) or let the SDK spawn. */
   readonly spawn: "process-group" | "sdk"
   /** Records/removes the CLI pid in the `ProcessLedger` (D2.5). */
-  readonly ledger?: {
-    readonly record: (pid: number, label: string) => Effect.Effect<void>
-    readonly remove: (pid: number) => Effect.Effect<void>
-  } | undefined
+  readonly ledger?:
+    | {
+        readonly record: (pid: number, label: string) => Effect.Effect<void>
+        readonly remove: (pid: number) => Effect.Effect<void>
+      }
+    | undefined
 }
 
 const harnessError = (
@@ -72,7 +74,9 @@ const harnessError = (
 
 const closedError = () => harnessError("closed", "The Claude session is closed.", { retryable: true })
 const notRunningError = () =>
-  harnessError("turn-rejected", "Claude is not working on that turn any more; send it as a new turn.", { retryable: true })
+  harnessError("turn-rejected", "Claude is not working on that turn any more; send it as a new turn.", {
+    retryable: true,
+  })
 
 const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "unknown error"
@@ -94,7 +98,7 @@ export const parseContextUsage = (value: unknown): ContextUsage | undefined => {
   return { usedTokens: Math.max(0, Math.round(used)), windowTokens: Math.round(max) }
 }
 
-export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
+export const openClaudeSession = Effect.fn("ClaudeSession.open")(function* (
   input: OpenSessionInput,
   deps: SessionDeps,
 ) {
@@ -163,11 +167,7 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
   }
 
   // ---------------------------------------------------------------- approvals (canUseTool → onRequest)
-  const canUseTool = async (
-    toolName: string,
-    toolInput: Record<string, unknown>,
-    options: CanUseToolOptions,
-  ) => {
+  const canUseTool = async (toolName: string, toolInput: Record<string, unknown>, options: CanUseToolOptions) => {
     const request = toHarnessRequest(toolName, toolInput, options, placement.harnessCwd)
     const signals = [closeController.signal, ...(options.signal ? [options.signal] : [])]
     const exit = await runPromiseExit(input.onRequest(request), { signal: AbortSignal.any(signals) })
@@ -181,7 +181,10 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
       const updated = result.updatedInput as Record<string, unknown>
       if (updated.run_in_background === true) {
         const timeout = typeof updated.timeout === "number" ? updated.timeout : 0
-        return { ...result, updatedInput: { ...updated, run_in_background: false, timeout: Math.max(timeout, TASK_BASH_MAX_TIMEOUT_MS) } }
+        return {
+          ...result,
+          updatedInput: { ...updated, run_in_background: false, timeout: Math.max(timeout, TASK_BASH_MAX_TIMEOUT_MS) },
+        }
       }
     }
     pipeline.noteDecision(options.toolUseID, result.behavior, result.behavior === "deny" ? result.message : undefined)
@@ -196,17 +199,18 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
   const ledgerOp = (op: Effect.Effect<void>) => {
     ledgerChain = ledgerChain.then(() => runPromiseExit(op))
   }
-  const spawner = deps.spawn === "process-group" && supportsProcessGroups
-    ? makeProcessGroupSpawner({
-      onSpawn: (pid) => {
-        if (ledger) ledgerOp(ledger.record(pid, input.sessionKey))
-      },
-      onExit: (pid) => {
-        if (ledger) ledgerOp(ledger.remove(pid))
-      },
-      onStderr: pushStderr,
-    })
-    : undefined
+  const spawner =
+    deps.spawn === "process-group" && supportsProcessGroups
+      ? makeProcessGroupSpawner({
+          onSpawn: (pid) => {
+            if (ledger) ledgerOp(ledger.record(pid, input.sessionKey))
+          },
+          onExit: (pid) => {
+            if (ledger) ledgerOp(ledger.remove(pid))
+          },
+          onStderr: pushStderr,
+        })
+      : undefined
 
   const abortController = new AbortController()
   const options = buildQueryOptions({
@@ -216,7 +220,10 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
       ...deps.env,
       ...placement.env,
       ...(input.purpose === "task"
-        ? { BASH_DEFAULT_TIMEOUT_MS: String(TASK_BASH_DEFAULT_TIMEOUT_MS), BASH_MAX_TIMEOUT_MS: String(TASK_BASH_MAX_TIMEOUT_MS) }
+        ? {
+            BASH_DEFAULT_TIMEOUT_MS: String(TASK_BASH_DEFAULT_TIMEOUT_MS),
+            BASH_MAX_TIMEOUT_MS: String(TASK_BASH_MAX_TIMEOUT_MS),
+          }
         : {}),
     },
     executable: deps.executable,
@@ -234,7 +241,7 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
 
   let released = false
   const release = (h: ClaudeQueryHandle) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (released) return
       released = true
       finish("closed", false)
@@ -277,17 +284,19 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
       catch: (cause) =>
         NOT_INSTALLED.test(errorMessage(cause))
           ? harnessError(
-            "not-installed",
-            `Claude Code is not installed${deps.executable !== undefined ? ` at ${deps.executable}` : ""}.`,
-          )
+              "not-installed",
+              `Claude Code is not installed${deps.executable !== undefined ? ` at ${deps.executable}` : ""}.`,
+            )
           : harnessError("open-failed", `Claude rejected the MCP servers ${Object.keys(servers).join(", ")}.`, {
-            retryable: true,
-          }),
+              retryable: true,
+            }),
     }).pipe(
       Effect.timeoutOrElse({
         duration: deps.mcpRegistrationTimeoutMs,
         orElse: () =>
-          Effect.fail(harnessError("open-failed", "Claude Code did not answer the MCP server registration.", { retryable: true })),
+          Effect.fail(
+            harnessError("open-failed", "Claude Code did not answer the MCP server registration.", { retryable: true }),
+          ),
       }),
       // The CLI is running: close it now rather than when the caller's scope ends.
       Effect.onError(() => release(handle)),
@@ -312,7 +321,7 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
         const out = pipeline.message(frame)
         emit(out.events)
         settle(out.settled)
-      })
+      }),
     ),
     Effect.matchCauseEffect({
       onSuccess: () => onReaderEnd(undefined),
@@ -334,11 +343,11 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
     Effect.sync(() => {
       if (ended) return "closed" as const
       if (!record()) return "rejected" as const
-      return Queue.offerUnsafe(inbox, message) ? "accepted" as const : "closed" as const
+      return Queue.offerUnsafe(inbox, message) ? ("accepted" as const) : ("closed" as const)
     })
 
   const startTurn = (turn: TurnInput) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (ended) return yield* Effect.fail(closedError())
       const uuid = deps.newUuid()
       const message = yield* buildMessage(turn, uuid)
@@ -356,7 +365,7 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
    * cut bots off mid-task whenever a teammate's message arrived.
    */
   const steer = (turn: TurnInput) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (ended) return yield* Effect.fail(closedError())
       if (!pipeline.canSteer(turn.turnId)) return yield* Effect.fail(notRunningError())
       const uuid = deps.newUuid()
@@ -368,13 +377,10 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
 
   const interrupt: Effect.Effect<void> = Effect.suspend(() => {
     if (ended || !pipeline.requestInterrupt()) return Effect.void
-    return Effect.tryPromise(() => handle.interrupt()).pipe(
-      Effect.timeout(deps.interruptTimeoutMs),
-      Effect.ignore,
-    )
+    return Effect.tryPromise(() => handle.interrupt()).pipe(Effect.timeout(deps.interruptTimeoutMs), Effect.ignore)
   })
 
-  const compact: Effect.Effect<void, HarnessError> = Effect.gen(function*() {
+  const compact: Effect.Effect<void, HarnessError> = Effect.gen(function* () {
     if (ended) return yield* Effect.fail(closedError())
     const uuid = deps.newUuid()
     const deferred = yield* Deferred.make<void, HarnessError>()
@@ -409,7 +415,13 @@ export const openClaudeSession = Effect.fn("ClaudeSession.open")(function*(
 
 /** A `ProcessLedger` adapter for `SessionDeps.ledger`. */
 export const ledgerHooks = (ledger: {
-  readonly record: (entry: { pid: number; pgid: number; kind: string; label?: string; startedAt: number }) => Effect.Effect<void, unknown>
+  readonly record: (entry: {
+    pid: number
+    pgid: number
+    kind: string
+    label?: string
+    startedAt: number
+  }) => Effect.Effect<void, unknown>
   readonly remove: (pid: number) => Effect.Effect<void, unknown>
 }): NonNullable<SessionDeps["ledger"]> => ({
   record: (pid, label) =>
@@ -418,7 +430,7 @@ export const ledgerHooks = (ledger: {
       Effect.catchCause((cause) => Effect.logWarning("harness-claude: ProcessLedger.record failed", cause)),
     ),
   remove: (pid) =>
-    ledger.remove(pid).pipe(
-      Effect.catchCause((cause) => Effect.logWarning("harness-claude: ProcessLedger.remove failed", cause)),
-    ),
+    ledger
+      .remove(pid)
+      .pipe(Effect.catchCause((cause) => Effect.logWarning("harness-claude: ProcessLedger.remove failed", cause))),
 })

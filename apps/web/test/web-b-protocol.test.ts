@@ -22,7 +22,15 @@ const encode = (meta: object, image: Uint8Array): ArrayBuffer => {
 }
 
 describe("screencast frames", () => {
-  const meta = { seq: 3, mime: "image/jpeg", width: 2560, height: 1600, viewportWidth: 1280, viewportHeight: 800, timestamp: 1_700_000_000_000 }
+  const meta = {
+    seq: 3,
+    mime: "image/jpeg",
+    width: 2560,
+    height: 1600,
+    viewportWidth: 1280,
+    viewportHeight: 800,
+    timestamp: 1_700_000_000_000,
+  }
 
   test("decodes meta and image bytes", () => {
     const image = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])
@@ -40,7 +48,9 @@ describe("screencast frames", () => {
   })
 
   test("falls back to the image size when the viewport is missing", () => {
-    const frame = decodeScreencastFrame(encode({ seq: 1, mime: "image/png", width: 800, height: 500 }, new Uint8Array(0)))
+    const frame = decodeScreencastFrame(
+      encode({ seq: 1, mime: "image/png", width: 800, height: 500 }, new Uint8Array(0)),
+    )
     expect(frame?.meta.viewportWidth).toBe(800)
     expect(frame?.meta.viewportHeight).toBe(500)
   })
@@ -49,8 +59,15 @@ describe("screencast frames", () => {
 describe("notices", () => {
   test("decodes the three ScreencastNotice shapes", () => {
     expect(decodeScreencastNotice('{"_tag":"Lease","holder":"user"}')).toEqual({ _tag: "Lease", holder: "user" })
-    expect(decodeScreencastNotice('{"_tag":"Url","url":"https://x.dev","title":"X"}')).toEqual({ _tag: "Url", url: "https://x.dev", title: "X" })
-    expect(decodeScreencastNotice('{"_tag":"Ended","reason":"target closed"}')).toEqual({ _tag: "Ended", reason: "target closed" })
+    expect(decodeScreencastNotice('{"_tag":"Url","url":"https://x.dev","title":"X"}')).toEqual({
+      _tag: "Url",
+      url: "https://x.dev",
+      title: "X",
+    })
+    expect(decodeScreencastNotice('{"_tag":"Ended","reason":"target closed"}')).toEqual({
+      _tag: "Ended",
+      reason: "target closed",
+    })
     expect(decodeScreencastNotice('{"_tag":"Lease","holder":"nobody"}')).toBeUndefined()
     expect(decodeScreencastNotice("not json")).toBeUndefined()
   })
@@ -68,7 +85,10 @@ describe("input mapping", () => {
 
   test("modifiers are omitted when none are held", () => {
     expect(modifiersOf({ altKey: false, ctrlKey: false, metaKey: false, shiftKey: false })).toBeUndefined()
-    expect(modifiersOf({ altKey: false, ctrlKey: true, metaKey: false, shiftKey: true })).toEqual({ ctrl: true, shift: true })
+    expect(modifiersOf({ altKey: false, ctrlKey: true, metaKey: false, shiftKey: true })).toEqual({
+      ctrl: true,
+      shift: true,
+    })
   })
 })
 

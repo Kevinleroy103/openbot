@@ -63,7 +63,9 @@ interface EyeSpec {
   readonly dy?: number
 }
 
-const eyes = (expression: AvatarExpression): readonly [EyeSpec, EyeSpec, number /* spacing */, readonly [number, number] /* shift */] => {
+const eyes = (
+  expression: AvatarExpression,
+): readonly [EyeSpec, EyeSpec, number /* spacing */, readonly [number, number] /* shift */] => {
   switch (expression) {
     case "happy":
       return [{ kind: "arc", w: 15, h: 9 }, { kind: "arc", w: 15, h: 9 }, 25, [0, 1]]
@@ -142,9 +144,25 @@ export function Avatar({
     >
       <svg viewBox="0 0 100 100" width={size} height={size} className="overflow-visible" focusable="false">
         <g className="ob-avatar-body">
-          {outlineColor && <path d={body.d} fill={outlineColor} stroke={outlineColor} strokeWidth={(3 / size) * 200} strokeLinejoin="round" />}
+          {outlineColor && (
+            <path
+              d={body.d}
+              fill={outlineColor}
+              stroke={outlineColor}
+              strokeWidth={(3 / size) * 200}
+              strokeLinejoin="round"
+            />
+          )}
           {ghost ? (
-            <path d={body.d} fill={fill} fillOpacity={0.12} stroke={fill} strokeWidth={4} strokeDasharray="9 7" strokeLinecap="round" />
+            <path
+              d={body.d}
+              fill={fill}
+              fillOpacity={0.12}
+              stroke={fill}
+              strokeWidth={4}
+              strokeDasharray="9 7"
+              strokeLinecap="round"
+            />
           ) : (
             <path d={body.d} fill={fill} />
           )}
@@ -176,7 +194,12 @@ export interface AvatarStackProps {
 }
 
 /** Group avatar: 2–3 member avatars overlapped diagonally, each cut out with a background-colored outline. */
-export function AvatarStack({ avatars, size = 36, outlineColor = "var(--ob-sidebar)", className }: AvatarStackProps): ReactNode {
+export function AvatarStack({
+  avatars,
+  size = 36,
+  outlineColor = "var(--ob-sidebar)",
+  className,
+}: AvatarStackProps): ReactNode {
   const shown = avatars.slice(0, 3)
   const inner = Math.round(size * (shown.length > 2 ? 0.6 : 0.68))
   const positions: ReadonlyArray<readonly [number, number]> =

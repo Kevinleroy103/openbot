@@ -23,7 +23,15 @@ export {
   botTintStyle,
 } from "./avatar/palette.ts"
 export { avatarBodies, type AvatarBody } from "./avatar/shapes.ts"
-export { Avatar, AvatarStack, type AvatarProps, type AvatarStackProps, type AvatarSize, type AvatarStatus, type AvatarGaze } from "./avatar/Avatar.tsx"
+export {
+  Avatar,
+  AvatarStack,
+  type AvatarProps,
+  type AvatarStackProps,
+  type AvatarSize,
+  type AvatarStatus,
+  type AvatarGaze,
+} from "./avatar/Avatar.tsx"
 export { AvatarPicker, type AvatarPickerProps } from "./avatar/AvatarPicker.tsx"
 
 // Buttons

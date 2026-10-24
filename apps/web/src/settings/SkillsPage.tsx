@@ -27,18 +27,36 @@ export function SkillsPage(): ReactNode {
         description="Skills are how-tos your Bots follow. Each Bot uses only the skills it has, and Bots can save their own."
         actions={
           <>
-            <PillButton variant="secondary" size="md" leadingIcon={Download} onClick={() => setImporting(true)} data-testid="import-skill">
+            <PillButton
+              variant="secondary"
+              size="md"
+              leadingIcon={Download}
+              onClick={() => setImporting(true)}
+              data-testid="import-skill"
+            >
               <span className="max-sm:hidden">Import from skills.sh</span>
               <span className="sm:hidden">Import</span>
             </PillButton>
-            <PillButton variant="primary" size="md" leadingIcon={Plus} onClick={() => setEditing("new")} data-testid="new-skill">
+            <PillButton
+              variant="primary"
+              size="md"
+              leadingIcon={Plus}
+              onClick={() => setEditing("new")}
+              data-testid="new-skill"
+            >
               New skill
             </PillButton>
           </>
         }
       />
 
-      <GroupLabel trailing={list.length > 0 ? <span className="text-sm text-fg-tertiary tabular-nums">{list.length}</span> : undefined}>Library</GroupLabel>
+      <GroupLabel
+        trailing={
+          list.length > 0 ? <span className="text-sm text-fg-tertiary tabular-nums">{list.length}</span> : undefined
+        }
+      >
+        Library
+      </GroupLabel>
       <SettingsCard testId="skills-library">
         {skills.loading ? (
           <LoadingLine />
@@ -47,7 +65,9 @@ export function SkillsPage(): ReactNode {
             {skills.error}
           </ErrorLine>
         ) : list.length === 0 ? (
-          <p className="px-4 py-5 text-center text-sm text-fg-secondary">No skills yet. Write one, import one from skills.sh, or ask a Bot to save one.</p>
+          <p className="px-4 py-5 text-center text-sm text-fg-secondary">
+            No skills yet. Write one, import one from skills.sh, or ask a Bot to save one.
+          </p>
         ) : (
           list.map((s, i) => (
             <Fragment key={s.name}>
@@ -75,9 +95,18 @@ export function SkillsPage(): ReactNode {
           ))
         )}
       </SettingsCard>
-      <p className="mt-3 px-1 text-2xs text-fg-quaternary">A Bot that wants a skill it doesn't have asks you first. To let that happen without asking, add a rule in Permissions.</p>
+      <p className="mt-3 px-1 text-2xs text-fg-quaternary">
+        A Bot that wants a skill it doesn't have asks you first. To let that happen without asking, add a rule in
+        Permissions.
+      </p>
 
-      {editing && <SkillEditorDialog key={editing === "new" ? "new" : editing.name} skill={open} onClose={() => setEditing(undefined)} />}
+      {editing && (
+        <SkillEditorDialog
+          key={editing === "new" ? "new" : editing.name}
+          skill={open}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
       {importing && <SkillImportDialog onClose={() => setImporting(false)} />}
     </div>
   )

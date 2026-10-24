@@ -38,7 +38,13 @@ import { Conflict, InvalidInput, NotFound } from "@openbot/contracts"
 import { Cause, Clock, Duration, Effect, FiberSet, Layer, Option, Queue, Semaphore, Stream } from "effect"
 import { IdGen } from "../../ports/IdGen.ts"
 import { BotRepo, EntryRepo, RoutineRepo } from "../../ports/repos.ts"
-import { type Actor, ConversationService, type EntryDraft, Orchestrator, RoutineScheduler } from "../../ports/services.ts"
+import {
+  type Actor,
+  ConversationService,
+  type EntryDraft,
+  Orchestrator,
+  RoutineScheduler,
+} from "../../ports/services.ts"
 import { SlackConnector, type SlackEvent } from "../../ports/Slack.ts"
 import { CATCH_UP_WINDOW_MS, describeTrigger, nextRunAfter, sameTrigger, validateTrigger } from "./schedule.ts"
 import { slackEventsText, slackTriggerMatches } from "./SlackService.ts"
@@ -78,7 +84,7 @@ const scheduleFrom = (routine: Routine, now: number): Routine =>
     ? withNextRun(routine, nextRunAfter(routine.trigger, now, { anchor: now, ranOnce: false }))
     : withoutNextRun(routine)
 
-export const makeRoutineScheduler = Effect.gen(function*() {
+export const makeRoutineScheduler = Effect.gen(function* () {
   const repo = yield* RoutineRepo
   const bots = yield* BotRepo
   const entries = yield* EntryRepo
@@ -100,19 +106,23 @@ export const makeRoutineScheduler = Effect.gen(function*() {
   const getRoutine = (routineId: RoutineId) =>
     repo.get(routineId).pipe(
       Effect.orDie,
-      Effect.flatMap(Option.match({
-        onNone: () => Effect.fail(new NotFound({ entity: "routine", id: routineId })),
-        onSome: Effect.succeed,
-      })),
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new NotFound({ entity: "routine", id: routineId })),
+          onSome: Effect.succeed,
+        }),
+      ),
     )
 
   const requireBot = (botId: BotId) =>
     bots.get(botId).pipe(
       Effect.orDie,
-      Effect.flatMap(Option.match({
-        onNone: () => Effect.fail(new NotFound({ entity: "bot", id: botId })),
-        onSome: Effect.succeed,
-      })),
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new NotFound({ entity: "bot", id: botId })),
+          onSome: Effect.succeed,
+        }),
+      ),
     )
 
   const checkOwner = (actor: Actor, botId: BotId) =>
@@ -124,25 +134,35 @@ export const makeRoutineScheduler = Effect.gen(function*() {
     const name = spec.name.trim()
     if (name.length === 0) return Effect.fail(new InvalidInput({ message: "A routine needs a name." }))
     if ([...name].length > ROUTINE_LIMITS.nameChars) {
-      return Effect.fail(new InvalidInput({ message: `The routine name is too long (max ${ROUTINE_LIMITS.nameChars} characters).` }))
+      return Effect.fail(
+        new InvalidInput({ message: `The routine name is too long (max ${ROUTINE_LIMITS.nameChars} characters).` }),
+      )
     }
     if (spec.prompt.trim().length === 0) {
       return Effect.fail(new InvalidInput({ message: "A routine needs an instruction (prompt)." }))
     }
     if (utf8Length(spec.prompt) > ROUTINE_LIMITS.promptBytes) {
-      return Effect.fail(new InvalidInput({ message: `The routine instruction is too long (max ${ROUTINE_LIMITS.promptBytes / 1024} KB).` }))
+      return Effect.fail(
+        new InvalidInput({
+          message: `The routine instruction is too long (max ${ROUTINE_LIMITS.promptBytes / 1024} KB).`,
+        }),
+      )
     }
     const problem = validateTrigger(spec.trigger, now)
     if (problem !== undefined) return Effect.fail(new InvalidInput({ message: problem }))
     if (spec.trigger.type !== "slack") return Effect.succeed(name)
-    const notConnected = new InvalidInput({ message: "Slack isn't connected: the owner connects it in Connect apps › Slack." })
+    const notConnected = new InvalidInput({
+      message: "Slack isn't connected: the owner connects it in Connect apps › Slack.",
+    })
     return slack === undefined
       ? Effect.fail(notConnected)
-      : slack.status.pipe(Effect.flatMap((status) => (status.connected ? Effect.succeed(name) : Effect.fail(notConnected))))
+      : slack.status.pipe(
+          Effect.flatMap((status) => (status.connected ? Effect.succeed(name) : Effect.fail(notConnected))),
+        )
   }
 
   const checkNameFree = (botId: BotId, name: string, except?: RoutineId) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const existing = yield* repo.list({ botId }).pipe(Effect.orDie)
       const lower = name.toLowerCase()
       if (existing.some((r) => r.id !== except && r.name.toLowerCase() === lower)) {
@@ -158,26 +178,30 @@ export const makeRoutineScheduler = Effect.gen(function*() {
     routine: Routine,
     action: "created" | "updated" | "enabled" | "disabled" | "deleted",
   ) => {
-    const write = actor.kind === "bot" && (action === "created" || action === "updated")
-      ? conversations.appendEntry({
-        kind: "card",
-        conversationId: actor.tool.claims.conversationId,
-        author: { kind: "bot", botId: bot.id },
-        card: {
-          type: "routine",
-          action,
-          routineId: routine.id,
-          name: routine.name,
-          triggerSummary: describeTrigger(routine.trigger),
-          prompt: routine.prompt,
-        },
-        state: { status: "info" },
-      } as EntryDraft)
-      : conversations.appendEvent({
-        conversationId: bot.directConversationId,
-        event: { type: "routine-changed", action, routineId: routine.id, routineName: routine.name },
-      })
-    return write.pipe(Effect.asVoid, Effect.catch((error) => Effect.logWarning("RoutineScheduler: change not announced", error)))
+    const write =
+      actor.kind === "bot" && (action === "created" || action === "updated")
+        ? conversations.appendEntry({
+            kind: "card",
+            conversationId: actor.tool.claims.conversationId,
+            author: { kind: "bot", botId: bot.id },
+            card: {
+              type: "routine",
+              action,
+              routineId: routine.id,
+              name: routine.name,
+              triggerSummary: describeTrigger(routine.trigger),
+              prompt: routine.prompt,
+            },
+            state: { status: "info" },
+          } as EntryDraft)
+        : conversations.appendEvent({
+            conversationId: bot.directConversationId,
+            event: { type: "routine-changed", action, routineId: routine.id, routineName: routine.name },
+          })
+    return write.pipe(
+      Effect.asVoid,
+      Effect.catch((error) => Effect.logWarning("RoutineScheduler: change not announced", error)),
+    )
   }
 
   // ------------------------------------------------------------------------ runs
@@ -185,17 +209,24 @@ export const makeRoutineScheduler = Effect.gen(function*() {
   const updateRunEvent = (runId: RoutineRunId, status: RoutineRunStatus) => {
     const entryId = runEvents.get(runId)
     if (entryId === undefined) return Effect.void
-    return conversations.updateEntry(entryId, (entry) =>
-      entry.kind === "event" && entry.event.type === "routine-run" ? { ...entry, event: { ...entry.event, status } } : entry
-    ).pipe(Effect.asVoid, Effect.catch((error) => Effect.logWarning("RoutineScheduler: run event not updated", error)))
+    return conversations
+      .updateEntry(entryId, (entry) =>
+        entry.kind === "event" && entry.event.type === "routine-run"
+          ? { ...entry, event: { ...entry.event, status } }
+          : entry,
+      )
+      .pipe(
+        Effect.asVoid,
+        Effect.catch((error) => Effect.logWarning("RoutineScheduler: run event not updated", error)),
+      )
   }
 
   const removeRunEvent = (runId: RoutineRunId) => {
     const entryId = runEvents.get(runId)
     if (entryId === undefined) return Effect.void
-    return conversations.removeEntry(entryId).pipe(
-      Effect.catchCause((cause) => Effect.logWarning("RoutineScheduler: run event not removed", cause)),
-    )
+    return conversations
+      .removeEntry(entryId)
+      .pipe(Effect.catchCause((cause) => Effect.logWarning("RoutineScheduler: run event not removed", cause)))
   }
 
   /** Closes a run (idempotent: only a running run changes). */
@@ -209,55 +240,59 @@ export const makeRoutineScheduler = Effect.gen(function*() {
       readonly turnId?: RoutineRun["turnId"] | undefined
     },
   ) =>
-    lock.withPermits(1)(Effect.gen(function*() {
-      if (running.get(routineId) === runId) running.delete(routineId)
-      const run = yield* repo.getRun(runId).pipe(Effect.orDie)
-      const routine = yield* repo.get(routineId).pipe(Effect.orDie)
-      // A deleted routine took its runs with it: nothing to close.
-      if (Option.isNone(run) || Option.isNone(routine) || run.value.status !== "running") return
-      const finishedAt = yield* Clock.currentTimeMillis
-      const summary = result.summary === undefined ? undefined : truncate(result.summary.trim(), ROUTINE_LIMITS.summaryChars)
-      const next: RoutineRun = {
-        ...run.value,
-        status: result.status,
-        finishedAt,
-        ...(summary === undefined || summary.length === 0 ? {} : { summary }),
-        ...(result.error === undefined ? {} : { error: result.error }),
-        ...(result.turnId === undefined ? {} : { turnId: result.turnId }),
-      }
-      yield* repo.upsertRun(next).pipe(Effect.orDie)
-      if (routine.value.lastRunAt === run.value.startedAt) {
-        yield* repo.upsert({ ...routine.value, lastRunStatus: result.status }).pipe(Effect.orDie)
-      }
-      // nothing to say: no line in the Bot's chat (the run stays in the routine's history)
-      const silent = result.status === "succeeded" && (summary === undefined || summary.length === 0)
-      yield* silent && routine.value.output === "direct" ? removeRunEvent(runId) : updateRunEvent(runId, result.status)
-      runEvents.delete(runId)
-    }))
+    lock.withPermits(1)(
+      Effect.gen(function* () {
+        if (running.get(routineId) === runId) running.delete(routineId)
+        const run = yield* repo.getRun(runId).pipe(Effect.orDie)
+        const routine = yield* repo.get(routineId).pipe(Effect.orDie)
+        // A deleted routine took its runs with it: nothing to close.
+        if (Option.isNone(run) || Option.isNone(routine) || run.value.status !== "running") return
+        const finishedAt = yield* Clock.currentTimeMillis
+        const summary =
+          result.summary === undefined ? undefined : truncate(result.summary.trim(), ROUTINE_LIMITS.summaryChars)
+        const next: RoutineRun = {
+          ...run.value,
+          status: result.status,
+          finishedAt,
+          ...(summary === undefined || summary.length === 0 ? {} : { summary }),
+          ...(result.error === undefined ? {} : { error: result.error }),
+          ...(result.turnId === undefined ? {} : { turnId: result.turnId }),
+        }
+        yield* repo.upsertRun(next).pipe(Effect.orDie)
+        if (routine.value.lastRunAt === run.value.startedAt) {
+          yield* repo.upsert({ ...routine.value, lastRunStatus: result.status }).pipe(Effect.orDie)
+        }
+        // nothing to say: no line in the Bot's chat (the run stays in the routine's history)
+        const silent = result.status === "succeeded" && (summary === undefined || summary.length === 0)
+        yield* silent && routine.value.output === "direct"
+          ? removeRunEvent(runId)
+          : updateRunEvent(runId, result.status)
+        runEvents.delete(runId)
+      }),
+    )
 
   const watch = (routineId: RoutineId, runId: RoutineRunId, deliveryId: string) =>
     orchestrator.awaitDelivery(deliveryId).pipe(
       Effect.flatMap((outcome) =>
         finishRun(routineId, runId, {
-          status: outcome.status === "completed"
-            ? "succeeded"
-            : outcome.status === "interrupted"
-            ? "interrupted"
-            : "failed",
+          status:
+            outcome.status === "completed" ? "succeeded" : outcome.status === "interrupted" ? "interrupted" : "failed",
           summary: outcome.lastBotMessage,
           turnId: outcome.turn?.id,
           ...(outcome.status === "dropped"
             ? { error: "The run was dropped before it started." }
             : outcome.status === "failed"
-            ? { error: outcome.turn?.failure?.message ?? "The bot's turn failed." }
-            : {}),
-        })
+              ? { error: outcome.turn?.failure?.message ?? "The bot's turn failed." }
+              : {}),
+        }),
       ),
-      Effect.catch((error) => finishRun(routineId, runId, { status: "failed", error: `Delivery lost (${error._tag}).` })),
+      Effect.catch((error) =>
+        finishRun(routineId, runId, { status: "failed", error: `Delivery lost (${error._tag}).` }),
+      ),
       Effect.catchDefect((defect) =>
         Effect.logError("RoutineScheduler: run watcher failed", defect).pipe(
           Effect.andThen(finishRun(routineId, runId, { status: "failed", error: "Internal error." })),
-        )
+        ),
       ),
     )
 
@@ -266,89 +301,101 @@ export const makeRoutineScheduler = Effect.gen(function*() {
    * leave the schedule alone. Returns none when a scheduled fire was skipped.
    */
   const fire = (routineId: RoutineId, firedBy: FiredBy, eventText?: string) =>
-    Effect.gen(function*() {
-      const started = yield* lock.withPermits(1)(Effect.gen(function*() {
-        const routine = yield* getRoutine(routineId)
-        const now = yield* Clock.currentTimeMillis
-        const scheduled = firedBy !== "manual"
-        const advanced = !scheduled
-          ? routine
-          : routine.trigger.type === "once"
-          // A one-time routine is done after its scheduled run: switch it off (the UI shows "Ran …").
-          ? { ...withNextRun(routine, undefined), enabled: false }
-          : withNextRun(routine, nextRunAfter(routine.trigger, now, { anchor: now, ranOnce: false }))
-        if (running.has(routine.id)) {
-          if (!scheduled) return yield* new Conflict({ reason: `"${routine.name}" is already running.` })
-          yield* Effect.logInfo(`RoutineScheduler: skipped ${routine.id}, the previous run is still going`)
-          yield* repo.upsert(advanced).pipe(Effect.orDie)
-          return Option.none()
-        }
-        const bot = yield* bots.get(routine.botId).pipe(Effect.orDie)
-        if (Option.isNone(bot)) {
-          if (!scheduled) return yield* new NotFound({ entity: "bot", id: routine.botId })
-          yield* repo.upsert(advanced).pipe(Effect.orDie)
-          return Option.none()
-        }
-        const runId = yield* ids.routineRunId
-        const triggerSummary = describeTrigger(routine.trigger)
-        const conversationId: ConversationId = routine.output === "own-conversation"
-          ? (yield* conversations.createRoutineRunConversation({
-            botId: bot.value.id,
-            routineId: routine.id,
-            runId,
-            title: routine.name,
-            triggerSummary,
-          })).id
-          : bot.value.directConversationId
-        const event = yield* conversations.appendEvent({
-          conversationId,
-          event: { type: "routine-run", routineId: routine.id, routineName: routine.name, runId, status: "running" },
-        })
-        runEvents.set(runId, event.id)
-        const run: RoutineRun = { id: runId, routineId: routine.id, firedBy, startedAt: now, status: "running", conversationId }
-        yield* repo.upsertRun(run).pipe(Effect.orDie)
-        yield* repo.upsert({ ...advanced, lastRunAt: now, lastRunStatus: "running" }).pipe(Effect.orDie)
-        running.set(routine.id, runId)
-        return Option.some({ routine, bot: bot.value, run, eventId: event.id, triggerSummary })
-      }))
-      if (Option.isNone(started)) return Option.none<RoutineRun>()
-      const { bot, eventId, routine, run, triggerSummary } = started.value
-      const receipt = yield* orchestrator.deliver({
-        conversationId: run.conversationId,
-        botId: bot.id,
-        kind: "routine",
-        text: `Routine "${oneLine(routine.name)}" (${triggerSummary}) — ${
-          run.firedBy === "manual"
-            ? "manual run: the owner pressed Run now (this is not a duplicate scheduled run)"
-            : run.firedBy === "catch-up"
-            ? "catch-up run: it was due while OpenBot was offline"
-            : run.firedBy === "event"
-            ? "it was triggered by what follows the instruction"
-            : "scheduled run"
-        }:\n${routine.prompt}${eventText === undefined ? "" : `\n\n${eventText}`}`,
-        // Wakes an idle bot; queues behind a running turn instead of steering into it.
-        urgency: "urgent",
-        mode: "queue",
-        sourceEntryId: eventId,
-        routineRunId: run.id,
-      }).pipe(
-        Effect.onError((cause) => {
-          const error = Cause.findErrorOption(cause)
-          if (Option.isSome(error)) {
-            const e = error.value
-            return finishRun(routine.id, run.id, {
-              status: "failed",
-              error: e._tag === "HarnessUnavailable" ? e.message : `${e._tag}: ${e.entity} ${e.id}`,
-            })
+    Effect.gen(function* () {
+      const started = yield* lock.withPermits(1)(
+        Effect.gen(function* () {
+          const routine = yield* getRoutine(routineId)
+          const now = yield* Clock.currentTimeMillis
+          const scheduled = firedBy !== "manual"
+          const advanced = !scheduled
+            ? routine
+            : routine.trigger.type === "once"
+              ? // A one-time routine is done after its scheduled run: switch it off (the UI shows "Ran …").
+                { ...withNextRun(routine, undefined), enabled: false }
+              : withNextRun(routine, nextRunAfter(routine.trigger, now, { anchor: now, ranOnce: false }))
+          if (running.has(routine.id)) {
+            if (!scheduled) return yield* new Conflict({ reason: `"${routine.name}" is already running.` })
+            yield* Effect.logInfo(`RoutineScheduler: skipped ${routine.id}, the previous run is still going`)
+            yield* repo.upsert(advanced).pipe(Effect.orDie)
+            return Option.none()
           }
-          if (Cause.hasInterruptsOnly(cause)) return finishRun(routine.id, run.id, { status: "interrupted" })
-          return finishRun(routine.id, run.id, { status: "failed", error: "Internal error." })
+          const bot = yield* bots.get(routine.botId).pipe(Effect.orDie)
+          if (Option.isNone(bot)) {
+            if (!scheduled) return yield* new NotFound({ entity: "bot", id: routine.botId })
+            yield* repo.upsert(advanced).pipe(Effect.orDie)
+            return Option.none()
+          }
+          const runId = yield* ids.routineRunId
+          const triggerSummary = describeTrigger(routine.trigger)
+          const conversationId: ConversationId =
+            routine.output === "own-conversation"
+              ? (yield* conversations.createRoutineRunConversation({
+                  botId: bot.value.id,
+                  routineId: routine.id,
+                  runId,
+                  title: routine.name,
+                  triggerSummary,
+                })).id
+              : bot.value.directConversationId
+          const event = yield* conversations.appendEvent({
+            conversationId,
+            event: { type: "routine-run", routineId: routine.id, routineName: routine.name, runId, status: "running" },
+          })
+          runEvents.set(runId, event.id)
+          const run: RoutineRun = {
+            id: runId,
+            routineId: routine.id,
+            firedBy,
+            startedAt: now,
+            status: "running",
+            conversationId,
+          }
+          yield* repo.upsertRun(run).pipe(Effect.orDie)
+          yield* repo.upsert({ ...advanced, lastRunAt: now, lastRunStatus: "running" }).pipe(Effect.orDie)
+          running.set(routine.id, runId)
+          return Option.some({ routine, bot: bot.value, run, eventId: event.id, triggerSummary })
         }),
       )
+      if (Option.isNone(started)) return Option.none<RoutineRun>()
+      const { bot, eventId, routine, run, triggerSummary } = started.value
+      const receipt = yield* orchestrator
+        .deliver({
+          conversationId: run.conversationId,
+          botId: bot.id,
+          kind: "routine",
+          text: `Routine "${oneLine(routine.name)}" (${triggerSummary}) — ${
+            run.firedBy === "manual"
+              ? "manual run: the owner pressed Run now (this is not a duplicate scheduled run)"
+              : run.firedBy === "catch-up"
+                ? "catch-up run: it was due while OpenBot was offline"
+                : run.firedBy === "event"
+                  ? "it was triggered by what follows the instruction"
+                  : "scheduled run"
+          }:\n${routine.prompt}${eventText === undefined ? "" : `\n\n${eventText}`}`,
+          // Wakes an idle bot; queues behind a running turn instead of steering into it.
+          urgency: "urgent",
+          mode: "queue",
+          sourceEntryId: eventId,
+          routineRunId: run.id,
+        })
+        .pipe(
+          Effect.onError((cause) => {
+            const error = Cause.findErrorOption(cause)
+            if (Option.isSome(error)) {
+              const e = error.value
+              return finishRun(routine.id, run.id, {
+                status: "failed",
+                error: e._tag === "HarnessUnavailable" ? e.message : `${e._tag}: ${e.entity} ${e.id}`,
+              })
+            }
+            if (Cause.hasInterruptsOnly(cause)) return finishRun(routine.id, run.id, { status: "interrupted" })
+            return finishRun(routine.id, run.id, { status: "failed", error: "Internal error." })
+          }),
+        )
       const withTurn: RoutineRun = receipt.turnId === undefined ? run : { ...run, turnId: receipt.turnId }
       if (receipt.turnId !== undefined) {
         yield* lock.withPermits(1)(
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const current = yield* repo.getRun(run.id).pipe(Effect.orDie)
             if (Option.isSome(current) && current.value.status === "running") {
               yield* repo.upsertRun({ ...current.value, turnId: receipt.turnId! }).pipe(Effect.orDie)
@@ -370,7 +417,7 @@ export const makeRoutineScheduler = Effect.gen(function*() {
     )
 
   /** Boot pass: fill missing `nextRunAt`, catch up misses from the last 24 h once. */
-  const boot = Effect.gen(function*() {
+  const boot = Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis
     const routines = yield* repo.list().pipe(Effect.orDie)
     for (const routine of routines) {
@@ -380,7 +427,8 @@ export const makeRoutineScheduler = Effect.gen(function*() {
           anchor: routine.lastRunAt ?? now,
           ranOnce: routine.lastRunAt !== undefined,
         })
-        if (next !== undefined) yield* lock.withPermits(1)(repo.upsert({ ...routine, nextRunAt: next }).pipe(Effect.orDie))
+        if (next !== undefined)
+          yield* lock.withPermits(1)(repo.upsert({ ...routine, nextRunAt: next }).pipe(Effect.orDie))
         continue
       }
       if (routine.nextRunAt > now) continue
@@ -388,7 +436,13 @@ export const makeRoutineScheduler = Effect.gen(function*() {
         yield* fireSafely(routine.id, "catch-up")
       } else {
         yield* lock.withPermits(1)(
-          repo.upsert(withNextRun(routine, nextRunAfter(routine.trigger, now, { anchor: now, ranOnce: routine.trigger.type === "once" })))
+          repo
+            .upsert(
+              withNextRun(
+                routine,
+                nextRunAfter(routine.trigger, now, { anchor: now, ranOnce: routine.trigger.type === "once" }),
+              ),
+            )
             .pipe(Effect.orDie),
         )
       }
@@ -396,25 +450,32 @@ export const makeRoutineScheduler = Effect.gen(function*() {
   })
 
   /** One iteration: fire everything due, then sleep until the next due time or a wake-up. */
-  const tick = Effect.gen(function*() {
+  const tick = Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis
     // Finished one-time routines are kept (switched off, under "Done") for a week, then removed.
     for (const r of yield* repo.list().pipe(Effect.orDie)) {
       if (
-        r.trigger.type === "once" && !r.enabled && r.lastRunAt !== undefined && !running.has(r.id) &&
+        r.trigger.type === "once" &&
+        !r.enabled &&
+        r.lastRunAt !== undefined &&
+        !running.has(r.id) &&
         now - r.lastRunAt > DONE_ONCE_RETENTION_MS
       ) {
         // Silent: no "deleted" event line in the chat for this housekeeping.
         yield* lock.withPermits(1)(repo.delete(r.id).pipe(Effect.orDie))
       }
     }
-    const due = (yield* repo.list().pipe(Effect.orDie)).filter((r) => r.enabled && r.nextRunAt !== undefined && r.nextRunAt <= now)
+    const due = (yield* repo.list().pipe(Effect.orDie)).filter(
+      (r) => r.enabled && r.nextRunAt !== undefined && r.nextRunAt <= now,
+    )
     for (const routine of due) yield* fireSafely(routine.id, "schedule")
     const after = yield* Clock.currentTimeMillis
-    const upcoming = (yield* repo.list().pipe(Effect.orDie))
-      .flatMap((r) => (r.enabled && r.nextRunAt !== undefined ? [r.nextRunAt] : []))
+    const upcoming = (yield* repo.list().pipe(Effect.orDie)).flatMap((r) =>
+      r.enabled && r.nextRunAt !== undefined ? [r.nextRunAt] : [],
+    )
     const earliest = upcoming.length === 0 ? undefined : Math.min(...upcoming)
-    const sleepMs = earliest === undefined ? MAX_SCHEDULER_SLEEP_MS : Math.min(MAX_SCHEDULER_SLEEP_MS, Math.max(0, earliest - after))
+    const sleepMs =
+      earliest === undefined ? MAX_SCHEDULER_SLEEP_MS : Math.min(MAX_SCHEDULER_SLEEP_MS, Math.max(0, earliest - after))
     yield* Effect.raceFirst(Effect.sleep(Duration.millis(sleepMs)), Queue.take(wake))
   })
 
@@ -424,10 +485,12 @@ export const makeRoutineScheduler = Effect.gen(function*() {
    * each chat's latest entries.
    */
   const SILENT_SCAN_ENTRIES = 500
-  const cleanSilentRuns = Effect.gen(function*() {
+  const cleanSilentRuns = Effect.gen(function* () {
     let removed = 0
     for (const bot of yield* bots.list.pipe(Effect.orDie)) {
-      const page = yield* entries.page({ conversationId: bot.directConversationId, limit: SILENT_SCAN_ENTRIES }).pipe(Effect.orDie)
+      const page = yield* entries
+        .page({ conversationId: bot.directConversationId, limit: SILENT_SCAN_ENTRIES })
+        .pipe(Effect.orDie)
       const list = page.entries
       for (let i = 0; i < list.length; i++) {
         const entry = list[i]!
@@ -447,7 +510,8 @@ export const makeRoutineScheduler = Effect.gen(function*() {
         removed++
       }
     }
-    if (removed > 0) yield* Effect.logInfo(`RoutineScheduler: removed ${removed} lines of routine runs that had nothing to say`)
+    if (removed > 0)
+      yield* Effect.logInfo(`RoutineScheduler: removed ${removed} lines of routine runs that had nothing to say`)
   }).pipe(Effect.catchCause((cause) => Effect.logWarning("RoutineScheduler: silent run lines not cleaned", cause)))
   yield* Effect.forkScoped(cleanSilentRuns, { startImmediately: true })
 
@@ -457,7 +521,7 @@ export const makeRoutineScheduler = Effect.gen(function*() {
       Effect.forever(
         tick.pipe(
           Effect.catchDefect((defect) =>
-            Effect.logError("RoutineScheduler: tick failed", defect).pipe(Effect.andThen(Effect.sleep("1 minute")))
+            Effect.logError("RoutineScheduler: tick failed", defect).pipe(Effect.andThen(Effect.sleep("1 minute"))),
           ),
         ),
       ),
@@ -472,7 +536,7 @@ export const makeRoutineScheduler = Effect.gen(function*() {
   const flushing = new Set<RoutineId>()
 
   const flushSlack = (routineId: RoutineId): Effect.Effect<void> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       yield* Effect.sleep(Duration.millis(SLACK_BATCH_MS))
       // messages that arrive while a run is going wait for it to end
       if (running.has(routineId)) return yield* flushSlack(routineId)
@@ -480,14 +544,20 @@ export const makeRoutineScheduler = Effect.gen(function*() {
       const events = slackQueue.get(routineId) ?? []
       slackQueue.delete(routineId)
       const routine = yield* repo.get(routineId).pipe(Effect.orDie)
-      if (events.length === 0 || Option.isNone(routine) || !routine.value.enabled || routine.value.trigger.type !== "slack") return
+      if (
+        events.length === 0 ||
+        Option.isNone(routine) ||
+        !routine.value.enabled ||
+        routine.value.trigger.type !== "slack"
+      )
+        return
       yield* fireSafely(routineId, "event", slackEventsText(events))
     })
 
   const onSlackEvent = (event: SlackEvent) =>
-    Effect.gen(function*() {
-      const matching = (yield* repo.list().pipe(Effect.orDie)).filter((r) =>
-        r.enabled && r.trigger.type === "slack" && slackTriggerMatches(r.trigger, event)
+    Effect.gen(function* () {
+      const matching = (yield* repo.list().pipe(Effect.orDie)).filter(
+        (r) => r.enabled && r.trigger.type === "slack" && slackTriggerMatches(r.trigger, event),
       )
       for (const routine of matching) {
         const queue = slackQueue.get(routine.id) ?? []
@@ -511,117 +581,142 @@ export const makeRoutineScheduler = Effect.gen(function*() {
   // ------------------------------------------------------------------------ service
 
   const create = (actor: Actor, input: { readonly botId: BotId; readonly spec: RoutineSpec }) =>
-    lock.withPermits(1)(Effect.gen(function*() {
-      const bot = yield* requireBot(input.botId)
-      yield* checkOwner(actor, bot.id)
-      const now = yield* Clock.currentTimeMillis
-      const name = yield* validateSpec(input.spec, now)
-      const existing = yield* checkNameFree(bot.id, name)
-      if (existing.length >= ROUTINE_LIMITS.perBot) {
-        return yield* new InvalidInput({ message: `A bot can have at most ${ROUTINE_LIMITS.perBot} routines.` })
-      }
-      const routine = scheduleFrom({
-        id: yield* ids.routineId,
-        botId: bot.id,
-        name,
-        prompt: input.spec.prompt,
-        trigger: input.spec.trigger,
-        enabled: input.spec.enabled,
-        output: input.spec.output,
-        createdAt: now,
-        updatedAt: now,
-      }, now)
-      yield* repo.upsert(routine).pipe(Effect.orDie)
-      return { bot, routine }
-    })).pipe(
-      Effect.tap(({ bot, routine }) => announce(actor, bot, routine, "created").pipe(Effect.andThen(signal))),
-      Effect.map(({ routine }) => routine),
-    )
+    lock
+      .withPermits(1)(
+        Effect.gen(function* () {
+          const bot = yield* requireBot(input.botId)
+          yield* checkOwner(actor, bot.id)
+          const now = yield* Clock.currentTimeMillis
+          const name = yield* validateSpec(input.spec, now)
+          const existing = yield* checkNameFree(bot.id, name)
+          if (existing.length >= ROUTINE_LIMITS.perBot) {
+            return yield* new InvalidInput({ message: `A bot can have at most ${ROUTINE_LIMITS.perBot} routines.` })
+          }
+          const routine = scheduleFrom(
+            {
+              id: yield* ids.routineId,
+              botId: bot.id,
+              name,
+              prompt: input.spec.prompt,
+              trigger: input.spec.trigger,
+              enabled: input.spec.enabled,
+              output: input.spec.output,
+              createdAt: now,
+              updatedAt: now,
+            },
+            now,
+          )
+          yield* repo.upsert(routine).pipe(Effect.orDie)
+          return { bot, routine }
+        }),
+      )
+      .pipe(
+        Effect.tap(({ bot, routine }) => announce(actor, bot, routine, "created").pipe(Effect.andThen(signal))),
+        Effect.map(({ routine }) => routine),
+      )
 
   const update = (actor: Actor, input: { readonly routineId: RoutineId; readonly spec: RoutineSpec }) =>
-    lock.withPermits(1)(Effect.gen(function*() {
-      const current = yield* getRoutine(input.routineId)
-      yield* checkOwner(actor, current.botId)
-      const bot = yield* requireBot(current.botId)
-      const now = yield* Clock.currentTimeMillis
-      const triggerChanged = !sameTrigger(current.trigger, input.spec.trigger)
-      // An unchanged one-time trigger may lie in the past (already ran); only new triggers are checked.
-      const name = yield* validateSpec(
-        triggerChanged ? input.spec : { ...input.spec, trigger: { type: "manual" } },
-        now,
+    lock
+      .withPermits(1)(
+        Effect.gen(function* () {
+          const current = yield* getRoutine(input.routineId)
+          yield* checkOwner(actor, current.botId)
+          const bot = yield* requireBot(current.botId)
+          const now = yield* Clock.currentTimeMillis
+          const triggerChanged = !sameTrigger(current.trigger, input.spec.trigger)
+          // An unchanged one-time trigger may lie in the past (already ran); only new triggers are checked.
+          const name = yield* validateSpec(
+            triggerChanged ? input.spec : { ...input.spec, trigger: { type: "manual" } },
+            now,
+          )
+          yield* checkNameFree(current.botId, name, current.id)
+          const base: Routine = {
+            ...current,
+            name,
+            prompt: input.spec.prompt,
+            trigger: input.spec.trigger,
+            enabled: input.spec.enabled,
+            output: input.spec.output,
+            updatedAt: now,
+          }
+          const routine = !base.enabled
+            ? withoutNextRun(base)
+            : triggerChanged || !current.enabled
+              ? scheduleFrom(base, now)
+              : base
+          yield* repo.upsert(routine).pipe(Effect.orDie)
+          return { bot, routine }
+        }),
       )
-      yield* checkNameFree(current.botId, name, current.id)
-      const base: Routine = {
-        ...current,
-        name,
-        prompt: input.spec.prompt,
-        trigger: input.spec.trigger,
-        enabled: input.spec.enabled,
-        output: input.spec.output,
-        updatedAt: now,
-      }
-      const routine = !base.enabled
-        ? withoutNextRun(base)
-        : triggerChanged || !current.enabled
-        ? scheduleFrom(base, now)
-        : base
-      yield* repo.upsert(routine).pipe(Effect.orDie)
-      return { bot, routine }
-    })).pipe(
-      Effect.tap(({ bot, routine }) => announce(actor, bot, routine, "updated").pipe(Effect.andThen(signal))),
-      Effect.map(({ routine }) => routine),
-    )
+      .pipe(
+        Effect.tap(({ bot, routine }) => announce(actor, bot, routine, "updated").pipe(Effect.andThen(signal))),
+        Effect.map(({ routine }) => routine),
+      )
 
   const setEnabled = (routineId: RoutineId, enabled: boolean) =>
-    lock.withPermits(1)(Effect.gen(function*() {
-      const current = yield* getRoutine(routineId)
-      if (current.enabled === enabled) return { routine: current, changed: false }
-      const now = yield* Clock.currentTimeMillis
-      const routine = scheduleFrom({ ...current, enabled, updatedAt: now }, now)
-      yield* repo.upsert(routine).pipe(Effect.orDie)
-      return { routine, changed: true }
-    })).pipe(
-      Effect.tap(({ changed, routine }) =>
-        changed
-          ? bots.get(routine.botId).pipe(
-            Effect.orDie,
-            Effect.flatMap(Option.match({
-              onNone: () => Effect.void,
-              onSome: (bot) => announce({ kind: "user" }, bot, routine, enabled ? "enabled" : "disabled"),
-            })),
-            Effect.andThen(signal),
-          )
-          : Effect.void
-      ),
-      Effect.map(({ routine }) => routine),
-    )
+    lock
+      .withPermits(1)(
+        Effect.gen(function* () {
+          const current = yield* getRoutine(routineId)
+          if (current.enabled === enabled) return { routine: current, changed: false }
+          const now = yield* Clock.currentTimeMillis
+          const routine = scheduleFrom({ ...current, enabled, updatedAt: now }, now)
+          yield* repo.upsert(routine).pipe(Effect.orDie)
+          return { routine, changed: true }
+        }),
+      )
+      .pipe(
+        Effect.tap(({ changed, routine }) =>
+          changed
+            ? bots.get(routine.botId).pipe(
+                Effect.orDie,
+                Effect.flatMap(
+                  Option.match({
+                    onNone: () => Effect.void,
+                    onSome: (bot) => announce({ kind: "user" }, bot, routine, enabled ? "enabled" : "disabled"),
+                  }),
+                ),
+                Effect.andThen(signal),
+              )
+            : Effect.void,
+        ),
+        Effect.map(({ routine }) => routine),
+      )
 
   const remove = (routineId: RoutineId) =>
-    lock.withPermits(1)(Effect.gen(function*() {
-      const routine = yield* getRoutine(routineId)
-      yield* repo.delete(routineId).pipe(Effect.orDie)
-      return routine
-    })).pipe(
-      Effect.tap((routine) =>
-        bots.get(routine.botId).pipe(
-          Effect.orDie,
-          Effect.flatMap(Option.match({
-            onNone: () => Effect.void,
-            onSome: (bot) => announce({ kind: "user" }, bot, routine, "deleted"),
-          })),
-          Effect.andThen(signal),
-        )
-      ),
-      Effect.asVoid,
-    )
+    lock
+      .withPermits(1)(
+        Effect.gen(function* () {
+          const routine = yield* getRoutine(routineId)
+          yield* repo.delete(routineId).pipe(Effect.orDie)
+          return routine
+        }),
+      )
+      .pipe(
+        Effect.tap((routine) =>
+          bots.get(routine.botId).pipe(
+            Effect.orDie,
+            Effect.flatMap(
+              Option.match({
+                onNone: () => Effect.void,
+                onSome: (bot) => announce({ kind: "user" }, bot, routine, "deleted"),
+              }),
+            ),
+            Effect.andThen(signal),
+          ),
+        ),
+        Effect.asVoid,
+      )
 
   const runNow = (routineId: RoutineId) =>
     fire(routineId, "manual").pipe(
-      Effect.flatMap(Option.match({
-        // Unreachable for manual runs (they fail instead of skipping); kept total.
-        onNone: () => Effect.fail(new Conflict({ reason: "The routine did not start." })),
-        onSome: Effect.succeed,
-      })),
+      Effect.flatMap(
+        Option.match({
+          // Unreachable for manual runs (they fail instead of skipping); kept total.
+          onNone: () => Effect.fail(new Conflict({ reason: "The routine did not start." })),
+          onSome: Effect.succeed,
+        }),
+      ),
     )
 
   return RoutineScheduler.of({

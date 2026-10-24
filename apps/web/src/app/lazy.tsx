@@ -2,7 +2,14 @@
 // module is imported on first use; when a module is missing (W2.3 still in flight) or throws on
 // load, the built-in fallback from ./fallbacks.tsx renders instead so the shell keeps working.
 import { type ComponentType, lazy } from "react"
-import type { ComputerViewProps, DetailsPaneProps, NewBotFormProps, NewGroupFormProps, OnboardingProps, SettingsDialogProps } from "../contracts.ts"
+import type {
+  ComputerViewProps,
+  DetailsPaneProps,
+  NewBotFormProps,
+  NewGroupFormProps,
+  OnboardingProps,
+  SettingsDialogProps,
+} from "../contracts.ts"
 import {
   FallbackComputerView,
   FallbackDetailsPane,

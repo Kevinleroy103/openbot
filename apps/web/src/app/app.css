@@ -5,28 +5,79 @@
 @source "../";
 
 @layer base {
-  html, body, #root { height: 100%; }
-  body { overflow: hidden; }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    overflow: hidden;
+  }
 }
 
 /* Bot markdown inside bubbles (chat/Markdown.tsx). Grok renders bold "label → value" lines, inline
  * code, links, lists; keep it compact at the 15/22 chat size. */
-.ob-md > * + * { margin-top: 6px; }
-.ob-md p { white-space: pre-wrap; }
-.ob-md ul, .ob-md ol { padding-inline-start: 20px; }
-.ob-md ul { list-style: disc; }
-.ob-md ol { list-style: decimal; }
-.ob-md li + li { margin-top: 2px; }
-.ob-md strong { font-weight: 600; }
-.ob-md em { font-style: italic; }
-.ob-md a { text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
-.ob-md a:hover { text-decoration-color: currentColor; }
-.ob-md-table table { border-collapse: collapse; font-size: 13px; line-height: 18px; min-width: 100%; }
-.ob-md-table th, .ob-md-table td { padding: 5px 10px; border-bottom: 0.5px solid color-mix(in srgb, currentColor 14%, transparent); vertical-align: top; }
-.ob-md-table th { font-weight: 600; white-space: nowrap; border-bottom-color: color-mix(in srgb, currentColor 24%, transparent); }
-.ob-md-table tr:last-child td { border-bottom: none; }
-.ob-md-table th:first-child, .ob-md-table td:first-child { padding-inline-start: 0; }
-.ob-md-table td code, .ob-md-table th code { white-space: nowrap; }
+.ob-md > * + * {
+  margin-top: 6px;
+}
+.ob-md p {
+  white-space: pre-wrap;
+}
+.ob-md ul,
+.ob-md ol {
+  padding-inline-start: 20px;
+}
+.ob-md ul {
+  list-style: disc;
+}
+.ob-md ol {
+  list-style: decimal;
+}
+.ob-md li + li {
+  margin-top: 2px;
+}
+.ob-md strong {
+  font-weight: 600;
+}
+.ob-md em {
+  font-style: italic;
+}
+.ob-md a {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+}
+.ob-md a:hover {
+  text-decoration-color: currentColor;
+}
+.ob-md-table table {
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 18px;
+  min-width: 100%;
+}
+.ob-md-table th,
+.ob-md-table td {
+  padding: 5px 10px;
+  border-bottom: 0.5px solid color-mix(in srgb, currentColor 14%, transparent);
+  vertical-align: top;
+}
+.ob-md-table th {
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom-color: color-mix(in srgb, currentColor 24%, transparent);
+}
+.ob-md-table tr:last-child td {
+  border-bottom: none;
+}
+.ob-md-table th:first-child,
+.ob-md-table td:first-child {
+  padding-inline-start: 0;
+}
+.ob-md-table td code,
+.ob-md-table th code {
+  white-space: nowrap;
+}
 .ob-md code {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -44,83 +95,231 @@
   overflow-x: auto;
   white-space: pre;
 }
-.ob-md pre code { padding: 0; background: none; font-size: inherit; }
-.ob-md blockquote { border-inline-start: 2px solid var(--ob-line); padding-inline-start: 8px; color: var(--ob-fg-secondary); }
-.ob-md h1, .ob-md h2, .ob-md h3 { font-weight: 600; }
-.ob-md-hr { border: 0; border-top: 1px solid var(--ob-line); margin: 10px 0; }
-.ob-md-img { max-width: 100%; max-height: 360px; border-radius: 12px; object-fit: contain; }
+.ob-md pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+.ob-md blockquote {
+  border-inline-start: 2px solid var(--ob-line);
+  padding-inline-start: 8px;
+  color: var(--ob-fg-secondary);
+}
+.ob-md h1,
+.ob-md h2,
+.ob-md h3 {
+  font-weight: 600;
+}
+.ob-md-hr {
+  border: 0;
+  border-top: 1px solid var(--ob-line);
+  margin: 10px 0;
+}
+.ob-md-img {
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 12px;
+  object-fit: contain;
+}
 /* a link's site icon (Markdown.tsx SiteIcon): a small rounded tile that sits on the text line */
 .ob-site-icon {
-  display: inline-flex; align-items: center; justify-content: center; vertical-align: -3px;
-  width: 18px; height: 18px; margin-inline-end: 5px; border-radius: 5px; overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -3px;
+  width: 18px;
+  height: 18px;
+  margin-inline-end: 5px;
+  border-radius: 5px;
+  overflow: hidden;
   background: var(--ob-secondary);
 }
-.ob-site-icon img { width: 14px; height: 14px; object-fit: contain; }
+.ob-site-icon img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
 /* a one-colour icon on a transparent background gets a tile it shows on (light-dark(LIGHT, DARK)) */
-.ob-site-icon[data-tone="dark"] { background: light-dark(var(--ob-secondary), #e9e9e9); }
-.ob-site-icon[data-tone="light"] { background: light-dark(#3a3a3a, var(--ob-secondary)); }
+.ob-site-icon[data-tone="dark"] {
+  background: light-dark(var(--ob-secondary), #e9e9e9);
+}
+.ob-site-icon[data-tone="light"] {
+  background: light-dark(#3a3a3a, var(--ob-secondary));
+}
 /* The dashed border and padding are part of the criterion: a bare coloured word reads as body text,
  * so a failed image would look like ordinary copy instead of a visible placeholder. */
 .ob-md-img-fallback {
-  display: inline-block; max-width: 100%; padding: 2px 6px; border-radius: 6px;
-  border: 1px dashed var(--ob-line); color: var(--ob-fg-secondary);
-  font-size: 13px; word-break: break-all;
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px dashed var(--ob-line);
+  color: var(--ob-fg-secondary);
+  font-size: 13px;
+  word-break: break-all;
 }
-.ob-md li[data-task="done"] { opacity: 0.65; text-decoration: line-through; }
-.ob-md-preview { font-size: 15px; line-height: 22px; }
-.ob-md-preview-code { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 19px; }
+.ob-md li[data-task="done"] {
+  opacity: 0.65;
+  text-decoration: line-through;
+}
+.ob-md-preview {
+  font-size: 15px;
+  line-height: 22px;
+}
+.ob-md-preview-code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 19px;
+}
 
 /* Accordion (steps disclosure): grid-template-rows 0fr -> 1fr, 240 ms standard easing. */
-.ob-accordion { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 240ms var(--ease-standard); }
-.ob-accordion[data-open] { grid-template-rows: 1fr; }
-.ob-accordion > * { min-height: 0; overflow: hidden; }
+.ob-accordion {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms var(--ease-standard);
+}
+.ob-accordion[data-open] {
+  grid-template-rows: 1fr;
+}
+.ob-accordion > * {
+  min-height: 0;
+  overflow: hidden;
+}
 
 /* Error tray (grok-bot-ui-activity.md F.7): danger-tinted surface docked above the composer. */
 .ob-tray {
   background: light-dark(#fbeeef, #312424);
-  border: 1px solid light-dark(color-mix(in srgb, #b72731 40%, transparent), color-mix(in srgb, #fe7271 40%, transparent));
+  border: 1px solid
+    light-dark(color-mix(in srgb, #b72731 40%, transparent), color-mix(in srgb, #fe7271 40%, transparent));
 }
 
 /* Resize handles: 12 px invisible hit area on the pane edge. */
-.ob-resize { position: absolute; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 20; }
-.ob-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5.5px; width: 1px; background: transparent; transition: background 120ms; }
-.ob-resize:hover::after, .ob-resize[data-dragging]::after { background: var(--ob-line-secondary); }
+.ob-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: col-resize;
+  z-index: 20;
+}
+.ob-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5.5px;
+  width: 1px;
+  background: transparent;
+  transition: background 120ms;
+}
+.ob-resize:hover::after,
+.ob-resize[data-dragging]::after {
+  background: var(--ob-line-secondary);
+}
 
 /* Send-progress bar under a pending user bubble (revealed after ~2 s). */
-@keyframes ob-send-progress { 0%, 100% { transform: translateX(-6px) } 50% { transform: translateX(6px) } }
-@keyframes ob-reveal { from { opacity: 0 } to { opacity: 1 } }
-.ob-send-progress { animation: ob-reveal 120ms ease-out 2s both; }
-.ob-send-progress > span { animation: ob-send-progress 1s ease-in-out infinite; }
+@keyframes ob-send-progress {
+  0%,
+  100% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+}
+@keyframes ob-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.ob-send-progress {
+  animation: ob-reveal 120ms ease-out 2s both;
+}
+.ob-send-progress > span {
+  animation: ob-send-progress 1s ease-in-out infinite;
+}
 
 /* Exchange dialog (chat/ExchangeDialog.tsx): the clicked line's message(s) light up once. */
 @keyframes ob-exchange-target {
-  0%, 55% { background-color: var(--ob-accent-soft-hover); box-shadow: 0 0 0 6px var(--ob-accent-soft-hover); }
-  100% { background-color: transparent; box-shadow: 0 0 0 6px transparent; }
+  0%,
+  55% {
+    background-color: var(--ob-accent-soft-hover);
+    box-shadow: 0 0 0 6px var(--ob-accent-soft-hover);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
 }
-[data-exchange-item][data-target] { border-radius: 18px; animation: ob-exchange-target 2.6s var(--ease-out-soft) both; }
+[data-exchange-item][data-target] {
+  border-radius: 18px;
+  animation: ob-exchange-target 2.6s var(--ease-out-soft) both;
+}
 @media (prefers-reduced-motion: reduce) {
-  [data-exchange-item][data-target] { animation: none; background-color: var(--ob-accent-soft); box-shadow: 0 0 0 6px var(--ob-accent-soft); }
+  [data-exchange-item][data-target] {
+    animation: none;
+    background-color: var(--ob-accent-soft);
+    box-shadow: 0 0 0 6px var(--ob-accent-soft);
+  }
 }
 
 /* Search (chat/find.ts): a hit lights up when the chat opens at it (strong) or the Find bar moves
  * to it (soft); its words are highlighted, the current hit's in a stronger color. */
 @keyframes ob-hit-ring {
-  0%, 55% { box-shadow: 0 0 0 3px var(--ob-bg, var(--ob-chrome)), 0 0 0 6px var(--ob-accent); }
-  100% { box-shadow: 0 0 0 3px transparent, 0 0 0 6px transparent; }
+  0%,
+  55% {
+    box-shadow:
+      0 0 0 3px var(--ob-bg, var(--ob-chrome)),
+      0 0 0 6px var(--ob-accent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 3px transparent,
+      0 0 0 6px transparent;
+  }
 }
-[data-flash] { border-radius: 18px; animation: ob-exchange-target 2.6s var(--ease-out-soft) both; }
+[data-flash] {
+  border-radius: 18px;
+  animation: ob-exchange-target 2.6s var(--ease-out-soft) both;
+}
 /* a bubble keeps its own colors: a ring around it instead */
-[data-side][data-flash] { animation-name: ob-hit-ring; }
-[data-flash="soft"] { animation-duration: 1.4s; }
-@media (prefers-reduced-motion: reduce) {
-  [data-flash] { animation: none; box-shadow: 0 0 0 3px var(--ob-accent-soft-hover); }
+[data-side][data-flash] {
+  animation-name: ob-hit-ring;
 }
-::highlight(ob-find), ::highlight(ob-find-exchange) { background-color: light-dark(#fde68a, #facc15); color: #111; }
-::highlight(ob-find-current), ::highlight(ob-find-exchange-current) { background-color: light-dark(#fb923c, #f59e0b); color: #111; }
+[data-flash="soft"] {
+  animation-duration: 1.4s;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-flash] {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--ob-accent-soft-hover);
+  }
+}
+::highlight(ob-find),
+::highlight(ob-find-exchange) {
+  background-color: light-dark(#fde68a, #facc15);
+  color: #111;
+}
+::highlight(ob-find-current),
+::highlight(ob-find-exchange-current) {
+  background-color: light-dark(#fb923c, #f59e0b);
+  color: #111;
+}
 
 /* Hover actions next to a bubble. */
-.ob-msg .ob-msg-actions { opacity: 0; transition: opacity 100ms; }
-.ob-msg:has([data-side]:hover) .ob-msg-actions, .ob-msg .ob-msg-actions:hover, .ob-msg:focus-within .ob-msg-actions { opacity: 1; }
+.ob-msg .ob-msg-actions {
+  opacity: 0;
+  transition: opacity 100ms;
+}
+.ob-msg:has([data-side]:hover) .ob-msg-actions,
+.ob-msg .ob-msg-actions:hover,
+.ob-msg:focus-within .ob-msg-actions {
+  opacity: 1;
+}
 
 /* ===================================================================== desktop app (apps/desktop) ====
  * `data-desktop` is the desktop app's platform (main.tsx). On macOS its window has no title bar: the
@@ -135,7 +334,21 @@
   -webkit-app-region: drag;
   app-region: drag;
 }
-html[data-desktop] :is(button, a, input, textarea, select, label, [role="button"], [role="tab"], [role="switch"], [role="menuitem"], [contenteditable="true"], .ob-pin-drop) {
+html[data-desktop]
+  :is(
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    label,
+    [role="button"],
+    [role="tab"],
+    [role="switch"],
+    [role="menuitem"],
+    [contenteditable="true"],
+    .ob-pin-drop
+  ) {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -164,41 +377,108 @@ html[data-quick-send="panel"] #root {
   --animate-push-in: ob-push-in .34s var(--ease-out-quint) both;
   --animate-sheet-up: ob-sheet-up .36s var(--ease-out-quint) both;
   --animate-slide-in-end: ob-push-in .3s var(--ease-out-quint) both;
-  @keyframes ob-push-in { from { transform: translateX(100%) } to { transform: none } }
-  @keyframes ob-sheet-up { from { transform: translateY(100%) } to { transform: none } }
+  @keyframes ob-push-in {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes ob-sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
 }
 
 /* Touch devices: the app root follows the visual viewport (useVisualViewport), so the composer
  * rides on top of the iOS keyboard; dvh is the fallback before the first measurement. */
 @media (hover: none) and (pointer: coarse) {
-  #root { position: fixed; inset-inline: 0; top: var(--ob-vv-top, 0px); height: var(--ob-vvh, 100dvh); }
-  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-  body { -webkit-tap-highlight-color: transparent; }
-  button, a, summary, [role="button"], [role="option"], [role="tab"], [role^="menuitem"] { touch-action: manipulation; }
+  #root {
+    position: fixed;
+    inset-inline: 0;
+    top: var(--ob-vv-top, 0px);
+    height: var(--ob-vvh, 100dvh);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button,
+  a,
+  summary,
+  [role="button"],
+  [role="option"],
+  [role="tab"],
+  [role^="menuitem"] {
+    touch-action: manipulation;
+  }
   /* iOS zooms into any field under 16 px on focus. */
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select { font-size: 16px; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
   /* Hover-only message actions become the long-press sheet (chat/MessageSheet.tsx). */
-  .ob-msg .ob-msg-actions { display: none; }
+  .ob-msg .ob-msg-actions {
+    display: none;
+  }
   /* Long-press surfaces: no iOS callout / text-selection loupe under the finger. */
-  .ob-msg [data-side], [data-row], [data-bot] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .ob-msg [data-side],
+  [data-row],
+  [data-bot] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
   /* Primary card actions (Allow once / Deny / options): 44 px touch targets. */
-  [data-card] button.rounded-full.font-medium { min-height: 44px; padding-inline: 16px; font-size: var(--text-base); }
-  [data-card] [aria-pressed] { min-height: 44px; }
+  [data-card] button.rounded-full.font-medium {
+    min-height: 44px;
+    padding-inline: 16px;
+    font-size: var(--text-base);
+  }
+  [data-card] [aria-pressed] {
+    min-height: 44px;
+  }
   /* Menus and selects opened by touch: roomier rows. */
-  [role="menu"] [role^="menuitem"] { min-height: 40px; }
+  [role="menu"] [role^="menuitem"] {
+    min-height: 40px;
+  }
 }
 
 /* Action sheets (app/ActionSheet.tsx): iOS-sized rows. */
-.ob-sheet [role^="menuitem"] { min-height: 46px; gap: 12px; padding-inline: 12px; border-radius: 12px; font-size: 16px; line-height: 22px; }
-.ob-sheet [role="separator"] { margin-block: 4px; }
+.ob-sheet [role^="menuitem"] {
+  min-height: 46px;
+  gap: 12px;
+  padding-inline: 12px;
+  border-radius: 12px;
+  font-size: 16px;
+  line-height: 22px;
+}
+.ob-sheet [role="separator"] {
+  margin-block: 4px;
+}
 
 /* Phone: one pane at a time. Home stays mounted (scroll position) but hides once the pushed chat
  * has slid over it. */
-.ob-phone[data-view="chat"] > .ob-home { visibility: hidden; transition: visibility 0s linear .34s; }
+.ob-phone[data-view="chat"] > .ob-home {
+  visibility: hidden;
+  transition: visibility 0s linear 0.34s;
+}
 
 @media (max-width: 767px) {
   /* Dialog panels tagged .ob-phone-full (forms, settings, search) become full-screen sheets. */
-  div:has(> .ob-phone-full) { padding: 0; align-items: stretch; }
+  div:has(> .ob-phone-full) {
+    padding: 0;
+    align-items: stretch;
+  }
   .ob-phone-full {
     width: 100% !important;
     height: 100% !important;
@@ -209,16 +489,30 @@ html[data-quick-send="panel"] #root {
     box-shadow: none;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
-    animation: ob-sheet-up .36s var(--ease-out-quint) both;
+    animation: ob-sheet-up 0.36s var(--ease-out-quint) both;
   }
   /* Transcript: bubbles up to 85 %, cards full width; tables keep readable columns and scroll. */
-  .ob-msg [data-side][data-position] { max-width: 85%; }
-  [data-card] { max-width: 100%; }
-  .ob-md-table table { width: max-content; }
-  .ob-md-table th, .ob-md-table td { max-width: 15rem; }
+  .ob-msg [data-side][data-position] {
+    max-width: 85%;
+  }
+  [data-card] {
+    max-width: 100%;
+  }
+  .ob-md-table table {
+    width: max-content;
+  }
+  .ob-md-table th,
+  .ob-md-table td {
+    max-width: 15rem;
+  }
   /* Composer dock: full width, above the home indicator (none while the keyboard is up). */
-  .ob-composer-dock { padding-inline: 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-  html[data-keyboard] .ob-composer-dock { padding-bottom: 8px; }
+  .ob-composer-dock {
+    padding-inline: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  html[data-keyboard] .ob-composer-dock {
+    padding-bottom: 8px;
+  }
 }
 
 /* Phone / tablet chat header: the transcript fades out under the floating glass row. */
@@ -228,17 +522,29 @@ html[data-quick-send="panel"] #root {
   inset: 0 0 -14px 0;
   z-index: -1;
   pointer-events: none;
-  background: linear-gradient(to bottom, var(--ob-chrome) 0%, var(--ob-chrome) calc(100% - 40px), color-mix(in srgb, var(--ob-chrome) 70%, transparent) calc(100% - 18px), transparent 100%);
+  background: linear-gradient(
+    to bottom,
+    var(--ob-chrome) 0%,
+    var(--ob-chrome) calc(100% - 40px),
+    color-mix(in srgb, var(--ob-chrome) 70%, transparent) calc(100% - 18px),
+    transparent 100%
+  );
 }
 
 /* Phone search sheet: room for the "Cancel" button next to the field. */
-.ob-search-sheet [role="combobox"] { margin-inline-end: 72px; }
+.ob-search-sheet [role="combobox"] {
+  margin-inline-end: 72px;
+}
 
 @media (max-width: 767px) {
   /* Full-screen settings use the page color so their cards stand out. */
-  .ob-phone-full.bg-chrome { background-color: var(--ob-chrome); }
+  .ob-phone-full.bg-chrome {
+    background-color: var(--ob-chrome);
+  }
 }
 /* Phones: no focus ring on buttons focused by a dialog opening under a tap. */
 @media (max-width: 767px) and (hover: none) and (pointer: coarse) {
-  button:focus-visible { outline-color: transparent; }
+  button:focus-visible {
+    outline-color: transparent;
+  }
 }

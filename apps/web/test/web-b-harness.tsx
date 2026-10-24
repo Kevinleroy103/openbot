@@ -35,7 +35,9 @@ function Frame({ children, details }: { readonly children?: ReactNode; readonly 
   return (
     <div className="relative flex h-screen bg-chrome" data-web-b-ready>
       <div className="w-[280px] shrink-0 bg-sidebar" />
-      <main className="relative flex min-w-0 flex-1 flex-col border-s-[0.5px] border-line-tertiary bg-pane">{children}</main>
+      <main className="relative flex min-w-0 flex-1 flex-col border-s-[0.5px] border-line-tertiary bg-pane">
+        {children}
+      </main>
       {details && <div className="w-[320px] shrink-0 border-s-[0.5px] border-line-tertiary">{details}</div>}
     </div>
   )
@@ -51,7 +53,11 @@ function DetailsScene(): ReactNode {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <Frame details={bot ? <DetailsPane botId={bot.id} onClose={() => {}} /> : <div data-loading className="h-full bg-chrome" />}>
+    <Frame
+      details={
+        bot ? <DetailsPane botId={bot.id} onClose={() => {}} /> : <div data-loading className="h-full bg-chrome" />
+      }
+    >
       {computer.botId && <ComputerView botId={computer.botId} onClose={computer.close} />}
     </Frame>
   )
@@ -60,7 +66,17 @@ function DetailsScene(): ReactNode {
 function GroupScene(): ReactNode {
   const summaries = useAtomValue(conversationSummariesAtom)
   const group = AsyncResult.isSuccess(summaries) ? summaries.value.find((c) => c.kind === "group") : undefined
-  return <Frame details={group ? <DetailsPane conversationId={group.id} onClose={() => {}} /> : <div data-loading className="h-full bg-chrome" />} />
+  return (
+    <Frame
+      details={
+        group ? (
+          <DetailsPane conversationId={group.id} onClose={() => {}} />
+        ) : (
+          <div data-loading className="h-full bg-chrome" />
+        )
+      }
+    />
+  )
 }
 
 function ComputerScene(): ReactNode {
@@ -81,12 +97,21 @@ function FormScene({ kind }: { readonly kind: "newbot" | "newgroup" }): ReactNod
   const initial = AsyncResult.isSuccess(bots) ? bots.value.slice(0, 2).map((b) => b.id) : []
   return (
     <Frame>
-      <Dialog open onOpenChange={() => {}} width={kind === "newbot" ? 520 : 480} label={kind === "newbot" ? "Create a Bot" : "New group chat"}>
+      <Dialog
+        open
+        onOpenChange={() => {}}
+        width={kind === "newbot" ? 520 : 480}
+        label={kind === "newbot" ? "Create a Bot" : "New group chat"}
+      >
         <DialogHeader title={kind === "newbot" ? "Create a Bot" : "New group chat"} onClose={() => {}} />
         {kind === "newbot" ? (
           <NewBotForm onCreated={(id) => (document.body.dataset.created = id)} onCancel={() => {}} />
         ) : AsyncResult.isSuccess(bots) ? (
-          <NewGroupForm initialBotIds={initial} onCreated={(id) => (document.body.dataset.created = id)} onCancel={() => {}} />
+          <NewGroupForm
+            initialBotIds={initial}
+            onCreated={(id) => (document.body.dataset.created = id)}
+            onCancel={() => {}}
+          />
         ) : null}
       </Dialog>
     </Frame>
@@ -102,7 +127,11 @@ function App(): ReactNode {
     case "settings":
       return (
         <Frame>
-          <SettingsDialog open initialPage={(params.get("page") as SettingsPage | null) ?? "general"} onClose={() => {}} />
+          <SettingsDialog
+            open
+            initialPage={(params.get("page") as SettingsPage | null) ?? "general"}
+            onClose={() => {}}
+          />
         </Frame>
       )
     case "newbot":

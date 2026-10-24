@@ -13,19 +13,51 @@ export const chatLabel = (roster: RosterView, hit: Pick<SearchHit, "conversation
   const c = roster.state.conversations.get(hit.conversationId)
   if (c === undefined) return "A chat"
   if (c.kind === "direct") return roster.botById(c.botIds[0])?.name ?? c.title
-  return c.title || c.botIds.map((id) => roster.botById(id)?.name ?? "").filter(Boolean).join(", ")
+  return (
+    c.title ||
+    c.botIds
+      .map((id) => roster.botById(id)?.name ?? "")
+      .filter(Boolean)
+      .join(", ")
+  )
 }
 
 /** "You", a Bot's name, "OpenBot" (system lines). */
 export const authorLabel = (roster: RosterView, hit: SearchHit): string =>
-  hit.author.kind === "owner" ? "You" : hit.author.kind === "bot" ? (roster.botById(hit.author.botId)?.name ?? "A Bot") : "OpenBot"
+  hit.author.kind === "owner"
+    ? "You"
+    : hit.author.kind === "bot"
+      ? (roster.botById(hit.author.botId)?.name ?? "A Bot")
+      : "OpenBot"
 
-const KIND_LABEL: Partial<Record<SearchHit["kind"], string>> = { card: "Card", event: "Event", notice: "Notice", "tool-call": "Step", task: "Task result" }
+const KIND_LABEL: Partial<Record<SearchHit["kind"], string>> = {
+  card: "Card",
+  event: "Event",
+  notice: "Notice",
+  "tool-call": "Step",
+  task: "Task result",
+}
 
-export function HitLeading({ roster, hit, size = 28 }: { readonly roster: RosterView; readonly hit: SearchHit; readonly size?: number }): ReactNode {
+export function HitLeading({
+  roster,
+  hit,
+  size = 28,
+}: {
+  readonly roster: RosterView
+  readonly hit: SearchHit
+  readonly size?: number
+}): ReactNode {
   const c = roster.state.conversations.get(hit.conversationId)
   if (c !== undefined && c.kind === "group") {
-    return <AvatarStack size={size - 4} outlineColor="var(--ob-elevated)" avatars={c.botIds.slice(0, 3).map((id) => ({ key: id, shape: roster.botById(id)?.avatar.shape, color: roster.botById(id)?.avatar.color }))} />
+    return (
+      <AvatarStack
+        size={size - 4}
+        outlineColor="var(--ob-elevated)"
+        avatars={c.botIds
+          .slice(0, 3)
+          .map((id) => ({ key: id, shape: roster.botById(id)?.avatar.shape, color: roster.botById(id)?.avatar.color }))}
+      />
+    )
   }
   const bot = roster.botById(c?.botIds[0] ?? (hit.author.kind === "bot" ? hit.author.botId : undefined))
   return <Avatar shape={bot?.avatar.shape} color={bot?.avatar.color} size={size} />
@@ -52,7 +84,15 @@ export function Snippet({ hit, className }: { readonly hit: SearchHit; readonly 
  * "Chief of Staff · You · 2:41 PM" (+ the kind when it isn't a message). A bot-to-bot message reads
  * "Chief of Staff to Scout" on one line that shortens once (the chat's name only when it is neither).
  */
-export function HitMeta({ roster, hit, className }: { readonly roster: RosterView; readonly hit: SearchHit; readonly className?: string }): ReactNode {
+export function HitMeta({
+  roster,
+  hit,
+  className,
+}: {
+  readonly roster: RosterView
+  readonly hit: SearchHit
+  readonly className?: string
+}): ReactNode {
   const kind = KIND_LABEL[hit.kind]
   const to = hit.toBotId !== undefined ? roster.botById(hit.toBotId)?.name : undefined
   const chat = chatLabel(roster, hit)
@@ -66,7 +106,8 @@ export function HitMeta({ roster, hit, className }: { readonly roster: RosterVie
               <span className="font-medium text-fg-secondary">{chat}</span> ·{" "}
             </>
           )}
-          <span className="font-medium text-fg-secondary">{author}</span> to <span className="font-medium text-fg-secondary">{to}</span>
+          <span className="font-medium text-fg-secondary">{author}</span> to{" "}
+          <span className="font-medium text-fg-secondary">{to}</span>
         </span>
       ) : (
         <>
@@ -79,7 +120,9 @@ export function HitMeta({ roster, hit, className }: { readonly roster: RosterVie
           )}
         </>
       )}
-      {kind && <span className="shrink-0 rounded-full bg-secondary px-1.5 text-2xs leading-4 text-fg-secondary">{kind}</span>}
+      {kind && (
+        <span className="shrink-0 rounded-full bg-secondary px-1.5 text-2xs leading-4 text-fg-secondary">{kind}</span>
+      )}
       <span className="ms-auto shrink-0 tabular-nums">{formatListTime(hit.createdAt)}</span>
     </span>
   )

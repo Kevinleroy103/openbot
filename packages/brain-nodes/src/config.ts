@@ -8,7 +8,15 @@
  *   the `node.hello` signature with it. Stored at `DataDir.brainIdentity` with mode 0600.
  */
 import { DataDir } from "@openbot/core"
-import { BRAIN_LIVENESS_TIMEOUT_MS, type KeyPair, generateKeyPair, isValidPublicKey, originOf, publicKeyFromPrivate, STREAM_TOKEN_TTL_MS } from "@openbot/node-protocol"
+import {
+  BRAIN_LIVENESS_TIMEOUT_MS,
+  type KeyPair,
+  generateKeyPair,
+  isValidPublicKey,
+  originOf,
+  publicKeyFromPrivate,
+  STREAM_TOKEN_TTL_MS,
+} from "@openbot/node-protocol"
 import { Clock, Context, Effect, Layer, Schema } from "effect"
 import { chmod, rename } from "node:fs/promises"
 
@@ -77,9 +85,10 @@ export interface BrainNodesConfigInput {
 export const DESKTOP_IDLE_MS = 10 * 60_000
 
 export const makeBrainNodesConfig = (input: BrainNodesConfigInput): BrainNodesConfigShape => ({
-  brainOrigin: typeof input.brainOrigin === "string"
-    ? Effect.succeed(originOf(input.brainOrigin))
-    : Effect.map(input.brainOrigin, originOf),
+  brainOrigin:
+    typeof input.brainOrigin === "string"
+      ? Effect.succeed(originOf(input.brainOrigin))
+      : Effect.map(input.brainOrigin, originOf),
   extraOrigins: (input.extraOrigins ?? []).map(originOf),
   brainVersion: input.brainVersion ?? "0.0.0",
   autoApproveFirstHello: input.autoApproveFirstHello ?? true,
@@ -135,7 +144,7 @@ export class BrainIdentity extends Context.Service<BrainIdentity, KeyPair>()("op
    */
   static readonly layerFile: Layer.Layer<BrainIdentity, BrainIdentityError, DataDir> = Layer.effect(
     BrainIdentity,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const dataDir = yield* DataDir
       return yield* loadOrCreateIdentity(dataDir.brainIdentity)
     }),
@@ -143,12 +152,15 @@ export class BrainIdentity extends Context.Service<BrainIdentity, KeyPair>()("op
 }
 
 export const loadOrCreateIdentity = (path: string): Effect.Effect<KeyPair, BrainIdentityError> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const fail = (message: string) => new BrainIdentityError({ path, message })
     const file = Bun.file(path)
     const exists = yield* Effect.promise(() => file.exists())
     if (exists) {
-      const raw = yield* Effect.tryPromise({ try: () => file.json() as Promise<unknown>, catch: () => fail("not valid JSON") })
+      const raw = yield* Effect.tryPromise({
+        try: () => file.json() as Promise<unknown>,
+        catch: () => fail("not valid JSON"),
+      })
       const parsed = decodeIdentityFile(raw)
       if (parsed._tag === "None" || !isValidPublicKey(parsed.value.publicKey)) {
         return yield* fail("unrecognized brain identity file")

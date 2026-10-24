@@ -17,38 +17,62 @@ describe("skills over RPC", () => {
         skillDirectory: SkillDirectoryFake.layer({
           results: [{ id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 3 }],
           downloads: {
-            "acme/skills/release-notes": { hash: "h", files: [{ path: "SKILL.md", contents: skillMd }, { path: "scripts/a.sh", contents: "echo\n" }] },
+            "acme/skills/release-notes": {
+              hash: "h",
+              files: [
+                { path: "SKILL.md", contents: skillMd },
+                { path: "scripts/a.sh", contents: "echo\n" },
+              ],
+            },
           },
         }),
       },
     })
     try {
       const cookie = await login(server.base, server.ownerToken)
-      await server.run(Effect.gen(function*() {
-        const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
-        const bot = yield* client["bots.create"]({ name: "Scout", harness: { kind: "fake" }, clientNonce: "s-1", introduce: false })
-        const triage = yield* client["skills.upsert"]({ name: "triage" as SkillName, description: "Use when triaging.", body: "1. Read" })
-        yield* client["skills.assign"]({ name: triage.name, botIds: [bot.id] })
-        const skillsOf = Effect.map(client["bots.get"]({ botId: bot.id }), (b) => [...b.skills].map(String).sort())
-        expect(yield* skillsOf).toEqual(["triage"])
+      await server.run(
+        Effect.gen(function* () {
+          const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
+          const bot = yield* client["bots.create"]({
+            name: "Scout",
+            harness: { kind: "fake" },
+            clientNonce: "s-1",
+            introduce: false,
+          })
+          const triage = yield* client["skills.upsert"]({
+            name: "triage" as SkillName,
+            description: "Use when triaging.",
+            body: "1. Read",
+          })
+          yield* client["skills.assign"]({ name: triage.name, botIds: [bot.id] })
+          const skillsOf = Effect.map(client["bots.get"]({ botId: bot.id }), (b) => [...b.skills].map(String).sort())
+          expect(yield* skillsOf).toEqual(["triage"])
 
-        expect(yield* client["skills.search"]({ query: "release" })).toEqual([
-          { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 3 },
-        ])
-        const preview = yield* client["skills.preview"]({ id: "acme/skills/release-notes" })
-        expect(preview).toMatchObject({ name: "release-notes", replaces: false, files: [{ path: "SKILL.md" }, { path: "scripts/a.sh", bytes: 5 }] })
-        const installed = yield* client["skills.install"]({ id: "acme/skills/release-notes", botIds: [bot.id] })
-        expect(installed).toMatchObject({ source: { kind: "skills.sh", id: "acme/skills/release-notes" }, files: ["scripts/a.sh"] })
-        expect(yield* skillsOf).toEqual(["release-notes", "triage"])
-        const dir = join(server.dataDir, "skills-lib", "skills", "release-notes")
-        expect(readFileSync(join(dir, "scripts", "a.sh"), "utf8")).toBe("echo\n")
+          expect(yield* client["skills.search"]({ query: "release" })).toEqual([
+            { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 3 },
+          ])
+          const preview = yield* client["skills.preview"]({ id: "acme/skills/release-notes" })
+          expect(preview).toMatchObject({
+            name: "release-notes",
+            replaces: false,
+            files: [{ path: "SKILL.md" }, { path: "scripts/a.sh", bytes: 5 }],
+          })
+          const installed = yield* client["skills.install"]({ id: "acme/skills/release-notes", botIds: [bot.id] })
+          expect(installed).toMatchObject({
+            source: { kind: "skills.sh", id: "acme/skills/release-notes" },
+            files: ["scripts/a.sh"],
+          })
+          expect(yield* skillsOf).toEqual(["release-notes", "triage"])
+          const dir = join(server.dataDir, "skills-lib", "skills", "release-notes")
+          expect(readFileSync(join(dir, "scripts", "a.sh"), "utf8")).toBe("echo\n")
 
-        yield* client["skills.delete"]({ name: triage.name })
-        expect(yield* skillsOf).toEqual(["release-notes"])
-        expect(existsSync(join(server.dataDir, "skills-lib", "skills", "triage"))).toBe(false)
-        const missing = yield* Effect.flip(client["skills.preview"]({ id: "acme/skills/nope" }))
-        expect(missing._tag).toBe("NotFound")
-      }))
+          yield* client["skills.delete"]({ name: triage.name })
+          expect(yield* skillsOf).toEqual(["release-notes"])
+          expect(existsSync(join(server.dataDir, "skills-lib", "skills", "triage"))).toBe(false)
+          const missing = yield* Effect.flip(client["skills.preview"]({ id: "acme/skills/nope" }))
+          expect(missing._tag).toBe("NotFound")
+        }),
+      )
     } finally {
       await server.close()
     }
@@ -58,10 +82,12 @@ describe("skills over RPC", () => {
     const server = await startServer({ server: { skillDirectory: SkillDirectoryFake.layer({ offline: true }) } })
     try {
       const cookie = await login(server.base, server.ownerToken)
-      await server.run(Effect.gen(function*() {
-        const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
-        expect((yield* Effect.flip(client["skills.search"]({ query: "x" })))._tag).toBe("Unavailable")
-      }))
+      await server.run(
+        Effect.gen(function* () {
+          const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
+          expect((yield* Effect.flip(client["skills.search"]({ query: "x" })))._tag).toBe("Unavailable")
+        }),
+      )
     } finally {
       await server.close()
     }

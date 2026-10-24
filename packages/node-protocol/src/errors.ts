@@ -126,7 +126,9 @@ export const describeNodeError = (
     case "BrowserUnavailable":
       return `The browser is unavailable: ${error.reason}`
     case "LeaseHeld":
-      return error.holder === "user" ? "The user is controlling the browser" : `The browser is controlled by the bot: ${error.reason}`
+      return error.holder === "user"
+        ? "The user is controlling the browser"
+        : `The browser is controlled by the bot: ${error.reason}`
     case "BrowserActionFailed":
       return `Browser ${error.action} failed: ${error.reason}`
     case "DesktopUnavailable":

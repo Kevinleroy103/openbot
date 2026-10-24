@@ -1,7 +1,18 @@
 // Message search's view models (search.ts, transcriptWindow.ts): the query the filters make, the
 // results across pages, the Find bar's steps, term highlighting, and the chat window around a hit.
 import { describe, expect, test } from "bun:test"
-import type { BotId, ConversationId, ConversationState, EntryId, SearchHit, SearchPage, TranscriptEntry, TranscriptWindow, Turn, TurnId } from "@openbot/contracts"
+import type {
+  BotId,
+  ConversationId,
+  ConversationState,
+  EntryId,
+  SearchHit,
+  SearchPage,
+  TranscriptEntry,
+  TranscriptWindow,
+  Turn,
+  TurnId,
+} from "@openbot/contracts"
 import {
   appendPage,
   applyWindowPage,
@@ -49,7 +60,15 @@ describe("search filters → search.query", () => {
 
   test("every filter", () => {
     const q = searchQueryOf(
-      { q: "deploy", botIds: ["bot_a" as BotId], chat: "groups", sender: "owner", date: "7d", types: ["steps", "messages"], sort: "newest" },
+      {
+        q: "deploy",
+        botIds: ["bot_a" as BotId],
+        chat: "groups",
+        sender: "owner",
+        date: "7d",
+        types: ["steps", "messages"],
+        sort: "newest",
+      },
       { now, groupIds },
     )
     expect(q).toEqual({
@@ -61,14 +80,21 @@ describe("search filters → search.query", () => {
       from: now - 7 * 24 * 3600_000,
       sort: "newest",
     })
-    expect(searchQueryOf({ ...searchFilters("x"), chat: cid, types: ["events"] }, { now, groupIds })).toEqual({ query: "x", conversationIds: [cid], kinds: ["event", "notice"] })
+    expect(searchQueryOf({ ...searchFilters("x"), chat: cid, types: ["events"] }, { now, groupIds })).toEqual({
+      query: "x",
+      conversationIds: [cid],
+      kinds: ["event", "notice"],
+    })
   })
 
   test("dates: recent spans and whole local days", () => {
     expect(dateRangeOf("any", now)).toEqual({})
     expect(dateRangeOf("24h", now)).toEqual({ from: now - 24 * 3600_000 })
     expect(dateRangeOf("30d", now)).toEqual({ from: now - 30 * 24 * 3600_000 })
-    expect(dateRangeOf({ from: "2026-10-01", to: "2026-10-02" }, now)).toEqual({ from: new Date(2026, 9, 1).getTime(), to: new Date(2026, 9, 3).getTime() - 1 })
+    expect(dateRangeOf({ from: "2026-10-01", to: "2026-10-02" }, now)).toEqual({
+      from: new Date(2026, 9, 1).getTime(),
+      to: new Date(2026, 9, 3).getTime() - 1,
+    })
     expect(dateRangeOf({ to: "2026-10-02" }, now)).toEqual({ to: new Date(2026, 9, 3).getTime() - 1 })
     expect(dateRangeOf({ from: "2026-02-30" }, now)).toEqual({})
   })
@@ -83,14 +109,23 @@ const hit = (id: string, at = 1): SearchHit => ({
   snippet: id,
   highlights: [],
 })
-const searchPage = (ids: ReadonlyArray<string>, nextCursor: string | null, extra: Partial<SearchPage> = {}): SearchPage => ({ hits: ids.map((id) => hit(id)), nextCursor, totalCapped: 5, terms: ["deploy"], ...extra })
+const searchPage = (
+  ids: ReadonlyArray<string>,
+  nextCursor: string | null,
+  extra: Partial<SearchPage> = {},
+): SearchPage => ({ hits: ids.map((id) => hit(id)), nextCursor, totalCapped: 5, terms: ["deploy"], ...extra })
 
 describe("search results", () => {
   test("pages append, repeats dropped, the last cursor wins", () => {
     let r = appendPage(undefined, searchPage(["a", "b"], "c1", { indexing: true }))
     expect([r.hits.map((h) => h.snippet), r.nextCursor, r.indexing]).toEqual([["a", "b"], "c1", true])
     r = appendPage(r, searchPage(["b", "c"], null))
-    expect([r.hits.map((h) => h.snippet), r.nextCursor, r.indexing, r.terms]).toEqual([["a", "b", "c"], null, false, ["deploy"]])
+    expect([r.hits.map((h) => h.snippet), r.nextCursor, r.indexing, r.terms]).toEqual([
+      ["a", "b", "c"],
+      null,
+      false,
+      ["deploy"],
+    ])
   })
 
   test("counts", () => {
@@ -105,7 +140,13 @@ describe("search results", () => {
       { text: "deploy", mark: true },
       { text: " now", mark: false },
     ])
-    expect(highlightParts("abcdef", [{ start: 4, end: 99 }, { start: 0, end: 2 }, { start: 1, end: 3 }])).toEqual([
+    expect(
+      highlightParts("abcdef", [
+        { start: 4, end: 99 },
+        { start: 0, end: 2 },
+        { start: 1, end: 3 },
+      ]),
+    ).toEqual([
       { text: "ab", mark: true },
       { text: "c", mark: true },
       { text: "d", mark: false },
@@ -153,8 +194,20 @@ describe("term ranges", () => {
   })
 })
 
-const turn = (id: string, status: Turn["status"] = "completed"): Turn => ({ id: id as TurnId, conversationId: cid, botId: "bot_a" as BotId, status, trigger: "user", startedAt: 0 })
-const win = (entries: ReadonlyArray<TranscriptEntry>, before: string | null, after: string | null, turns: ReadonlyArray<Turn> = []): TranscriptWindow => ({
+const turn = (id: string, status: Turn["status"] = "completed"): Turn => ({
+  id: id as TurnId,
+  conversationId: cid,
+  botId: "bot_a" as BotId,
+  status,
+  trigger: "user",
+  startedAt: 0,
+})
+const win = (
+  entries: ReadonlyArray<TranscriptEntry>,
+  before: string | null,
+  after: string | null,
+  turns: ReadonlyArray<Turn> = [],
+): TranscriptWindow => ({
   entries,
   hasMoreBefore: before !== null,
   hasMoreAfter: after !== null,
@@ -163,7 +216,10 @@ const win = (entries: ReadonlyArray<TranscriptEntry>, before: string | null, aft
   turns,
   requests: [],
 })
-const replica = (entries: ReadonlyArray<TranscriptEntry>, turns: ReadonlyArray<Turn> = []): Pick<ConversationState, "entries" | "turns" | "requests"> => ({
+const replica = (
+  entries: ReadonlyArray<TranscriptEntry>,
+  turns: ReadonlyArray<Turn> = [],
+): Pick<ConversationState, "entries" | "turns" | "requests"> => ({
   entries: new Map(entries.map((e) => [e.id, e])),
   turns: new Map(turns.map((t) => [t.id, t])),
   requests: new Map(),
@@ -177,18 +233,22 @@ describe("chat window", () => {
     w = applyWindowPage(w, win([msg("e3", 3), msg("e4", 4)], null, "x"), "older")
     expect([ids(w.entries), w.beforeCursor, w.afterCursor]).toEqual([["e3", "e4", "e5", "e6"], null, "a6"])
     w = applyWindowPage(w, win([msg("e6", 6, 1), msg("e7", 7)], "y", null, [turn("t1", "failed"), turn("t2")]), "newer")
-    expect([ids(w.entries), w.beforeCursor, w.afterCursor, w.entries[3]!.revision, w.turns.get("t1" as TurnId)?.status, w.turns.size]).toEqual([
-      ["e3", "e4", "e5", "e6", "e7"],
-      null,
-      null,
-      1,
-      "failed",
-      2,
-    ])
+    expect([
+      ids(w.entries),
+      w.beforeCursor,
+      w.afterCursor,
+      w.entries[3]!.revision,
+      w.turns.get("t1" as TurnId)?.status,
+      w.turns.size,
+    ]).toEqual([["e3", "e4", "e5", "e6", "e7"], null, null, 1, "failed", 2])
   })
 
   test("a cursor of a page that says nothing more is dropped", () => {
-    const w = applyWindowPage(undefined, { ...win([msg("e1", 1)], null, null), beforeCursor: "stale", afterCursor: "stale" }, "first")
+    const w = applyWindowPage(
+      undefined,
+      { ...win([msg("e1", 1)], null, null), beforeCursor: "stale", afterCursor: "stale" },
+      "first",
+    )
     expect([w.beforeCursor, w.afterCursor]).toEqual([null, null])
   })
 
@@ -204,7 +264,11 @@ describe("chat window", () => {
     // the reaction arrives live: the replica now holds e2 next to its own tail (e8, e9)
     const live = replica([msg("e2", 2, 2, "reacted"), msg("e8", 8), msg("e9", 9)])
     const v = windowView(w, live)
-    expect([v.joined, ids(v.entries), (v.entries[0] as { text: string }).text]).toEqual([false, ["e2", "e3"], "reacted"])
+    expect([v.joined, ids(v.entries), (v.entries[0] as { text: string }).text]).toEqual([
+      false,
+      ["e2", "e3"],
+      "reacted",
+    ])
     // the window's last entry too
     expect(windowView(w, replica([msg("e3", 3, 2, "reacted"), msg("e8", 8)])).joined).toBe(false)
   })
@@ -214,9 +278,16 @@ describe("chat window", () => {
     const live = replica([msg("e8", 8), msg("e9", 9)], [turn("t9", "running")])
     const v = windowView(w, live)
     expect([v.joined, ids(v.entries), v.turns.has("t9" as TurnId)]).toEqual([false, ["e2", "e3"], true])
-    const joined = windowView(applyWindowPage(w, win([msg("e4", 4)], "x", null), "newer"), replica([msg("e1", 1, 2, "older edit"), msg("e3", 3, 2, "edited"), msg("e8", 8), msg("e9", 9)]))
+    const joined = windowView(
+      applyWindowPage(w, win([msg("e4", 4)], "x", null), "newer"),
+      replica([msg("e1", 1, 2, "older edit"), msg("e3", 3, 2, "edited"), msg("e8", 8), msg("e9", 9)]),
+    )
     // e1 is older than the window: its own older page brings it, not the replica
-    expect([joined.joined, ids(joined.entries), (joined.entries[1] as { text: string }).text]).toEqual([true, ["e2", "e3", "e4", "e8", "e9"], "edited"])
+    expect([joined.joined, ids(joined.entries), (joined.entries[1] as { text: string }).text]).toEqual([
+      true,
+      ["e2", "e3", "e4", "e8", "e9"],
+      "edited",
+    ])
   })
 
   test("new messages since a mark", () => {
@@ -248,6 +319,10 @@ describe("revealed steps", () => {
     const entries = [msg("e1", 1), tool]
     const turns = [turn("t1")]
     expect(layoutTranscript({ entries, turns, showSteps: false }).some((r) => r.type === "steps")).toBe(false)
-    expect(layoutTranscript({ entries, turns, showSteps: false, revealSteps: new Set(["t1" as TurnId]) }).some((r) => r.type === "steps")).toBe(true)
+    expect(
+      layoutTranscript({ entries, turns, showSteps: false, revealSteps: new Set(["t1" as TurnId]) }).some(
+        (r) => r.type === "steps",
+      ),
+    ).toBe(true)
   })
 })

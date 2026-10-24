@@ -18,7 +18,8 @@ import type {
   TurnId,
 } from "@openbot/contracts"
 import { Cause, Context, Deferred, Effect, Fiber, Layer, Queue, Ref, Scope, Stream } from "effect"
-import { CallPresence,
+import {
+  CallPresence,
   BotService,
   ConversationService,
   EntryRepo,
@@ -93,16 +94,18 @@ export interface TurnHandle {
 export type Behavior = (turn: TurnHandle) => Effect.Effect<void>
 
 /** Default: one short final reply without mentions. */
-export const replyBehavior = (text?: (turn: TurnHandle) => string): Behavior => (turn) =>
-  Effect.gen(function*() {
-    yield* turn.emit({ _tag: "Activity", label: "Typing…" })
-    yield* turn.say(`${turn.turnId}/msg`, text?.(turn) ?? `Reply from ${turn.bot.name}`)
-    yield* turn.complete("end_turn")
-  })
+export const replyBehavior =
+  (text?: (turn: TurnHandle) => string): Behavior =>
+  (turn) =>
+    Effect.gen(function* () {
+      yield* turn.emit({ _tag: "Activity", label: "Typing…" })
+      yield* turn.say(`${turn.turnId}/msg`, text?.(turn) ?? `Reply from ${turn.bot.name}`)
+      yield* turn.complete("end_turn")
+    })
 
 /** Streams a partial message, then waits for `release` (or an interrupt), then completes. */
 export const holdBehavior: Behavior = (turn) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     yield* turn.emit({ _tag: "Activity", label: "Working", toolKind: "shell" })
     yield* turn.emit({
       _tag: "ItemUpserted",
@@ -152,7 +155,7 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
   }): Layer.Layer<TestDriver, never, HarnessRegistry> =>
     Layer.effect(
       TestDriver,
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const registry = yield* HarnessRegistry
         const opened = yield* Ref.make<ReadonlyArray<OpenSessionInput>>([])
         const turns = yield* Ref.make<ReadonlyArray<TurnHandle>>([])
@@ -165,7 +168,7 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
         let sessionCount = 0
 
         const gateOf = (botId: BotId) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const existing = gates.get(botId)
             if (existing !== undefined) return existing
             const gate = yield* Deferred.make<void>()
@@ -188,7 +191,7 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
         const kind = options?.kind ?? "fake"
 
         const openSession = (input: OpenSessionInput): Effect.Effect<HarnessSession, HarnessError, Scope.Scope> =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const sessionNumber = ++sessionCount
             yield* Ref.update(opened, (all) => [...all, input])
             const nativeSessionId = input.nativeSessionId ?? `native-${sessionNumber}`
@@ -205,7 +208,7 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
             yield* Effect.addFinalizer(() =>
               Effect.sync(() => {
                 state.closed = true
-              }).pipe(Effect.andThen(Queue.end(events)))
+              }).pipe(Effect.andThen(Queue.end(events))),
             )
 
             /** Clears the active turn BEFORE the terminal event (the runner may start the next turn at once). */
@@ -240,17 +243,23 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
                 input: turn,
                 turnId,
                 steered: [],
-                tool: taskId === undefined
-                  ? { claims, callId: `${turnId}/call`, turnId }
-                  : { claims, callId: `${turnId}/call`, taskId },
+                tool:
+                  taskId === undefined
+                    ? { claims, callId: `${turnId}/call`, turnId }
+                    : { claims, callId: `${turnId}/call`, taskId },
                 emit: offer,
                 say: (key, text) =>
-                  Effect.gen(function*() {
+                  Effect.gen(function* () {
                     yield* offer({
                       _tag: "ItemUpserted",
                       turnId,
                       key,
-                      item: { _tag: "Message", role: "bot", text: text.slice(0, Math.ceil(text.length / 2)), streaming: true },
+                      item: {
+                        _tag: "Message",
+                        role: "bot",
+                        text: text.slice(0, Math.ceil(text.length / 2)),
+                        streaming: true,
+                      },
                     })
                     yield* offer({
                       _tag: "ItemUpserted",
@@ -265,7 +274,9 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
                     return finish(turnId, [
                       { _tag: "Usage", turnId, usage: { inputTokens: 10, outputTokens: 5 } },
                       { _tag: "ContextUsage", usedTokens: state.used, windowTokens: 200_000 },
-                      stopReason === undefined ? { _tag: "TurnCompleted", turnId } : { _tag: "TurnCompleted", turnId, stopReason },
+                      stopReason === undefined
+                        ? { _tag: "TurnCompleted", turnId }
+                        : { _tag: "TurnCompleted", turnId, stopReason },
                     ])
                   }),
                 fail: (code, message, retryable = false) =>
@@ -275,9 +286,11 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
                     { _tag: "TurnFailed", turnId, error: { code: "crashed", message: reason, retryable: true } },
                     { _tag: "SessionClosed", reason },
                   ]).pipe(
-                    Effect.andThen(Effect.sync(() => {
-                      state.closed = true
-                    })),
+                    Effect.andThen(
+                      Effect.sync(() => {
+                        state.closed = true
+                      }),
+                    ),
                     Effect.andThen(Queue.end(events)),
                   ),
                 waitForRelease: Effect.flatMap(gateOf(input.bot.id), Deferred.await),
@@ -290,7 +303,7 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
               events: Stream.fromQueue(events),
               nativeSessionId: Effect.succeed(nativeSessionId),
               startTurn: (turn) =>
-                Effect.gen(function*() {
+                Effect.gen(function* () {
                   if (state.closed) return yield* new HarnessError({ harness: kind, code: "closed", message: "closed" })
                   if (state.active !== undefined) {
                     return yield* new HarnessError({ harness: kind, code: "turn-rejected", message: "busy" })
@@ -304,7 +317,7 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
                   active.fiber = yield* Effect.forkIn(behavior(handle), scope, { startImmediately: true })
                 }),
               steer: (turn) =>
-                Effect.gen(function*() {
+                Effect.gen(function* () {
                   if (!capabilities.steer) {
                     return yield* new HarnessError({ harness: kind, code: "unsupported", message: "no steer" })
                   }
@@ -313,19 +326,23 @@ export class TestDriver extends Context.Service<TestDriver, TestDriverControl>()
                     return yield* new HarnessError({ harness: kind, code: "turn-rejected", message: "idle" })
                   }
                   active.handle.steered.push(turn)
-                  yield* Ref.update(steers, (all) => [...all, { botId: input.bot.id, turnId: active.handle.turnId, input: turn }])
+                  yield* Ref.update(steers, (all) => [
+                    ...all,
+                    { botId: input.bot.id, turnId: active.handle.turnId, input: turn },
+                  ])
                 }),
               interrupt: Effect.suspend(() => {
                 const active = state.active
                 if (active === undefined) return Effect.void
                 state.active = undefined
-                return Effect.gen(function*() {
+                return Effect.gen(function* () {
                   if (active.fiber !== undefined) yield* Fiber.interrupt(active.fiber)
                   yield* offer({ _tag: "TurnInterrupted", turnId: active.handle.turnId })
                 })
               }),
-              compact: Effect.gen(function*() {
-                if (!capabilities.compact) return yield* new HarnessError({ harness: kind, code: "unsupported", message: "no" })
+              compact: Effect.gen(function* () {
+                if (!capabilities.compact)
+                  return yield* new HarnessError({ harness: kind, code: "unsupported", message: "no" })
                 yield* Ref.update(compactions, (n) => n + 1)
                 state.used = 500
               }),
@@ -391,7 +408,9 @@ const approvalLayer = (options?: AppOptions) => {
  */
 export const appLayer = (options?: AppOptions) => {
   const ports = TestPorts()
-  const driver = TestDriver.layer(options?.capabilities === undefined ? undefined : { capabilities: options.capabilities })
+  const driver = TestDriver.layer(
+    options?.capabilities === undefined ? undefined : { capabilities: options.capabilities },
+  )
   const level2 = Layer.mergeAll(
     ConversationServiceLive,
     AttachmentServiceLive,
@@ -421,7 +440,7 @@ export const eventually = <E, R>(
   label = "condition",
   tries = 5_000,
 ): Effect.Effect<void, E | Error, R> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     for (let i = 0; i < tries; i++) {
       if (yield* check) return
       yield* Effect.yieldNow
@@ -431,11 +450,14 @@ export const eventually = <E, R>(
 
 /** Collects a (live) stream in the background; `items` reads what arrived so far. */
 export const collect = <A, E, R>(stream: Stream.Stream<A, E, R>) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const items = yield* Ref.make<ReadonlyArray<A>>([])
-    yield* Effect.forkScoped(Stream.runForEach(stream, (item) => Ref.update(items, (all) => [...all, item])), {
-      startImmediately: true,
-    })
+    yield* Effect.forkScoped(
+      Stream.runForEach(stream, (item) => Ref.update(items, (all) => [...all, item])),
+      {
+        startImmediately: true,
+      },
+    )
     return { items: Ref.get(items) }
   })
 
@@ -451,7 +473,8 @@ export const createBot = (name: string, extra?: { readonly instructions?: string
       harness: { kind: "fake" },
       clientNonce: freshNonce(),
       ...(extra?.instructions === undefined ? {} : { instructions: extra.instructions }),
-    }))
+    }),
+  )
 
 /** Sends an owner message. */
 export const send = (
@@ -462,7 +485,7 @@ export const send = (
 
 /** The whole transcript of a conversation, oldest first (known entries only). */
 export const transcript = (conversationId: ConversationId) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const entries = yield* EntryRepo
     const page = yield* Effect.orDie(entries.page({ conversationId, limit: 10_000 }))
     return page.entries.filter((e): e is KnownTranscriptEntry => e.kind !== "unknown")
@@ -481,8 +504,12 @@ export const turnsOf = (conversationId: ConversationId) =>
 /** Waits until every turn of the conversation is terminal (and at least `min` exist). */
 export const settled = (conversationId: ConversationId, min = 1) =>
   eventually(
-    Effect.map(turnsOf(conversationId), (turns) =>
-      turns.length >= min && turns.every((t) => t.status === "completed" || t.status === "failed" || t.status === "interrupted")),
+    Effect.map(
+      turnsOf(conversationId),
+      (turns) =>
+        turns.length >= min &&
+        turns.every((t) => t.status === "completed" || t.status === "failed" || t.status === "interrupted"),
+    ),
     `settled ${conversationId}`,
   )
 

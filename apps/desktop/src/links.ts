@@ -20,7 +20,8 @@ export const prefillOfLink = (link: string): Omit<QuickSendPrefill, "id"> | unde
   } catch {
     return undefined
   }
-  if (url.protocol !== "openbot:" || (url.hostname !== "send" && url.pathname.replace(/^\/+/, "") !== "send")) return undefined
+  if (url.protocol !== "openbot:" || (url.hostname !== "send" && url.pathname.replace(/^\/+/, "") !== "send"))
+    return undefined
   const q = url.searchParams
   const shared = q.get("url") ?? undefined
   let text = q.get("text")?.trim() || undefined
@@ -33,4 +34,3 @@ export const prefillOfLink = (link: string): Omit<QuickSendPrefill, "id"> | unde
     ...(q.get("to") ? { to: q.get("to")! } : {}),
   }
 }
-

@@ -27,10 +27,22 @@ export interface ConnectApp {
 export function SlackLogo({ className }: { readonly className?: string }): ReactNode {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path fill="#E01E5A" d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" />
-      <path fill="#36C5F0" d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z" />
-      <path fill="#2EB67D" d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z" />
-      <path fill="#ECB22E" d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
+      <path
+        fill="#E01E5A"
+        d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"
+      />
+      <path
+        fill="#36C5F0"
+        d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"
+      />
+      <path
+        fill="#2EB67D"
+        d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"
+      />
+      <path
+        fill="#ECB22E"
+        d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"
+      />
     </svg>
   )
 }
@@ -62,10 +74,21 @@ export const APPS: ReadonlyArray<ConnectApp> = [
 export const appById = (id: AppId): ConnectApp => APPS.find((app) => app.id === id)!
 
 /** An app's logo on a white rounded tile (Grok's app tile). */
-export function AppTile({ app, size = 40, className }: { readonly app: ConnectApp; readonly size?: number; readonly className?: string }): ReactNode {
+export function AppTile({
+  app,
+  size = 40,
+  className,
+}: {
+  readonly app: ConnectApp
+  readonly size?: number
+  readonly className?: string
+}): ReactNode {
   return (
     <span
-      className={cn("inline-flex shrink-0 items-center justify-center rounded-[22%] bg-white hairline border-line-tertiary", className)}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-[22%] bg-white hairline border-line-tertiary",
+        className,
+      )}
       style={{ width: size, height: size }}
     >
       <app.Logo className="size-[56%]" />
@@ -74,7 +97,13 @@ export function AppTile({ app, size = 40, className }: { readonly app: ConnectAp
 }
 
 /** The connected apps' logos, overlapping (the "N connected" button, the sidebar pill). */
-export function StackedLogos({ apps, size = 22 }: { readonly apps: ReadonlyArray<ConnectApp>; readonly size?: number }): ReactNode {
+export function StackedLogos({
+  apps,
+  size = 22,
+}: {
+  readonly apps: ReadonlyArray<ConnectApp>
+  readonly size?: number
+}): ReactNode {
   if (apps.length === 0) return null
   return (
     <span className="inline-flex items-center">
@@ -95,11 +124,20 @@ export interface AppStatus {
 
 const slackStatusOf = (status: SlackStatus | undefined, loading: boolean): AppStatus => {
   if (status === undefined || !status.connected) return { state: "off", loading }
-  const live = status.events === "live" ? "live messages on" : status.events === "connecting" ? "connecting live messages" : status.events === "off" ? "live messages off" : "live messages not working"
+  const live =
+    status.events === "live"
+      ? "live messages on"
+      : status.events === "connecting"
+        ? "connecting live messages"
+        : status.events === "off"
+          ? "live messages off"
+          : "live messages not working"
   const outdated = status.missingScopes !== undefined && status.missingScopes.length > 0
   return {
     state: status.events === "failed" || outdated ? "attention" : "connected",
-    summary: [status.team, outdated ? "the app needs an update" : live].filter((part) => part !== undefined).join(" · "),
+    summary: [status.team, outdated ? "the app needs an update" : live]
+      .filter((part) => part !== undefined)
+      .join(" · "),
     loading,
   }
 }
@@ -114,7 +152,9 @@ const harkStatusOf = (status: HarkStatus | undefined, loading: boolean): AppStat
 }
 
 /** Every app's status; `poll` refreshes them every few seconds (while the Connect apps window is open). */
-export const useAppStatuses = (options?: { readonly poll?: boolean }): ReadonlyMap<AppId, AppStatus> & { readonly refresh: () => void } => {
+export const useAppStatuses = (options?: {
+  readonly poll?: boolean
+}): ReadonlyMap<AppId, AppStatus> & { readonly refresh: () => void } => {
   const slack = useQuery(slackStatusAtom)
   const hark = useQuery(harkStatusAtom)
   const refreshSlack = slack.refresh

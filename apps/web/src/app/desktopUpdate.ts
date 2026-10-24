@@ -34,10 +34,12 @@ export function useDesktopUpdate(): DesktopUpdates {
   return {
     supported: bridge?.onUpdate !== undefined,
     state,
-    check: async () => (bridge?.checkForUpdates === undefined ? undefined : ((await bridge.checkForUpdates()) as DesktopUpdateState)),
+    check: async () =>
+      bridge?.checkForUpdates === undefined ? undefined : ((await bridge.checkForUpdates()) as DesktopUpdateState),
     install: () => bridge?.installUpdate?.(),
   }
 }
 
 /** A new version is downloaded (or, where the app cannot replace itself, ready to download). */
-export const updateReady = (state: DesktopUpdateState | undefined): boolean => state?.status === "ready" || state?.status === "manual"
+export const updateReady = (state: DesktopUpdateState | undefined): boolean =>
+  state?.status === "ready" || state?.status === "manual"

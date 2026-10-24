@@ -10,7 +10,19 @@ import { createHash } from "node:crypto"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { deflateSync } from "node:zlib"
-import { type AppPage, type Brain, connectRpc, hasChromium, launchBrowser, openApp, type Rpc, send, shotsDir, startBrain, waitIdle } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  send,
+  shotsDir,
+  startBrain,
+  waitIdle,
+} from "./brain.ts"
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n
@@ -47,7 +59,12 @@ const makePng = (width: number, height: number): Uint8Array => {
   new DataView(ihdr.buffer).setUint32(0, width)
   new DataView(ihdr.buffer).setUint32(4, height)
   ihdr.set([8, 2, 0, 0, 0], 8)
-  const parts = [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", new Uint8Array())]
+  const parts = [
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", new Uint8Array()),
+  ]
   const png = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
   let at = 0
   for (const p of parts) {
@@ -107,9 +124,35 @@ const makeMedia = (dir: string): { readonly video: boolean; readonly audio: bool
   let video = false
   let audio = false
   if (ffmpeg !== null) {
-    const v = Bun.spawnSync([ffmpeg, "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", join(dir, "cache-demo.mp4")])
+    const v = Bun.spawnSync([
+      ffmpeg,
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=size=640x360:rate=30:duration=2",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      join(dir, "cache-demo.mp4"),
+    ])
     video = v.exitCode === 0
-    const a = Bun.spawnSync([ffmpeg, "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", join(dir, "beep.wav")])
+    const a = Bun.spawnSync([
+      ffmpeg,
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:duration=1",
+      join(dir, "beep.wav"),
+    ])
     audio = a.exitCode === 0
   }
   if (!video) {
@@ -134,13 +177,18 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     brain = await startBrain()
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
-    bot = await rpc.call((c) => c["bots.create"]({ name: "Reel", harness: { kind: "fake" }, clientNonce: "e2e-attachments" }))
+    bot = await rpc.call((c) =>
+      c["bots.create"]({ name: "Reel", harness: { kind: "fake" }, clientNonce: "e2e-attachments" }),
+    )
     // what the bot "rendered" in its workspace on the local node
     const out = join(brain.dataDir, "bots", bot.id, "workspace", "output")
     mkdirSync(out, { recursive: true })
     writeFileSync(join(out, "cover.png"), makePng(960, 540))
     media = makeMedia(out)
-    writeFileSync(join(out, "report.pdf"), "%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n")
+    writeFileSync(
+      join(out, "report.pdf"),
+      "%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n",
+    )
     writeFileSync(join(out, "site.zip"), new Uint8Array([0x50, 0x4b, 0x05, 0x06, ...new Array(18).fill(0)]))
     for (const [name, body] of Object.entries(PREVIEW_FIXTURES)) writeFileSync(join(out, name), body)
     writeFileSync(join(out, "huge.md"), "# huge\n" + "x".repeat(OVER_PREVIEW_LIMIT))
@@ -158,7 +206,11 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     )
     await transcript.getByText("Rendered: cover, demo and sources", { exact: true }).waitFor({ timeout: 30_000 })
     await waitIdle(app.page, 30_000)
-    await send(app.page, "Reel", `tool: send_file {"paths":${JSON.stringify(previewFiles)},"caption":"Preview fixtures"}`)
+    await send(
+      app.page,
+      "Reel",
+      `tool: send_file {"paths":${JSON.stringify(previewFiles)},"caption":"Preview fixtures"}`,
+    )
     await transcript.getByText("Preview fixtures", { exact: true }).waitFor({ timeout: 30_000 })
     await waitIdle(app.page, 30_000)
     // The same mention the `notes.md` fixture ends with, rendered the other way (chat bubble), so
@@ -187,7 +239,10 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
 
     // the image loaded through the cookie-authenticated route
     const image = files.locator('[data-attachment="image"] img')
-    await page.waitForFunction((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth > 0, await image.elementHandle())
+    await page.waitForFunction(
+      (el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth > 0,
+      await image.elementHandle(),
+    )
     expect(await image.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(960)
     const imageBox = (await files.locator('[data-attachment="image"]').boundingBox())!
     expect(imageBox.width).toBeLessThanOrEqual(361)
@@ -200,7 +255,9 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     expect(await video.getAttribute("controls")).not.toBeNull()
     expect(await video.getAttribute("src")).toMatch(/^\/api\/attachments\/[\w-]+#t=0\.1$/)
     if (media.video) {
-      await page.waitForFunction((el) => (el as HTMLVideoElement).readyState >= 1, await video.elementHandle(), { timeout: 15_000 })
+      await page.waitForFunction((el) => (el as HTMLVideoElement).readyState >= 1, await video.elementHandle(), {
+        timeout: 15_000,
+      })
       expect(await video.evaluate((el) => Math.round((el as HTMLVideoElement).duration))).toBe(2)
     }
     expect(await files.locator('[data-attachment="audio"] audio').getAttribute("controls")).not.toBeNull()
@@ -222,7 +279,9 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     const lightbox = page.getByTestId("lightbox")
     await lightbox.waitFor()
     await lightbox.getByText("cover.png").waitFor()
-    expect(await lightbox.getByRole("link", { name: "Download cover.png" }).getAttribute("href")).toContain("?download=1")
+    expect(await lightbox.getByRole("link", { name: "Download cover.png" }).getAttribute("href")).toContain(
+      "?download=1",
+    )
     await app.shot("e2e-attachments-02-lightbox")
     await page.keyboard.press("Escape")
     await lightbox.waitFor({ state: "detached" })
@@ -266,11 +325,18 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
   const card = (name: string) => app.page.locator('button[title="Preview"]').filter({ hasText: name })
   /** Waits for the preview to reach `state` (the state is on the DOM, so no copy matching is needed). */
   const waitState = (state: string) =>
-    app.page.waitForFunction((s) => document.querySelector('[data-testid="file-preview"]')?.getAttribute("data-preview-state") === s, state)
+    app.page.waitForFunction(
+      (s) => document.querySelector('[data-testid="file-preview"]')?.getAttribute("data-preview-state") === s,
+      state,
+    )
 
   const openPreview = async (name: string): Promise<void> => {
     // A previous failure must not leave its dialog on screen blocking this click.
-    if (await preview().isVisible().catch(() => false)) {
+    if (
+      await preview()
+        .isVisible()
+        .catch(() => false)
+    ) {
       await app.page.keyboard.press("Escape")
       await preview().waitFor({ state: "detached" })
     }
@@ -322,14 +388,21 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     // The bot bubble that echoed the identical line — `data-side` pins it, since the user message
     // that triggered the echo also carries an `.ob-mention` and `last()` alone would not say which
     // one it picked. The rendered text drops the `@` (the regex consumes it), hence `pickup`.
-    const inChat = app.page.getByTestId("transcript").locator('[data-side="bot"]').filter({ hasText: "pickup" }).locator(".ob-mention").last()
+    const inChat = app.page
+      .getByTestId("transcript")
+      .locator('[data-side="bot"]')
+      .filter({ hasText: "pickup" })
+      .locator(".ob-mention")
+      .last()
     expect(await inChat.count()).toBe(1)
     expect((await inDialog.textContent())?.trim()).toBe("Reel")
     // `outerHTML`, not `innerHTML`: the theme colour sits in the span's own `style`, and the avatar
     // shape is a data attribute on its child — the whole element has to match, not just its inside.
     // The avatar's expression is random, so it is the one thing normalised away.
     const shape = (html: string) => html.replace(/ data-expression="[a-z]+"/g, "")
-    expect(shape(await inDialog.evaluate((el) => el.outerHTML))).toBe(shape(await inChat.evaluate((el) => el.outerHTML)))
+    expect(shape(await inDialog.evaluate((el) => el.outerHTML))).toBe(
+      shape(await inChat.evaluate((el) => el.outerHTML)),
+    )
     await app.shot("e2e-attachments-04-preview-markdown")
     await closeWithEscape()
   }, 60_000)
@@ -343,7 +416,7 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
       expect(await pre.locator("code").textContent()).toBe(PREVIEW_FIXTURES[name]!)
       // The dialog header's own <h2> is not a rendered markdown heading; only the body matters.
       for (const tag of ["table", "ul", "ol", "blockquote"]) expect(await preview().locator(tag).count()).toBe(0)
-      expect(await preview().locator('.ob-md h1, .ob-md h2').count()).toBe(0)
+      expect(await preview().locator(".ob-md h1, .ob-md h2").count()).toBe(0)
       await closeWithEscape()
     }
   }, 90_000)
@@ -378,7 +451,9 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
 
     // The Download link's own href, fetched through the app's context (its cookie), so this is the
     // destination a user's click actually reaches.
-    const href = await preview().getByRole("link", { name: /Download/ }).getAttribute("href")
+    const href = await preview()
+      .getByRole("link", { name: /Download/ })
+      .getAttribute("href")
     expect(href).toContain("?download=1")
     const downloadResponse = await app.page.request.get(new URL(href!, brain.base).toString())
     expect(downloadResponse.status()).toBe(200)
@@ -471,7 +546,9 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     try {
       await openPreview("huge.md")
       await waitState("too-large")
-      await preview().getByText(/too large/i).waitFor()
+      await preview()
+        .getByText(/too large/i)
+        .waitFor()
       expect(requested).toEqual([])
       await app.shot("e2e-attachments-06-too-large")
     } finally {
@@ -539,7 +616,10 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     const box = app.page.getByRole("textbox", { name: "Message Reel" })
     await box.fill("still works after the deleted attachment")
     await box.press("Enter")
-    await app.page.getByTestId("transcript").getByText("still works after the deleted attachment").waitFor({ timeout: 15_000 })
+    await app.page
+      .getByTestId("transcript")
+      .getByText("still works after the deleted attachment")
+      .waitFor({ timeout: 15_000 })
   }, 90_000)
 
   test("closing while the preview is still loading cancels the in-flight request", async () => {
@@ -548,7 +628,8 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     // wrong. The falsifiable half is the network layer — the request must die.
     const failed: Array<{ url: string; error: string }> = []
     const onFailed = (request: { url: () => string; failure: () => { errorText?: string } | null }) => {
-      if (request.url().includes("/api/attachments/")) failed.push({ url: request.url(), error: request.failure()?.errorText ?? "(none)" })
+      if (request.url().includes("/api/attachments/"))
+        failed.push({ url: request.url(), error: request.failure()?.errorText ?? "(none)" })
     }
     app.page.on("requestfailed", onFailed)
     // Hold the response so the dialog stays in `loading` for as long as the test needs.
@@ -595,13 +676,21 @@ describe.skipIf(!hasChromium)("e2e: files a bot sends", () => {
     try {
       await page.goto(brain.loginUrl)
       await page.goto(`${brain.base}/#/c/${bot.directConversationId}`)
-      await send(page, "Reel", "echo: ![broken](/api/attachments/does-not-exist) and ![](/api/attachments/does-not-exist)")
+      await send(
+        page,
+        "Reel",
+        "echo: ![broken](/api/attachments/does-not-exist) and ![](/api/attachments/does-not-exist)",
+      )
       const transcript = page.getByTestId("transcript")
       const fallbacks = transcript.locator(".ob-md-img-fallback")
       // Both images must reach their failure state before counting: the first one appears while the
       // second is still loading.
-      await page.waitForFunction(() => document.querySelectorAll(".ob-md-img-fallback").length === 2, null, { timeout: 20_000 })
-      await page.waitForFunction(() => document.querySelectorAll("img.ob-md-img").length === 0, null, { timeout: 20_000 })
+      await page.waitForFunction(() => document.querySelectorAll(".ob-md-img-fallback").length === 2, null, {
+        timeout: 20_000,
+      })
+      await page.waitForFunction(() => document.querySelectorAll("img.ob-md-img").length === 0, null, {
+        timeout: 20_000,
+      })
 
       expect(await fallbacks.count()).toBe(2)
       // The <img> is gone on both, and each fallback is actually visible — not merely present.

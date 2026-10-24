@@ -166,17 +166,29 @@ export const startTestBrain = (options: {
             pingTimeout: 15_000,
             disableFatalDefects: true,
           }).pipe(Effect.provide(brainHandlers))
-          const record: BrainConnectionRecord = { nonce: verified.success.nonce, peer, hello: undefined, closeCode: undefined }
+          const record: BrainConnectionRecord = {
+            nonce: verified.success.nonce,
+            peer,
+            hello: undefined,
+            closeCode: undefined,
+          }
           brain.connections.push(record)
           if (brain.helloMode !== "skip") {
             const brainSig =
               brain.helloMode === "valid"
                 ? yield* Effect.orDie(
-                    signHello({ brainPrivateKey: options.brainKeys.privateKey, nodeId: options.nodeId, nonce: verified.success.nonce, brainOrigin: BRAIN_ORIGIN }),
+                    signHello({
+                      brainPrivateKey: options.brainKeys.privateKey,
+                      nodeId: options.nodeId,
+                      nonce: verified.success.nonce,
+                      brainOrigin: BRAIN_ORIGIN,
+                    }),
                   )
                 : yield* Effect.orDie(sign(options.brainKeys.privateKey, "not the hello message"))
             record.hello = yield* Effect.result(
-              peer.client["node.hello"]({ protocol: { min: 1, max: 1 }, brainVersion: "0.0.0-test", brainSig }).pipe(Effect.timeout("5 seconds")),
+              peer.client["node.hello"]({ protocol: { min: 1, max: 1 }, brainVersion: "0.0.0-test", brainSig }).pipe(
+                Effect.timeout("5 seconds"),
+              ),
             )
           }
           if (brain.closeOnConnect !== undefined) yield* peer.mux.close(brain.closeOnConnect, "test close")
@@ -203,9 +215,9 @@ export const startTestBrain = (options: {
           const writer = yield* socket.writer
           const end: StreamEnd = { frames: [], writer, closed: false }
           brain.streams.set(id, end)
-          yield* Effect.forever(Effect.flatMap(reader.pull, (frames) => Effect.sync(() => void end.frames.push(...frames)))).pipe(
-            Effect.ignore,
-          )
+          yield* Effect.forever(
+            Effect.flatMap(reader.pull, (frames) => Effect.sync(() => void end.frames.push(...frames))),
+          ).pipe(Effect.ignore)
           end.closed = true
         }),
       )

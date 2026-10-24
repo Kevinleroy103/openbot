@@ -2,20 +2,38 @@
 // when none of your Permissions rules decides. Shared by Details › Brain, New Bot and Settings › Permissions.
 // Also the project-folder list editor (Settings' shared folders, a Bot's own folders): folders that
 // count as the Bot's workspace.
-import { type BotAutonomy, cleanProjectFolders, MAX_PROJECT_FOLDERS, normalizeProjectFolder, projectFolderProblem } from "@openbot/contracts"
+import {
+  type BotAutonomy,
+  cleanProjectFolders,
+  MAX_PROJECT_FOLDERS,
+  normalizeProjectFolder,
+  projectFolderProblem,
+} from "@openbot/contracts"
 import { Icon, IconButton, PillButton, Select, type SelectOption, TextField, cn } from "@openbot/ui"
 import { Folder, TriangleAlert, X } from "lucide-react"
 import { type ReactNode, useState } from "react"
 
-export const AUTONOMY_CHOICES: ReadonlyArray<{ readonly value: BotAutonomy; readonly label: string; readonly hint: string }> = [
+export const AUTONOMY_CHOICES: ReadonlyArray<{
+  readonly value: BotAutonomy
+  readonly label: string
+  readonly hint: string
+}> = [
   { value: "ask", label: "Ask first", hint: "Asks you before it runs commands or changes files." },
-  { value: "workspace", label: "Auto in workspace", hint: "Works freely in its own workspace and project folders; asks before anything outside them." },
+  {
+    value: "workspace",
+    label: "Auto in workspace",
+    hint: "Works freely in its own workspace and project folders; asks before anything outside them.",
+  },
   { value: "full", label: "Full auto", hint: "Never asks: runs any command and changes any file on its computer." },
 ]
 
-export const autonomyChoice = (value: BotAutonomy) => AUTONOMY_CHOICES.find((c) => c.value === value) ?? AUTONOMY_CHOICES[1]!
+export const autonomyChoice = (value: BotAutonomy) =>
+  AUTONOMY_CHOICES.find((c) => c.value === value) ?? AUTONOMY_CHOICES[1]!
 
-const OPTIONS: ReadonlyArray<SelectOption<BotAutonomy>> = AUTONOMY_CHOICES.map((c) => ({ value: c.value, label: c.label }))
+const OPTIONS: ReadonlyArray<SelectOption<BotAutonomy>> = AUTONOMY_CHOICES.map((c) => ({
+  value: c.value,
+  label: c.label,
+}))
 
 export function AutonomySelect({
   value,
@@ -46,12 +64,23 @@ export function AutonomySelect({
 }
 
 /** "Full auto" warning (shown wherever the choice is made). */
-export function FullAutoWarning({ name, className }: { readonly name?: string; readonly className?: string }): ReactNode {
+export function FullAutoWarning({
+  name,
+  className,
+}: {
+  readonly name?: string
+  readonly className?: string
+}): ReactNode {
   return (
-    <div role="note" data-testid="full-auto-warning" className={cn("flex items-start gap-2 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn-fg", className)}>
+    <div
+      role="note"
+      data-testid="full-auto-warning"
+      className={cn("flex items-start gap-2 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn-fg", className)}
+    >
       <Icon icon={TriangleAlert} size="sm" className="mt-0.5 shrink-0" />
       <span className="min-w-0 flex-1">
-        {name ?? "This Bot"} won't ask before running commands or changing files anywhere on its computer. Your “Never allow” rules still apply.
+        {name ?? "This Bot"} won't ask before running commands or changing files anywhere on its computer. Your “Never
+        allow” rules still apply.
       </span>
     </div>
   )
@@ -88,7 +117,8 @@ export function FolderListEditor({
     if (folders.length >= MAX_PROJECT_FOLDERS) return setProblem(`At most ${MAX_PROJECT_FOLDERS} folders.`)
     const cleaned = cleanProjectFolders([...folders, value])
     if ("problem" in cleaned) return setProblem(cleaned.problem)
-    if (cleaned.folders.length === folders.length) return setProblem(`${normalizeProjectFolder(value)} is already in the list.`)
+    if (cleaned.folders.length === folders.length)
+      return setProblem(`${normalizeProjectFolder(value)} is already in the list.`)
     setProblem(undefined)
     if (await onChange(cleaned.folders)) setDraft("")
   }

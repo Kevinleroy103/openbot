@@ -68,14 +68,18 @@ export const botItem = (
   const handling = active.length > 0 && (away ? handlingHere : !busy)
   const status: RowStatus = waiting ? "attention" : busy || handling ? "working" : unread ? "unread" : "idle"
   const preview = waiting
-    ? (activity?.state === "waiting" && activity.label ? activity.label : summary?.preview?.startsWith("Waiting") ? summary.preview : "Waiting for you")
+    ? activity?.state === "waiting" && activity.label
+      ? activity.label
+      : summary?.preview?.startsWith("Waiting")
+        ? summary.preview
+        : "Waiting for you"
     : handling
       ? HANDLING
       : away
-      ? `Busy in ${whereOf(state.conversations.get(activity!.conversationId!))}`
-      : busy && activity?.label === "Typing…"
-      ? "Typing…"
-      : (summary?.preview ?? (busy ? (activity?.label ?? "Working…") : ""))
+        ? `Busy in ${whereOf(state.conversations.get(activity!.conversationId!))}`
+        : busy && activity?.label === "Typing…"
+          ? "Typing…"
+          : (summary?.preview ?? (busy ? (activity?.label ?? "Working…") : ""))
   return { kind: "bot", key: bot.id, bot, summary, activity, status, preview, unread, handling }
 }
 
@@ -83,24 +87,33 @@ export const botItem = (
  * Chats the owner placed (dragged) keep their `sidebarOrder`; the rest come first, most recent first
  * (a new chat shows on top).
  */
-const arranged = <T>(order: (t: T) => number | undefined, recency: (t: T) => number) => (a: T, b: T): number => {
-  const oa = order(a)
-  const ob = order(b)
-  if (oa === undefined && ob === undefined) return recency(b) - recency(a)
-  if (oa === undefined) return -1
-  if (ob === undefined) return 1
-  return oa - ob
-}
+const arranged =
+  <T>(order: (t: T) => number | undefined, recency: (t: T) => number) =>
+  (a: T, b: T): number => {
+    const oa = order(a)
+    const ob = order(b)
+    if (oa === undefined && ob === undefined) return recency(b) - recency(a)
+    if (oa === undefined) return -1
+    if (ob === undefined) return 1
+    return oa - ob
+  }
 
 export const buildSidebar = (
-  state: Pick<RosterState, "bots" | "conversations" | "activities" | "sections"> & { readonly tasks?: RosterState["tasks"] | undefined },
+  state: Pick<RosterState, "bots" | "conversations" | "activities" | "sections"> & {
+    readonly tasks?: RosterState["tasks"] | undefined
+  },
   open?: string | null,
 ): SidebarModel => {
   const bots = [...state.bots.values()].sort((a, b) => a.name.localeCompare(b.name))
   const visible = bots.filter((b) => !b.hidden)
   const pinned = visible
     .filter((b) => b.pinned)
-    .sort(arranged((b: Bot) => b.sidebarOrder, (b) => -b.createdAt))
+    .sort(
+      arranged(
+        (b: Bot) => b.sidebarOrder,
+        (b) => -b.createdAt,
+      ),
+    )
     .map((b) => botItem(b, state, open))
   const sectionList = [...state.sections.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
   const known = new Set<string>(sectionList.map((s) => s.id))
@@ -143,8 +156,14 @@ export const buildSidebar = (
   sections.push({
     id: "unassigned",
     name: "Unassigned",
-    items: place(rest.filter((b) => b.sectionId === undefined || !known.has(b.sectionId)).map((b) => botItem(b, state, open))),
+    items: place(
+      rest.filter((b) => b.sectionId === undefined || !known.has(b.sectionId)).map((b) => botItem(b, state, open)),
+    ),
   })
-  const hidden: SidebarSection = { id: "hidden", name: "Hidden Bots", items: bots.filter((b) => b.hidden).map((b) => botItem(b, state, open)) }
+  const hidden: SidebarSection = {
+    id: "hidden",
+    name: "Hidden Bots",
+    items: bots.filter((b) => b.hidden).map((b) => botItem(b, state, open)),
+  }
   return { pinned, sections, hidden }
 }

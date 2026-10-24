@@ -39,21 +39,31 @@ const receiver = (socket: Socket.Socket, options?: { readonly autoAck?: boolean 
   Effect.gen(function* () {
     const reader = yield* socket.reader
     const writer = yield* socket.writer
-    const state = { chunks: [] as Array<Uint8Array>, received: 0, final: undefined as Record<string, unknown> | undefined, maxChunk: 0 }
+    const state = {
+      chunks: [] as Array<Uint8Array>,
+      received: 0,
+      final: undefined as Record<string, unknown> | undefined,
+      maxChunk: 0,
+    }
     let autoAck = options?.autoAck ?? true
     yield* Effect.forkScoped(
       Effect.forever(
         Effect.flatMap(reader.pull, (frames) =>
-          Effect.forEach(frames, (f) => {
-            if (typeof f === "string") {
-              state.final = JSON.parse(f) as Record<string, unknown>
-              return Effect.void
-            }
-            state.chunks.push(f.slice())
-            state.received += f.byteLength
-            state.maxChunk = Math.max(state.maxChunk, f.byteLength)
-            return autoAck ? writer.write(JSON.stringify({ ack: state.received })) : Effect.void
-          }, { discard: true })),
+          Effect.forEach(
+            frames,
+            (f) => {
+              if (typeof f === "string") {
+                state.final = JSON.parse(f) as Record<string, unknown>
+                return Effect.void
+              }
+              state.chunks.push(f.slice())
+              state.received += f.byteLength
+              state.maxChunk = Math.max(state.maxChunk, f.byteLength)
+              return autoAck ? writer.write(JSON.stringify({ ack: state.received })) : Effect.void
+            },
+            { discard: true },
+          ),
+        ),
       ).pipe(Effect.ignore),
     )
     const waitFor = (pred: () => boolean, ms = 5000) =>
@@ -93,7 +103,11 @@ describe("fs.download", () => {
         writeFileSync(path.join(root, "out", "render.png"), data)
         const { client, brain } = yield* makeTestNode({ dataDir, roots: [root] })
         const meta = yield* client["fs.download"]({ inv: inv(), path: "out/render.png", cwd: root, ...ticket(1) })
-        expect(meta).toMatchObject({ path: path.join(root, "out", "render.png"), name: "render.png", size: data.byteLength })
+        expect(meta).toMatchObject({
+          path: path.join(root, "out", "render.png"),
+          name: "render.png",
+          size: data.byteLength,
+        })
         const head = base64Decode(meta.head)
         expect(head.byteLength).toBe(4096)
         expect([...head.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47])
@@ -130,15 +144,23 @@ describe("fs.download", () => {
         writeFileSync(path.join(outside, "secret.txt"), "nope")
         writeFileSync(path.join(root, ".ssh", "id_ed25519"), "key")
         const { client, brain } = yield* makeTestNode({ dataDir, roots: [root] })
-        const out = yield* Effect.flip(client["fs.download"]({ inv: inv(), path: path.join(outside, "secret.txt"), ...ticket(3) }))
+        const out = yield* Effect.flip(
+          client["fs.download"]({ inv: inv(), path: path.join(outside, "secret.txt"), ...ticket(3) }),
+        )
         expect(out._tag).toBe("PathDenied")
-        const escape = yield* Effect.flip(client["fs.download"]({ inv: inv(), path: "../elsewhere/secret.txt", cwd: root, ...ticket(4) }))
+        const escape = yield* Effect.flip(
+          client["fs.download"]({ inv: inv(), path: "../elsewhere/secret.txt", cwd: root, ...ticket(4) }),
+        )
         expect(escape._tag).toBe("PathDenied")
-        const denied = yield* Effect.flip(client["fs.download"]({ inv: inv(), path: ".ssh/id_ed25519", cwd: root, ...ticket(5) }))
+        const denied = yield* Effect.flip(
+          client["fs.download"]({ inv: inv(), path: ".ssh/id_ed25519", cwd: root, ...ticket(5) }),
+        )
         expect(denied._tag).toBe("PathDenied")
         const dir = yield* Effect.flip(client["fs.download"]({ inv: inv(), path: "out", cwd: root, ...ticket(6) }))
         expect(dir).toMatchObject({ _tag: "FsError", code: "EISDIR" })
-        const missing = yield* Effect.flip(client["fs.download"]({ inv: inv(), path: "nope.mp4", cwd: root, ...ticket(7) }))
+        const missing = yield* Effect.flip(
+          client["fs.download"]({ inv: inv(), path: "nope.mp4", cwd: root, ...ticket(7) }),
+        )
         expect(missing).toMatchObject({ _tag: "FsError", code: "ENOENT" })
         expect(brain.streams.size).toBe(0)
       }),
@@ -149,13 +171,23 @@ describe("fs.download", () => {
       Effect.gen(function* () {
         writeFileSync(path.join(root, "clip.mp4"), noise(5000))
         const { client } = yield* makeTestNode({ dataDir, roots: [root], limits: { transferBytes: 4000 } })
-        const capped = yield* Effect.flip(client["fs.download"]({ inv: inv(), path: "clip.mp4", cwd: root, ...ticket(8) }))
+        const capped = yield* Effect.flip(
+          client["fs.download"]({ inv: inv(), path: "clip.mp4", cwd: root, ...ticket(8) }),
+        )
         expect(capped).toMatchObject({ _tag: "FsError", code: "EFBIG" })
         expect((capped as { reason: string }).reason).toBe("the file is 5 KB; files up to 4 KB can be sent")
         const node2 = yield* makeTestNode({ dataDir, roots: [root] })
-        const asked = yield* Effect.flip(node2.client["fs.download"]({ inv: inv(), path: "clip.mp4", cwd: root, maxBytes: 1000, ...ticket(9) }))
+        const asked = yield* Effect.flip(
+          node2.client["fs.download"]({ inv: inv(), path: "clip.mp4", cwd: root, maxBytes: 1000, ...ticket(9) }),
+        )
         expect(asked).toMatchObject({ _tag: "FsError", code: "EFBIG" })
-        const ok = yield* node2.client["fs.download"]({ inv: inv(), path: "clip.mp4", cwd: root, maxBytes: 5000, ...ticket(10) })
+        const ok = yield* node2.client["fs.download"]({
+          inv: inv(),
+          path: "clip.mp4",
+          cwd: root,
+          maxBytes: 5000,
+          ...ticket(10),
+        })
         expect(ok.size).toBe(5000)
       }),
     ))
@@ -165,13 +197,24 @@ describe("fs.download", () => {
       Effect.gen(function* () {
         writeFileSync(path.join(root, "a.txt"), "hello")
         const never = yield* makeTestNode({ dataDir, roots: [root], policy: { actions: { "read-file": "never" } } })
-        const refused = yield* Effect.flip(never.client["fs.download"]({ inv: inv(), path: "a.txt", cwd: root, ...ticket(11) }))
+        const refused = yield* Effect.flip(
+          never.client["fs.download"]({ inv: inv(), path: "a.txt", cwd: root, ...ticket(11) }),
+        )
         expect(refused._tag).toBe("PolicyRefused")
         const ask = yield* makeTestNode({ dataDir, roots: [root], policy: { actions: { "read-file": "ask" } } })
-        const meta = yield* ask.client["fs.download"]({ inv: inv("bot_1", "call_9"), path: "a.txt", cwd: root, ...ticket(12) })
+        const meta = yield* ask.client["fs.download"]({
+          inv: inv("bot_1", "call_9"),
+          path: "a.txt",
+          cwd: root,
+          ...ticket(12),
+        })
         expect(meta.size).toBe(5)
         expect(ask.brain.approvals).toHaveLength(1)
-        expect(ask.brain.approvals[0]).toMatchObject({ action: "read-file", target: path.join(root, "a.txt"), toolCallId: "call_9" })
+        expect(ask.brain.approvals[0]).toMatchObject({
+          action: "read-file",
+          target: path.join(root, "a.txt"),
+          toolCallId: "call_9",
+        })
       }),
     ))
 
@@ -189,17 +232,27 @@ describe("fs.download", () => {
             const writer = yield* socket.writer
             const acks: Array<number> = []
             yield* Effect.forkScoped(
-              Effect.forever(Effect.flatMap(reader.pull, (frames) => Effect.sync(() => {
-                for (const f of frames) if (typeof f === "string") acks.push((JSON.parse(f) as { ack: number }).ack)
-              }))).pipe(Effect.ignore),
+              Effect.forever(
+                Effect.flatMap(reader.pull, (frames) =>
+                  Effect.sync(() => {
+                    for (const f of frames) if (typeof f === "string") acks.push((JSON.parse(f) as { ack: number }).ack)
+                  }),
+                ),
+              ).pipe(Effect.ignore),
             )
-            for (let at = 0; at < bytes.length; at += TRANSFER_CHUNK_BYTES) yield* writer.write(bytes.slice(at, at + TRANSFER_CHUNK_BYTES))
+            for (let at = 0; at < bytes.length; at += TRANSFER_CHUNK_BYTES)
+              yield* writer.write(bytes.slice(at, at + TRANSFER_CHUNK_BYTES))
             if (final === "close") yield* writer.write(new Socket.CloseEvent(1000))
             else yield* writer.write(JSON.stringify(final))
             return acks
           })
 
-        const upload = yield* client["fs.upload"]({ inv: inv(), path: target, size: data.byteLength, ...ticket(20) }).pipe(Effect.forkScoped)
+        const upload = yield* client["fs.upload"]({
+          inv: inv(),
+          path: target,
+          size: data.byteLength,
+          ...ticket(20),
+        }).pipe(Effect.forkScoped)
         const acks = yield* sendAll("st_20", data, { done: true, sha256: sha256(data), size: data.byteLength })
         const result = yield* Fiber.join(upload)
         expect(result).toEqual({ path: target, size: data.byteLength, sha256: sha256(data) })
@@ -207,11 +260,18 @@ describe("fs.download", () => {
         expect(acks.length).toBeGreaterThanOrEqual(3)
 
         const damagedTarget = path.join(root, "inbox", "att_2", "x.bin")
-        const damaged = yield* client["fs.upload"]({ inv: inv(), path: damagedTarget, size: 10, ...ticket(21) }).pipe(Effect.forkScoped)
+        const damaged = yield* client["fs.upload"]({ inv: inv(), path: damagedTarget, size: 10, ...ticket(21) }).pipe(
+          Effect.forkScoped,
+        )
         yield* sendAll("st_21", noise(10), { done: true, sha256: "00", size: 10 })
         expect((yield* Effect.flip(Fiber.join(damaged)))._tag).toBe("TunnelFailed")
         const cutTarget = path.join(root, "inbox", "att_3", "y.bin")
-        const cut = yield* client["fs.upload"]({ inv: inv(), path: cutTarget, size: 2 * TRANSFER_CHUNK_BYTES, ...ticket(22) }).pipe(Effect.forkScoped)
+        const cut = yield* client["fs.upload"]({
+          inv: inv(),
+          path: cutTarget,
+          size: 2 * TRANSFER_CHUNK_BYTES,
+          ...ticket(22),
+        }).pipe(Effect.forkScoped)
         yield* sendAll("st_22", noise(TRANSFER_CHUNK_BYTES), "close")
         expect((yield* Effect.flip(Fiber.join(cut)))._tag).toBe("TunnelFailed")
         expect(existsSync(damagedTarget)).toBe(false)
@@ -219,10 +279,14 @@ describe("fs.download", () => {
         expect(readdirSync(path.join(root, "inbox", "att_2"))).toEqual([])
         expect(readdirSync(path.join(root, "inbox", "att_3"))).toEqual([])
 
-        const outsideRoot = yield* Effect.flip(client["fs.upload"]({ inv: inv(), path: path.join(outside, "z.bin"), size: 1, ...ticket(23) }))
+        const outsideRoot = yield* Effect.flip(
+          client["fs.upload"]({ inv: inv(), path: path.join(outside, "z.bin"), size: 1, ...ticket(23) }),
+        )
         expect(outsideRoot._tag).toBe("PathDenied")
         const capped = yield* makeTestNode({ dataDir, roots: [root], limits: { transferBytes: 100 } })
-        const tooBig = yield* Effect.flip(capped.client["fs.upload"]({ inv: inv(), path: path.join(root, "big.bin"), size: 101, ...ticket(24) }))
+        const tooBig = yield* Effect.flip(
+          capped.client["fs.upload"]({ inv: inv(), path: path.join(root, "big.bin"), size: 101, ...ticket(24) }),
+        )
         expect(tooBig).toMatchObject({ _tag: "FsError", code: "EFBIG" })
       }),
     ))

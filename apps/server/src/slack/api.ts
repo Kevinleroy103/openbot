@@ -30,17 +30,29 @@ export interface SlackApi {
 const TIMEOUT_MS = 20_000
 const MAX_RETRY_AFTER_S = 30
 
-export const makeSlackApi = (options: { readonly baseUrl?: string | undefined; readonly fetch?: typeof fetch | undefined; readonly signal: AbortSignal }): SlackApi => {
+export const makeSlackApi = (options: {
+  readonly baseUrl?: string | undefined
+  readonly fetch?: typeof fetch | undefined
+  readonly signal: AbortSignal
+}): SlackApi => {
   const base = (options.baseUrl ?? SLACK_API_URL).replace(/\/+$/, "")
   const fetchImpl = options.fetch ?? fetch
-  const call = async (token: string, method: string, args: SlackArgs = {}, retried = false): Promise<Record<string, any>> => {
+  const call = async (
+    token: string,
+    method: string,
+    args: SlackArgs = {},
+    retried = false,
+  ): Promise<Record<string, any>> => {
     const body = new URLSearchParams()
     for (const [key, value] of Object.entries(args)) if (value !== undefined) body.set(key, String(value))
     let response: Response
     try {
       response = await fetchImpl(`${base}/${method}`, {
         method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/x-www-form-urlencoded; charset=utf-8" },
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/x-www-form-urlencoded; charset=utf-8",
+        },
         body,
         signal: AbortSignal.any([options.signal, AbortSignal.timeout(TIMEOUT_MS)]),
       })
@@ -56,20 +68,41 @@ export const makeSlackApi = (options: { readonly baseUrl?: string | undefined; r
     if (!response.ok) throw new SlackApiError(`http_${response.status}`)
     const json = (await response.json().catch(() => undefined)) as Record<string, any> | undefined
     if (json === undefined) throw new SlackApiError("bad_response")
-    if (json.ok !== true) throw new SlackApiError(String(json.error ?? "unknown_error"), typeof json.needed === "string" ? json.needed : undefined)
+    if (json.ok !== true)
+      throw new SlackApiError(
+        String(json.error ?? "unknown_error"),
+        typeof json.needed === "string" ? json.needed : undefined,
+      )
     // the token's scopes (Slack sends them on every call), for checking a new connection
     const scopes = response.headers.get("x-oauth-scopes")
-    return scopes === null ? json : { ...json, [SCOPES]: scopes.split(",").map((scope) => scope.trim()).filter((scope) => scope !== "") }
+    return scopes === null
+      ? json
+      : {
+          ...json,
+          [SCOPES]: scopes
+            .split(",")
+            .map((scope) => scope.trim())
+            .filter((scope) => scope !== ""),
+        }
   }
   return { call: (token, method, args) => call(token, method, args) }
 }
 
-const REJECTED = new Set(["invalid_auth", "not_authed", "token_revoked", "token_expired", "account_inactive", "no_permission"])
+const REJECTED = new Set([
+  "invalid_auth",
+  "not_authed",
+  "token_revoked",
+  "token_expired",
+  "account_inactive",
+  "no_permission",
+])
 
 /** What the owner or a Bot reads when a Slack call failed. */
 export const describeSlackError = (error: unknown): InvalidInput | Unavailable => {
   if (!(error instanceof SlackApiError)) {
-    return new Unavailable({ message: `Slack did not answer (${error instanceof Error ? error.message : String(error)}).` })
+    return new Unavailable({
+      message: `Slack did not answer (${error instanceof Error ? error.message : String(error)}).`,
+    })
   }
   switch (error.code) {
     case "channel_not_found":
@@ -96,7 +129,9 @@ export const describeSlackError = (error: unknown): InvalidInput | Unavailable =
       return new Unavailable({ message: "Slack did not answer; try again in a minute." })
     default:
       return REJECTED.has(error.code)
-        ? new Unavailable({ message: "Slack no longer accepts OpenBot's token. Connect Slack again in Connect apps › Slack." })
+        ? new Unavailable({
+            message: "Slack no longer accepts OpenBot's token. Connect Slack again in Connect apps › Slack.",
+          })
         : new Unavailable({ message: `Slack refused (${error.code}).` })
   }
 }

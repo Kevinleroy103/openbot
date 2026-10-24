@@ -26,7 +26,10 @@ import { AsyncResult } from "effect/reactivity"
 
 export function DetailsPane({ botId, conversationId, tab: tabProp, onClose }: DetailsPaneProps): ReactNode {
   const pane = useDetailsPane()
-  const summary = useRosterValue<ConversationSummary | undefined>(conversationSummaryAtom(conversationId ?? ("" as never)), undefined)
+  const summary = useRosterValue<ConversationSummary | undefined>(
+    conversationSummaryAtom(conversationId ?? ("" as never)),
+    undefined,
+  )
   const isGroup = summary?.kind === "group"
   const targetBotId: BotId | undefined = botId ?? (summary && summary.kind !== "group" ? summary.botIds[0] : undefined)
   const mode = useLayoutMode()
@@ -39,9 +42,22 @@ export function DetailsPane({ botId, conversationId, tab: tabProp, onClose }: De
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col bg-chrome" aria-label="Details" data-testid="details-pane">
-      <div className={cn("flex shrink-0 items-center px-3", mode === "phone" ? "justify-start" : "justify-end", mode === "desktop" ? "h-[60px]" : "h-[calc(60px+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]")}>
+      <div
+        className={cn(
+          "flex shrink-0 items-center px-3",
+          mode === "phone" ? "justify-start" : "justify-end",
+          mode === "desktop" ? "h-[60px]" : "h-[calc(60px+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]",
+        )}
+      >
         {mode === "phone" ? (
-          <IconButton icon={ChevronLeft} label="Back" size={44} variant="elevated" onClick={onClose} data-testid="close-details" />
+          <IconButton
+            icon={ChevronLeft}
+            label="Back"
+            size={44}
+            variant="elevated"
+            onClick={onClose}
+            data-testid="close-details"
+          />
         ) : (
           <IconButton icon={X} label="Close details" variant="elevated" onClick={onClose} data-testid="close-details" />
         )}
@@ -59,12 +75,26 @@ export function DetailsPane({ botId, conversationId, tab: tabProp, onClose }: De
   )
 }
 
-function BotDetails({ botId, tab, setTab, onClose }: { readonly botId: BotId; readonly tab: DetailsTab; readonly setTab: (t: DetailsTab) => void; readonly onClose: () => void }): ReactNode {
+function BotDetails({
+  botId,
+  tab,
+  setTab,
+  onClose,
+}: {
+  readonly botId: BotId
+  readonly tab: DetailsTab
+  readonly setTab: (t: DetailsTab) => void
+  readonly onClose: () => void
+}): ReactNode {
   const result = useAtomValue(botAtom(botId))
   const activity = useRosterValue<BotActivity | undefined>(activityAtom(botId), undefined)
   const bot: Bot | undefined = AsyncResult.isSuccess(result) ? result.value : undefined
   if (!bot) {
-    return AsyncResult.isSuccess(result) ? <EmptyNote className="pt-16">This Bot no longer exists.</EmptyNote> : <LoadingLine className="pt-16" />
+    return AsyncResult.isSuccess(result) ? (
+      <EmptyNote className="pt-16">This Bot no longer exists.</EmptyNote>
+    ) : (
+      <LoadingLine className="pt-16" />
+    )
   }
   const working = activity !== undefined && (activity.state === "thinking" || activity.state === "working")
   return (

@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test"
 import { HarnessRequest } from "@openbot/contracts"
 import { Schema } from "effect"
 import { join } from "node:path"
-import { type CanUseToolOptions, toHarnessRequest, toPermissionResult, toSessionPermissionUpdates } from "../src/permissions.ts"
+import {
+  type CanUseToolOptions,
+  toHarnessRequest,
+  toPermissionResult,
+  toSessionPermissionUpdates,
+} from "../src/permissions.ts"
 import { CONTRACT_FIXTURES, type FixtureFrame, loadJsonl } from "./support.ts"
 
 const decodeRequest = Schema.decodeUnknownSync(HarnessRequest)
@@ -33,13 +38,21 @@ describe("canUseTool → HarnessRequest", () => {
       toolKey: "toolu_fake_002_1",
       nativeRequestId: "661a1ff3-40b9-45b1-a6ec-d571f25d7123",
     })
-    expect(request.kind !== "question" && request.suggestions?.map((s) => s.decision)).toEqual(["allow-session", "allow-always"])
+    expect(request.kind !== "question" && request.suggestions?.map((s) => s.decision)).toEqual([
+      "allow-session",
+      "allow-always",
+    ])
   })
 
   test("Write → file-approval with paths", async () => {
     const [, write] = await canUseToolFrames()
     const request = toHarnessRequest(write!.toolName, write!.input, write!.options)
-    expect(request).toMatchObject({ kind: "file-approval", surface: "file-edit", paths: ["<CWD>/denied.txt"], detail: "denied.txt" })
+    expect(request).toMatchObject({
+      kind: "file-approval",
+      surface: "file-edit",
+      paths: ["<CWD>/denied.txt"],
+      detail: "denied.txt",
+    })
   })
 
   test("AskUserQuestion → question request with q<i> ids", async () => {
@@ -51,20 +64,31 @@ describe("canUseTool → HarnessRequest", () => {
       title: "Color",
       toolKey: "toolu_fake_006_0",
       nativeRequestId: "43b5d02b-c328-4ec9-9278-b748b9e7bf78",
-      questions: [{
-        id: "q0",
-        header: "Color",
-        prompt: "Which color should the bot avatar use?",
-        options: [{ label: "Blue", description: "Calm" }, { label: "Orange", description: "Warm" }],
-        multiSelect: false,
-        allowFreeText: true,
-      }],
+      questions: [
+        {
+          id: "q0",
+          header: "Color",
+          prompt: "Which color should the bot avatar use?",
+          options: [
+            { label: "Blue", description: "Calm" },
+            { label: "Orange", description: "Warm" },
+          ],
+          multiSelect: false,
+          allowFreeText: true,
+        },
+      ],
     })
   })
 
   test("mcp tools → mcp-approval with server; openbot node tools carry nodeId", () => {
     const request = toHarnessRequest("mcp__openbot__shell", { command: "ls", node: "nod_1" }, { toolUseID: "t1" })
-    expect(request).toMatchObject({ kind: "command-approval", surface: "shell", server: "openbot", command: "ls", nodeId: "nod_1" })
+    expect(request).toMatchObject({
+      kind: "command-approval",
+      surface: "shell",
+      server: "openbot",
+      command: "ls",
+      nodeId: "nod_1",
+    })
     const other = toHarnessRequest("mcp__github__create_issue", { title: "x" }, { toolUseID: "t2" })
     expect(other).toMatchObject({ kind: "mcp-approval", surface: "mcp", server: "github" })
   })
@@ -91,13 +115,23 @@ describe("resolution → PermissionResult (domain-contract §F.8)", () => {
   })
 
   test("multi-select answers are joined; edited input is honoured on allow", () => {
-    const input = { questions: [{ question: "Pick", header: "P", options: [{ label: "A" }, { label: "B" }], multiSelect: true }] }
+    const input = {
+      questions: [{ question: "Pick", header: "P", options: [{ label: "A" }, { label: "B" }], multiSelect: true }],
+    }
     const result = toPermissionResult("AskUserQuestion", input, { toolUseID: "t" }, { answers: { q0: ["A", "B"] } })
-    expect(result).toMatchObject({ behavior: "allow", updatedInput: { questions: input.questions, answers: { Pick: "A, B" } } })
-    const edited = toPermissionResult("Bash", { command: "ls" }, { toolUseID: "t" }, {
-      decision: "allow-once",
-      updatedInput: { command: "ls -la" },
+    expect(result).toMatchObject({
+      behavior: "allow",
+      updatedInput: { questions: input.questions, answers: { Pick: "A, B" } },
     })
+    const edited = toPermissionResult(
+      "Bash",
+      { command: "ls" },
+      { toolUseID: "t" },
+      {
+        decision: "allow-once",
+        updatedInput: { command: "ls -la" },
+      },
+    )
     expect(edited).toMatchObject({ behavior: "allow", updatedInput: { command: "ls -la" } })
   })
 
@@ -105,7 +139,7 @@ describe("resolution → PermissionResult (domain-contract §F.8)", () => {
     const [bash] = await canUseToolFrames()
     const result = toPermissionResult(bash!.toolName, bash!.input, bash!.options, { decision: "allow-session" })
     expect(result.behavior).toBe("allow")
-    const updates = result.behavior === "allow" ? result.updatedPermissions ?? [] : []
+    const updates = result.behavior === "allow" ? (result.updatedPermissions ?? []) : []
     expect(updates.length).toBe(2) // setMode acceptEdits is dropped
     for (const u of updates) expect(u.destination).toBe("session")
     expect(updates.some((u) => u.type === "setMode")).toBe(false)
@@ -113,13 +147,20 @@ describe("resolution → PermissionResult (domain-contract §F.8)", () => {
     expect(always).toMatchObject({
       behavior: "allow",
       decisionClassification: "user_permanent",
-      updatedPermissions: [{ type: "addRules", rules: [{ toolName: "Read" }], behavior: "allow", destination: "session" }],
+      updatedPermissions: [
+        { type: "addRules", rules: [{ toolName: "Read" }], behavior: "allow", destination: "session" },
+      ],
     })
   })
 
   test("cancel denies with interrupt; dismissing a question denies", () => {
-    expect(toPermissionResult("Bash", {}, { toolUseID: "t" }, { decision: "cancel" })).toMatchObject({ behavior: "deny", interrupt: true })
-    expect(toPermissionResult("AskUserQuestion", { questions: [] }, { toolUseID: "t" }, { decision: "deny" })).toMatchObject({
+    expect(toPermissionResult("Bash", {}, { toolUseID: "t" }, { decision: "cancel" })).toMatchObject({
+      behavior: "deny",
+      interrupt: true,
+    })
+    expect(
+      toPermissionResult("AskUserQuestion", { questions: [] }, { toolUseID: "t" }, { decision: "deny" }),
+    ).toMatchObject({
       behavior: "deny",
       message: "The user dismissed the question.",
     })
@@ -127,7 +168,12 @@ describe("resolution → PermissionResult (domain-contract §F.8)", () => {
 
   test("toSessionPermissionUpdates never writes to settings files", () => {
     const updates = toSessionPermissionUpdates("Bash", [
-      { type: "addRules", rules: [{ toolName: "Bash", ruleContent: "ls" }], behavior: "allow", destination: "localSettings" },
+      {
+        type: "addRules",
+        rules: [{ toolName: "Bash", ruleContent: "ls" }],
+        behavior: "allow",
+        destination: "localSettings",
+      },
       { type: "addDirectories", directories: ["/x"], destination: "projectSettings" },
     ])
     expect(updates.map((u) => u.destination)).toEqual(["session", "session"])

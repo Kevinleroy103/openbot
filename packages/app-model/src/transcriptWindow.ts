@@ -3,7 +3,15 @@
 // live replica keeps only the newest part of a chat, so the window lives next to it: newer
 // revisions of the window's entries come from the replica, and once the window reaches the newest
 // entry, the two join into one continuous transcript that stays live.
-import { compareEntries, type ConversationState, type RuntimeRequest, type TranscriptEntry, type TranscriptWindow, type Turn, type TurnId } from "@openbot/contracts"
+import {
+  compareEntries,
+  type ConversationState,
+  type RuntimeRequest,
+  type TranscriptEntry,
+  type TranscriptWindow,
+  type Turn,
+  type TurnId,
+} from "@openbot/contracts"
 
 /** The loaded part of a chat around a target, oldest first, with the cursors to load more. */
 export interface ChatWindow {
@@ -17,7 +25,9 @@ export interface ChatWindow {
 }
 
 /** Entries merged by id (the newer revision wins), in transcript order. */
-export const mergeEntries = (...lists: ReadonlyArray<ReadonlyArray<TranscriptEntry>>): ReadonlyArray<TranscriptEntry> => {
+export const mergeEntries = (
+  ...lists: ReadonlyArray<ReadonlyArray<TranscriptEntry>>
+): ReadonlyArray<TranscriptEntry> => {
   const byId = new Map<string, TranscriptEntry>()
   for (const list of lists) {
     for (const e of list) {
@@ -39,7 +49,11 @@ const mergeById = <K, V>(base: ReadonlyMap<K, V>, later: Iterable<readonly [K, V
  * The window after a page arrives: the first page starts it; an older / newer page extends it on
  * that side and moves only that side's cursor.
  */
-export const applyWindowPage = (window: ChatWindow | undefined, page: TranscriptWindow, side: "first" | "older" | "newer"): ChatWindow => {
+export const applyWindowPage = (
+  window: ChatWindow | undefined,
+  page: TranscriptWindow,
+  side: "first" | "older" | "newer",
+): ChatWindow => {
   const turns = page.turns.map((t) => [t.id, t] as const)
   const requests = page.requests.map((r) => [r.id as string, r] as const)
   if (window === undefined || side === "first") {
@@ -81,7 +95,10 @@ export interface WindowView {
  * replica's newer entries too (older ones may be lone edits: the window's own older pages bring
  * them). Before that, the replica's other entries stay out: they belong to pages not loaded yet.
  */
-export const windowView = (window: ChatWindow, replica: Pick<ConversationState, "entries" | "turns" | "requests">): WindowView => {
+export const windowView = (
+  window: ChatWindow,
+  replica: Pick<ConversationState, "entries" | "turns" | "requests">,
+): WindowView => {
   const joined = joinsReplica(window)
   const turns = mergeById(window.turns, replica.turns)
   const requests = mergeById(window.requests, replica.requests as ReadonlyMap<string, RuntimeRequest>)
@@ -105,7 +122,10 @@ export const newestOf = (entries: ReadonlyMap<string, TranscriptEntry>): Transcr
 }
 
 /** Messages after `mark` (written while a window was open): the "New messages" badge. */
-export const messagesAfter = (entries: ReadonlyMap<string, TranscriptEntry>, mark: TranscriptEntry | undefined): number => {
+export const messagesAfter = (
+  entries: ReadonlyMap<string, TranscriptEntry>,
+  mark: TranscriptEntry | undefined,
+): number => {
   let n = 0
   for (const e of entries.values()) if (e.kind === "message" && (mark === undefined || compareEntries(e, mark) > 0)) n++
   return n

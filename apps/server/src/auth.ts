@@ -46,18 +46,28 @@ export interface WebAuthShape {
   /** The owner token (printed in the login URL). */
   readonly ownerToken: string
   /** Exchanges the owner token for a session token; `undefined` when the token is wrong. */
-  readonly login: (token: string) => Effect.Effect<{ readonly sessionToken: string; readonly session: Session } | undefined>
+  readonly login: (
+    token: string,
+  ) => Effect.Effect<{ readonly sessionToken: string; readonly session: Session } | undefined>
   /** Revokes a session (closing its sockets). Unknown tokens are ignored. */
   readonly logout: (sessionToken: string) => Effect.Effect<void>
   /** The live session of a session token. */
   readonly session: (sessionToken: string | undefined) => Effect.Effect<Session | undefined>
-  readonly mintTicket: (session: Session) => Effect.Effect<{ readonly ticket: string; readonly expiresInSeconds: number }>
+  readonly mintTicket: (
+    session: Session,
+  ) => Effect.Effect<{ readonly ticket: string; readonly expiresInSeconds: number }>
   /** A one-time code the iPhone app trades for a session of its own (`loginWithAppCode`). */
-  readonly mintAppCode: (session: Session) => Effect.Effect<{ readonly code: string; readonly expiresInSeconds: number }>
+  readonly mintAppCode: (
+    session: Session,
+  ) => Effect.Effect<{ readonly code: string; readonly expiresInSeconds: number }>
   /** Redeems (and burns) an app code: a new session, while the session that minted it is alive. */
-  readonly loginWithAppCode: (code: string) => Effect.Effect<{ readonly sessionToken: string; readonly session: Session } | undefined>
+  readonly loginWithAppCode: (
+    code: string,
+  ) => Effect.Effect<{ readonly sessionToken: string; readonly session: Session } | undefined>
   /** A one-time code for the session token itself (the app's in-app web pages). */
-  readonly mintWebCode: (sessionToken: string) => Effect.Effect<{ readonly code: string; readonly expiresInSeconds: number }>
+  readonly mintWebCode: (
+    sessionToken: string,
+  ) => Effect.Effect<{ readonly code: string; readonly expiresInSeconds: number }>
   /** Redeems (and burns) a web code: its session token, while that session is alive. */
   readonly redeemWebCode: (code: string) => Effect.Effect<string | undefined>
   /** Redeems (and burns) a ticket. */
@@ -141,12 +151,20 @@ interface AuthFile {
 const isAuthFile = (value: unknown): value is AuthFile => {
   if (typeof value !== "object" || value === null) return false
   const v = value as Record<string, unknown>
-  return v["version"] === 1 && typeof v["ownerToken"] === "string" && (v["ownerToken"] as string).length >= 32 &&
+  return (
+    v["version"] === 1 &&
+    typeof v["ownerToken"] === "string" &&
+    (v["ownerToken"] as string).length >= 32 &&
     Array.isArray(v["sessions"]) &&
-    (v["sessions"] as Array<unknown>).every((s) =>
-      typeof s === "object" && s !== null && typeof (s as Session).id === "string" &&
-      typeof (s as Session).createdAt === "number" && typeof (s as Session).expiresAt === "number"
+    (v["sessions"] as Array<unknown>).every(
+      (s) =>
+        typeof s === "object" &&
+        s !== null &&
+        typeof (s as Session).id === "string" &&
+        typeof (s as Session).createdAt === "number" &&
+        typeof (s as Session).expiresAt === "number",
     )
+  )
 }
 
 const writeAuthFile = async (path: string, file: AuthFile): Promise<void> => {
@@ -162,7 +180,7 @@ export const loadAuthFile = (path: string): Effect.Effect<{ readonly file: AuthF
     await mkdir(path.slice(0, path.lastIndexOf("/")) || "/", { recursive: true })
     const handle = Bun.file(path)
     if (await handle.exists()) {
-      const parsed = await handle.json().catch(() => undefined) as unknown
+      const parsed = (await handle.json().catch(() => undefined)) as unknown
       if (isAuthFile(parsed)) {
         await chmod(path, 0o600).catch(() => undefined)
         return { file: parsed, created: false }
@@ -184,7 +202,7 @@ export interface WebAuthOptions {
 }
 
 export const makeWebAuth = (options: WebAuthOptions) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const loaded = yield* loadAuthFile(options.path)
     let file: AuthFile = loaded.file
     const lock = yield* Semaphore.make(1)
@@ -194,20 +212,22 @@ export const makeWebAuth = (options: WebAuthOptions) =>
     const revocations = new Map<string, Deferred.Deferred<void>>()
 
     const persist = (update: (current: AuthFile) => AuthFile) =>
-      lock.withPermits(1)(Effect.promise(async () => {
-        file = update(file)
-        await writeAuthFile(options.path, file)
-      }))
+      lock.withPermits(1)(
+        Effect.promise(async () => {
+          file = update(file)
+          await writeAuthFile(options.path, file)
+        }),
+      )
 
     const session: WebAuthShape["session"] = (token) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (token === undefined || token.length < 16 || token.length > 128) return undefined
         const id = yield* sha256Hex(token)
         const now = yield* Clock.currentTimeMillis
         return file.sessions.find((s) => s.id === id && s.expiresAt > now)
       })
 
-    const newSession = Effect.gen(function*() {
+    const newSession = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const sessionToken = randomToken(32)
       const created: Session = { id: yield* sha256Hex(sessionToken), createdAt: now, expiresAt: now + SESSION_TTL_MS }
@@ -222,7 +242,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       safeEqual(token.trim(), file.ownerToken) ? newSession : Effect.succeed(undefined)
 
     const mintAppCode: WebAuthShape["mintAppCode"] = (owner) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         for (const [c, entry] of appCodes) if (entry.expiresAt <= now) appCodes.delete(c)
         const code = randomToken(16)
@@ -231,7 +251,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       })
 
     const loginWithAppCode: WebAuthShape["loginWithAppCode"] = (code) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const entry = appCodes.get(code)
         appCodes.delete(code)
         if (entry === undefined) return undefined
@@ -243,7 +263,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       })
 
     const mintWebCode: WebAuthShape["mintWebCode"] = (sessionToken) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         for (const [c, entry] of webCodes) if (entry.expiresAt <= now) webCodes.delete(c)
         const code = randomToken(16)
@@ -252,7 +272,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       })
 
     const redeemWebCode: WebAuthShape["redeemWebCode"] = (code) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const entry = webCodes.get(code)
         webCodes.delete(code)
         if (entry === undefined) return undefined
@@ -261,7 +281,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       })
 
     const revoke = (id: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const deferred = revocations.get(id)
         if (deferred !== undefined) {
           revocations.delete(id)
@@ -272,7 +292,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       })
 
     const logout: WebAuthShape["logout"] = (token) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const found = yield* session(token)
         if (found === undefined) return
         yield* persist((current) => ({ ...current, sessions: current.sessions.filter((s) => s.id !== found.id) }))
@@ -280,7 +300,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       })
 
     const mintTicket: WebAuthShape["mintTicket"] = (owner) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         for (const [t, entry] of tickets) if (entry.expiresAt <= now) tickets.delete(t)
         const ticket = randomToken(16)
@@ -289,7 +309,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
       })
 
     const redeemTicket: WebAuthShape["redeemTicket"] = (ticket) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const entry = tickets.get(ticket)
         tickets.delete(ticket)
         if (entry === undefined) return undefined
@@ -315,14 +335,14 @@ export const makeWebAuth = (options: WebAuthOptions) =>
     const allowedOrigins = options.allowedOrigins
 
     const authenticate: WebAuthShape["authenticate"] = (request, opts) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (opts?.allowTicket === true) {
           const ticket = searchParamsOf(request).get("wsTicket")
           if (ticket !== null) {
             const owner = yield* redeemTicket(ticket)
             return owner === undefined
-              ? { ok: false, status: 401, reason: "invalid or used ticket" } as const
-              : { ok: true, session: owner, via: "ticket" } as const
+              ? ({ ok: false, status: 401, reason: "invalid or used ticket" } as const)
+              : ({ ok: true, session: owner, via: "ticket" } as const)
           }
         }
         const owner = yield* session(sessionTokenOf(request))
@@ -359,4 +379,7 @@ export const makeWebAuth = (options: WebAuthOptions) =>
   })
 
 export const WebAuthLayer = (options: WebAuthOptions): Layer.Layer<WebAuth> =>
-  Layer.effect(WebAuth, Effect.map(makeWebAuth(options), (built) => built.service))
+  Layer.effect(
+    WebAuth,
+    Effect.map(makeWebAuth(options), (built) => built.service),
+  )

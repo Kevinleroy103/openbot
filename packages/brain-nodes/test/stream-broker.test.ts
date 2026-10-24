@@ -12,7 +12,9 @@ import { brainStack, dialWebSocket, run, startServer, tempDir } from "./helpers.
 const NODE = "nod_test" as NodeId
 
 const brokerLayer = (ttl = 30_000) =>
-  StreamBrokerLive.pipe(Layer.provide(BrainNodesConfig.layer({ brainOrigin: "https://brain.test", streamTokenTtlMs: ttl })))
+  StreamBrokerLive.pipe(
+    Layer.provide(BrainNodesConfig.layer({ brainOrigin: "https://brain.test", streamTokenTtlMs: ttl })),
+  )
 
 const withBroker = <A, E>(effect: Effect.Effect<A, E, StreamBroker | Scope.Scope>, ttl?: number) =>
   run(Effect.provide(effect, brokerLayer(ttl)))
@@ -33,7 +35,7 @@ const streamUpgradeStatus = (httpBase: string, streamId: string, authorization: 
 describe("StreamBroker tickets", () => {
   test("tickets are 96-bit ids with 128-bit tokens; a ticket is claimed once; wrong tokens do not burn it", () =>
     withBroker(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const broker = yield* StreamBroker
         const expected = yield* broker.expect({ nodeId: NODE, kind: "pty" })
         expect(expected.ticket.streamId).toMatch(/^[A-Za-z0-9_-]{16}$/)
@@ -64,7 +66,7 @@ describe("StreamBroker tickets", () => {
 
   test("an unclaimed ticket expires and fails the waiting consumer", () =>
     withBroker(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const broker = yield* StreamBroker
         const expected = yield* broker.expect({ nodeId: NODE, kind: "cdp-screencast" })
         const waited = yield* Effect.flip(expected.socket)
@@ -78,7 +80,7 @@ describe("StreamBroker tickets", () => {
 
   test("closing the consumer's scope revokes its ticket", () =>
     withBroker(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const broker = yield* StreamBroker
         const scope = yield* Scope.make()
         const expected = yield* broker.expect({ nodeId: NODE, kind: "pty" }).pipe(Scope.provide(scope))
@@ -93,7 +95,7 @@ describe("StreamBroker tickets", () => {
 
   test("dialLocal claims the ticket in-process and returns the node end of a socket pair", () =>
     withBroker(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const broker = yield* StreamBroker
         const expected = yield* broker.expect({ nodeId: NODE, kind: "pty" })
         const nodeEnd = yield* broker.dialLocal(expected.ticket, "pty")
@@ -114,7 +116,7 @@ describe("StreamBroker tickets", () => {
 
   test("openNodeStream fails fast when the node refuses to open the stream", () =>
     withBroker(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const broker = yield* StreamBroker
         const failed = yield* Effect.flip(
           openNodeStream(broker, {
@@ -143,13 +145,15 @@ afterAll(() => dir.cleanup())
 describe("/node/stream/:id over a real WebSocket", () => {
   test("the node dials with the one-time bearer; frames pass verbatim; reuse and bad tokens get 401", () =>
     run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const broker = yield* StreamBroker
 
         const expected = yield* broker.expect({ nodeId: NODE, kind: "tcp" })
         // bad token: refused without burning the ticket
-        expect(yield* streamUpgradeStatus(server.http, expected.ticket.streamId, formatStreamAuth("x".repeat(22)))).toBe(401)
+        expect(
+          yield* streamUpgradeStatus(server.http, expected.ticket.streamId, formatStreamAuth("x".repeat(22))),
+        ).toBe(401)
         expect(yield* streamUpgradeStatus(server.http, expected.ticket.streamId, undefined)).toBe(401)
 
         const nodeSocket = yield* dialWebSocket(`${server.ws}${Routes.stream(expected.ticket.streamId)}`, {
@@ -172,7 +176,11 @@ describe("/node/stream/:id over a real WebSocket", () => {
 
         // the ticket was used: a second dial is refused
         expect(
-          yield* streamUpgradeStatus(server.http, expected.ticket.streamId, formatStreamAuth(expected.ticket.streamToken)),
+          yield* streamUpgradeStatus(
+            server.http,
+            expected.ticket.streamId,
+            formatStreamAuth(expected.ticket.streamToken),
+          ),
         ).toBe(401)
 
         // closing the node end closes the brain end

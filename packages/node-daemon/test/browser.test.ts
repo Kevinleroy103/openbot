@@ -10,7 +10,12 @@ import * as Socket from "effect/socket/Socket"
 import { RpcTest, type RpcClient, type RpcGroup } from "effect/rpc"
 import { mkdirSync } from "node:fs"
 import * as path from "node:path"
-import { decodeScreencastFrame, NodeRpcs, type BrowserActionResult, type ScreencastFrameMeta } from "@openbot/node-protocol"
+import {
+  decodeScreencastFrame,
+  NodeRpcs,
+  type BrowserActionResult,
+  type ScreencastFrameMeta,
+} from "@openbot/node-protocol"
 import { detectBrowserExecutable, imageSize, NodeHandlersLive, type NodeConfigInput } from "../src/index.ts"
 import { fakeLinks, inv, makeFakeBrain, run, tempDir } from "./helpers.ts"
 
@@ -30,7 +35,9 @@ const server = Bun.serve({
   fetch(req) {
     const url = new URL(req.url)
     const html = (body: string, headers?: Record<string, string>) =>
-      new Response(`<!doctype html><html><head><meta charset="utf-8">${body}</html>`, { headers: { "content-type": "text/html", ...headers } })
+      new Response(`<!doctype html><html><head><meta charset="utf-8">${body}</html>`, {
+        headers: { "content-type": "text/html", ...headers },
+      })
     switch (url.pathname) {
       case "/":
         return html(`<title>OpenBot Test</title></head><body style="margin:0;height:3000px">
@@ -49,7 +56,9 @@ const server = Bun.serve({
           <script>let n = 0; const f = () => { document.getElementById('c').textContent = String(n++); requestAnimationFrame(f) }; f()</script></body>`)
       case "/cookie":
         cookieVisits.push(req.headers.get("cookie") ?? "")
-        return html(`<title>Cookie</title></head><body>cookie</body>`, { "set-cookie": "ob=persist; Max-Age=3600; Path=/" })
+        return html(`<title>Cookie</title></head><body>cookie</body>`, {
+          "set-cookie": "ob=persist; Max-Age=3600; Path=/",
+        })
       default:
         return new Response("not found", { status: 404 })
     }
@@ -95,7 +104,10 @@ const refOf = (snapshot: string, re: RegExp): string => {
 }
 
 const titleOf = (client: NodeClient, botId: string) =>
-  Effect.map(act(client, botId, { _tag: "tabs", op: "list" }), (r: BrowserActionResult) => r.tabs?.find((x) => x.active)?.title ?? "")
+  Effect.map(
+    act(client, botId, { _tag: "tabs", op: "list" }),
+    (r: BrowserActionResult) => r.tabs?.find((x) => x.active)?.title ?? "",
+  )
 
 const waitTitle = (client: NodeClient, botId: string, want: string) =>
   Effect.gen(function* () {
@@ -218,13 +230,22 @@ describe("BrowserManager", () => {
           const w = yield* client["browser.ensure"]({ botId: "bot_d" })
           yield* act(client, "bot_d", { _tag: "tabs", op: "close", tabId: w.windowTargetId })
           for (let i = 0; i < 50 && !brain.events.some((e) => e.type === "browser.closed"); i++) yield* Effect.sleep(20)
-          expect(brain.events).toContainEqual({ type: "browser.closed", data: { botId: "bot_d", reason: "the bot's window was closed" } })
+          expect(brain.events).toContainEqual({
+            type: "browser.closed",
+            data: { botId: "bot_d", reason: "the bot's window was closed" },
+          })
           // the next use opens a fresh window
           const again = yield* client["browser.ensure"]({ botId: "bot_d" })
           expect(again.windowTargetId).not.toBe(w.windowTargetId)
           // every new window is announced (the brain's computer view goes "ready" after bot actions)
-          expect(brain.events).toContainEqual({ type: "browser.opened", data: { botId: "bot_d", windowTargetId: w.windowTargetId } })
-          expect(brain.events).toContainEqual({ type: "browser.opened", data: { botId: "bot_d", windowTargetId: again.windowTargetId } })
+          expect(brain.events).toContainEqual({
+            type: "browser.opened",
+            data: { botId: "bot_d", windowTargetId: w.windowTargetId },
+          })
+          expect(brain.events).toContainEqual({
+            type: "browser.opened",
+            data: { botId: "bot_d", windowTargetId: again.windowTargetId },
+          })
         }),
       ),
     T,
@@ -235,7 +256,9 @@ describe("BrowserManager", () => {
     () =>
       withClient((client) =>
         Effect.gen(function* () {
-          const refused = yield* Effect.flip(client["browser.input"]({ botId: "bot_a", event: { _tag: "text", text: "x" } }))
+          const refused = yield* Effect.flip(
+            client["browser.input"]({ botId: "bot_a", event: { _tag: "text", text: "x" } }),
+          )
           expect(refused._tag).toBe("LeaseHeld")
           yield* act(client, "bot_a", { _tag: "navigate", url: `${base}/` })
           const lease = yield* client["lease.set"]({ botId: "bot_a", holder: "user" })
@@ -243,8 +266,14 @@ describe("BrowserManager", () => {
           const held = yield* Effect.flip(act(client, "bot_a", { _tag: "snapshot" }))
           expect(held._tag).toBe("LeaseHeld")
           // user input goes through Input.dispatch* (the page reacts to Ctrl+K)
-          yield* client["browser.input"]({ botId: "bot_a", event: { _tag: "key", type: "down", key: "k", modifiers: { ctrl: true } } })
-          yield* client["browser.input"]({ botId: "bot_a", event: { _tag: "key", type: "up", key: "k", modifiers: { ctrl: true } } })
+          yield* client["browser.input"]({
+            botId: "bot_a",
+            event: { _tag: "key", type: "down", key: "k", modifiers: { ctrl: true } },
+          })
+          yield* client["browser.input"]({
+            botId: "bot_a",
+            event: { _tag: "key", type: "up", key: "k", modifiers: { ctrl: true } },
+          })
           yield* client["browser.input"]({ botId: "bot_a", event: { _tag: "mouse", type: "move", x: 10, y: 10 } })
           yield* client["lease.set"]({ botId: "bot_a", holder: "bot" })
           expect(yield* waitTitle(client, "bot_a", "Ctrl+K")).toBe("Ctrl+K")
@@ -309,7 +338,9 @@ describe("BrowserManager", () => {
           const profileDir = path.join(t.path, "profile-cookies")
           const once = Effect.scoped(
             Effect.gen(function* () {
-              const ctx = yield* Layer.build(NodeHandlersLive(nodeConfig(profileDir)).pipe(Layer.provide(fakeLinks(makeFakeBrain()))))
+              const ctx = yield* Layer.build(
+                NodeHandlersLive(nodeConfig(profileDir)).pipe(Layer.provide(fakeLinks(makeFakeBrain()))),
+              )
               const client = yield* RpcTest.makeClient(NodeRpcs).pipe(Effect.provide(ctx))
               const ensured = yield* client["browser.ensure"]({ botId: "bot_c" })
               yield* act(client, "bot_c", { _tag: "navigate", url: `${base}/cookie` })

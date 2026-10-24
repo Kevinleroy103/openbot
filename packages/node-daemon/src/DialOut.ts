@@ -121,20 +121,22 @@ export class BrainConnection extends Context.Service<BrainConnection, BrainConne
 ) {}
 
 // ---------------------------------------------------------------- helpers
-const controlUrlOf = (config: DialOutConfig) => config.controlUrl ?? brainWsUrl(config.identity.brainUrl, Routes.control)
-const streamUrlOf = (config: DialOutConfig) => config.streamUrl ?? ((id: string) => brainWsUrl(config.identity.brainUrl, Routes.stream(id)))
+const controlUrlOf = (config: DialOutConfig) =>
+  config.controlUrl ?? brainWsUrl(config.identity.brainUrl, Routes.control)
+const streamUrlOf = (config: DialOutConfig) =>
+  config.streamUrl ?? ((id: string) => brainWsUrl(config.identity.brainUrl, Routes.stream(id)))
 
 /** Bun's WebSocket accepts handshake headers in an options object (the DOM typing hides it). */
-export const BunWebSocketConstructor: Layer.Layer<Socket.WebSocketConstructor> = Layer.succeed(Socket.WebSocketConstructor)(
-  (url, options) => {
-    const Ctor = globalThis.WebSocket as unknown as new (u: string, o?: unknown) => globalThis.WebSocket
-    if (options === undefined || typeof options === "string" || Array.isArray(options)) return new Ctor(url, options)
-    return new Ctor(url, {
-      protocols: typeof options.protocols === "string" ? [options.protocols] : options.protocols,
-      headers: options.headers,
-    })
-  },
-)
+export const BunWebSocketConstructor: Layer.Layer<Socket.WebSocketConstructor> = Layer.succeed(
+  Socket.WebSocketConstructor,
+)((url, options) => {
+  const Ctor = globalThis.WebSocket as unknown as new (u: string, o?: unknown) => globalThis.WebSocket
+  if (options === undefined || typeof options === "string" || Array.isArray(options)) return new Ctor(url, options)
+  return new Ctor(url, {
+    protocols: typeof options.protocols === "string" ? [options.protocols] : options.protocols,
+    headers: options.headers,
+  })
+})
 
 /** Exponential backoff with ±50 % jitter (`random` in [0, 1)). */
 export const backoffDelayMs = (attempt: number, random: number, backoff?: BackoffConfig): number => {
@@ -160,9 +162,7 @@ const describeFailure = (cause: Cause.Cause<unknown>): string => {
  * current: approvals resolve `deny`/`unreachable` while disconnected, events are dropped, and
  * `openStream` fails with `StreamRefused`.
  */
-export const DialOutLinksLive = (
-  config: DialOutConfig,
-): Layer.Layer<BrainLink | StreamDialer | BrainConnection> =>
+export const DialOutLinksLive = (config: DialOutConfig): Layer.Layer<BrainLink | StreamDialer | BrainConnection> =>
   Layer.effectContext(
     Effect.gen(function* () {
       let current: BrainClient | undefined
@@ -188,13 +188,16 @@ export const DialOutLinksLive = (
             const client = current
             if (!client) return Effect.succeed(deny("unreachable"))
             return client["node.requestApproval"](request).pipe(
-              Effect.catchCause((cause) => (keepInterrupts(cause) ? Effect.failCause(cause) : Effect.succeed(deny("unreachable")))),
+              Effect.catchCause((cause) =>
+                keepInterrupts(cause) ? Effect.failCause(cause) : Effect.succeed(deny("unreachable")),
+              ),
             ) as Effect.Effect<NodeApprovalResponse>
           }),
         openStream: ({ kind, botId }) =>
           Effect.suspend(() => {
             const client = current
-            if (!client) return Effect.fail(new StreamRefused({ kind, reason: "the node is not connected to the brain" }))
+            if (!client)
+              return Effect.fail(new StreamRefused({ kind, reason: "the node is not connected to the brain" }))
             return client["node.openStream"]({ kind, botId }).pipe(
               Effect.catchTag("RpcClientError", (e) => Effect.fail(new StreamRefused({ kind, reason: e.message }))),
             )
@@ -213,7 +216,9 @@ export const DialOutLinksLive = (
           dialWebSocket(urlFor(ticket.streamId), {
             headers: { authorization: formatStreamAuth(ticket.streamToken) },
             openTimeout: config.openTimeoutMs ?? 10_000,
-          }).pipe(Effect.mapError((e) => new StreamRefused({ kind, reason: `cannot open the data stream: ${e.message}` }))),
+          }).pipe(
+            Effect.mapError((e) => new StreamRefused({ kind, reason: `cannot open the data stream: ${e.message}` })),
+          ),
       })
 
       return Context.make(BrainLink, brainLink).pipe(
@@ -256,7 +261,11 @@ export const makeDialOut = (config: DialOutConfig) =>
     /** One control connection, from the signed dial to the close. */
     const connectOnce: Effect.Effect<ConnectionOutcome, unknown, Scope.Scope> = Effect.gen(function* () {
       const scope = yield* Effect.scope
-      const auth = yield* makeUpgradeAuth({ nodeId: identity.nodeId, privateKey: identity.privateKey, brainOrigin: identity.brainOrigin })
+      const auth = yield* makeUpgradeAuth({
+        nodeId: identity.nodeId,
+        privateKey: identity.privateKey,
+        brainOrigin: identity.brainOrigin,
+      })
       const socket = yield* Socket.makeWebSocket(controlUrl, {
         headers: {
           [ProtocolHeaders.authorization]: auth.header,
@@ -278,7 +287,10 @@ export const makeDialOut = (config: DialOutConfig) =>
             Effect.forkIn(
               Effect.andThen(
                 Effect.logWarning(`node.hello rejected: ${reason}`),
-                Effect.delay(Effect.suspend(() => close(code, reason)), "100 millis"),
+                Effect.delay(
+                  Effect.suspend(() => close(code, reason)),
+                  "100 millis",
+                ),
               ),
               scope,
             ),
@@ -385,5 +397,6 @@ export const makeDialOut = (config: DialOutConfig) =>
   })
 
 /** The dial loop (forked for the layer's lifetime). Needs the handlers and the links. */
-export const DialOutLive = (config: DialOutConfig): Layer.Layer<DialOut, never, NodeHandlers | NodeInfo | BrainConnection> =>
-  Layer.effect(DialOut, makeDialOut(config))
+export const DialOutLive = (
+  config: DialOutConfig,
+): Layer.Layer<DialOut, never, NodeHandlers | NodeInfo | BrainConnection> => Layer.effect(DialOut, makeDialOut(config))

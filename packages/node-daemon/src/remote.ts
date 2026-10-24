@@ -18,9 +18,10 @@ export interface RemoteNodeOptions {
  */
 export const RemoteNodeLive = (
   options: RemoteNodeOptions,
-): Layer.Layer<DialOut | NodeInfo | NodeHandlers | NodeHandlersContext | BrainLink | StreamDialer | BrainConnection> => {
+): Layer.Layer<
+  DialOut | NodeInfo | NodeHandlers | NodeHandlersContext | BrainLink | StreamDialer | BrainConnection
+> => {
   const links = DialOutLinksLive(options.dial)
   const handlers = NodeHandlersLive(options.node).pipe(Layer.provideMerge(links))
   return DialOutLive(options.dial).pipe(Layer.provideMerge(handlers))
 }
-

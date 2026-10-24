@@ -6,7 +6,20 @@
  * Names are unique (case-insensitive) because they are how bots are addressed (`@Name`,
  * `message_bot {to}`); "everyone" is reserved for `@everyone`.
  */
-import type { Bot, BotAutonomy, BotCreateInput, BotHarness, BotId, BotPatch, Conversation, NodeId, Section, SectionId, SidebarItemRef, SidebarPlace } from "@openbot/contracts"
+import type {
+  Bot,
+  BotAutonomy,
+  BotCreateInput,
+  BotHarness,
+  BotId,
+  BotPatch,
+  Conversation,
+  NodeId,
+  Section,
+  SectionId,
+  SidebarItemRef,
+  SidebarPlace,
+} from "@openbot/contracts"
 import {
   Conflict,
   kokoroVoice,
@@ -25,7 +38,16 @@ import { IdGen } from "../../ports/IdGen.ts"
 import { McpTokenRepo } from "../../ports/Mcp.ts"
 import { NodeDirectory } from "../../ports/NodeDirectory.ts"
 import { describePlacement, type PlacementSummary, planPlacement, workspacePathFor } from "../../ports/Placement.ts"
-import { BotRepo, ConversationRepo, EntryRepo, type ReplicaLog, RequestRepo, SectionRepo, SettingsRepo, type TurnRepo } from "../../ports/repos.ts"
+import {
+  BotRepo,
+  ConversationRepo,
+  EntryRepo,
+  type ReplicaLog,
+  RequestRepo,
+  SectionRepo,
+  SettingsRepo,
+  type TurnRepo,
+} from "../../ports/repos.ts"
 import {
   ApprovalService,
   BackgroundTasks,
@@ -73,7 +95,8 @@ const harnessOf = (input: BotHarness): BotHarness => {
 const validName = (raw: string, what: string, max: number) => {
   const name = raw.trim()
   if (name === "") return Effect.fail(new InvalidInput({ message: `The ${what} name cannot be empty.` }))
-  if (name.length > max) return Effect.fail(new InvalidInput({ message: `The ${what} name is longer than ${max} characters.` }))
+  if (name.length > max)
+    return Effect.fail(new InvalidInput({ message: `The ${what} name is longer than ${max} characters.` }))
   if (/[\r\n]/.test(name)) return Effect.fail(new InvalidInput({ message: `The ${what} name must be one line.` }))
   return Effect.succeed(name)
 }
@@ -107,7 +130,7 @@ export const BotServiceLive: Layer.Layer<
   | McpTokenRepo
 > = Layer.effect(
   BotService,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const orchestrator = yield* Orchestrator
     const routines = yield* RoutineScheduler
     const approvals = yield* ApprovalService
@@ -133,14 +156,14 @@ export const BotServiceLive: Layer.Layer<
     const getBot = (botId: BotId) => required(bots.get(botId), "bot", botId)
 
     const publishBot = (bot: Bot) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* orDie(bots.upsert(bot))
         yield* hub.publishRoster({ type: "bot.upserted", bot })
       })
 
     /** Unique, non-reserved bot name. */
     const uniqueName = (raw: string, except?: BotId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const name = yield* validName(raw, "bot", MAX_BOT_NAME_LENGTH)
         const key = nameKey(name.startsWith("@") ? name.slice(1) : name)
         if (RESERVED_NAMES.has(key)) return yield* new InvalidInput({ message: `"${name}" is reserved.` })
@@ -155,18 +178,26 @@ export const BotServiceLive: Layer.Layer<
 
     /** Forgets the bot's native session (a new driver, account or host cannot resume it). */
     const dropNativeSession = (bot: Bot) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* orDie(bots.clearSession(bot.id))
         const now = yield* Clock.currentTimeMillis
-        yield* Effect.ignore(store.update(bot.directConversationId, (c) =>
-          c.sessions === undefined
-            ? c
-            : { ...c, sessions: c.sessions.map((s) => (s.botId === bot.id ? { botId: bot.id, active: false, updatedAt: now } : s)) }))
+        yield* Effect.ignore(
+          store.update(bot.directConversationId, (c) =>
+            c.sessions === undefined
+              ? c
+              : {
+                  ...c,
+                  sessions: c.sessions.map((s) =>
+                    s.botId === bot.id ? { botId: bot.id, active: false, updatedAt: now } : s,
+                  ),
+                },
+          ),
+        )
       })
 
     // ------------------------------------------------------------------ create / update / delete
 
-    const create = Effect.fn("BotService.create")(function*(
+    const create = Effect.fn("BotService.create")(function* (
       input: BotCreateInput,
       options?: { readonly autonomyCeiling?: BotAutonomy | undefined; readonly introduce?: boolean | undefined },
     ) {
@@ -183,7 +214,8 @@ export const BotServiceLive: Layer.Layer<
       yield* nodeExists(hostNodeId)
       const label = input.label?.trim()
       const requested = input.autonomy ?? (yield* settingsService.get).defaultAutonomy
-      const autonomy = options?.autonomyCeiling === undefined ? requested : minAutonomy(requested, options.autonomyCeiling)
+      const autonomy =
+        options?.autonomyCeiling === undefined ? requested : minAutonomy(requested, options.autonomyCeiling)
       const now = yield* Clock.currentTimeMillis
       const id = yield* ids.botId
       const directConversationId = yield* ids.conversationId
@@ -219,24 +251,31 @@ export const BotServiceLive: Layer.Layer<
         epoch: yield* ids.next("epc"),
       })
       yield* orDie(settingsRepo.set(botNonceKey(input.clientNonce), id))
-      yield* Effect.ignore(conversationService.appendEvent({
-        conversationId: directConversationId,
-        event: { type: "joined", botId: id, name },
-      }))
+      yield* Effect.ignore(
+        conversationService.appendEvent({
+          conversationId: directConversationId,
+          event: { type: "joined", botId: id, name },
+        }),
+      )
       if (options?.introduce === true) {
         const { ownerName } = yield* settingsService.get
-        yield* orchestrator.deliver({
-          conversationId: directConversationId,
-          botId: id,
-          kind: "introduction",
-          text: introductionText(ownerName),
-          urgency: "urgent",
-        }).pipe(Effect.asVoid, Effect.catch((error) => Effect.logWarning("BotService.create: introduction not started", error)))
+        yield* orchestrator
+          .deliver({
+            conversationId: directConversationId,
+            botId: id,
+            kind: "introduction",
+            text: introductionText(ownerName),
+            urgency: "urgent",
+          })
+          .pipe(
+            Effect.asVoid,
+            Effect.catch((error) => Effect.logWarning("BotService.create: introduction not started", error)),
+          )
       }
       return bot
     })
 
-    const update = Effect.fn("BotService.update")(function*(botId: BotId, patch: BotPatch) {
+    const update = Effect.fn("BotService.update")(function* (botId: BotId, patch: BotPatch) {
       const before = yield* getBot(botId)
       let next: Bot = { ...before }
       if (patch.name !== undefined) next = { ...next, name: yield* uniqueName(patch.name, botId) }
@@ -248,9 +287,9 @@ export const BotServiceLive: Layer.Layer<
       if (patch.avatar !== undefined) next = { ...next, avatar: patch.avatar }
       if (patch.harness !== undefined) {
         const harness = harnessOf(patch.harness)
-        yield* registry.get(harness.kind, harness.profileId).pipe(
-          Effect.mapError((e) => new InvalidInput({ message: e.message })),
-        )
+        yield* registry
+          .get(harness.kind, harness.profileId)
+          .pipe(Effect.mapError((e) => new InvalidInput({ message: e.message })))
         next = { ...next, harness }
       }
       if (patch.hostNodeId !== undefined) {
@@ -281,7 +320,8 @@ export const BotServiceLive: Layer.Layer<
       if (patch.voice !== undefined) {
         const { voice: _drop, ...rest } = next
         if (patch.voice === null) next = rest
-        else if (kokoroVoice(patch.voice) === undefined) return yield* new InvalidInput({ message: `There is no voice called "${patch.voice}".` })
+        else if (kokoroVoice(patch.voice) === undefined)
+          return yield* new InvalidInput({ message: `There is no voice called "${patch.voice}".` })
         else next = { ...rest, voice: patch.voice }
       }
       if (patch.autonomy !== undefined) next = { ...next, autonomy: patch.autonomy }
@@ -301,7 +341,8 @@ export const BotServiceLive: Layer.Layer<
         next = { ...next, skills }
       }
 
-      const relocated = next.harness.kind !== before.harness.kind ||
+      const relocated =
+        next.harness.kind !== before.harness.kind ||
         normalizeProfileId(next.harness.profileId) !== normalizeProfileId(before.harness.profileId) ||
         next.hostNodeId !== before.hostNodeId
       if (relocated) {
@@ -314,15 +355,17 @@ export const BotServiceLive: Layer.Layer<
       yield* publishBot(next)
       if (next.name !== before.name) {
         yield* Effect.ignore(store.update(next.directConversationId, (c) => ({ ...c, title: next.name })))
-        yield* Effect.ignore(conversationService.appendEvent({
-          conversationId: next.directConversationId,
-          event: { type: "name-changed", to: next.name },
-        }))
+        yield* Effect.ignore(
+          conversationService.appendEvent({
+            conversationId: next.directConversationId,
+            event: { type: "name-changed", to: next.name },
+          }),
+        )
       }
       return next
     })
 
-    const deleteBot = Effect.fn("BotService.delete")(function*(botId: BotId) {
+    const deleteBot = Effect.fn("BotService.delete")(function* (botId: BotId) {
       const bot = yield* getBot(botId)
       yield* orchestrator.stopBot(botId)
       // Its background work stops and its records go (D5.7).
@@ -343,21 +386,25 @@ export const BotServiceLive: Layer.Layer<
           yield* store.remove(conversation.id)
           continue
         }
-        yield* Effect.ignore(store.update(conversation.id, (c) => {
-          if (c.kind !== "group") return c
-          const { leadBotId, ...rest } = c
-          const group: GroupConversation = compact({
-            ...rest,
-            memberBotIds: c.memberBotIds.filter((id) => id !== botId),
-            leadBotId: leadBotId === botId ? undefined : leadBotId,
-            sessions: c.sessions?.filter((s) => s.botId !== botId),
-          })
-          return group
-        }))
-        yield* Effect.ignore(conversationService.appendEvent({
-          conversationId: conversation.id,
-          event: { type: "member-removed", botId, name: bot.name },
-        }))
+        yield* Effect.ignore(
+          store.update(conversation.id, (c) => {
+            if (c.kind !== "group") return c
+            const { leadBotId, ...rest } = c
+            const group: GroupConversation = compact({
+              ...rest,
+              memberBotIds: c.memberBotIds.filter((id) => id !== botId),
+              leadBotId: leadBotId === botId ? undefined : leadBotId,
+              sessions: c.sessions?.filter((s) => s.botId !== botId),
+            })
+            return group
+          }),
+        )
+        yield* Effect.ignore(
+          conversationService.appendEvent({
+            conversationId: conversation.id,
+            event: { type: "member-removed", botId, name: bot.name },
+          }),
+        )
       }
       yield* orDie(bots.delete(botId))
       yield* hub.publishRoster({ type: "bot.removed", botId })
@@ -367,7 +414,7 @@ export const BotServiceLive: Layer.Layer<
 
     /** Placement preview for `readContext` (pure rules, nothing is opened). */
     const previewPlacement = (bot: Bot) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const node = yield* Effect.option(directory.get(bot.hostNodeId))
         const driver = yield* Effect.option(registry.get(bot.harness.kind, bot.harness.profileId))
         const workspacePath = Option.isSome(node)
@@ -403,12 +450,12 @@ export const BotServiceLive: Layer.Layer<
     // ------------------------------------------------------------------ sections
 
     const publishSection = (section: Section) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* orDie(sections.upsert(section))
         yield* hub.publishRoster({ type: "section.upserted", section })
       })
 
-    const createSection = Effect.fn("BotService.createSection")(function*(raw: string) {
+    const createSection = Effect.fn("BotService.createSection")(function* (raw: string) {
       const name = yield* validName(raw, "section", MAX_SECTION_NAME_LENGTH)
       const all = yield* orDie(sections.list)
       const order = all.reduce((max, s) => Math.max(max, s.order), -1) + 1
@@ -417,7 +464,7 @@ export const BotServiceLive: Layer.Layer<
       return section
     })
 
-    const renameSection = Effect.fn("BotService.renameSection")(function*(sectionId: SectionId, raw: string) {
+    const renameSection = Effect.fn("BotService.renameSection")(function* (sectionId: SectionId, raw: string) {
       const current = yield* required(sections.get(sectionId), "section", sectionId)
       const name = yield* validName(raw, "section", MAX_SECTION_NAME_LENGTH)
       const section: Section = { ...current, name }
@@ -425,7 +472,7 @@ export const BotServiceLive: Layer.Layer<
       return section
     })
 
-    const deleteSection = Effect.fn("BotService.deleteSection")(function*(sectionId: SectionId) {
+    const deleteSection = Effect.fn("BotService.deleteSection")(function* (sectionId: SectionId) {
       yield* required(sections.get(sectionId), "section", sectionId)
       const now = yield* Clock.currentTimeMillis
       for (const bot of yield* orDie(bots.list)) {
@@ -443,7 +490,7 @@ export const BotServiceLive: Layer.Layer<
       yield* hub.publishRoster({ type: "section.removed", sectionId })
     })
 
-    const arrangeSidebar = Effect.fn("BotService.arrangeSidebar")(function*(input: {
+    const arrangeSidebar = Effect.fn("BotService.arrangeSidebar")(function* (input: {
       readonly place: SidebarPlace
       readonly items: ReadonlyArray<SidebarItemRef>
     }) {
@@ -452,7 +499,10 @@ export const BotServiceLive: Layer.Layer<
       if (section !== undefined) yield* required(sections.get(section), "section", section)
       for (const [index, item] of input.items.entries()) {
         if (item.kind === "bot") {
-          if (place === "groups") return yield* new InvalidInput({ message: "Bots go in a section, Unassigned or the pins, not in Group chats." })
+          if (place === "groups")
+            return yield* new InvalidInput({
+              message: "Bots go in a section, Unassigned or the pins, not in Group chats.",
+            })
           // pinning keeps the Bot's section: unpinned, it goes back there
           yield* update(item.botId, {
             pinned: place === "pinned",
@@ -466,7 +516,7 @@ export const BotServiceLive: Layer.Layer<
       }
     })
 
-    const reorderSections = Effect.fn("BotService.reorderSections")(function*(sectionIds: ReadonlyArray<SectionId>) {
+    const reorderSections = Effect.fn("BotService.reorderSections")(function* (sectionIds: ReadonlyArray<SectionId>) {
       const all = yield* orDie(sections.list)
       const byId = new Map(all.map((s) => [s.id, s] as const))
       if (new Set(sectionIds).size !== sectionIds.length) {
@@ -497,7 +547,7 @@ export const BotServiceLive: Layer.Layer<
           const bot = findBotByRef(all, ref)
           return bot === undefined ? Effect.fail(new NotFound({ entity: "bot", id: ref.trim() })) : Effect.succeed(bot)
         }),
-      readContext: Effect.fn("BotService.readContext")(function*(botId: BotId) {
+      readContext: Effect.fn("BotService.readContext")(function* (botId: BotId) {
         const bot = yield* getBot(botId)
         const botMemory = yield* memory.get(botId)
         const placement = yield* previewPlacement(bot)

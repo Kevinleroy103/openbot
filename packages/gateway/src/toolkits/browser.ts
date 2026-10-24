@@ -45,7 +45,7 @@ const opt = <K extends string, V>(key: K, value: V | undefined): { readonly [P i
 
 /** Maps the flat tool arguments to a node-protocol `BrowserAction`. */
 export const toBrowserAction = (args: Args): Effect.Effect<BrowserAction, ToolRefusal> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const tab = opt("tabId", args.tab_id)
     switch (args.action) {
       case "navigate":
@@ -89,7 +89,7 @@ const browser = defineTool({
   name: "browser",
   toolset: "browser",
   description:
-    "Use your own web browser window on your computer (the user can watch it live). Actions: navigate {url}; snapshot (page text with [ref] ids for elements); click {ref | x,y}; type {text, ref?, submit?, clear?}; key {key, e.g. \"Enter\", \"Control+a\"}; scroll {direction, amount?}; screenshot {full_page?}; tabs {tab_op: list|new|select|close, tab_id?, url?}. Take a snapshot before clicking or typing to get fresh refs.",
+    'Use your own web browser window on your computer (the user can watch it live). Actions: navigate {url}; snapshot (page text with [ref] ids for elements); click {ref | x,y}; type {text, ref?, submit?, clear?}; key {key, e.g. "Enter", "Control+a"}; scroll {direction, amount?}; screenshot {full_page?}; tabs {tab_op: list|new|select|close, tab_id?, url?}. Take a snapshot before clicking or typing to get fresh refs.',
   params: p.params({
     action: p.literals(actions, "What to do."),
     url: p.optional(p.string("URL for navigate (or tabs new).")),
@@ -108,16 +108,17 @@ const browser = defineTool({
   }),
   annotations: { title: "Browser", destructiveHint: true, openWorldHint: true },
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       // The browser always runs on the host node (architecture §4.6).
       const target = yield* resolveTarget(ctx, undefined, "browser")
       const action = yield* toBrowserAction(args)
       yield* ctx.progress(`Browser: ${args.action}`)
       const result = yield* target.client["browser.action"]({ inv: target.inv, action })
       const header = [result.title, result.url].filter((s) => s !== undefined && s !== "").join(" — ")
-      const tabs = result.tabs === undefined
-        ? ""
-        : `\nTabs:\n${result.tabs.map((t) => `${t.active ? "*" : " "} ${t.tabId} ${t.title} — ${t.url}`).join("\n")}`
+      const tabs =
+        result.tabs === undefined
+          ? ""
+          : `\nTabs:\n${result.tabs.map((t) => `${t.active ? "*" : " "} ${t.tabId} ${t.title} — ${t.url}`).join("\n")}`
       const text = yield* fitToResult(target, `${header === "" ? "" : `${header}\n`}${result.text}${tabs}`)
       return result.image === undefined
         ? textResult(text)

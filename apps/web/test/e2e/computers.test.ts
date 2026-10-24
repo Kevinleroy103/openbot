@@ -10,9 +10,23 @@ import type { Bot } from "@openbot/contracts"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { type AppPage, type Brain, childEnv, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, send, startBrain, waitIdle } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  childEnv,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  send,
+  startBrain,
+  waitIdle,
+} from "./brain.ts"
 
-const PAGE = "data:text/html,<body style='background:%23d43f3a;color:white;font:48px sans-serif'><h1>OpenBot e2e</h1></body>"
+const PAGE =
+  "data:text/html,<body style='background:%23d43f3a;color:white;font:48px sans-serif'><h1>OpenBot e2e</h1></body>"
 
 describe.skipIf(!hasChromium)("e2e: computers", () => {
   let brain: Brain
@@ -64,7 +78,11 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     await pane.getByRole("tab", { name: "Computer" }).click()
     const thumb = pane.getByTestId("screen-thumbnail")
     await thumb.waitFor()
-    await eventually(() => thumb.getByTestId("screen-empty").count(), (n) => n === 0, { label: "a live thumbnail", timeout: 20_000 })
+    await eventually(
+      () => thumb.getByTestId("screen-empty").count(),
+      (n) => n === 0,
+      { label: "a live thumbnail", timeout: 20_000 },
+    )
     await app.shot("e2e-40-computer-thumbnail")
     const wsLog: Array<string> = []
     page.on("console", (m) => {
@@ -81,7 +99,11 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
           let frames = 0
           console.log("WSX", Date.now() - t0, id, "new", String(url).slice(-40))
           ws.addEventListener("open", () => console.log("WSX", Date.now() - t0, id, "open"))
-          ws.addEventListener("message", (e) => (typeof e.data === "string" ? console.log("WSX", Date.now() - t0, id, e.data) : ++frames <= 3 && console.log("WSX", Date.now() - t0, id, "frame")))
+          ws.addEventListener("message", (e) =>
+            typeof e.data === "string"
+              ? console.log("WSX", Date.now() - t0, id, e.data)
+              : ++frames <= 3 && console.log("WSX", Date.now() - t0, id, "frame"),
+          )
           ws.addEventListener("close", (e) => console.log("WSX", Date.now() - t0, id, "close", e.code, e.reason))
         }
         return ws
@@ -93,7 +115,11 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     const view = page.getByTestId("computer-view")
     await view.waitFor()
     const take = view.getByRole("button", { name: "Take control" })
-    await eventually(() => take.isEnabled(), (on) => on, { label: "a live screencast", timeout: 20_000 }).catch(async (e: unknown) => {
+    await eventually(
+      () => take.isEnabled(),
+      (on) => on,
+      { label: "a live screencast", timeout: 20_000 },
+    ).catch(async (e: unknown) => {
       await app.shot("zz-computer-fail")
       throw new Error(`${String(e)}\nsockets:\n${wsLog.join("\n")}\nbrain log:\n${brain.log().slice(-6000)}`)
     })
@@ -104,7 +130,9 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
           const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="computer-view"] canvas')
           if (!canvas || canvas.width === 0) return [0, 0, 0, 0]
           const ctx = canvas.getContext("2d")
-          return ctx ? Array.from(ctx.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height * 0.8), 1, 1).data) : [0, 0, 0, 0]
+          return ctx
+            ? Array.from(ctx.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height * 0.8), 1, 1).data)
+            : [0, 0, 0, 0]
         }),
       (p) => p[0]! > 150 && p[1]! < 120 && p[2]! < 120,
       { label: "a red frame on the canvas", timeout: 20_000 },
@@ -131,7 +159,11 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     await page.waitForTimeout(800)
     await host.click()
     await page.keyboard.type("echo e2e-$((40+2))-ok\n", { delay: 10 })
-    await eventually(() => host.innerText(), (t) => t.includes("e2e-42-ok"), { label: "the echoed output", timeout: 15_000 })
+    await eventually(
+      () => host.innerText(),
+      (t) => t.includes("e2e-42-ok"),
+      { label: "the echoed output", timeout: 15_000 },
+    )
     await app.shot("e2e-43-terminal")
     await view.getByRole("button", { name: "Exit fullscreen" }).click()
     await view.waitFor({ state: "detached" })
@@ -146,9 +178,15 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     await settings.waitFor()
     await page.getByTestId("pair-computer").click()
     const codeBox = page.getByTestId("pairing-code")
-    await eventually(() => codeBox.innerText(), (t) => /\S{4,}/.test(t.trim()), { label: "a pairing code" })
+    await eventually(
+      () => codeBox.innerText(),
+      (t) => /\S{4,}/.test(t.trim()),
+      { label: "a pairing code" },
+    )
     const code = (await codeBox.innerText()).trim()
-    const command = (await page.getByRole("dialog", { name: "Pair a computer" }).locator("code").first().innerText()).trim()
+    const command = (
+      await page.getByRole("dialog", { name: "Pair a computer" }).locator("code").first().innerText()
+    ).trim()
     expect(command).toBe(`curl -fsSL ${brain.base}/node/install.sh | sh -s -- ${code}`)
     await app.shot("e2e-44-pairing-code")
 
@@ -175,9 +213,12 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
 
     // the pairing dialog turns into "Approve <node>?"
     const dialog = page.getByRole("dialog", { name: "Pair a computer" })
-    await dialog.getByText(/^Approve .+\?$/).waitFor({ timeout: 30_000 }).catch((e: unknown) => {
-      throw new Error(`${String(e)}\nnode log:\n${daemonLog}`)
-    })
+    await dialog
+      .getByText(/^Approve .+\?$/)
+      .waitFor({ timeout: 30_000 })
+      .catch((e: unknown) => {
+        throw new Error(`${String(e)}\nnode log:\n${daemonLog}`)
+      })
     await app.shot("e2e-45-approve-node")
     await dialog.getByRole("button", { name: "Approve" }).click()
     await dialog.waitFor({ state: "detached" })
@@ -201,7 +242,11 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     await pane.getByRole("tab", { name: "Details" }).click()
     await pane.getByRole("button", { name: "Runs on" }).click()
     await page.getByRole("menu", { name: "Runs on" }).getByText(remote!.label, { exact: true }).click()
-    await eventually(() => rpc.call((c) => c["bots.get"]({ botId: bot.id })), (b) => b.hostNodeId === remote!.id, { label: "Otto on the paired node" })
+    await eventually(
+      () => rpc.call((c) => c["bots.get"]({ botId: bot.id })),
+      (b) => b.hostNodeId === remote!.id,
+      { label: "Otto on the paired node" },
+    )
     await app.shot("e2e-47-runs-on-node")
     // a bot runs a command on the paired node (gateway node tool → approval → node daemon)
     await send(page, "Otto", `tool: shell {"command": "echo hello-from-$((6*7)) in $PWD"}`)
@@ -211,7 +256,11 @@ describe.skipIf(!hasChromium)("e2e: computers", () => {
     })
     await app.shot("e2e-48-remote-shell-approval")
     await card.getByRole("button", { name: "Allow once" }).click()
-    await page.getByTestId("transcript").getByText("hello-from-42", { exact: false }).first().waitFor({ timeout: 20_000 })
+    await page
+      .getByTestId("transcript")
+      .getByText("hello-from-42", { exact: false })
+      .first()
+      .waitFor({ timeout: 20_000 })
     await waitIdle(page)
     await app.shot("e2e-49-remote-shell-result")
     // it ran inside the node's root (the bot's workspace there), not on the brain's data dir

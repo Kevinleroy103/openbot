@@ -188,11 +188,20 @@ export const HarnessNoticeItem = Schema.TaggedStruct("Notice", {
   /** Machine code (see NoticeEntry.code); default "harness". */
   code: Schema.optionalKey(Schema.String),
 })
-export const HarnessItem = Schema.Union([HarnessMessageItem, HarnessReasoningItem, HarnessToolCallItem, HarnessNoticeItem]).pipe(Schema.toTaggedUnion("_tag"))
+export const HarnessItem = Schema.Union([
+  HarnessMessageItem,
+  HarnessReasoningItem,
+  HarnessToolCallItem,
+  HarnessNoticeItem,
+]).pipe(Schema.toTaggedUnion("_tag"))
 export type HarnessItem = typeof HarnessItem.Type
 
 // ---------------------------------------------------------------------------- events
-export const HarnessTurnError = Schema.Struct({ code: Schema.String, message: Schema.String, retryable: Schema.Boolean })
+export const HarnessTurnError = Schema.Struct({
+  code: Schema.String,
+  message: Schema.String,
+  retryable: Schema.Boolean,
+})
 export type HarnessTurnError = typeof HarnessTurnError.Type
 
 export const SessionBound = Schema.TaggedStruct("SessionBound", { nativeSessionId: NonEmptyString })
@@ -217,8 +226,14 @@ export const ActivityEvent = Schema.TaggedStruct("Activity", {
   toolKind: Schema.optionalKey(ToolKind),
 })
 export const UsageEvent = Schema.TaggedStruct("Usage", { usage: Usage, turnId: Schema.optionalKey(TurnId) })
-export const ContextUsageEvent = Schema.TaggedStruct("ContextUsage", { usedTokens: NonNegativeInt, windowTokens: NonNegativeInt })
-export const TurnCompleted = Schema.TaggedStruct("TurnCompleted", { turnId: TurnId, stopReason: Schema.optionalKey(Schema.String) })
+export const ContextUsageEvent = Schema.TaggedStruct("ContextUsage", {
+  usedTokens: NonNegativeInt,
+  windowTokens: NonNegativeInt,
+})
+export const TurnCompleted = Schema.TaggedStruct("TurnCompleted", {
+  turnId: TurnId,
+  stopReason: Schema.optionalKey(Schema.String),
+})
 export const TurnFailed = Schema.TaggedStruct("TurnFailed", { turnId: TurnId, error: HarnessTurnError })
 export const TurnInterrupted = Schema.TaggedStruct("TurnInterrupted", { turnId: TurnId })
 export const SessionClosed = Schema.TaggedStruct("SessionClosed", { reason: Schema.String })
@@ -239,7 +254,12 @@ export type HarnessEvent = typeof HarnessEvent.Type
 export type HarnessEventOf<T extends HarnessEvent["_tag"]> = Extract<HarnessEvent, { _tag: T }>
 
 // ---------------------------------------------------------------------------- requests
-export const HarnessApprovalKind = Schema.Literals(["tool-approval", "command-approval", "file-approval", "mcp-approval"])
+export const HarnessApprovalKind = Schema.Literals([
+  "tool-approval",
+  "command-approval",
+  "file-approval",
+  "mcp-approval",
+])
 export type HarnessApprovalKind = typeof HarnessApprovalKind.Type
 
 export const HarnessDecisionSuggestion = Schema.Struct({

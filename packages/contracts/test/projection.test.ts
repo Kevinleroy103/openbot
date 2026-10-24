@@ -86,14 +86,26 @@ describe("conversation projection", () => {
     expect(s.synchronized).toBe(true)
 
     // stale revision is ignored, newer wins
-    s = applyConversationStreamItem(s, { kind: "change", cursor: { epoch: "e1", sequence: 3 }, change: { type: "entry.upserted", entry: msg("ent_4", 40, "four v2", 2) } })
-    s = applyConversationStreamItem(s, { kind: "change", cursor: { epoch: "e1", sequence: 4 }, change: { type: "entry.upserted", entry: msg("ent_4", 40, "four v1", 1) } })
+    s = applyConversationStreamItem(s, {
+      kind: "change",
+      cursor: { epoch: "e1", sequence: 3 },
+      change: { type: "entry.upserted", entry: msg("ent_4", 40, "four v2", 2) },
+    })
+    s = applyConversationStreamItem(s, {
+      kind: "change",
+      cursor: { epoch: "e1", sequence: 4 },
+      change: { type: "entry.upserted", entry: msg("ent_4", 40, "four v1", 1) },
+    })
     expect(transcriptOf(s).map((e) => (e as any).text)).toEqual(["three", "four v2"])
     expect(s.cursor).toEqual({ epoch: "e1", sequence: 4 })
 
     // older history merges in order
     const before = s
-    s = prependHistory(s, { entries: [msg("ent_1", 10, "one"), msg("ent_2", 20, "two")], hasMoreBefore: false, beforeCursor: null })
+    s = prependHistory(s, {
+      entries: [msg("ent_1", 10, "one"), msg("ent_2", 20, "two")],
+      hasMoreBefore: false,
+      beforeCursor: null,
+    })
     expect(transcriptOf(s).map((e) => (e as any).text)).toEqual(["one", "two", "three", "four v2"])
     expect(s.hasMoreBefore).toBe(false)
     expect(before.entries.size).toBe(2) // inputs are never mutated
@@ -112,18 +124,34 @@ describe("conversation projection", () => {
       blocking: false,
       createdAt: 50,
     }
-    s = applyConversationStreamItem(s, { kind: "change", cursor: { epoch: "e1", sequence: 5 }, change: { type: "request.upserted", request } })
+    s = applyConversationStreamItem(s, {
+      kind: "change",
+      cursor: { epoch: "e1", sequence: 5 },
+      change: { type: "request.upserted", request },
+    })
     expect(pendingRequestsOf(s).map((r) => r.id)).toEqual([request.id])
-    s = applyConversationStreamItem(s, { kind: "change", cursor: { epoch: "e1", sequence: 6 }, change: { type: "entry.removed", entryId: "ent_1" as EntryId, reason: "retracted" } })
+    s = applyConversationStreamItem(s, {
+      kind: "change",
+      cursor: { epoch: "e1", sequence: 6 },
+      change: { type: "entry.removed", entryId: "ent_1" as EntryId, reason: "retracted" },
+    })
     expect(s.entries.has("ent_1" as EntryId)).toBe(false)
 
     // unknown change from a newer server: skipped, cursor advances
-    s = applyConversationStreamItem(s, { kind: "change", cursor: { epoch: "e1", sequence: 7 }, change: { type: "unknown", originalTag: "plan.updated" } as any })
+    s = applyConversationStreamItem(s, {
+      kind: "change",
+      cursor: { epoch: "e1", sequence: 7 },
+      change: { type: "unknown", originalTag: "plan.updated" } as any,
+    })
     expect(s.cursor!.sequence).toBe(7)
     expect(s.skippedUnknown).toBe(1)
 
     // a change from another epoch is a gap
-    const gapped = applyConversationStreamItem(s, { kind: "change", cursor: { epoch: "e2", sequence: 1 }, change: { type: "entry.removed", entryId: "ent_3" as EntryId, reason: "deleted" } })
+    const gapped = applyConversationStreamItem(s, {
+      kind: "change",
+      cursor: { epoch: "e2", sequence: 1 },
+      change: { type: "entry.removed", entryId: "ent_3" as EntryId, reason: "deleted" },
+    })
     expect(gapped.gap).toBe(true)
     expect(gapped.entries.has("ent_3" as EntryId)).toBe(true)
 
@@ -170,10 +198,39 @@ describe("roster projection", () => {
       },
       { kind: "synchronized", cursor: at(0) },
       { kind: "change", cursor: at(1), change: { type: "bot.upserted", bot: bot("bot_2", "Ada") } },
-      { kind: "change", cursor: at(2), change: { type: "section.upserted", section: { id: "sec_a" as SectionId, name: "A", order: 1 } } },
-      { kind: "change", cursor: at(3), change: { type: "activity.updated", activity: { botId: "bot_2" as BotId, state: "working", label: "Typing…", since: 5 } } },
-      { kind: "change", cursor: at(4), change: { type: "settings.updated", settings: { ...DEFAULT_SETTINGS, theme: "dark" } } },
-      { kind: "change", cursor: at(5), change: { type: "notification", notification: { id: "ntf_1" as any, kind: "waiting", botId: "bot_2" as BotId, title: "Ada", body: "Needs approval", at: 6 } } },
+      {
+        kind: "change",
+        cursor: at(2),
+        change: { type: "section.upserted", section: { id: "sec_a" as SectionId, name: "A", order: 1 } },
+      },
+      {
+        kind: "change",
+        cursor: at(3),
+        change: {
+          type: "activity.updated",
+          activity: { botId: "bot_2" as BotId, state: "working", label: "Typing…", since: 5 },
+        },
+      },
+      {
+        kind: "change",
+        cursor: at(4),
+        change: { type: "settings.updated", settings: { ...DEFAULT_SETTINGS, theme: "dark" } },
+      },
+      {
+        kind: "change",
+        cursor: at(5),
+        change: {
+          type: "notification",
+          notification: {
+            id: "ntf_1" as any,
+            kind: "waiting",
+            botId: "bot_2" as BotId,
+            title: "Ada",
+            body: "Needs approval",
+            at: 6,
+          },
+        },
+      },
       { kind: "change", cursor: at(6), change: { type: "bot.removed", botId: "bot_2" as BotId } },
     ]
     const s = items.reduce(applyRosterStreamItem, emptyRosterState)
@@ -185,11 +242,19 @@ describe("roster projection", () => {
     expect(s.cursor).toEqual(at(6))
     expect(s.synchronized).toBe(true)
 
-    const gapped = applyRosterStreamItem(s, { kind: "change", cursor: at(8), change: { type: "bot.upserted", bot: bot("bot_3", "Max") } })
+    const gapped = applyRosterStreamItem(s, {
+      kind: "change",
+      cursor: at(8),
+      change: { type: "bot.upserted", bot: bot("bot_3", "Max") },
+    })
     expect(gapped.gap).toBe(true)
     expect(gapped.synchronized).toBe(false)
     expect(gapped.bots.has("bot_3" as BotId)).toBe(false)
-    const healed = applyRosterStreamItem(gapped, { kind: "change", cursor: at(7), change: { type: "bot.upserted", bot: bot("bot_3", "Max") } })
+    const healed = applyRosterStreamItem(gapped, {
+      kind: "change",
+      cursor: at(7),
+      change: { type: "bot.upserted", bot: bot("bot_3", "Max") },
+    })
     expect(healed.gap).toBe(false)
     expect(healed.bots.has("bot_3" as BotId)).toBe(true)
   })
@@ -219,12 +284,20 @@ describe("roster projection", () => {
       },
       { kind: "change", cursor: at(1), change: { type: "task.upserted", task: task("tsk_2", "bot_1", "queued", 2) } },
       { kind: "change", cursor: at(2), change: { type: "task.upserted", task: task("tsk_3", "bot_2", "running", 3) } },
-      { kind: "change", cursor: at(3), change: { type: "task.upserted", task: { ...task("tsk_1", "bot_1", "succeeded", 1), result: "done" } } },
+      {
+        kind: "change",
+        cursor: at(3),
+        change: { type: "task.upserted", task: { ...task("tsk_1", "bot_1", "succeeded", 1), result: "done" } },
+      },
     ]
     const s = items.reduce(applyRosterStreamItem, emptyRosterState)
     expect(activeTasksOf(s, "bot_1" as BotId).map((t) => t.id)).toEqual(["tsk_2" as TaskId])
     expect(s.tasks.get("tsk_1" as TaskId)?.result).toBe("done")
-    const removed = applyRosterStreamItem(s, { kind: "change", cursor: at(4), change: { type: "bot.removed", botId: "bot_1" as BotId } })
+    const removed = applyRosterStreamItem(s, {
+      kind: "change",
+      cursor: at(4),
+      change: { type: "bot.removed", botId: "bot_1" as BotId },
+    })
     expect([...removed.tasks.keys()]).toEqual(["tsk_3" as TaskId])
     // an older brain's snapshot has no tasks
     const { tasks: _drop, ...old } = items[0] as Extract<KnownRosterStreamItem, { kind: "snapshot" }>

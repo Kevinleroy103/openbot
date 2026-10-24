@@ -2,9 +2,30 @@
 // `card` transcript entry plus the linked RuntimeRequest (live status) and answers through
 // `requests.respond` (a Slack draft: `slack.sendDraft` / `slack.discardDraft`). Unknown card types
 // render a placeholder.
-import { Check, Clock, ExternalLink, FolderCheck, Globe, Hash, KeyRound, Monitor, ShieldCheck, TriangleAlert } from "lucide-react"
+import {
+  Check,
+  Clock,
+  ExternalLink,
+  FolderCheck,
+  Globe,
+  Hash,
+  KeyRound,
+  Monitor,
+  ShieldCheck,
+  TriangleAlert,
+} from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useMemo, useRef, useState } from "react"
-import type { Bot, BotId, Card as CardModel, CardState, DecisionId, EntryId, Question, RuntimeRequest, RuntimeResponse } from "@openbot/contracts"
+import type {
+  Bot,
+  BotId,
+  Card as CardModel,
+  CardState,
+  DecisionId,
+  EntryId,
+  Question,
+  RuntimeRequest,
+  RuntimeResponse,
+} from "@openbot/contracts"
 import {
   Card,
   CardActions,
@@ -53,7 +74,8 @@ const statusOf = (state: CardState, request: RuntimeRequest | undefined): Status
   return state.status
 }
 
-const responseOf = (state: CardState, request: RuntimeRequest | undefined): RuntimeResponse | undefined => request?.response ?? state.response
+const responseOf = (state: CardState, request: RuntimeRequest | undefined): RuntimeResponse | undefined =>
+  request?.response ?? state.response
 
 /** Dispatch on the card type. */
 export function CardView(props: CardViewProps): ReactNode {
@@ -147,12 +169,19 @@ const ruleText = (card: ApprovalModel, request: RuntimeRequest | undefined): str
   const rule = request?.suggestedRule ?? card.suggestedRule
   // Rules are bot-scoped but never directory-scoped: "Run bun test commands", not "… in <dir>".
   if (rule?.match.commandPrefix) return `Run ${rule.match.commandPrefix} commands`
-  if (rule?.match.pathPrefix) return `${rule.surface === "file-read" ? "Read" : "Edit"} files under ${rule.match.pathPrefix}`
+  if (rule?.match.pathPrefix)
+    return `${rule.surface === "file-read" ? "Read" : "Edit"} files under ${rule.match.pathPrefix}`
   if (rule?.match.toolName) return `Use ${rule.match.toolName}`
   return card.summary ?? card.title
 }
 
-function ApprovalCard({ card, state, request, bot, className }: CardViewProps & { readonly card: ApprovalModel }): ReactNode {
+function ApprovalCard({
+  card,
+  state,
+  request,
+  bot,
+  className,
+}: CardViewProps & { readonly card: ApprovalModel }): ReactNode {
   const status = statusOf(state, request)
   const response = responseOf(state, request)
   const decision = response?.type === "decision" ? response.decision : undefined
@@ -209,7 +238,11 @@ function ApprovalCard({ card, state, request, bot, className }: CardViewProps & 
             </SheetField>
           )}
           {card.reason && <SheetField label="Why">{card.reason}</SheetField>}
-          {card.diff && <pre className="max-h-64 overflow-auto px-3 py-2 font-mono text-xs leading-[16.5px] text-fg-secondary scrollbar-thin">{card.diff}</pre>}
+          {card.diff && (
+            <pre className="max-h-64 overflow-auto px-3 py-2 font-mono text-xs leading-[16.5px] text-fg-secondary scrollbar-thin">
+              {card.diff}
+            </pre>
+          )}
           {!card.toolName && !card.command && !card.cwd && !card.paths && !card.diff && !card.reason && (
             <SheetField label="Request">{request?.detail ?? card.title}</SheetField>
           )}
@@ -217,7 +250,13 @@ function ApprovalCard({ card, state, request, bot, className }: CardViewProps & 
       )}
       {status === "pending" && (
         <CardActions>
-          <PillButton variant="primary" size="card" loading={busy === "allow-once"} disabled={busy !== null} onClick={() => respond({ type: "decision", decision: "allow-once" }, "allow-once")}>
+          <PillButton
+            variant="primary"
+            size="card"
+            loading={busy === "allow-once"}
+            disabled={busy !== null}
+            onClick={() => respond({ type: "decision", decision: "allow-once" }, "allow-once")}
+          >
             Allow once
           </PillButton>
           {folder && (
@@ -228,22 +267,43 @@ function ApprovalCard({ card, state, request, bot, className }: CardViewProps & 
               data-testid="allow-in-folder"
               loading={busy === "allow-folder"}
               disabled={busy !== null}
-              onClick={() => respond({ type: "decision", decision: "allow-once", scope: "project-folder" }, "allow-folder")}
+              onClick={() =>
+                respond({ type: "decision", decision: "allow-once", scope: "project-folder" }, "allow-folder")
+              }
             >
               Allow in {shortFolder(folder)}
             </PillButton>
           )}
           {offersDecision(request, "allow-always") && (
-            <PillButton variant="secondary" size="card" loading={busy === "allow-always"} disabled={busy !== null} onClick={() => respond({ type: "decision", decision: "allow-always" }, "allow-always")}>
+            <PillButton
+              variant="secondary"
+              size="card"
+              loading={busy === "allow-always"}
+              disabled={busy !== null}
+              onClick={() => respond({ type: "decision", decision: "allow-always" }, "allow-always")}
+            >
               Always allow
             </PillButton>
           )}
           {offersDecision(request, "allow-session") && (
-            <PillButton variant="secondary" size="card" loading={busy === "allow-session"} disabled={busy !== null} onClick={() => respond({ type: "decision", decision: "allow-session" }, "allow-session")}>
+            <PillButton
+              variant="secondary"
+              size="card"
+              loading={busy === "allow-session"}
+              disabled={busy !== null}
+              onClick={() => respond({ type: "decision", decision: "allow-session" }, "allow-session")}
+            >
               Allow this session
             </PillButton>
           )}
-          <PillButton variant="tertiary" size="card" className="ms-auto" loading={busy === "deny"} disabled={busy !== null} onClick={() => respond({ type: "decision", decision: "deny" }, "deny")}>
+          <PillButton
+            variant="tertiary"
+            size="card"
+            className="ms-auto"
+            loading={busy === "deny"}
+            disabled={busy !== null}
+            onClick={() => respond({ type: "decision", decision: "deny" }, "deny")}
+          >
             Deny
           </PillButton>
         </CardActions>
@@ -286,7 +346,9 @@ function ApprovalCard({ card, state, request, bot, className }: CardViewProps & 
           </div>
         </Sheet>
       )}
-      {status === "resolved" && (decision === "deny" || decision === "cancel") && <p className="text-sm text-fg-secondary">{botName} won't do this</p>}
+      {status === "resolved" && (decision === "deny" || decision === "cancel") && (
+        <p className="text-sm text-fg-secondary">{botName} won't do this</p>
+      )}
       {status === "expired" && suggested && offersDecision(request, "allow-always") && (
         <div>
           <PillButton
@@ -294,13 +356,22 @@ function ApprovalCard({ card, state, request, bot, className }: CardViewProps & 
             leadingIcon={saveState === "saved" ? Check : undefined}
             loading={saveState === "saving"}
             disabled={saveState !== "idle"}
-            onClick={() => save({ ...(request?.botId ? { botId: request.botId } : {}), surface: suggested.surface, match: suggested.match, action: "allow" })}
+            onClick={() =>
+              save({
+                ...(request?.botId ? { botId: request.botId } : {}),
+                surface: suggested.surface,
+                match: suggested.match,
+                action: "allow",
+              })
+            }
           >
             {saveState === "saved" ? "Will allow next time" : "Always allow next time"}
           </PillButton>
         </div>
       )}
-      {status === "expired" && !(suggested && offersDecision(request, "allow-always")) && <p className="text-sm text-fg-secondary">Nobody answered in time, so {botName} skipped this.</p>}
+      {status === "expired" && !(suggested && offersDecision(request, "allow-always")) && (
+        <p className="text-sm text-fg-secondary">Nobody answered in time, so {botName} skipped this.</p>
+      )}
     </Card>
   )
 }
@@ -310,7 +381,12 @@ function ApprovalCard({ card, state, request, bot, className }: CardViewProps & 
 type QuestionModel = Extract<CardModel, { type: "question" }>
 const KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-function QuestionCard({ card, state, request, className }: CardViewProps & { readonly card: QuestionModel }): ReactNode {
+function QuestionCard({
+  card,
+  state,
+  request,
+  className,
+}: CardViewProps & { readonly card: QuestionModel }): ReactNode {
   const status = statusOf(state, request)
   const response = responseOf(state, request)
   const { respond, busy } = useRespond(request?.id ?? card.requestId)
@@ -321,7 +397,8 @@ function QuestionCard({ card, state, request, className }: CardViewProps & { rea
   const rootRef = useRef<HTMLElement>(null)
   const answerable = status === "pending" && (request !== undefined || card.requestId !== undefined)
 
-  const submit = (answers: Record<string, ReadonlyArray<string>>) => respond({ type: "answers", answers: answers as Record<string, Array<string>> })
+  const submit = (answers: Record<string, ReadonlyArray<string>>) =>
+    respond({ type: "answers", answers: answers as Record<string, Array<string>> })
 
   const choose = (q: Question, label: string) => {
     if (!answerable || busy) return
@@ -359,7 +436,12 @@ function QuestionCard({ card, state, request, className }: CardViewProps & { rea
                 {answers.map((a) => {
                   const idx = q.options.findIndex((o) => o.label === a)
                   return (
-                    <OptionRow key={a} optionKey={idx >= 0 ? KEYS[idx]! : "✎"} disabled trailing={<Icon icon={Check} size="sm" className="text-success-fg" />}>
+                    <OptionRow
+                      key={a}
+                      optionKey={idx >= 0 ? KEYS[idx]! : "✎"}
+                      disabled
+                      trailing={<Icon icon={Check} size="sm" className="text-success-fg" />}
+                    >
                       {a}
                     </OptionRow>
                   )
@@ -374,7 +456,14 @@ function QuestionCard({ card, state, request, className }: CardViewProps & { rea
 
   const dimmed = status === "dismissed" || status === "expired" || status === "cancelled"
   return (
-    <Card ref={rootRef} className={cn(dimmed && "opacity-60", className)} tabIndex={answerable ? 0 : undefined} onKeyDown={onKeyDown} data-card="question" data-status={status}>
+    <Card
+      ref={rootRef}
+      className={cn(dimmed && "opacity-60", className)}
+      tabIndex={answerable ? 0 : undefined}
+      onKeyDown={onKeyDown}
+      data-card="question"
+      data-status={status}
+    >
       {questions.map((q, qi) => (
         <div key={q.id} className="flex flex-col gap-2.5">
           <CardHeader
@@ -387,7 +476,9 @@ function QuestionCard({ card, state, request, className }: CardViewProps & { rea
                 <StatusPill>{state.detail ?? "Skipped"}</StatusPill>
               ) : undefined
             }
-            {...(answerable && qi === 0 ? { onClose: () => void respond({ type: "dismiss" }, "dismiss"), closeLabel: "Skip question" } : {})}
+            {...(answerable && qi === 0
+              ? { onClose: () => void respond({ type: "dismiss" }, "dismiss"), closeLabel: "Skip question" }
+              : {})}
           />
           {q.options.length > 0 && (
             <Sheet>
@@ -439,7 +530,10 @@ function QuestionCard({ card, state, request, className }: CardViewProps & { rea
               const answers: Record<string, ReadonlyArray<string>> = {}
               for (const q of questions) {
                 const extra = (custom[q.id] ?? "").trim()
-                answers[q.id] = [...(selected[q.id] ?? []), ...(extra && !(selected[q.id] ?? []).includes(extra) ? [extra] : [])]
+                answers[q.id] = [
+                  ...(selected[q.id] ?? []),
+                  ...(extra && !(selected[q.id] ?? []).includes(extra) ? [extra] : []),
+                ]
               }
               void submit(answers)
             }}
@@ -460,7 +554,10 @@ function FormCard({ card, state, request, className }: CardViewProps & { readonl
   const status = statusOf(state, request)
   const { respond, busy } = useRespond(request?.id ?? card.requestId)
   const [values, setValues] = useState<Record<string, unknown>>({})
-  const missing = useMemo(() => card.fields.some((f) => f.required && (values[f.key] === undefined || values[f.key] === "")), [card.fields, values])
+  const missing = useMemo(
+    () => card.fields.some((f) => f.required && (values[f.key] === undefined || values[f.key] === "")),
+    [card.fields, values],
+  )
   const pending = status === "pending"
   return (
     <Card className={className} data-card="form" data-status={status}>
@@ -470,9 +567,15 @@ function FormCard({ card, state, request, className }: CardViewProps & { readonl
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-lg text-fg">{card.title}</div>
-          <div className="text-sm text-fg-secondary">{pending ? (card.description ?? "Secure Form") : status === "resolved" ? "Submitted" : "Closed"}</div>
+          <div className="text-sm text-fg-secondary">
+            {pending ? (card.description ?? "Secure Form") : status === "resolved" ? "Submitted" : "Closed"}
+          </div>
         </div>
-        {status === "resolved" && <StatusPill tone="success" dot>Done</StatusPill>}
+        {status === "resolved" && (
+          <StatusPill tone="success" dot>
+            Done
+          </StatusPill>
+        )}
         {status === "expired" && <StatusPill dot>Expired</StatusPill>}
       </div>
       {pending && (
@@ -489,7 +592,16 @@ function FormCard({ card, state, request, className }: CardViewProps & { readonl
                   </label>
                 )
               if (f.type === "text")
-                return <TextArea key={f.key} label={label} description={f.description} rows={3} value={String(values[f.key] ?? "")} onChange={(e) => set(e.target.value)} />
+                return (
+                  <TextArea
+                    key={f.key}
+                    label={label}
+                    description={f.description}
+                    rows={3}
+                    value={String(values[f.key] ?? "")}
+                    onChange={(e) => set(e.target.value)}
+                  />
+                )
               if (f.type === "select" || f.type === "multiselect")
                 return (
                   <div key={f.key} className="flex flex-col gap-1.5">
@@ -497,7 +609,8 @@ function FormCard({ card, state, request, className }: CardViewProps & { readonl
                     <div className="flex flex-wrap gap-1.5">
                       {(f.options ?? []).map((o) => {
                         const cur = values[f.key]
-                        const on = f.type === "multiselect" ? Array.isArray(cur) && cur.includes(o.label) : cur === o.label
+                        const on =
+                          f.type === "multiselect" ? Array.isArray(cur) && cur.includes(o.label) : cur === o.label
                         return (
                           <PillButton
                             key={o.label}
@@ -522,18 +635,40 @@ function FormCard({ card, state, request, className }: CardViewProps & { readonl
                   key={f.key}
                   label={label}
                   description={f.description}
-                  type={f.type === "secret" ? "password" : f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  type={
+                    f.type === "secret"
+                      ? "password"
+                      : f.type === "number"
+                        ? "number"
+                        : f.type === "date"
+                          ? "date"
+                          : "text"
+                  }
                   value={String(values[f.key] ?? "")}
-                  onChange={(e) => set(f.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
+                  onChange={(e) =>
+                    set(f.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)
+                  }
                 />
               )
             })}
           </div>
           <CardActions>
-            <PillButton variant="primary" size="card" disabled={missing || busy !== null} loading={busy === "submit"} onClick={() => respond({ type: "form", values }, "submit")}>
+            <PillButton
+              variant="primary"
+              size="card"
+              disabled={missing || busy !== null}
+              loading={busy === "submit"}
+              onClick={() => respond({ type: "form", values }, "submit")}
+            >
               Submit
             </PillButton>
-            <PillButton variant="tertiary" size="card" className="ms-auto" disabled={busy !== null} onClick={() => respond({ type: "dismiss" }, "skip")}>
+            <PillButton
+              variant="tertiary"
+              size="card"
+              className="ms-auto"
+              disabled={busy !== null}
+              onClick={() => respond({ type: "dismiss" }, "skip")}
+            >
               Skip
             </PillButton>
           </CardActions>
@@ -547,7 +682,13 @@ function FormCard({ card, state, request, className }: CardViewProps & { readonl
 
 type SecretModel = Extract<CardModel, { type: "secret-request" }>
 
-function SecretCard({ card, state, request, bot, className }: CardViewProps & { readonly card: SecretModel }): ReactNode {
+function SecretCard({
+  card,
+  state,
+  request,
+  bot,
+  className,
+}: CardViewProps & { readonly card: SecretModel }): ReactNode {
   const status = statusOf(state, request)
   const { respond, busy } = useRespond(request?.id ?? card.requestId)
   const [value, setValue] = useState("")
@@ -556,9 +697,19 @@ function SecretCard({ card, state, request, bot, className }: CardViewProps & { 
     <Card className={className} data-card="secret" data-status={status}>
       <CardHeader
         title={card.label}
-        subtitle={[card.envVar ? `Given to ${botName} as ${card.envVar}` : `Given only to ${botName}`, card.description].filter(Boolean).join(". ")}
+        subtitle={[card.envVar ? `Given to ${botName} as ${card.envVar}` : `Given only to ${botName}`, card.description]
+          .filter(Boolean)
+          .join(". ")}
         icon={<Icon icon={KeyRound} size="lg" className="text-icon-secondary" />}
-        status={status === "resolved" ? <StatusPill tone="success" dot>Saved</StatusPill> : status === "expired" ? <StatusPill dot>Expired</StatusPill> : undefined}
+        status={
+          status === "resolved" ? (
+            <StatusPill tone="success" dot>
+              Saved
+            </StatusPill>
+          ) : status === "expired" ? (
+            <StatusPill dot>Expired</StatusPill>
+          ) : undefined
+        }
       />
       {status === "pending" ? (
         <form
@@ -568,7 +719,16 @@ function SecretCard({ card, state, request, bot, className }: CardViewProps & { 
             if (value) void respond({ type: "secret", value }, "save").then((ok) => ok && setValue(""))
           }}
         >
-          <TextField type="password" autoComplete="off" placeholder={`Paste your ${card.label}`} aria-label={card.label} value={value} onChange={(e) => setValue(e.target.value)} wrapperClassName="flex-1" className="h-9 text-lg" />
+          <TextField
+            type="password"
+            autoComplete="off"
+            placeholder={`Paste your ${card.label}`}
+            aria-label={card.label}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            wrapperClassName="flex-1"
+            className="h-9 text-lg"
+          />
           <PillButton type="submit" variant="primary" size="card" disabled={!value} loading={busy === "save"}>
             Save securely
           </PillButton>
@@ -576,7 +736,9 @@ function SecretCard({ card, state, request, bot, className }: CardViewProps & { 
       ) : null}
       <p className="flex items-center gap-1.5 text-sm text-fg-secondary">
         <Icon icon={ShieldCheck} size="sm" />
-        {status === "resolved" ? "Saved securely and kept private" : "Never stored by OpenBot and never shown to other Bots."}
+        {status === "resolved"
+          ? "Saved securely and kept private"
+          : "Never stored by OpenBot and never shown to other Bots."}
       </p>
     </Card>
   )
@@ -592,7 +754,13 @@ type HandoffModel = Extract<CardModel, { type: "handoff" }>
  * computer view in control: the lease, not an answer) and **Skip**. While the owner holds the screen
  * the card offers **I'm done**: handing the screen back makes the brain answer the hand-off "done".
  */
-function HandoffCard({ card, state, request, bot, className }: CardViewProps & { readonly card: HandoffModel }): ReactNode {
+function HandoffCard({
+  card,
+  state,
+  request,
+  bot,
+  className,
+}: CardViewProps & { readonly card: HandoffModel }): ReactNode {
   const status = statusOf(state, request)
   const response = responseOf(state, request)
   const name = bot?.name ?? "Bot"
@@ -616,17 +784,42 @@ function HandoffCard({ card, state, request, bot, className }: CardViewProps & {
   const botId = bot?.id ?? request?.botId
   return (
     <Card className={className} data-card="handoff" data-status={status}>
-      <CardHeader title="Computer" icon={<Icon icon={Monitor} size="lg" className="text-icon-secondary" />} status={pill} />
+      <CardHeader
+        title="Computer"
+        icon={<Icon icon={Monitor} size="lg" className="text-icon-secondary" />}
+        status={pill}
+      />
       <CardBody className="-mt-1 text-base break-words">{card.instruction}</CardBody>
       {card.screenshotUrl && status !== "pending" && (
-        <img src={card.screenshotUrl} alt={`${name}'s screen`} className="aspect-[16/10] w-full rounded-xl object-cover hairline border-line-tertiary" />
+        <img
+          src={card.screenshotUrl}
+          alt={`${name}'s screen`}
+          className="aspect-[16/10] w-full rounded-xl object-cover hairline border-line-tertiary"
+        />
       )}
-      {status === "pending" && botId !== undefined && <HandoffPending requestId={request?.id ?? card.requestId} botId={botId} botName={name} screenshotUrl={card.screenshotUrl} />}
+      {status === "pending" && botId !== undefined && (
+        <HandoffPending
+          requestId={request?.id ?? card.requestId}
+          botId={botId}
+          botName={name}
+          screenshotUrl={card.screenshotUrl}
+        />
+      )}
     </Card>
   )
 }
 
-function HandoffPending({ requestId, botId, botName, screenshotUrl }: { readonly requestId: string; readonly botId: BotId; readonly botName: string; readonly screenshotUrl: string | undefined }): ReactNode {
+function HandoffPending({
+  requestId,
+  botId,
+  botName,
+  screenshotUrl,
+}: {
+  readonly requestId: string
+  readonly botId: BotId
+  readonly botName: string
+  readonly screenshotUrl: string | undefined
+}): ReactNode {
   const { respond, busy } = useRespond(requestId)
   const { status, availability, lease } = useComputer(botId)
   const computer = useComputerView()
@@ -641,15 +834,26 @@ function HandoffPending({ requestId, botId, botName, screenshotUrl }: { readonly
   return (
     <>
       {screenshotUrl ? (
-        <img src={screenshotUrl} alt={`${botName}'s screen`} className="aspect-[16/10] w-full rounded-xl object-cover hairline border-line-tertiary" />
+        <img
+          src={screenshotUrl}
+          alt={`${botName}'s screen`}
+          className="aspect-[16/10] w-full rounded-xl object-cover hairline border-line-tertiary"
+        />
       ) : (
-        hasScreen && computer.botId !== botId && <ScreenPeek botId={botId} botName={botName} onOpen={() => computer.open(botId)} />
+        hasScreen &&
+        computer.botId !== botId && <ScreenPeek botId={botId} botName={botName} onOpen={() => computer.open(botId)} />
       )}
       {lease.error && <p className="text-sm text-danger-fg">{lease.error}</p>}
       <CardActions>
         {controlling ? (
           <>
-            <PillButton variant="primary" size="card" loading={lease.pending} disabled={busy !== null} onClick={() => void lease.run({ botId, take: false })}>
+            <PillButton
+              variant="primary"
+              size="card"
+              loading={lease.pending}
+              disabled={busy !== null}
+              onClick={() => void lease.run({ botId, take: false })}
+            >
               I'm done
             </PillButton>
             <PillButton variant="secondary" size="card" disabled={busy !== null} onClick={() => computer.open(botId)}>
@@ -657,11 +861,23 @@ function HandoffPending({ requestId, botId, botName, screenshotUrl }: { readonly
             </PillButton>
           </>
         ) : (
-          <PillButton variant="secondary" size="card" disabled={busy !== null || availability.kind === "unsupported"} onClick={() => computer.open(botId, { takeControl: true })}>
+          <PillButton
+            variant="secondary"
+            size="card"
+            disabled={busy !== null || availability.kind === "unsupported"}
+            onClick={() => computer.open(botId, { takeControl: true })}
+          >
             Take over
           </PillButton>
         )}
-        <PillButton variant="tertiary" size="card" className="ms-auto" disabled={busy !== null || lease.pending} loading={busy === "skip"} onClick={() => void skip()}>
+        <PillButton
+          variant="tertiary"
+          size="card"
+          className="ms-auto"
+          disabled={busy !== null || lease.pending}
+          loading={busy === "skip"}
+          onClick={() => void skip()}
+        >
           Skip
         </PillButton>
       </CardActions>
@@ -682,7 +898,9 @@ function RoutineCard({ card, className }: CardViewProps & { readonly card: Routi
           <Icon icon={Clock} size="lg" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm text-fg-secondary">{card.action === "created" ? "Created a routine" : "Updated a routine"}</div>
+          <div className="text-sm text-fg-secondary">
+            {card.action === "created" ? "Created a routine" : "Updated a routine"}
+          </div>
           <div className="truncate text-lg text-fg">{card.name}</div>
           <div className="text-sm text-fg-secondary">{card.triggerSummary}</div>
         </div>
@@ -705,7 +923,12 @@ type SlackDraftModel = Extract<CardModel, { type: "slack-draft" }>
  * **Send message** posts it as the owner (with files, the text may be empty); **Discard** drops it.
  * Sent: the message as sent and **Open in Slack**.
  */
-function SlackDraftCard({ card, state, entryId, className }: CardViewProps & { readonly card: SlackDraftModel }): ReactNode {
+function SlackDraftCard({
+  card,
+  state,
+  entryId,
+  className,
+}: CardViewProps & { readonly card: SlackDraftModel }): ReactNode {
   const status = state.status
   const pending = status === "pending"
   const [text, setText] = useState(card.text)
@@ -755,7 +978,14 @@ function SlackDraftCard({ card, state, entryId, className }: CardViewProps & { r
         />
       ) : (
         card.text !== "" && (
-          <p className={cn("text-base break-words whitespace-pre-wrap", status !== "resolved" && "text-fg-secondary line-through decoration-fg-tertiary")}>{card.text}</p>
+          <p
+            className={cn(
+              "text-base break-words whitespace-pre-wrap",
+              status !== "resolved" && "text-fg-secondary line-through decoration-fg-tertiary",
+            )}
+          >
+            {card.text}
+          </p>
         )
       )}
       {files.length > 0 && <Attachments items={files} side="bot" />}
@@ -771,13 +1001,25 @@ function SlackDraftCard({ card, state, entryId, className }: CardViewProps & { r
           >
             Send message
           </PillButton>
-          <PillButton variant="tertiary" size="card" className="ms-auto" disabled={busy} loading={discard.pending} onClick={() => void discard.run({ entryId })}>
+          <PillButton
+            variant="tertiary"
+            size="card"
+            className="ms-auto"
+            disabled={busy}
+            loading={discard.pending}
+            onClick={() => void discard.run({ entryId })}
+          >
             Discard
           </PillButton>
         </CardActions>
       )}
       {status === "resolved" && state.link !== undefined && (
-        <a href={state.link} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-sm text-fg-secondary hover:text-fg">
+        <a
+          href={state.link}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex w-fit items-center gap-1 text-sm text-fg-secondary hover:text-fg"
+        >
           Open in Slack
           <Icon icon={ExternalLink} size="sm" />
         </a>
@@ -787,4 +1029,6 @@ function SlackDraftCard({ card, state, entryId, className }: CardViewProps & { r
 }
 
 /** Inline warning glyph used by notices and the error tray. */
-export const WarnIcon = ({ className }: { readonly className?: string }) => <Icon icon={TriangleAlert} size="md" className={cn("text-danger-fg", className)} />
+export const WarnIcon = ({ className }: { readonly className?: string }) => (
+  <Icon icon={TriangleAlert} size="md" className={cn("text-danger-fg", className)} />
+)

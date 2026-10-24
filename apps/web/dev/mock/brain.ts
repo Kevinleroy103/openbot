@@ -78,7 +78,13 @@ export const OWNER: Author = { kind: "user", userId: OWNER_USER_ID }
 export const botAuthor = (botId: string): Author => ({ kind: "bot", botId: botId as BotId })
 
 type Entry = KnownTranscriptEntry
-type Running = { readonly ac: AbortController; readonly conversationId: string; readonly botId: string; streamingId?: string; toolIds: string[] }
+type Running = {
+  readonly ac: AbortController
+  readonly conversationId: string
+  readonly botId: string
+  streamingId?: string
+  toolIds: string[]
+}
 
 class Aborted extends Error {}
 class TurnFailed extends Error {
@@ -212,7 +218,11 @@ export class MockBrain {
     this.conv(request.conversationId).apply({ type: "request.upserted", request })
     this.publishSummary(request.conversationId)
   }
-  setActivity(botId: string, state: BotActivityState, opts: { conversationId?: string; label?: string; toolKind?: string } = {}) {
+  setActivity(
+    botId: string,
+    state: BotActivityState,
+    opts: { conversationId?: string; label?: string; toolKind?: string } = {},
+  ) {
     const activity: BotActivity = {
       botId: botId as BotId,
       state,
@@ -250,7 +260,13 @@ export class MockBrain {
   }
 
   // ------------------------------------------------------------------------------ entry helpers
-  message(conversationId: string, author: Author, text: string, at: number, extra: Partial<Extract<Entry, { kind: "message" }>> = {}): Extract<Entry, { kind: "message" }> {
+  message(
+    conversationId: string,
+    author: Author,
+    text: string,
+    at: number,
+    extra: Partial<Extract<Entry, { kind: "message" }>> = {},
+  ): Extract<Entry, { kind: "message" }> {
     return {
       id: (extra.id ?? this.id("ent")) as EntryId,
       conversationId: conversationId as ConversationId,
@@ -266,7 +282,13 @@ export class MockBrain {
       ...extra,
     } as Extract<Entry, { kind: "message" }>
   }
-  event(conversationId: string, author: Author, event: KnownConversationEvent, at: number, turnId?: string): Extract<Entry, { kind: "event" }> {
+  event(
+    conversationId: string,
+    author: Author,
+    event: KnownConversationEvent,
+    at: number,
+    turnId?: string,
+  ): Extract<Entry, { kind: "event" }> {
     return {
       id: this.id("ent") as EntryId,
       conversationId: conversationId as ConversationId,
@@ -279,7 +301,14 @@ export class MockBrain {
       ...(turnId ? { turnId: turnId as TurnId } : {}),
     }
   }
-  card(conversationId: string, botId: string, card: Card, state: CardState, at: number, turnId?: string): Extract<Entry, { kind: "card" }> {
+  card(
+    conversationId: string,
+    botId: string,
+    card: Card,
+    state: CardState,
+    at: number,
+    turnId?: string,
+  ): Extract<Entry, { kind: "card" }> {
     return {
       id: this.id("ent") as EntryId,
       conversationId: conversationId as ConversationId,
@@ -293,7 +322,14 @@ export class MockBrain {
       ...(turnId ? { turnId: turnId as TurnId } : {}),
     }
   }
-  tool(conversationId: string, botId: string, turnId: string, step: ToolStep, at: number, status: Extract<Entry, { kind: "tool-call" }>["status"]): Extract<Entry, { kind: "tool-call" }> {
+  tool(
+    conversationId: string,
+    botId: string,
+    turnId: string,
+    step: ToolStep,
+    at: number,
+    status: Extract<Entry, { kind: "tool-call" }>["status"],
+  ): Extract<Entry, { kind: "tool-call" }> {
     return {
       id: this.id("ent") as EntryId,
       conversationId: conversationId as ConversationId,
@@ -335,7 +371,16 @@ export class MockBrain {
       input.conversationId,
       input.botId,
       input.card,
-      { status: status === "pending" ? "pending" : status === "expired" ? "expired" : status === "cancelled" ? "cancelled" : "resolved" },
+      {
+        status:
+          status === "pending"
+            ? "pending"
+            : status === "expired"
+              ? "expired"
+              : status === "cancelled"
+                ? "cancelled"
+                : "resolved",
+      },
       input.at,
       input.turnId,
     )
@@ -363,7 +408,9 @@ export class MockBrain {
   // ------------------------------------------------------------------------------------- turns
   private touchActivity(conversationId: string, at: number, previewText?: string, unread = false) {
     const c = this.conv(conversationId).conversation
-    const patch: { -readonly [K in "lastActivityAt" | "unreadCount" | "unreadBoundaryAt"]?: number } = { lastActivityAt: at }
+    const patch: { -readonly [K in "lastActivityAt" | "unreadCount" | "unreadBoundaryAt"]?: number } = {
+      lastActivityAt: at,
+    }
     if (unread) {
       patch.unreadCount = c.unreadCount + 1
       if (c.unreadCount === 0) patch.unreadBoundaryAt = at - 1
@@ -379,13 +426,23 @@ export class MockBrain {
     return next
   }
 
-  startTurn(conversationId: string, botId: string, trigger: Turn["trigger"], script: (turn: Turn, signal: AbortSignal) => Promise<void>, inputEntryId?: string): TurnId {
+  startTurn(
+    conversationId: string,
+    botId: string,
+    trigger: Turn["trigger"],
+    script: (turn: Turn, signal: AbortSignal) => Promise<void>,
+    inputEntryId?: string,
+  ): TurnId {
     const turnId = this.id("trn") as TurnId
     const queued: Turn = {
       id: turnId,
       conversationId: conversationId as ConversationId,
       botId: botId as BotId,
-      status: this.running.size > 0 && [...this.running.values()].some((r) => r.botId === botId && r.conversationId === conversationId) ? "queued" : "running",
+      status:
+        this.running.size > 0 &&
+        [...this.running.values()].some((r) => r.botId === botId && r.conversationId === conversationId)
+          ? "queued"
+          : "running",
       trigger,
       startedAt: this.now(),
       ...(inputEntryId ? { inputEntryId: inputEntryId as EntryId } : {}),
@@ -405,7 +462,12 @@ export class MockBrain {
       } catch (error) {
         if (error instanceof TurnFailed) this.finishTurn(turnId, "failed", error.failure)
         else if (error instanceof Aborted || ac.signal.aborted) this.finishTurn(turnId, "interrupted")
-        else this.finishTurn(turnId, "failed", { code: "internal", message: String((error as Error)?.message ?? error), retryable: true })
+        else
+          this.finishTurn(turnId, "failed", {
+            code: "internal",
+            message: String((error as Error)?.message ?? error),
+            retryable: true,
+          })
       }
     })
     return turnId
@@ -413,7 +475,8 @@ export class MockBrain {
 
   finishTurn(turnId: string, status: "completed" | "failed" | "interrupted", failure?: TurnFailure) {
     const run = this.running.get(turnId)
-    const conversationId = run?.conversationId ?? [...this.convs.values()].find((c) => c.state.turns.has(turnId as TurnId))?.conversation.id
+    const conversationId =
+      run?.conversationId ?? [...this.convs.values()].find((c) => c.state.turns.has(turnId as TurnId))?.conversation.id
     if (!conversationId) return
     const r = this.conv(conversationId)
     const turn = r.state.turns.get(turnId as TurnId)
@@ -423,19 +486,44 @@ export class MockBrain {
     // Close a streaming reply and running tools.
     for (const e of r.entries) {
       if (e.turnId !== turnId) continue
-      if (e.kind === "message" && e.streaming) this.put({ ...e, streaming: false, ...(status === "interrupted" ? { aborted: true } : {}), updatedAt: now })
-      if (e.kind === "tool-call" && (e.status === "running" || e.status === "pending" || e.status === "awaiting-approval")) this.put({ ...e, status: status === "interrupted" ? "interrupted" : "failed", completedAt: now, updatedAt: now })
+      if (e.kind === "message" && e.streaming)
+        this.put({ ...e, streaming: false, ...(status === "interrupted" ? { aborted: true } : {}), updatedAt: now })
+      if (
+        e.kind === "tool-call" &&
+        (e.status === "running" || e.status === "pending" || e.status === "awaiting-approval")
+      )
+        this.put({
+          ...e,
+          status: status === "interrupted" ? "interrupted" : "failed",
+          completedAt: now,
+          updatedAt: now,
+        })
     }
-    for (const q of r.requests) if (q.turnId === turnId && q.status === "pending" && q.blocking) this.cancelRequest(q, "turn-ended")
-    const usage = { inputTokens: 1200 + Math.round(Math.random() * 3000), outputTokens: 200 + Math.round(Math.random() * 600) }
-    this.putTurn({ ...turn, status, endedAt: now, usage, ...(failure ? { failure } : {}), ...(status === "interrupted" ? { stopReason: "interrupted" } : {}) })
+    for (const q of r.requests)
+      if (q.turnId === turnId && q.status === "pending" && q.blocking) this.cancelRequest(q, "turn-ended")
+    const usage = {
+      inputTokens: 1200 + Math.round(Math.random() * 3000),
+      outputTokens: 200 + Math.round(Math.random() * 600),
+    }
+    this.putTurn({
+      ...turn,
+      status,
+      endedAt: now,
+      usage,
+      ...(failure ? { failure } : {}),
+      ...(status === "interrupted" ? { stopReason: "interrupted" } : {}),
+    })
     const prevUsage = this.usage.get(turn.botId)
     this.usage.set(turn.botId, {
       botId: turn.botId,
       usage: {
         inputTokens: (prevUsage?.usage.inputTokens ?? 0) + usage.inputTokens,
         outputTokens: (prevUsage?.usage.outputTokens ?? 0) + usage.outputTokens,
-        costUsd: Number((((prevUsage?.usage.costUsd ?? 0) as number) + usage.inputTokens * 3e-6 + usage.outputTokens * 15e-6).toFixed(4)),
+        costUsd: Number(
+          (((prevUsage?.usage.costUsd ?? 0) as number) + usage.inputTokens * 3e-6 + usage.outputTokens * 15e-6).toFixed(
+            4,
+          ),
+        ),
       },
       turnCount: (prevUsage?.turnCount ?? 0) + 1,
       lastAt: now,
@@ -444,20 +532,39 @@ export class MockBrain {
     const c = r.conversation
     const sessions = [...(c.sessions ?? [])]
     const i = sessions.findIndex((s) => s.botId === turn.botId)
-    const used = Math.min(195_000, (i >= 0 ? (sessions[i]!.contextUsage?.usedTokens ?? 0) : 8_000) + usage.inputTokens + usage.outputTokens * 4)
-    const session = { botId: turn.botId, active: true, contextUsage: { usedTokens: used, windowTokens: 200_000 }, updatedAt: now }
+    const used = Math.min(
+      195_000,
+      (i >= 0 ? (sessions[i]!.contextUsage?.usedTokens ?? 0) : 8_000) + usage.inputTokens + usage.outputTokens * 4,
+    )
+    const session = {
+      botId: turn.botId,
+      active: true,
+      contextUsage: { usedTokens: used, windowTokens: 200_000 },
+      updatedAt: now,
+    }
     if (i >= 0) sessions[i] = session
     else sessions.push(session)
     this.updateConversation(conversationId, { sessions })
-    this.setActivity(turn.botId, status === "failed" ? "error" : "idle", status === "failed" ? { conversationId, label: failure?.message ?? "Failed" } : {})
+    this.setActivity(
+      turn.botId,
+      status === "failed" ? "error" : "idle",
+      status === "failed" ? { conversationId, label: failure?.message ?? "Failed" } : {},
+    )
     if (status === "failed") setTimeout(() => this.setActivity(turn.botId, "idle"), 1500)
   }
 
   /** Streams `text` into one bot message, a few characters per tick. */
-  async stream(turn: Turn, text: string, signal: AbortSignal, extra: Partial<Extract<Entry, { kind: "message" }>> = {}): Promise<Extract<Entry, { kind: "message" }>> {
+  async stream(
+    turn: Turn,
+    text: string,
+    signal: AbortSignal,
+    extra: Partial<Extract<Entry, { kind: "message" }>> = {},
+  ): Promise<Extract<Entry, { kind: "message" }>> {
     const run = this.running.get(turn.id)
     const at = this.now()
-    let entry = this.put(this.message(turn.conversationId, botAuthor(turn.botId), "", at, { streaming: true, turnId: turn.id, ...extra }))
+    let entry = this.put(
+      this.message(turn.conversationId, botAuthor(turn.botId), "", at, { streaming: true, turnId: turn.id, ...extra }),
+    )
     if (run) run.streamingId = entry.id
     this.setActivity(turn.botId, "working", { conversationId: turn.conversationId, label: "Typing…" })
     const words = text.split(/(\s+)/)
@@ -493,7 +600,11 @@ export class MockBrain {
     for (const step of steps) {
       const started = this.tool(turn.conversationId, turn.botId, turn.id, step, this.now(), "running")
       let entry = this.put(started)
-      this.setActivity(turn.botId, "working", { conversationId: turn.conversationId, label: phraseFor[step.toolKind] ?? "Working on it", toolKind: step.toolKind })
+      this.setActivity(turn.botId, "working", {
+        conversationId: turn.conversationId,
+        label: phraseFor[step.toolKind] ?? "Working on it",
+        toolKind: step.toolKind,
+      })
       await this.wait(700, signal)
       entry = this.put({
         ...entry,
@@ -508,8 +619,20 @@ export class MockBrain {
   }
 
   /** Blocks the turn on a request until `requests.respond` (or interrupt). */
-  async ask(turn: Turn, input: Omit<Parameters<MockBrain["request"]>[0], "conversationId" | "botId" | "turnId" | "at" | "blocking">, signal: AbortSignal, label: string): Promise<RuntimeResponse> {
-    const { request, entry } = this.request({ ...input, conversationId: turn.conversationId, botId: turn.botId, turnId: turn.id, at: this.now(), blocking: true })
+  async ask(
+    turn: Turn,
+    input: Omit<Parameters<MockBrain["request"]>[0], "conversationId" | "botId" | "turnId" | "at" | "blocking">,
+    signal: AbortSignal,
+    label: string,
+  ): Promise<RuntimeResponse> {
+    const { request, entry } = this.request({
+      ...input,
+      conversationId: turn.conversationId,
+      botId: turn.botId,
+      turnId: turn.id,
+      at: this.now(),
+      blocking: true,
+    })
     this.put(entry)
     this.putRequest(request)
     this.putTurn({ ...turn, status: "waiting" })
@@ -538,97 +661,232 @@ export class MockBrain {
     const bot = this.bot(botId)
     const name = bot?.name ?? "Bot"
     if (/\bfail|\bbreak\b|\berror\b/.test(lower)) {
-      return this.startTurn(conversationId, botId, "user", async (turn, signal) => {
-        await this.wait(600, signal)
-        await this.stream(turn, "Pulling the cohort table now.", signal)
-        await this.steps(turn, [{ name: "Bash", toolKind: "shell", summary: "psql -f cohort.sql", command: "psql -f queries/cohort.sql", fail: "connection timed out" }], signal)
-        await this.wait(900, signal)
-        throw new TurnFailed({ code: "timeout", message: "The reply timed out", retryable: true })
-      }, inputEntryId)
+      return this.startTurn(
+        conversationId,
+        botId,
+        "user",
+        async (turn, signal) => {
+          await this.wait(600, signal)
+          await this.stream(turn, "Pulling the cohort table now.", signal)
+          await this.steps(
+            turn,
+            [
+              {
+                name: "Bash",
+                toolKind: "shell",
+                summary: "psql -f cohort.sql",
+                command: "psql -f queries/cohort.sql",
+                fail: "connection timed out",
+              },
+            ],
+            signal,
+          )
+          await this.wait(900, signal)
+          throw new TurnFailed({ code: "timeout", message: "The reply timed out", retryable: true })
+        },
+        inputEntryId,
+      )
     }
     if (/\b(approve|run|deploy|delete|clean|push|archive)\b/.test(lower)) {
-      const command = /deploy|push/.test(lower) ? "git push origin --tags" : /delete|clean|archive/.test(lower) ? "rm -rf ~/builds/2024-*" : "npm test"
-      return this.startTurn(conversationId, botId, "user", async (turn, signal) => {
-        await this.wait(500, signal)
-        await this.steps(turn, [{ name: "Read", toolKind: "file-read", summary: "package.json", output: '{ "name": "app", "scripts": { "test": "bun test" } }' }], signal)
-        const requestId = this.id("req")
-        const tool = this.put(this.tool(conversationId, botId, turn.id, { name: "Bash", toolKind: "shell", summary: command, command }, this.now(), "awaiting-approval"))
-        const response = await this.ask(
-          turn,
-          {
-            kind: "command-approval",
-            title: `Allow ${name} to run a command on your computer?`,
-            card: { type: "approval", requestId: requestId as RequestId, requestKind: "command-approval", title: `Allow ${name} to run a command on your computer?`, summary: `Run \`${command}\` in ~/openbot.`, command, cwd: "~/openbot", toolName: "Bash", nodeLabel: "This computer", suggestedRule: { surface: "shell", match: { commandPrefix: command.split(" ").slice(0, 2).join(" ") } } },
-            capability: { type: "decision", options: [{ id: "allow-once" }, { id: "allow-always" }, { id: "deny" }], allowMessage: true },
-            subject: { toolName: "Bash", command, cwd: "~/openbot", toolCallEntryId: tool.id },
-            suggestedRule: { surface: "shell", match: { commandPrefix: command.split(" ").slice(0, 2).join(" ") } },
-          },
-          signal,
-          "run a command",
-        )
-        const allowed = response.type === "decision" && response.decision.startsWith("allow")
-        this.put({ ...tool, status: allowed ? "running" : "declined", updatedAt: this.now() })
-        if (allowed) {
-          this.setActivity(botId, "working", { conversationId, label: "Running a few commands", toolKind: "shell" })
-          await this.wait(900, signal)
-          this.put({ ...tool, status: "completed", completedAt: this.now(), updatedAt: this.now(), output: { text: "✓ done in 1.2s" }, command: { command, cwd: "~/openbot", exitCode: 0 } })
-          await this.stream(turn, `Done. Ran \`${command}\` and it finished cleanly.\n\n- **Exit code** → 0\n- **Time** → 1.2s`, signal)
-        } else {
-          await this.stream(turn, "Okay, I won't run it. Tell me if you want a different approach.", signal)
-        }
-      }, inputEntryId)
+      const command = /deploy|push/.test(lower)
+        ? "git push origin --tags"
+        : /delete|clean|archive/.test(lower)
+          ? "rm -rf ~/builds/2024-*"
+          : "npm test"
+      return this.startTurn(
+        conversationId,
+        botId,
+        "user",
+        async (turn, signal) => {
+          await this.wait(500, signal)
+          await this.steps(
+            turn,
+            [
+              {
+                name: "Read",
+                toolKind: "file-read",
+                summary: "package.json",
+                output: '{ "name": "app", "scripts": { "test": "bun test" } }',
+              },
+            ],
+            signal,
+          )
+          const requestId = this.id("req")
+          const tool = this.put(
+            this.tool(
+              conversationId,
+              botId,
+              turn.id,
+              { name: "Bash", toolKind: "shell", summary: command, command },
+              this.now(),
+              "awaiting-approval",
+            ),
+          )
+          const response = await this.ask(
+            turn,
+            {
+              kind: "command-approval",
+              title: `Allow ${name} to run a command on your computer?`,
+              card: {
+                type: "approval",
+                requestId: requestId as RequestId,
+                requestKind: "command-approval",
+                title: `Allow ${name} to run a command on your computer?`,
+                summary: `Run \`${command}\` in ~/openbot.`,
+                command,
+                cwd: "~/openbot",
+                toolName: "Bash",
+                nodeLabel: "This computer",
+                suggestedRule: { surface: "shell", match: { commandPrefix: command.split(" ").slice(0, 2).join(" ") } },
+              },
+              capability: {
+                type: "decision",
+                options: [{ id: "allow-once" }, { id: "allow-always" }, { id: "deny" }],
+                allowMessage: true,
+              },
+              subject: { toolName: "Bash", command, cwd: "~/openbot", toolCallEntryId: tool.id },
+              suggestedRule: { surface: "shell", match: { commandPrefix: command.split(" ").slice(0, 2).join(" ") } },
+            },
+            signal,
+            "run a command",
+          )
+          const allowed = response.type === "decision" && response.decision.startsWith("allow")
+          this.put({ ...tool, status: allowed ? "running" : "declined", updatedAt: this.now() })
+          if (allowed) {
+            this.setActivity(botId, "working", { conversationId, label: "Running a few commands", toolKind: "shell" })
+            await this.wait(900, signal)
+            this.put({
+              ...tool,
+              status: "completed",
+              completedAt: this.now(),
+              updatedAt: this.now(),
+              output: { text: "✓ done in 1.2s" },
+              command: { command, cwd: "~/openbot", exitCode: 0 },
+            })
+            await this.stream(
+              turn,
+              `Done. Ran \`${command}\` and it finished cleanly.\n\n- **Exit code** → 0\n- **Time** → 1.2s`,
+              signal,
+            )
+          } else {
+            await this.stream(turn, "Okay, I won't run it. Tell me if you want a different approach.", signal)
+          }
+        },
+        inputEntryId,
+      )
     }
     if (/\b(choose|pick|which|options?|ask me)\b/.test(lower)) {
-      return this.startTurn(conversationId, botId, "user", async (turn, signal) => {
-        await this.wait(700, signal)
-        await this.stream(turn, "I found three that fit. Which should I go with?", signal)
-        const requestId = this.id("req")
-        const { request, entry } = this.request({
-          conversationId,
-          botId,
-          turnId: turn.id,
-          kind: "question",
-          title: "Which one should I go with?",
-          card: {
-            type: "question",
-            requestId: requestId as RequestId,
-            questions: [
-              { id: "q1", prompt: "Which one should I go with?", options: [{ label: "The fastest option" }, { label: "The cheapest option" }, { label: "Show me all three" }], multiSelect: false, allowFreeText: true },
-            ],
-          },
-          capability: { type: "answers", questions: [] },
-          blocking: false,
-          at: this.now(),
-        })
-        this.put(entry)
-        this.putRequest(request)
-      }, inputEntryId)
+      return this.startTurn(
+        conversationId,
+        botId,
+        "user",
+        async (turn, signal) => {
+          await this.wait(700, signal)
+          await this.stream(turn, "I found three that fit. Which should I go with?", signal)
+          const requestId = this.id("req")
+          const { request, entry } = this.request({
+            conversationId,
+            botId,
+            turnId: turn.id,
+            kind: "question",
+            title: "Which one should I go with?",
+            card: {
+              type: "question",
+              requestId: requestId as RequestId,
+              questions: [
+                {
+                  id: "q1",
+                  prompt: "Which one should I go with?",
+                  options: [
+                    { label: "The fastest option" },
+                    { label: "The cheapest option" },
+                    { label: "Show me all three" },
+                  ],
+                  multiSelect: false,
+                  allowFreeText: true,
+                },
+              ],
+            },
+            capability: { type: "answers", questions: [] },
+            blocking: false,
+            at: this.now(),
+          })
+          this.put(entry)
+          this.putRequest(request)
+        },
+        inputEntryId,
+      )
     }
     const ask = /\bask\s+@?([\w ]+?)(?:\s+(?:to|about|for|if)\b|[?.!,]|$)/i.exec(text)
-    const peer = ask ? [...this.roster.state.bots.values()].find((b) => b.id !== botId && b.name.toLowerCase() === ask[1]!.trim().toLowerCase()) : undefined
+    const peer = ask
+      ? [...this.roster.state.bots.values()].find(
+          (b) => b.id !== botId && b.name.toLowerCase() === ask[1]!.trim().toLowerCase(),
+        )
+      : undefined
     if (peer) {
-      return this.startTurn(conversationId, botId, "user", async (turn, signal) => {
-        await this.wait(600, signal)
-        const at = this.now()
-        const delivered = this.put(this.message(peer.directConversationId, botAuthor(botId), `Quick one from the owner: ${text}`, at, { toBotId: peer.id }))
-        this.put(this.event(conversationId, botAuthor(botId), { type: "messaged-bot", toBotId: peer.id, toName: peer.name, conversationId: peer.directConversationId, entryId: delivered.id }, at, turn.id))
-        this.touchActivity(peer.directConversationId, at, preview(delivered.text), true)
-        this.replyTo(peer.directConversationId, peer.id, "status update", delivered.id)
-        await this.stream(turn, `I asked **${peer.name}**. I'll pass along what they say.`, signal)
-      }, inputEntryId)
-    }
-    return this.startTurn(conversationId, botId, "user", async (turn, signal) => {
-      await this.wait(650, signal)
-      await this.steps(
-        turn,
-        [
-          { name: "Read", toolKind: "file-read", summary: "notes/today.md", output: "- deck review 2pm\n- offsite venue\n- expense report" },
-          { name: "Bash", toolKind: "shell", summary: "rg -n \"TODO\" ops/", command: "rg -n \"TODO\" ops/", output: "ops/offsite.md:12: TODO confirm catering\nops/deck.md:4: TODO refresh Q3 numbers" },
-        ],
-        signal,
+      return this.startTurn(
+        conversationId,
+        botId,
+        "user",
+        async (turn, signal) => {
+          await this.wait(600, signal)
+          const at = this.now()
+          const delivered = this.put(
+            this.message(peer.directConversationId, botAuthor(botId), `Quick one from the owner: ${text}`, at, {
+              toBotId: peer.id,
+            }),
+          )
+          this.put(
+            this.event(
+              conversationId,
+              botAuthor(botId),
+              {
+                type: "messaged-bot",
+                toBotId: peer.id,
+                toName: peer.name,
+                conversationId: peer.directConversationId,
+                entryId: delivered.id,
+              },
+              at,
+              turn.id,
+            ),
+          )
+          this.touchActivity(peer.directConversationId, at, preview(delivered.text), true)
+          this.replyTo(peer.directConversationId, peer.id, "status update", delivered.id)
+          await this.stream(turn, `I asked **${peer.name}**. I'll pass along what they say.`, signal)
+        },
+        inputEntryId,
       )
-      await this.stream(turn, cannedReply(text, name), signal)
-    }, inputEntryId)
+    }
+    return this.startTurn(
+      conversationId,
+      botId,
+      "user",
+      async (turn, signal) => {
+        await this.wait(650, signal)
+        await this.steps(
+          turn,
+          [
+            {
+              name: "Read",
+              toolKind: "file-read",
+              summary: "notes/today.md",
+              output: "- deck review 2pm\n- offsite venue\n- expense report",
+            },
+            {
+              name: "Bash",
+              toolKind: "shell",
+              summary: 'rg -n "TODO" ops/',
+              command: 'rg -n "TODO" ops/',
+              output: "ops/offsite.md:12: TODO confirm catering\nops/deck.md:4: TODO refresh Q3 numbers",
+            },
+          ],
+          signal,
+        )
+        await this.stream(turn, cannedReply(text, name), signal)
+      },
+      inputEntryId,
+    )
   }
 
   /** Follow-up after an async (non-blocking) request is answered. */
@@ -639,10 +897,13 @@ export class MockBrain {
       const answer = Object.values(response.answers)[0]?.join(", ") ?? "that"
       text = `Got it: **${answer}**. I'll take it from here.`
     } else if (response.type === "decision") {
-      text = response.decision.startsWith("allow") ? "Done. Archived 14 folders and freed 6.2 GB." : "Okay, I'll leave them where they are."
+      text = response.decision.startsWith("allow")
+        ? "Done. Archived 14 folders and freed 6.2 GB."
+        : "Okay, I'll leave them where they are."
     } else if (response.type === "form") text = "Thanks, I've saved those details."
     else if (response.type === "secret") text = "Thanks. I'll use it for this session only."
-    else if (response.type === "acknowledge") text = response.action === "skip" ? "No problem, skipping that step." : "Thanks for handing it back. Continuing."
+    else if (response.type === "acknowledge")
+      text = response.action === "skip" ? "No problem, skipping that step." : "Thanks for handing it back. Continuing."
     else return
     this.startTurn(conversationId, botId, "user", async (turn, signal) => {
       await this.wait(500, signal)
@@ -658,7 +919,10 @@ export class MockBrain {
   /** What a node lacks for desktops (`node.hello.desktop.missing`), by node id. */
   readonly desktopMissing = new Map<string, ReadonlyArray<string>>()
   /** Open desktop viewer sockets per bot (closed on release / reset). */
-  readonly desktopViewers = new Map<string, Set<{ readonly mode: "view" | "control"; readonly close: (code: number, reason: string) => void }>>()
+  readonly desktopViewers = new Map<
+    string,
+    Set<{ readonly mode: "view" | "control"; readonly close: (code: number, reason: string) => void }>
+  >()
   /** Bots whose screen can't be reached: their viewer sockets close at once with 1011 + this reason. */
   readonly desktopBroken = new Map<string, string>()
   /** Input the fake desktops received (dev diagnostics, `/api/mock/desktop`). */
@@ -681,12 +945,32 @@ export class MockBrain {
     const base = { botId: bot.id, nodeId: bot.hostNodeId, ...(missing && missing.length > 0 ? { missing } : {}) }
     if (node?.capabilities.includes("desktop@1")) {
       const d = this.desktopOf(botId)
-      return { ...base, state: d.state, surface: "desktop", controller: d.controller, viewPath: `/ws/computer/${bot.id}`, ...(d.state === "ready" ? { width: 1920, height: 1200 } : {}) }
+      return {
+        ...base,
+        state: d.state,
+        surface: "desktop",
+        controller: d.controller,
+        viewPath: `/ws/computer/${bot.id}`,
+        ...(d.state === "ready" ? { width: 1920, height: 1200 } : {}),
+      }
     }
     if (node?.capabilities.includes("browser@1")) {
-      return { ...base, state: "error", surface: "browser", controller: "bot", viewPath: `/ws/computer/${bot.id}`, message: "The dev mock has no browser screencast." }
+      return {
+        ...base,
+        state: "error",
+        surface: "browser",
+        controller: "bot",
+        viewPath: `/ws/computer/${bot.id}`,
+        message: "The dev mock has no browser screencast.",
+      }
     }
-    return { ...base, state: "unsupported", surface: "none", controller: "bot", message: `${node?.label ?? "This computer"} has no screen to show.` }
+    return {
+      ...base,
+      state: "unsupported",
+      surface: "none",
+      controller: "bot",
+      message: `${node?.label ?? "This computer"} has no screen to show.`,
+    }
   }
 
   computerEnsure(botId: string): ComputerStatus {
@@ -705,7 +989,8 @@ export class MockBrain {
       // the brain answers the bot's pending hand-offs when the owner hands the screen back
       for (const c of this.convs.values()) {
         for (const q of c.state.requests.values()) {
-          if (q.botId === botId && q.kind === "handoff" && q.status === "pending") this.respond(q.id, { type: "acknowledge", action: "done" })
+          if (q.botId === botId && q.kind === "handoff" && q.status === "pending")
+            this.respond(q.id, { type: "acknowledge", action: "done" })
         }
       }
     }
@@ -721,7 +1006,12 @@ export class MockBrain {
   }
 
   /** `/ws/computer/:botId` before the upgrade: the brain's HTTP refusals. */
-  desktopViewerCheck(botId: string, mode: "view" | "control"): { readonly ok: true; readonly accent: string; readonly page: "signin" | "dashboard" } | { readonly ok: false; readonly status: number; readonly text: string } {
+  desktopViewerCheck(
+    botId: string,
+    mode: "view" | "control",
+  ):
+    | { readonly ok: true; readonly accent: string; readonly page: "signin" | "dashboard" }
+    | { readonly ok: false; readonly status: number; readonly text: string } {
     const bot = this.bot(botId)
     if (!bot) return { ok: false, status: 404, text: "unknown bot" }
     const st = this.computerStatus(botId)
@@ -729,11 +1019,16 @@ export class MockBrain {
     if (mode === "control" && st.controller !== "user") return { ok: false, status: 403, text: "Take control first" }
     // a viewer wakes the desktop (like the brain's viewer, which ensures it first)
     this.desktopOf(botId).state = "ready"
-    const handoff = [...this.convs.values()].some((c) => [...c.state.requests.values()].some((q) => q.botId === botId && q.kind === "handoff" && q.status === "pending"))
+    const handoff = [...this.convs.values()].some((c) =>
+      [...c.state.requests.values()].some((q) => q.botId === botId && q.kind === "handoff" && q.status === "pending"),
+    )
     return { ok: true, accent: bot.avatar.color, page: handoff ? "signin" : "dashboard" }
   }
 
-  joinDesktop(botId: string, viewer: { readonly mode: "view" | "control"; readonly close: (code: number, reason: string) => void }): () => void {
+  joinDesktop(
+    botId: string,
+    viewer: { readonly mode: "view" | "control"; readonly close: (code: number, reason: string) => void },
+  ): () => void {
     let set = this.desktopViewers.get(botId)
     if (!set) {
       set = new Set()
@@ -773,7 +1068,17 @@ export class MockBrain {
     const at = this.now()
     const attachments = (input.attachmentIds ?? []).flatMap((id): Attachment[] => {
       const a = this.attachments.get(id)
-      return a ? [{ id: id as AttachmentId, name: (a as { name?: string }).name ?? id, mime: a.mime, byteSize: a.bytes.byteLength, url: `/api/attachments/${id}` }] : []
+      return a
+        ? [
+            {
+              id: id as AttachmentId,
+              name: (a as { name?: string }).name ?? id,
+              mime: a.mime,
+              byteSize: a.bytes.byteLength,
+              url: `/api/attachments/${id}`,
+            },
+          ]
+        : []
     })
     const entry = this.put(
       this.message(input.conversationId, OWNER, input.text, at, {
@@ -790,18 +1095,28 @@ export class MockBrain {
     if (c.kind === "group") {
       const members = c.memberBotIds as ReadonlyArray<string>
       if (input.addressEveryone) targets = [...members]
-      else if (input.addressedBotIds && input.addressedBotIds.length > 0) targets = input.addressedBotIds.filter((id) => members.includes(id))
+      else if (input.addressedBotIds && input.addressedBotIds.length > 0)
+        targets = input.addressedBotIds.filter((id) => members.includes(id))
       else if (input.replyToId) {
         const replied = r.state.entries.get(input.replyToId)
-        targets = replied?.author.kind === "bot" && members.includes(replied.author.botId) ? [replied.author.botId] : [c.leadBotId ?? members[0]!]
+        targets =
+          replied?.author.kind === "bot" && members.includes(replied.author.botId)
+            ? [replied.author.botId]
+            : [c.leadBotId ?? members[0]!]
       } else targets = [c.leadBotId ?? members[0]!]
     } else targets = [c.botId]
     const turnIds = targets.map((botId, i) => {
       if (i === 0) return this.replyTo(input.conversationId, botId, input.text, entry.id)
-      return this.startTurn(input.conversationId, botId, "user", async (turn, signal) => {
-        await this.wait(1200 + i * 600, signal)
-        await this.stream(turn, cannedGroupReply(this.bot(botId)?.name ?? "Bot", input.text), signal)
-      }, entry.id)
+      return this.startTurn(
+        input.conversationId,
+        botId,
+        "user",
+        async (turn, signal) => {
+          await this.wait(1200 + i * 600, signal)
+          await this.stream(turn, cannedGroupReply(this.bot(botId)?.name ?? "Bot", input.text), signal)
+        },
+        entry.id,
+      )
     })
     const result: SendResult = { entryId: entry.id, turnIds, disposition: turnIds.length > 0 ? "started" : "queued" }
     this.sends.set(input.clientNonce, result)
@@ -834,9 +1149,10 @@ export class MockBrain {
   advanceSttInstall(): SttStatus {
     if (this.stt.state !== "installing") return this.stt
     const downloadedBytes = Math.min(STT_DOWNLOAD_BYTES, (this.stt.downloadedBytes ?? 0) + STT_DOWNLOAD_STEP_BYTES)
-    this.stt = downloadedBytes >= STT_DOWNLOAD_BYTES
-      ? { state: "ready", model: this.stt.model }
-      : { state: "installing", model: this.stt.model, downloadBytes: STT_DOWNLOAD_BYTES, downloadedBytes }
+    this.stt =
+      downloadedBytes >= STT_DOWNLOAD_BYTES
+        ? { state: "ready", model: this.stt.model }
+        : { state: "installing", model: this.stt.model, downloadBytes: STT_DOWNLOAD_BYTES, downloadedBytes }
     return this.stt
   }
 
@@ -844,13 +1160,23 @@ export class MockBrain {
   answerSlackDraft(entryId: string, text: string | undefined) {
     const conv = [...this.convs.values()].find((c) => c.state.entries.has(entryId as EntryId))
     const entry = conv?.state.entries.get(entryId as EntryId)
-    if (entry?.kind !== "card" || entry.card.type !== "slack-draft") throw new NotFound({ entity: "slack draft", id: entryId })
-    if (entry.state.status !== "pending") throw new Conflict({ reason: entry.state.status === "resolved" ? "This message was already sent." : "This draft was discarded." })
-    if (text !== undefined && !this.slack.connected) throw new Unavailable({ message: "Slack isn't connected (Connect apps › Slack)." })
+    if (entry?.kind !== "card" || entry.card.type !== "slack-draft")
+      throw new NotFound({ entity: "slack draft", id: entryId })
+    if (entry.state.status !== "pending")
+      throw new Conflict({
+        reason: entry.state.status === "resolved" ? "This message was already sent." : "This draft was discarded.",
+      })
+    if (text !== undefined && !this.slack.connected)
+      throw new Unavailable({ message: "Slack isn't connected (Connect apps › Slack)." })
     const card = text === undefined ? entry.card : { ...entry.card, text }
-    const state = text === undefined
-      ? { status: "dismissed" as const, detail: "Discarded" }
-      : { status: "resolved" as const, detail: "Sent", link: `https://acme.slack.com/archives/${entry.card.channelId}/p${this.now()}000` }
+    const state =
+      text === undefined
+        ? { status: "dismissed" as const, detail: "Discarded" }
+        : {
+            status: "resolved" as const,
+            detail: "Sent",
+            link: `https://acme.slack.com/archives/${entry.card.channelId}/p${this.now()}000`,
+          }
     this.put({ ...entry, card, state, updatedAt: this.now() } as Entry)
   }
 
@@ -859,13 +1185,31 @@ export class MockBrain {
     if (!conv) throw new NotFound({ entity: "request", id: requestId })
     const q = conv.state.requests.get(requestId as RequestId)!
     if (q.status !== "pending") throw new RequestNotPending({ requestId: q.id, status: q.status })
-    const response: RuntimeResponse = input.type === "secret" ? { type: "secret", provided: true } : (input as RuntimeResponse)
+    const response: RuntimeResponse =
+      input.type === "secret" ? { type: "secret", provided: true } : (input as RuntimeResponse)
     const resolved: RuntimeRequest = { ...q, status: "resolved", response, resolvedAt: this.now(), resolvedBy: OWNER }
     this.putRequest(resolved)
     const entry = conv.state.entries.get(q.cardEntryId)
-    if (entry?.kind === "card") this.put({ ...entry, state: { status: response.type === "dismiss" ? "dismissed" : "resolved", response, ...(response.type === "secret" ? { detail: "Saved securely and kept private" } : {}) }, updatedAt: this.now() } as Entry)
+    if (entry?.kind === "card")
+      this.put({
+        ...entry,
+        state: {
+          status: response.type === "dismiss" ? "dismissed" : "resolved",
+          response,
+          ...(response.type === "secret" ? { detail: "Saved securely and kept private" } : {}),
+        },
+        updatedAt: this.now(),
+      } as Entry)
     if (response.type === "decision" && response.decision === "allow-always" && q.suggestedRule) {
-      const rule: ApprovalRule = { id: this.id("rul") as ApprovalRule["id"], botId: q.botId, surface: q.suggestedRule.surface, match: q.suggestedRule.match, action: "allow", origin: "always-allow", createdAt: this.now() }
+      const rule: ApprovalRule = {
+        id: this.id("rul") as ApprovalRule["id"],
+        botId: q.botId,
+        surface: q.suggestedRule.surface,
+        match: q.suggestedRule.match,
+        action: "allow",
+        origin: "always-allow",
+        createdAt: this.now(),
+      }
       this.rules.set(rule.id, rule)
     }
     const waiter = this.waiters.get(q.id)
@@ -875,7 +1219,15 @@ export class MockBrain {
     return resolved
   }
 
-  createBot(input: { name: string; label?: string; avatar?: Bot["avatar"]; harness: Bot["harness"]; hostNodeId?: string; instructions?: string; autonomy?: Bot["autonomy"] }): Bot {
+  createBot(input: {
+    name: string
+    label?: string
+    avatar?: Bot["avatar"]
+    harness: Bot["harness"]
+    hostNodeId?: string
+    instructions?: string
+    autonomy?: Bot["autonomy"]
+  }): Bot {
     const id = this.id("bot") as BotId
     const conversationId = this.id("cnv") as ConversationId
     const at = this.now()
@@ -900,11 +1252,28 @@ export class MockBrain {
     }
     this.putBot(bot)
     this.memory.set(id, { index: "", facts: [] })
-    this.addConversation({ id: conversationId, kind: "direct", botId: id, title: bot.name, createdAt: at, lastActivityAt: at, unreadCount: 0, hiddenFromSidebar: false, epoch: "e1" }, "Joined the team")
+    this.addConversation(
+      {
+        id: conversationId,
+        kind: "direct",
+        botId: id,
+        title: bot.name,
+        createdAt: at,
+        lastActivityAt: at,
+        unreadCount: 0,
+        hiddenFromSidebar: false,
+        epoch: "e1",
+      },
+      "Joined the team",
+    )
     this.put(this.event(conversationId, { kind: "system" }, { type: "joined", botId: id, name: bot.name }, at))
     this.startTurn(conversationId, id, "system", async (turn, signal) => {
       await this.wait(700, signal)
-      await this.stream(turn, `Hi, I'm **${bot.name}**. I run on ${input.harness.kind === "fake" ? "the offline demo harness" : input.harness.kind}. What would you like me to take off your plate?`, signal)
+      await this.stream(
+        turn,
+        `Hi, I'm **${bot.name}**. I run on ${input.harness.kind === "fake" ? "the offline demo harness" : input.harness.kind}. What would you like me to take off your plate?`,
+        signal,
+      )
       const requestId = this.id("req")
       const { request, entry } = this.request({
         conversationId,
@@ -919,7 +1288,12 @@ export class MockBrain {
             {
               id: "q1",
               prompt: "What would you like me to take off your plate?",
-              options: [{ label: "Triage my inbox every morning" }, { label: "Keep an eye on competitors" }, { label: "Prep my meetings" }, { label: "Something else" }],
+              options: [
+                { label: "Triage my inbox every morning" },
+                { label: "Keep an eye on competitors" },
+                { label: "Prep my meetings" },
+                { label: "Something else" },
+              ],
               multiSelect: false,
               allowFreeText: true,
             },
@@ -937,7 +1311,8 @@ export class MockBrain {
 
   createGroup(input: { title: string; memberBotIds: ReadonlyArray<string>; leadBotId?: string }): Conversation {
     const members = [...new Set(input.memberBotIds)]
-    if (members.length < MIN_GROUP_BOTS || members.length > MAX_GROUP_BOTS) throw new InvalidInput({ message: `A group chat needs ${MIN_GROUP_BOTS}–${MAX_GROUP_BOTS} Bots` })
+    if (members.length < MIN_GROUP_BOTS || members.length > MAX_GROUP_BOTS)
+      throw new InvalidInput({ message: `A group chat needs ${MIN_GROUP_BOTS}–${MAX_GROUP_BOTS} Bots` })
     for (const id of members) if (!this.bot(id)) throw new NotFound({ entity: "bot", id })
     const at = this.now()
     const conversation: Conversation = {
@@ -954,22 +1329,43 @@ export class MockBrain {
       epoch: "e1",
     }
     this.addConversation(conversation, "New group chat")
-    for (const id of members) this.put(this.event(conversation.id, { kind: "system" }, { type: "member-added", botId: id as BotId, name: this.bot(id)!.name }, at))
+    for (const id of members)
+      this.put(
+        this.event(
+          conversation.id,
+          { kind: "system" },
+          { type: "member-added", botId: id as BotId, name: this.bot(id)!.name },
+          at,
+        ),
+      )
     return conversation
   }
 
   /** `conversations.exchange`: both directions from both DMs, paged by `"<createdAt>:<id>"` cursors. */
-  exchange(input: { readonly botId: string; readonly peerBotId: string; readonly at?: number; readonly before?: string; readonly after?: string; readonly limit: number }) {
+  exchange(input: {
+    readonly botId: string
+    readonly peerBotId: string
+    readonly at?: number
+    readonly before?: string
+    readonly after?: string
+    readonly limit: number
+  }) {
     const a = this.bot(input.botId)
     const b = this.bot(input.peerBotId)
     if (!a || !b) throw new NotFound({ entity: "bot", id: a ? input.peerBotId : input.botId })
     const all = [a, b]
       .flatMap((bot) => this.conv(bot.directConversationId).entries)
-      .filter((e) => e.kind === "message" && e.author.kind === "bot" && ((e.author.botId === a.id && e.toBotId === b.id) || (e.author.botId === b.id && e.toBotId === a.id)))
+      .filter(
+        (e) =>
+          e.kind === "message" &&
+          e.author.kind === "bot" &&
+          ((e.author.botId === a.id && e.toBotId === b.id) || (e.author.botId === b.id && e.toBotId === a.id)),
+      )
       .sort(compareEntries)
     const cursor = (e: { readonly createdAt: number; readonly id: string }) => `${e.createdAt}:${e.id}`
     const position = (c: string) => ({ createdAt: Number(c.slice(0, c.indexOf(":"))), id: c.slice(c.indexOf(":") + 1) })
-    const countUpTo = (p: { readonly createdAt: number; readonly id: string }, inclusive: boolean) => all.filter((e) => compareEntries(e, p) < (inclusive ? 1 : 0)).length
+    const countUpTo = (p: { readonly createdAt: number; readonly id: string }, inclusive: boolean) =>
+      all.filter((e) => compareEntries(e, p) < (inclusive ? 1 : 0)).length
     let start: number
     let end: number
     if (input.before) {
@@ -995,7 +1391,10 @@ export class MockBrain {
     const r = this.conv(conversationId)
     if (unread) {
       const lastBot = [...r.entries].reverse().find((e) => e.author.kind === "bot")
-      this.updateConversation(conversationId, { unreadCount: 1, unreadBoundaryAt: (lastBot?.createdAt ?? this.now()) - 1 })
+      this.updateConversation(conversationId, {
+        unreadCount: 1,
+        unreadBoundaryAt: (lastBot?.createdAt ?? this.now()) - 1,
+      })
     } else this.updateConversation(conversationId, { unreadCount: 0, unreadBoundaryAt: at ?? this.now() })
   }
 
@@ -1032,7 +1431,13 @@ export class MockBrain {
     return {
       conversations: [...this.convs.values()].map((r) => {
         const c = r.conversation
-        return { id: c.id, kind: c.kind, memberBotIds: c.kind === "group" ? c.memberBotIds : [c.botId], entries: r.entries, turns: r.state.turns }
+        return {
+          id: c.id,
+          kind: c.kind,
+          memberBotIds: c.kind === "group" ? c.memberBotIds : [c.botId],
+          entries: r.entries,
+          turns: r.state.turns,
+        }
       }),
     }
   }
@@ -1044,8 +1449,15 @@ export class MockBrain {
       () =>
         Effect.try({ try: f, catch: (e) => e as never })
     const h: Record<string, (p: any) => unknown> = {
-      "session.info": () => Effect.succeed({ ownerName: this.settings.ownerName ?? "Alex", version: "0.0.0-dev", dataDir: "(in-memory mock)", firstRun: this.firstRun && this.roster.state.bots.size === 0 }),
-      "roster.subscribe": ({ after }) => subscribeTo<KnownRosterStreamItem>(this.roster, after, () => this.roster.snapshot()),
+      "session.info": () =>
+        Effect.succeed({
+          ownerName: this.settings.ownerName ?? "Alex",
+          version: "0.0.0-dev",
+          dataDir: "(in-memory mock)",
+          firstRun: this.firstRun && this.roster.state.bots.size === 0,
+        }),
+      "roster.subscribe": ({ after }) =>
+        subscribeTo<KnownRosterStreamItem>(this.roster, after, () => this.roster.snapshot()),
       "conversations.subscribe": ({ conversationId, after }) => {
         const r = this.convs.get(conversationId)
         if (!r) return Stream.fail(new NotFound({ entity: "conversation", id: conversationId }))
@@ -1059,7 +1471,10 @@ export class MockBrain {
       "conversations.around": ({ conversationId, entryId, beforeCursor, afterCursor, limit }) =>
         sync(() => {
           const r = this.conv(conversationId)
-          const page = around({ entries: r.entries, turns: r.state.turns, requests: r.requests }, { entryId, beforeCursor, afterCursor, limit })
+          const page = around(
+            { entries: r.entries, turns: r.state.turns, requests: r.requests },
+            { entryId, beforeCursor, afterCursor, limit },
+          )
           if (!page) throw new NotFound({ entity: "entry", id: entryId ?? "" })
           return page
         })(),
@@ -1098,7 +1513,8 @@ export class MockBrain {
           this.roster.apply({ type: "conversation.removed", conversationId: bot.directConversationId })
           this.convs.delete(bot.directConversationId)
         })(),
-      "bots.get": ({ botId }) => (this.bot(botId) ? Effect.succeed(this.bot(botId)) : Effect.fail(new NotFound({ entity: "bot", id: botId }))),
+      "bots.get": ({ botId }) =>
+        this.bot(botId) ? Effect.succeed(this.bot(botId)) : Effect.fail(new NotFound({ entity: "bot", id: botId })),
       "bots.readContext": ({ botId }) =>
         sync(() => {
           const bot = this.bot(botId)
@@ -1114,16 +1530,34 @@ export class MockBrain {
           const bot = this.bot(botId)
           if (!bot) throw new NotFound({ entity: "bot", id: botId })
           const c = this.conv(bot.directConversationId).conversation
-          this.put(this.event(c.id, { kind: "system" }, { type: "session-changed", botId, action: "new-session" }, this.now()))
-          this.updateConversation(c.id, { sessions: (c.sessions ?? []).map((s) => (s.botId === botId ? { botId: s.botId, active: false, updatedAt: this.now() } : s)) })
+          this.put(
+            this.event(c.id, { kind: "system" }, { type: "session-changed", botId, action: "new-session" }, this.now()),
+          )
+          this.updateConversation(c.id, {
+            sessions: (c.sessions ?? []).map((s) =>
+              s.botId === botId ? { botId: s.botId, active: false, updatedAt: this.now() } : s,
+            ),
+          })
         })(),
       "bots.compact": ({ botId }) =>
         sync(() => {
           const bot = this.bot(botId)
           if (!bot) throw new NotFound({ entity: "bot", id: botId })
           const c = this.conv(bot.directConversationId).conversation
-          this.put(this.event(c.id, { kind: "system" }, { type: "session-changed", botId, action: "compacted" }, this.now()))
-          this.updateConversation(c.id, { sessions: (c.sessions ?? []).map((s) => (s.botId === botId ? { ...s, contextUsage: { usedTokens: 18_000, windowTokens: s.contextUsage?.windowTokens ?? 200_000 }, updatedAt: this.now() } : s)) })
+          this.put(
+            this.event(c.id, { kind: "system" }, { type: "session-changed", botId, action: "compacted" }, this.now()),
+          )
+          this.updateConversation(c.id, {
+            sessions: (c.sessions ?? []).map((s) =>
+              s.botId === botId
+                ? {
+                    ...s,
+                    contextUsage: { usedTokens: 18_000, windowTokens: s.contextUsage?.windowTokens ?? 200_000 },
+                    updatedAt: this.now(),
+                  }
+                : s,
+            ),
+          })
         })(),
       "sections.list": () => Effect.succeed([...this.roster.state.sections.values()]),
       "sections.create": ({ name }) =>
@@ -1142,7 +1576,9 @@ export class MockBrain {
         })(),
       "sections.delete": ({ sectionId }) =>
         sync(() => {
-          for (const b of this.roster.state.bots.values()) if (b.sectionId === sectionId) this.putBot(Object.fromEntries(Object.entries(b).filter(([k]) => k !== "sectionId")) as unknown as Bot)
+          for (const b of this.roster.state.bots.values())
+            if (b.sectionId === sectionId)
+              this.putBot(Object.fromEntries(Object.entries(b).filter(([k]) => k !== "sectionId")) as unknown as Bot)
           this.roster.apply({ type: "section.removed", sectionId })
         })(),
       "sections.reorder": ({ sectionIds }) =>
@@ -1161,28 +1597,66 @@ export class MockBrain {
           const c = this.conv(conversationId).conversation
           if (c.kind !== "group") throw new InvalidInput({ message: "Not a group chat" })
           const at = this.now()
-          for (const id of memberBotIds as string[]) if (!c.memberBotIds.includes(id as BotId)) this.put(this.event(conversationId, OWNER, { type: "member-added", botId: id as BotId, name: this.bot(id)?.name ?? "Bot" }, at))
-          for (const id of c.memberBotIds) if (!(memberBotIds as string[]).includes(id)) this.put(this.event(conversationId, OWNER, { type: "member-removed", botId: id, name: this.bot(id)?.name ?? "Bot" }, at))
-          const next = { ...c, memberBotIds, ...(leadBotId === null ? { leadBotId: undefined } : leadBotId ? { leadBotId } : {}) } as Conversation
+          for (const id of memberBotIds as string[])
+            if (!c.memberBotIds.includes(id as BotId))
+              this.put(
+                this.event(
+                  conversationId,
+                  OWNER,
+                  { type: "member-added", botId: id as BotId, name: this.bot(id)?.name ?? "Bot" },
+                  at,
+                ),
+              )
+          for (const id of c.memberBotIds)
+            if (!(memberBotIds as string[]).includes(id))
+              this.put(
+                this.event(
+                  conversationId,
+                  OWNER,
+                  { type: "member-removed", botId: id, name: this.bot(id)?.name ?? "Bot" },
+                  at,
+                ),
+              )
+          const next = {
+            ...c,
+            memberBotIds,
+            ...(leadBotId === null ? { leadBotId: undefined } : leadBotId ? { leadBotId } : {}),
+          } as Conversation
           this.updateConversation(conversationId, next)
           return this.conv(conversationId).conversation
         })(),
       "conversations.rename": ({ conversationId, title }) =>
         sync(() => {
           this.put(this.event(conversationId, OWNER, { type: "name-changed", to: title }, this.now()))
-          this.updateConversation(conversationId, { title, ...(this.conv(conversationId).conversation.kind === "group" ? { namedBy: "user" } : {}) } as Partial<Conversation>)
+          this.updateConversation(conversationId, {
+            title,
+            ...(this.conv(conversationId).conversation.kind === "group" ? { namedBy: "user" } : {}),
+          } as Partial<Conversation>)
           return this.conv(conversationId).conversation
         })(),
-      "conversations.markRead": ({ conversationId, unread, at }) => sync(() => this.markRead(conversationId, unread, at))(),
-      "conversations.setHidden": ({ conversationId, hidden }) => sync(() => this.updateConversation(conversationId, { hiddenFromSidebar: hidden }))(),
-      "sidebar.arrange": ({ place, items }: { place: string; items: ReadonlyArray<{ kind: "bot"; botId: string } | { kind: "group"; conversationId: string }> }) =>
+      "conversations.markRead": ({ conversationId, unread, at }) =>
+        sync(() => this.markRead(conversationId, unread, at))(),
+      "conversations.setHidden": ({ conversationId, hidden }) =>
+        sync(() => this.updateConversation(conversationId, { hiddenFromSidebar: hidden }))(),
+      "sidebar.arrange": ({
+        place,
+        items,
+      }: {
+        place: string
+        items: ReadonlyArray<{ kind: "bot"; botId: string } | { kind: "group"; conversationId: string }>
+      }) =>
         sync(() => {
           const section = place === "pinned" || place === "unassigned" || place === "groups" ? undefined : place
           items.forEach((item, index) => {
             if (item.kind === "bot") {
               const bot = this.bot(item.botId)
               if (!bot) throw new NotFound({ entity: "bot", id: item.botId })
-              const next: Record<string, unknown> = { ...bot, pinned: place === "pinned", sidebarOrder: index, updatedAt: this.now() }
+              const next: Record<string, unknown> = {
+                ...bot,
+                pinned: place === "pinned",
+                sidebarOrder: index,
+                updatedAt: this.now(),
+              }
               if (place !== "pinned") {
                 if (section === undefined) delete next.sectionId
                 else next.sectionId = section
@@ -1191,7 +1665,14 @@ export class MockBrain {
             } else {
               const r = this.conv(item.conversationId)
               const { sectionId: _drop, ...rest } = r.conversation as Conversation & { sectionId?: string }
-              r.apply({ type: "conversation.updated", conversation: { ...rest, ...(section === undefined ? {} : { sectionId: section }), sidebarOrder: index } as Conversation })
+              r.apply({
+                type: "conversation.updated",
+                conversation: {
+                  ...rest,
+                  ...(section === undefined ? {} : { sectionId: section }),
+                  sidebarOrder: index,
+                } as Conversation,
+              })
               this.publishSummary(item.conversationId)
             }
           })
@@ -1206,7 +1687,9 @@ export class MockBrain {
       "messages.send": (input) => sync(() => this.send(input))(),
       "messages.lookupSend": ({ clientNonce }) => {
         const s = this.sends.get(clientNonce)
-        return Effect.succeed(s ? { outcome: "found", entryId: s.entryId, delivery: "accepted" } : { outcome: "not-found" })
+        return Effect.succeed(
+          s ? { outcome: "found", entryId: s.entryId, delivery: "accepted" } : { outcome: "not-found" },
+        )
       },
       "messages.react": ({ conversationId, entryId, emoji }) =>
         sync(() => {
@@ -1214,7 +1697,11 @@ export class MockBrain {
           if (!e || e.kind !== "message") throw new NotFound({ entity: "entry", id: entryId })
           const reactions = e.reactions ?? []
           const mine = reactions.findIndex((r) => r.emoji === emoji && r.by.kind === "user")
-          this.put({ ...e, reactions: mine >= 0 ? reactions.filter((_, i) => i !== mine) : [...reactions, { emoji, by: OWNER }], updatedAt: this.now() } as Entry)
+          this.put({
+            ...e,
+            reactions: mine >= 0 ? reactions.filter((_, i) => i !== mine) : [...reactions, { emoji, by: OWNER }],
+            updatedAt: this.now(),
+          } as Entry)
         })(),
       "turns.interrupt": ({ conversationId, turnId }) => sync(() => this.interrupt(conversationId, turnId))(),
       "turns.retry": ({ conversationId, turnId }) => sync(() => this.retry(conversationId, turnId))(),
@@ -1228,16 +1715,35 @@ export class MockBrain {
         })(),
       "requests.respond": ({ requestId, response }) => sync(() => this.respond(requestId, response))(),
       "requests.listPending": ({ conversationId }) =>
-        Effect.succeed([...this.convs.values()].filter((c) => !conversationId || c.conversation.id === conversationId).flatMap((c) => c.requests.filter((q) => q.status === "pending"))),
-      "routines.list": ({ botId }) => Effect.succeed([...this.routines.values()].filter((r) => !botId || r.botId === botId)),
+        Effect.succeed(
+          [...this.convs.values()]
+            .filter((c) => !conversationId || c.conversation.id === conversationId)
+            .flatMap((c) => c.requests.filter((q) => q.status === "pending")),
+        ),
+      "routines.list": ({ botId }) =>
+        Effect.succeed([...this.routines.values()].filter((r) => !botId || r.botId === botId)),
       "routines.create": ({ botId, spec }) =>
         sync(() => {
           const bot = this.bot(botId)
           if (!bot) throw new NotFound({ entity: "bot", id: botId })
           const at = this.now()
-          const routine: Routine = { id: this.id("rtn") as RoutineId, botId, ...spec, createdAt: at, updatedAt: at, nextRunAt: at + 86_400_000 }
+          const routine: Routine = {
+            id: this.id("rtn") as RoutineId,
+            botId,
+            ...spec,
+            createdAt: at,
+            updatedAt: at,
+            nextRunAt: at + 86_400_000,
+          }
           this.routines.set(routine.id, routine)
-          this.put(this.event(bot.directConversationId, OWNER, { type: "routine-changed", action: "created", routineId: routine.id, routineName: routine.name }, at))
+          this.put(
+            this.event(
+              bot.directConversationId,
+              OWNER,
+              { type: "routine-changed", action: "created", routineId: routine.id, routineName: routine.name },
+              at,
+            ),
+          )
           return routine
         })(),
       "routines.update": ({ routineId, spec }) =>
@@ -1255,7 +1761,20 @@ export class MockBrain {
           const next = { ...r, enabled, updatedAt: this.now() }
           this.routines.set(routineId, next)
           const bot = this.bot(r.botId)
-          if (bot) this.put(this.event(bot.directConversationId, OWNER, { type: "routine-changed", action: enabled ? "enabled" : "disabled", routineId: r.id, routineName: r.name }, this.now()))
+          if (bot)
+            this.put(
+              this.event(
+                bot.directConversationId,
+                OWNER,
+                {
+                  type: "routine-changed",
+                  action: enabled ? "enabled" : "disabled",
+                  routineId: r.id,
+                  routineName: r.name,
+                },
+                this.now(),
+              ),
+            )
           return next
         })(),
       "routines.delete": ({ routineId }) =>
@@ -1264,7 +1783,15 @@ export class MockBrain {
           if (!r) throw new NotFound({ entity: "routine", id: routineId })
           this.routines.delete(routineId)
           const bot = this.bot(r.botId)
-          if (bot) this.put(this.event(bot.directConversationId, OWNER, { type: "routine-changed", action: "deleted", routineId: r.id, routineName: r.name }, this.now()))
+          if (bot)
+            this.put(
+              this.event(
+                bot.directConversationId,
+                OWNER,
+                { type: "routine-changed", action: "deleted", routineId: r.id, routineName: r.name },
+                this.now(),
+              ),
+            )
         })(),
       "routines.runNow": ({ routineId }) =>
         sync(() => {
@@ -1272,14 +1799,41 @@ export class MockBrain {
           if (!r) throw new NotFound({ entity: "routine", id: routineId })
           const bot = this.bot(r.botId)!
           const at = this.now()
-          const run: RoutineRun = { id: this.id("run") as RoutineRunId, routineId: r.id, firedBy: "manual", startedAt: at, status: "running", conversationId: bot.directConversationId }
+          const run: RoutineRun = {
+            id: this.id("run") as RoutineRunId,
+            routineId: r.id,
+            firedBy: "manual",
+            startedAt: at,
+            status: "running",
+            conversationId: bot.directConversationId,
+          }
           this.runs.set(r.id, [run, ...(this.runs.get(r.id) ?? [])].slice(0, 20))
-          this.put(this.event(bot.directConversationId, { kind: "system" }, { type: "routine-run", routineId: r.id, routineName: r.name, runId: run.id, status: "running" }, at))
+          this.put(
+            this.event(
+              bot.directConversationId,
+              { kind: "system" },
+              { type: "routine-run", routineId: r.id, routineName: r.name, runId: run.id, status: "running" },
+              at,
+            ),
+          )
           this.startTurn(bot.directConversationId, bot.id, "routine", async (turn, signal) => {
             await this.steps(turn, [{ name: "Read", toolKind: "file-read", summary: "calendar/today.ics" }], signal)
-            const msg = await this.stream(turn, `**${r.name}** · ${new Date().toLocaleDateString("en-US", { weekday: "long" })}\n\n- 2 meetings, first at 10:00\n- 3 emails need a reply\n- Nothing blocked`, signal)
-            const done: RoutineRun = { ...run, status: "succeeded", finishedAt: this.now(), turnId: turn.id, summary: preview(msg.text, 140) }
-            this.runs.set(r.id, (this.runs.get(r.id) ?? []).map((x) => (x.id === run.id ? done : x)))
+            const msg = await this.stream(
+              turn,
+              `**${r.name}** · ${new Date().toLocaleDateString("en-US", { weekday: "long" })}\n\n- 2 meetings, first at 10:00\n- 3 emails need a reply\n- Nothing blocked`,
+              signal,
+            )
+            const done: RoutineRun = {
+              ...run,
+              status: "succeeded",
+              finishedAt: this.now(),
+              turnId: turn.id,
+              summary: preview(msg.text, 140),
+            }
+            this.runs.set(
+              r.id,
+              (this.runs.get(r.id) ?? []).map((x) => (x.id === run.id ? done : x)),
+            )
             this.routines.set(r.id, { ...r, lastRunAt: this.now(), lastRunStatus: "succeeded" })
           })
           return run
@@ -1290,9 +1844,20 @@ export class MockBrain {
         sync(() => {
           const m = this.memory.get(botId) ?? { index: "", facts: [] }
           const id = fact.id ?? memoryFactIdFromTitle(fact.title)
-          const next = { id, title: fact.title, ...(fact.description ? { description: fact.description } : {}), body: fact.body, updatedAt: this.now() }
+          const next = {
+            id,
+            title: fact.title,
+            ...(fact.description ? { description: fact.description } : {}),
+            body: fact.body,
+            updatedAt: this.now(),
+          }
           const facts = [...m.facts.filter((f) => f.id !== id), next]
-          this.memory.set(botId, { index: facts.map((f) => `- [${f.title}](${f.id}.md)${f.description ? ` — ${f.description}` : ""}`).join("\n"), facts })
+          this.memory.set(botId, {
+            index: facts
+              .map((f) => `- [${f.title}](${f.id}.md)${f.description ? ` — ${f.description}` : ""}`)
+              .join("\n"),
+            facts,
+          })
           return next
         })(),
       "memory.deleteFact": ({ botId, factId }) =>
@@ -1335,12 +1900,16 @@ export class MockBrain {
             sync(() => {
               const q = (query as string).trim().toLowerCase()
               if (q === "") throw new InvalidInput({ message: "Type something to search for." })
-              if (q.includes("offline")) throw new Unavailable({ message: "skills.sh did not answer (search): fetch failed" })
-              return SKILLS_SH.map((c) => c.result).filter((r) => q.split(/\s+/).every((w) => r.id.toLowerCase().includes(w)))
+              if (q.includes("offline"))
+                throw new Unavailable({ message: "skills.sh did not answer (search): fetch failed" })
+              return SKILLS_SH.map((c) => c.result).filter((r) =>
+                q.split(/\s+/).every((w) => r.id.toLowerCase().includes(w)),
+              )
             })(),
           ),
         ),
-      "skills.preview": ({ id }) => Effect.promise(() => sleep(400)).pipe(Effect.andThen(() => sync(() => this.previewSkill(id))())),
+      "skills.preview": ({ id }) =>
+        Effect.promise(() => sleep(400)).pipe(Effect.andThen(() => sync(() => this.previewSkill(id))())),
       "skills.install": ({ id, botIds }) =>
         Effect.promise(() => sleep(400)).pipe(
           Effect.andThen(() =>
@@ -1356,7 +1925,9 @@ export class MockBrain {
                 files: canned.files.map((f) => f.path).filter((f) => f !== "SKILL.md"),
               }
               this.skills.set(skill.name, skill)
-              const holders = [...this.roster.state.bots.values()].filter((b) => (b.skills ?? []).includes(skill.name)).map((b) => b.id as string)
+              const holders = [...this.roster.state.bots.values()]
+                .filter((b) => (b.skills ?? []).includes(skill.name))
+                .map((b) => b.id as string)
               this.setSkillHolders(skill.name, [...new Set([...holders, ...(botIds as string[])])])
               return skill
             })(),
@@ -1379,13 +1950,27 @@ export class MockBrain {
             })),
         ),
       "harnesses.discover": ({ kind }) =>
-        Effect.succeed(kind === "claude" && !this.harnesses.some((h) => h.configDir === "/home/alex/.claude-3") ? [{ kind, configDir: "/home/alex/.claude-3", suggestedLabel: "alex@side.dev (Side)" }] : []),
+        Effect.succeed(
+          kind === "claude" && !this.harnesses.some((h) => h.configDir === "/home/alex/.claude-3")
+            ? [{ kind, configDir: "/home/alex/.claude-3", suggestedLabel: "alex@side.dev (Side)" }]
+            : [],
+        ),
       "harnesses.addProfile": ({ kind, label, configDir }) =>
         sync(() => {
           const base = this.harnesses.find((h) => h.kind === kind)
           if (!base) throw new InvalidInput({ message: `${kind} supports only its default account for now.` })
           const id = `hpf_${Math.random().toString(36).slice(2, 8)}`
-          this.harnesses = [...this.harnesses, { ...base, profileId: id, profileLabel: label || configDir, configDir, auth: { state: "signed-in", label }, account: { email: label } }]
+          this.harnesses = [
+            ...this.harnesses,
+            {
+              ...base,
+              profileId: id,
+              profileLabel: label || configDir,
+              configDir,
+              auth: { state: "signed-in", label },
+              account: { email: label },
+            },
+          ]
           return { id, kind, label: label || configDir, configDir, createdAt: this.now() }
         })(),
       "harnesses.removeProfile": ({ profileId }) =>
@@ -1395,9 +1980,16 @@ export class MockBrain {
         })(),
       "nodes.list": () => Effect.succeed([...this.roster.state.nodes.values()]),
       "nodes.createPairingCode": () => {
-        const raw = Array.from({ length: 8 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("")
+        const raw = Array.from(
+          { length: 8 },
+          () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)],
+        ).join("")
         const code = `${raw.slice(0, 4)}-${raw.slice(4)}`
-        return Effect.succeed({ code, expiresAt: this.now() + 600_000, command: `openbot-node pair ${this.origin} ${code}` })
+        return Effect.succeed({
+          code,
+          expiresAt: this.now() + 600_000,
+          command: `openbot-node pair ${this.origin} ${code}`,
+        })
       },
       "nodes.rename": ({ nodeId, label }) =>
         sync(() => {
@@ -1427,7 +2019,8 @@ export class MockBrain {
       "hark.status": () => Effect.succeed(this.hark),
       "hark.connect": ({ webhook }) =>
         sync(() => {
-          if (!/whk_/.test(webhook)) throw new InvalidInput({ message: "Paste the service's webhook URL from Hark (…/hooks/whk_…)." })
+          if (!/whk_/.test(webhook))
+            throw new InvalidInput({ message: "Paste the service's webhook URL from Hark (…/hooks/whk_…)." })
           this.hark = { connected: true, sends: this.hark.sends, lastSentAt: this.now() }
           return this.hark
         })(),
@@ -1449,9 +2042,17 @@ export class MockBrain {
       "slack.status": () => Effect.succeed(this.slack),
       "slack.connect": ({ userToken, appToken }) =>
         sync(() => {
-          if (!this.slack.connected && !(userToken ?? "").startsWith("xoxp-")) throw new InvalidInput({ message: "Paste the User OAuth Token: it starts with xoxp-." })
+          if (!this.slack.connected && !(userToken ?? "").startsWith("xoxp-"))
+            throw new InvalidInput({ message: "Paste the User OAuth Token: it starts with xoxp-." })
           const events = appToken !== undefined || this.slack.events === "live" ? ("live" as const) : ("off" as const)
-          this.slack = { connected: true, team: "Acme", teamUrl: "https://acme.slack.com/", userId: "U_OWNER", userName: this.settings.ownerName ?? "Alex", events }
+          this.slack = {
+            connected: true,
+            team: "Acme",
+            teamUrl: "https://acme.slack.com/",
+            userId: "U_OWNER",
+            userName: this.settings.ownerName ?? "Alex",
+            events,
+          }
           return this.slack
         })(),
       "slack.disconnect": () =>
@@ -1464,7 +2065,12 @@ export class MockBrain {
       "stt.status": () => sync(() => this.advanceSttInstall())(),
       "stt.install": () =>
         sync(() => {
-          this.stt = { state: "installing", model: this.stt.model, downloadBytes: STT_DOWNLOAD_BYTES, downloadedBytes: 0 }
+          this.stt = {
+            state: "installing",
+            model: this.stt.model,
+            downloadBytes: STT_DOWNLOAD_BYTES,
+            downloadedBytes: 0,
+          }
           return this.stt
         })(),
       "stt.remove": () =>
@@ -1486,15 +2092,20 @@ export class MockBrain {
         })(),
       "stt.open": () =>
         sync(() => {
-          if (this.stt.state !== "ready") throw new Unavailable({ message: "Voice input isn't set up on this OpenBot yet." })
+          if (this.stt.state !== "ready")
+            throw new Unavailable({ message: "Voice input isn't set up on this OpenBot yet." })
           return { sessionId: this.id("dic") }
         })(),
       "stt.append": () =>
         sync(() => {
-          if (this.sttFailsAppend) throw new Unavailable({ message: "Voice input could not transcribe; the details are in the brain's log." })
+          if (this.sttFailsAppend)
+            throw new Unavailable({ message: "Voice input could not transcribe; the details are in the brain's log." })
           return { text: "Check the staging deploy" }
         })(),
-      "stt.finish": () => Effect.as(Effect.sleep(this.sttFinishDelayMs), { text: "Check the staging deploy and tell me if it is green." }),
+      "stt.finish": () =>
+        Effect.as(Effect.sleep(this.sttFinishDelayMs), {
+          text: "Check the staging deploy and tell me if it is green.",
+        }),
       "stt.discard": () =>
         sync(() => {
           this.sttDiscards++
@@ -1506,10 +2117,15 @@ export class MockBrain {
           this.roster.apply({ type: "settings.updated", settings: next })
           return next
         })(),
-      "rules.list": ({ botId }) => Effect.succeed([...this.rules.values()].filter((r) => !botId || r.botId === botId || r.botId === undefined)),
+      "rules.list": ({ botId }) =>
+        Effect.succeed([...this.rules.values()].filter((r) => !botId || r.botId === botId || r.botId === undefined)),
       "rules.upsert": ({ rule }) =>
         sync(() => {
-          const r: ApprovalRule = { ...rule, id: rule.id ?? (this.id("rul") as ApprovalRule["id"]), createdAt: this.rules.get(rule.id)?.createdAt ?? this.now() }
+          const r: ApprovalRule = {
+            ...rule,
+            id: rule.id ?? (this.id("rul") as ApprovalRule["id"]),
+            createdAt: this.rules.get(rule.id)?.createdAt ?? this.now(),
+          }
           this.rules.set(r.id, r)
           return r
         })(),
@@ -1518,7 +2134,8 @@ export class MockBrain {
       // background tasks (D5.7): the offline mock runs none
       "tasks.list": () => Effect.succeed([]),
     }
-    for (const tag of OpenBotRpcs.requests.keys()) if (!(tag in h)) h[tag] = () => Effect.die(new Error(`${tag} not implemented in the dev mock`))
+    for (const tag of OpenBotRpcs.requests.keys())
+      if (!(tag in h)) h[tag] = () => Effect.die(new Error(`${tag} not implemented in the dev mock`))
     return h
   }
 }
@@ -1539,9 +2156,12 @@ const MODELS: Record<string, ModelInfo[]> = {
 
 const cannedReply = (text: string, name: string): string => {
   const t = text.toLowerCase()
-  if (/today|morning|agenda|needs me/.test(t)) return "Two things need you today:\n\n1. **Deck review** at 2pm, numbers are checked\n2. **Offsite venue**, a yes or no by Friday\n\nEverything else is handled."
-  if (/status|update|progress/.test(t)) return `Here's where things stand:\n\n- **Done** → 3 of 5 items\n- **In progress** → the Q3 summary\n- **Blocked** → nothing\n\nI'll post again when the summary is ready.`
-  if (/code|script|snippet/.test(t)) return "Here's the script:\n\n```ts\nconst total = rows.reduce((sum, r) => sum + r.amount, 0)\nconsole.log(total.toFixed(2))\n```\n\nRun it with `bun total.ts`."
+  if (/today|morning|agenda|needs me/.test(t))
+    return "Two things need you today:\n\n1. **Deck review** at 2pm, numbers are checked\n2. **Offsite venue**, a yes or no by Friday\n\nEverything else is handled."
+  if (/status|update|progress/.test(t))
+    return `Here's where things stand:\n\n- **Done** → 3 of 5 items\n- **In progress** → the Q3 summary\n- **Blocked** → nothing\n\nI'll post again when the summary is ready.`
+  if (/code|script|snippet/.test(t))
+    return "Here's the script:\n\n```ts\nconst total = rows.reduce((sum, r) => sum + r.amount, 0)\nconsole.log(total.toFixed(2))\n```\n\nRun it with `bun total.ts`."
   return `On it. I checked your notes and the ops folder: two TODOs are open (\`ops/offsite.md\` and \`ops/deck.md\`). I'll handle the catering confirmation and flag the Q3 numbers for you.\n\n— ${name}`
 }
 

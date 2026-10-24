@@ -50,19 +50,19 @@ export interface CanUseToolOptions {
 /** SDK `PermissionResult`, structurally. */
 export type ClaudePermissionResult =
   | {
-    readonly behavior: "allow"
-    readonly updatedInput: Record<string, unknown>
-    readonly updatedPermissions?: ReadonlyArray<Record<string, unknown>>
-    readonly toolUseID?: string
-    readonly decisionClassification?: "user_temporary" | "user_permanent"
-  }
+      readonly behavior: "allow"
+      readonly updatedInput: Record<string, unknown>
+      readonly updatedPermissions?: ReadonlyArray<Record<string, unknown>>
+      readonly toolUseID?: string
+      readonly decisionClassification?: "user_temporary" | "user_permanent"
+    }
   | {
-    readonly behavior: "deny"
-    readonly message: string
-    readonly interrupt?: boolean
-    readonly toolUseID?: string
-    readonly decisionClassification?: "user_reject"
-  }
+      readonly behavior: "deny"
+      readonly message: string
+      readonly interrupt?: boolean
+      readonly toolUseID?: string
+      readonly decisionClassification?: "user_reject"
+    }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -82,17 +82,24 @@ const nativeQuestions = (input: Record<string, unknown>): ReadonlyArray<NativeQu
     if (!isRecord(entry) || typeof entry.question !== "string") return []
     const options = Array.isArray(entry.options)
       ? entry.options.flatMap((option) =>
-        isRecord(option) && typeof option.label === "string"
-          ? [{ label: option.label, ...(typeof option.description === "string" ? { description: option.description } : {}) }]
-          : []
-      )
+          isRecord(option) && typeof option.label === "string"
+            ? [
+                {
+                  label: option.label,
+                  ...(typeof option.description === "string" ? { description: option.description } : {}),
+                },
+              ]
+            : [],
+        )
       : []
-    return [{
-      question: entry.question,
-      ...(typeof entry.header === "string" ? { header: entry.header } : {}),
-      options,
-      multiSelect: entry.multiSelect === true,
-    }]
+    return [
+      {
+        question: entry.question,
+        ...(typeof entry.header === "string" ? { header: entry.header } : {}),
+        options,
+        multiSelect: entry.multiSelect === true,
+      },
+    ]
   })
 }
 
@@ -155,14 +162,18 @@ export const toHarnessRequest = (
   const tool = classifyTool(toolName, input)
   const label = options.displayName ?? tool.title
   const title = options.title ?? `Claude wants to use ${label}`
-  const detail = options.description ?? options.decisionReason ??
-    (tool.command ?? (tool.inputSummary.length > 0 ? tool.inputSummary : inputDetail(input)))
-  const suggestions: Array<HarnessDecisionSuggestion> = options.suppressAlwaysAllowRule === true
-    ? []
-    : [
-      { decision: "allow-session", label: "Allow for this conversation", native: options.suggestions ?? [] },
-      { decision: "allow-always", label: "Always allow", native: options.suggestions ?? [] },
-    ]
+  const detail =
+    options.description ??
+    options.decisionReason ??
+    tool.command ??
+    (tool.inputSummary.length > 0 ? tool.inputSummary : inputDetail(input))
+  const suggestions: Array<HarnessDecisionSuggestion> =
+    options.suppressAlwaysAllowRule === true
+      ? []
+      : [
+          { decision: "allow-session", label: "Allow for this conversation", native: options.suggestions ?? [] },
+          { decision: "allow-always", label: "Always allow", native: options.suggestions ?? [] },
+        ]
   const paths = tool.paths ?? (options.blockedPath ? [options.blockedPath] : undefined)
   const request: HarnessApprovalRequest = {
     kind: approvalKind(tool.kind),
@@ -191,7 +202,9 @@ export const toSessionPermissionUpdates = (
   const updates = list
     .filter((s) => s.type !== "setMode") // never let a tool approval change the permission mode
     .map((s) => ({ ...s, destination: "session" }))
-  return updates.length > 0 ? updates : [{ type: "addRules", rules: [{ toolName }], behavior: "allow", destination: "session" }]
+  return updates.length > 0
+    ? updates
+    : [{ type: "addRules", rules: [{ toolName }], behavior: "allow", destination: "session" }]
 }
 
 const answerText = (value: string | ReadonlyArray<string>): string =>
@@ -249,7 +262,8 @@ export const toPermissionResult = (
     default:
       return {
         behavior: "deny",
-        message: resolution.message ??
+        message:
+          resolution.message ??
           (toolName === ASK_USER_QUESTION ? "The user dismissed the question." : "The user denied this action."),
         toolUseID,
         decisionClassification: "user_reject",

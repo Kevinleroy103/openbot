@@ -10,7 +10,8 @@ export const reconnectAtom: Atom.Writable<void, void> = Atom.writable(
   () => undefined,
   (ctx) => {
     const state = ctx.get(connectionStateAtom)
-    if (state.status !== "online") ctx.set(connectionStateAtom, { ...state, status: "connecting", attempt: 0, nextRetryAt: undefined })
+    if (state.status !== "online")
+      ctx.set(connectionStateAtom, { ...state, status: "connecting", attempt: 0, nextRetryAt: undefined })
     ctx.set(reconnectSignalAtom, ctx.get(reconnectSignalAtom) + 1)
   },
 )
@@ -22,7 +23,9 @@ interface EventTargetLike {
 
 /** Browser wake-ups (online / visible) → immediate reconnect while offline. No-op outside a browser. */
 const browserWakeAtom = Atom.make((get) => {
-  const win = globalThis as unknown as Partial<EventTargetLike> & { document?: Partial<EventTargetLike> & { visibilityState?: string } }
+  const win = globalThis as unknown as Partial<EventTargetLike> & {
+    document?: Partial<EventTargetLike> & { visibilityState?: string }
+  }
   if (typeof win.addEventListener !== "function" || typeof win.removeEventListener !== "function") return
   const registry = get.registry
   const wake = () => {

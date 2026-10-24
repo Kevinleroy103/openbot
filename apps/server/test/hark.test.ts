@@ -24,7 +24,11 @@ const startFakeHark = () => {
       const match = /^\/hooks\/([^/]+)$/.exec(new URL(request.url).pathname)
       if (request.method !== "POST" || match === null) return new Response("not found", { status: 404 })
       if (!known.has(match[1]!)) return Response.json({ ok: false, error: "unknown webhook" }, { status: 404 })
-      pushes.push({ token: match[1]!, key: request.headers.get("idempotency-key"), body: (await request.json()) as Record<string, unknown> })
+      pushes.push({
+        token: match[1]!,
+        key: request.headers.get("idempotency-key"),
+        body: (await request.json()) as Record<string, unknown>,
+      })
       return Response.json({ ok: true, eventId: `evt_${pushes.length}`, delivered: 1 })
     },
   })
@@ -53,73 +57,117 @@ describe("Hark", () => {
 
   for (const pendingAt of ["request", "response body"] as const) {
     test(`interrupting a Hark call aborts its pending ${pendingAt}`, () =>
-      server.run(Effect.gen(function*() {
-        const started = Promise.withResolvers<AbortSignal>()
-        const file = join(server.dataDir, `cancel-${pendingAt}.json`)
-        const fetchImpl: typeof fetch = Object.assign(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-          const signal = init?.signal
-          if (signal == null) throw new Error("Hark must pass an abort signal")
-          const pending = () => {
-            started.resolve(signal)
-            return new Promise<never>((_resolve, reject) => {
-              signal.addEventListener("abort", () => reject(signal.reason), { once: true })
-            })
-          }
-          if (pendingAt === "request") return pending()
-          return Object.assign(new Response(null, { status: 503 }), { json: pending })
-        }, { preconnect: fetch.preconnect })
-        const service = yield* makeHark({ file, fetch: fetchImpl })
-        const call = yield* service.connect("whk_good").pipe(Effect.forkScoped)
-        const signal = yield* Effect.promise(() => started.promise)
-        expect(signal.aborted).toBe(false)
-        yield* Fiber.interrupt(call)
-        expect(signal.aborted).toBe(true)
-        expect(existsSync(file)).toBe(false)
-        expect(yield* service.status).toEqual({ connected: false, sends: "all" })
-      })))
+      server.run(
+        Effect.gen(function* () {
+          const started = Promise.withResolvers<AbortSignal>()
+          const file = join(server.dataDir, `cancel-${pendingAt}.json`)
+          const fetchImpl: typeof fetch = Object.assign(
+            async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+              const signal = init?.signal
+              if (signal == null) throw new Error("Hark must pass an abort signal")
+              const pending = () => {
+                started.resolve(signal)
+                return new Promise<never>((_resolve, reject) => {
+                  signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+                })
+              }
+              if (pendingAt === "request") return pending()
+              return Object.assign(new Response(null, { status: 503 }), { json: pending })
+            },
+            { preconnect: fetch.preconnect },
+          )
+          const service = yield* makeHark({ file, fetch: fetchImpl })
+          const call = yield* service.connect("whk_good").pipe(Effect.forkScoped)
+          const signal = yield* Effect.promise(() => started.promise)
+          expect(signal.aborted).toBe(false)
+          yield* Fiber.interrupt(call)
+          expect(signal.aborted).toBe(true)
+          expect(existsSync(file)).toBe(false)
+          expect(yield* service.status).toEqual({ connected: false, sends: "all" })
+        }),
+      ))
   }
 
-  test("connect, push OpenBot's notifications to the iPhone, choose what is sent, disconnect", () =>
-    server.run(Effect.gen(function*() {
-      const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
-      expect(yield* client["hark.status"]()).toEqual({ connected: false, sends: "all" })
-      const unknown = yield* Effect.flip(client["hark.connect"]({ webhook: "https://hark.ryan.ceo/hooks/whk_nope" }))
-      expect(unknown).toMatchObject({ _tag: "InvalidInput", message: expect.stringContaining("doesn't know this webhook") })
-      const connected = yield* client["hark.connect"]({ webhook: "https://hark.ryan.ceo/hooks/whk_good" })
-      expect(connected).toMatchObject({ connected: true, sends: "all" })
-      expect(hark.pushes.at(-1)!.body).toEqual({
-        title: "OpenBot",
-        body: "Connected. Your Bots' notifications will show up here.",
-        url: "https://box.tailnet.ts.net:8444/",
-      })
+  test(
+    "connect, push OpenBot's notifications to the iPhone, choose what is sent, disconnect",
+    () =>
+      server.run(
+        Effect.gen(function* () {
+          const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
+          expect(yield* client["hark.status"]()).toEqual({ connected: false, sends: "all" })
+          const unknown = yield* Effect.flip(
+            client["hark.connect"]({ webhook: "https://hark.ryan.ceo/hooks/whk_nope" }),
+          )
+          expect(unknown).toMatchObject({
+            _tag: "InvalidInput",
+            message: expect.stringContaining("doesn't know this webhook"),
+          })
+          const connected = yield* client["hark.connect"]({ webhook: "https://hark.ryan.ceo/hooks/whk_good" })
+          expect(connected).toMatchObject({ connected: true, sends: "all" })
+          expect(hark.pushes.at(-1)!.body).toEqual({
+            title: "OpenBot",
+            body: "Connected. Your Bots' notifications will show up here.",
+            url: "https://box.tailnet.ts.net:8444/",
+          })
 
-      // a Bot answers: "finished" becomes a push to the chat
-      const bot = yield* client["bots.create"]({ name: "Scout", harness: { kind: "fake" }, clientNonce: "hark-scout", introduce: false })
-      yield* client["messages.send"]({ conversationId: bot.directConversationId, text: "echo: The report is ready.", clientNonce: "hark-1" })
-      yield* eventually(Effect.sync(() => hark.pushes.length), (n) => n === 2, { label: "the finished push", timeout: 20_000 })
-      const finished = hark.pushes[1]!
-      expect(finished.body).toEqual({
-        title: "Scout",
-        body: "The report is ready.",
-        url: `https://box.tailnet.ts.net:8444/#/c/${bot.directConversationId}`,
-        project: "Scout",
-      })
-      expect(finished.key).toMatch(/^ntf_/)
+          // a Bot answers: "finished" becomes a push to the chat
+          const bot = yield* client["bots.create"]({
+            name: "Scout",
+            harness: { kind: "fake" },
+            clientNonce: "hark-scout",
+            introduce: false,
+          })
+          yield* client["messages.send"]({
+            conversationId: bot.directConversationId,
+            text: "echo: The report is ready.",
+            clientNonce: "hark-1",
+          })
+          yield* eventually(
+            Effect.sync(() => hark.pushes.length),
+            (n) => n === 2,
+            { label: "the finished push", timeout: 20_000 },
+          )
+          const finished = hark.pushes[1]!
+          expect(finished.body).toEqual({
+            title: "Scout",
+            body: "The report is ready.",
+            url: `https://box.tailnet.ts.net:8444/#/c/${bot.directConversationId}`,
+            project: "Scout",
+          })
+          expect(finished.key).toMatch(/^ntf_/)
 
-      // only when a Bot needs you: a finished reply is not pushed, a question is
-      yield* client["hark.setSends"]({ sends: "needs-you" })
-      yield* client["messages.send"]({ conversationId: bot.directConversationId, text: "echo: Done again.", clientNonce: "hark-2" })
-      yield* client["messages.send"]({ conversationId: bot.directConversationId, text: "ask: Which format? | PDF | Slides", clientNonce: "hark-3" })
-      yield* eventually(Effect.sync(() => hark.pushes.length), (n) => n === 3, { label: "the question push", timeout: 20_000 })
-      expect(hark.pushes[2]!.body).toMatchObject({ title: "Scout", body: expect.stringContaining("Which format?") })
-      expect(hark.pushes.some((p) => p.body.body === "Done again.")).toBe(false)
+          // only when a Bot needs you: a finished reply is not pushed, a question is
+          yield* client["hark.setSends"]({ sends: "needs-you" })
+          yield* client["messages.send"]({
+            conversationId: bot.directConversationId,
+            text: "echo: Done again.",
+            clientNonce: "hark-2",
+          })
+          yield* client["messages.send"]({
+            conversationId: bot.directConversationId,
+            text: "ask: Which format? | PDF | Slides",
+            clientNonce: "hark-3",
+          })
+          yield* eventually(
+            Effect.sync(() => hark.pushes.length),
+            (n) => n === 3,
+            { label: "the question push", timeout: 20_000 },
+          )
+          expect(hark.pushes[2]!.body).toMatchObject({ title: "Scout", body: expect.stringContaining("Which format?") })
+          expect(hark.pushes.some((p) => p.body.body === "Done again.")).toBe(false)
 
-      // Hark forgets the webhook: the next push fails and says why
-      hark.known.delete("whk_good")
-      const tested = yield* Effect.flip(client["hark.test"]())
-      expect(tested).toMatchObject({ _tag: "Unavailable" })
-      expect(yield* client["hark.status"]()).toMatchObject({ connected: true, problem: expect.stringContaining("doesn't know this webhook") })
+          // Hark forgets the webhook: the next push fails and says why
+          hark.known.delete("whk_good")
+          const tested = yield* Effect.flip(client["hark.test"]())
+          expect(tested).toMatchObject({ _tag: "Unavailable" })
+          expect(yield* client["hark.status"]()).toMatchObject({
+            connected: true,
+            problem: expect.stringContaining("doesn't know this webhook"),
+          })
 
-      expect(yield* client["hark.disconnect"]()).toEqual({ connected: false, sends: "all" })
-    })), 60_000)
+          expect(yield* client["hark.disconnect"]()).toEqual({ connected: false, sends: "all" })
+        }),
+      ),
+    60_000,
+  )
 })

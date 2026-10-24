@@ -46,7 +46,14 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js"
 import { Cause, Clock, Context, Deferred, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { bearerTokenOf, hashMcpToken } from "./McpBindingIssuer.ts"
-import { errorResult, INTERNAL_ERROR, MAX_RESULT_TEXT_BYTES, renderToolError, toWireResult, type WireToolResult } from "./results.ts"
+import {
+  errorResult,
+  INTERNAL_ERROR,
+  MAX_RESULT_TEXT_BYTES,
+  renderToolError,
+  toWireResult,
+  type WireToolResult,
+} from "./results.ts"
 import { type AnyTool, MAX_DESCRIPTION_CHARS, type ToolCallContext } from "./tool.ts"
 import { BotToolkit, type BotToolkitServices } from "./toolkits/bot.ts"
 import { BrowserToolkit } from "./toolkits/browser.ts"
@@ -119,14 +126,18 @@ const unauthorized = (presentedToken: boolean): Response =>
   json(
     401,
     { error: "invalid_token", message: "A valid OpenBot MCP token is required." },
-    { "www-authenticate": presentedToken ? "Bearer error=\"invalid_token\"" : "Bearer" },
+    { "www-authenticate": presentedToken ? 'Bearer error="invalid_token"' : "Bearer" },
   )
 
 const sessionNotFound = (): Response =>
   json(404, { jsonrpc: "2.0", error: { code: -32001, message: "Session not found" }, id: null })
 
 const methodNotAllowed = (): Response =>
-  json(405, { jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null }, { allow: "POST, DELETE" })
+  json(
+    405,
+    { jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null },
+    { allow: "POST, DELETE" },
+  )
 
 /** `/mcp/<botId>` (optionally behind a prefix); undefined when the path does not match. */
 export const botIdFromPath = (pathname: string): string | undefined => {
@@ -153,7 +164,10 @@ const stableJson = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`
   if (value !== null && typeof value === "object") {
     const record = value as Record<string, unknown>
-    return `{${Object.keys(record).sort().map((k) => `${JSON.stringify(k)}:${stableJson(record[k])}`).join(",")}}`
+    return `{${Object.keys(record)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(record[k])}`)
+      .join(",")}}`
   }
   return JSON.stringify(value) ?? "null"
 }
@@ -209,7 +223,7 @@ interface Authenticated {
 export const makeMcpGateway = <R = GatewayToolServices>(
   options?: McpGatewayOptions<R>,
 ): Effect.Effect<McpGatewayShape, never, R | McpTokenRepo | NodeDirectory | Orchestrator | Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const tools = (options?.tools ?? DefaultToolkits) as ReadonlyArray<AnyTool<R>>
     const progressIntervalMs = Math.max(10, options?.progressIntervalMs ?? 4_000)
     const progressMinGapMs = Math.max(0, options?.progressMinGapMs ?? 1_000)
@@ -232,19 +246,28 @@ export const makeMcpGateway = <R = GatewayToolServices>(
      * part of the bot's running turn.
      */
     const currentContext = (claims: McpClaims, callId: string | undefined): Effect.Effect<ToolContext> =>
-      claims.taskId !== undefined ? Effect.succeed<ToolContext>({ claims, callId, taskId: claims.taskId }) : orchestrator.activeTurn(claims.botId).pipe(
-        Effect.map(Option.match({
-          onNone: (): ToolContext => ({ claims, callId }),
-          onSome: (turn): ToolContext => ({
-            claims: turn.conversationId === claims.conversationId
-              ? claims
-              : { ...claims, conversationId: turn.conversationId, sessionKey: sessionKeyOf(claims.botId, turn.conversationId) },
-            callId,
-            turnId: turn.id,
-          }),
-        })),
-        Effect.catchCause(() => Effect.succeed<ToolContext>({ claims, callId })),
-      )
+      claims.taskId !== undefined
+        ? Effect.succeed<ToolContext>({ claims, callId, taskId: claims.taskId })
+        : orchestrator.activeTurn(claims.botId).pipe(
+            Effect.map(
+              Option.match({
+                onNone: (): ToolContext => ({ claims, callId }),
+                onSome: (turn): ToolContext => ({
+                  claims:
+                    turn.conversationId === claims.conversationId
+                      ? claims
+                      : {
+                          ...claims,
+                          conversationId: turn.conversationId,
+                          sessionKey: sessionKeyOf(claims.botId, turn.conversationId),
+                        },
+                  callId,
+                  turnId: turn.id,
+                }),
+              }),
+            ),
+            Effect.catchCause(() => Effect.succeed<ToolContext>({ claims, callId })),
+          )
     const sessions = new Map<string, GatewaySession>()
 
     const closeSession = (session: GatewaySession): Promise<void> => {
@@ -253,19 +276,21 @@ export const makeMcpGateway = <R = GatewayToolServices>(
     }
 
     yield* Effect.addFinalizer(() =>
-      Effect.promise(() => Promise.allSettled([...sessions.values()].map(closeSession))).pipe(Effect.asVoid)
+      Effect.promise(() => Promise.allSettled([...sessions.values()].map(closeSession))).pipe(Effect.asVoid),
     )
 
     // ---------------------------------------------------------------- auth
 
     const authenticate = (token: string): Effect.Effect<Authenticated> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const hash = yield* hashMcpToken(token)
-        const found = yield* repo.lookup(hash).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logError("McpGateway: token lookup failed", cause).pipe(Effect.as(Option.none<McpTokenRecord>()))
-          ),
-        )
+        const found = yield* repo
+          .lookup(hash)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logError("McpGateway: token lookup failed", cause).pipe(Effect.as(Option.none<McpTokenRecord>())),
+            ),
+          )
         const now = yield* Clock.currentTimeMillis
         const valid = Option.filter(found, (r) => !r.revoked && (r.expiresAt === undefined || r.expiresAt > now))
         return { hash, record: valid }
@@ -307,24 +332,29 @@ export const makeMcpGateway = <R = GatewayToolServices>(
         Effect.catch((error) => {
           const text = renderToolError(error)
           if (text !== INTERNAL_ERROR) return Effect.succeed(errorResult(text))
-          return Effect.logWarning(`McpGateway: tool ${tool.name} failed with an unrecognised error (bot ${session.claims.botId})`, error).pipe(
-            Effect.as(errorResult(text)),
-          )
+          return Effect.logWarning(
+            `McpGateway: tool ${tool.name} failed with an unrecognised error (bot ${session.claims.botId})`,
+            error,
+          ).pipe(Effect.as(errorResult(text)))
         }),
         Effect.catchDefect((defect) =>
           Effect.logError(`McpGateway: tool ${tool.name} died (bot ${session.claims.botId})`, defect).pipe(
             Effect.as(errorResult("Internal error")),
-          )
+          ),
         ),
         Effect.map((result) => toWireResult(result, maxResultBytes)),
       )
 
     const callTool = (
       session: GatewaySession,
-      params: { readonly name: string; readonly arguments?: Record<string, unknown> | undefined; readonly _meta?: Record<string, unknown> | undefined },
+      params: {
+        readonly name: string
+        readonly arguments?: Record<string, unknown> | undefined
+        readonly _meta?: Record<string, unknown> | undefined
+      },
       sendProgress: (progressToken: string | number, progress: number, message: string | undefined) => Promise<void>,
     ): Effect.Effect<WireToolResult, never, R> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const tool = session.tools.get(params.name)
         if (tool === undefined) {
           return toWireResult(
@@ -337,7 +367,8 @@ export const makeMcpGateway = <R = GatewayToolServices>(
         const rawToken = params._meta?.progressToken
         const progressToken = typeof rawToken === "string" || typeof rawToken === "number" ? rawToken : undefined
         const progress = makeProgress(progressToken, (message) =>
-          progressToken === undefined ? Promise.resolve() : sendProgress(progressToken, progress.current(), message))
+          progressToken === undefined ? Promise.resolve() : sendProgress(progressToken, progress.current(), message),
+        )
         const callId = callIdOf(params._meta)
         const toolContext = yield* currentContext(session.claims, callId)
         const ctx: ToolCallContext = {
@@ -348,9 +379,11 @@ export const makeMcpGateway = <R = GatewayToolServices>(
         }
 
         const work = Effect.scoped(
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             if (progress.enabled) {
-              yield* Effect.forkScoped(Effect.forever(Effect.sleep(progressIntervalMs).pipe(Effect.andThen(progress.heartbeat))))
+              yield* Effect.forkScoped(
+                Effect.forever(Effect.sleep(progressIntervalMs).pipe(Effect.andThen(progress.heartbeat))),
+              )
             }
             return yield* runTool(session, tool, decoded.value, ctx)
           }),
@@ -359,13 +392,16 @@ export const makeMcpGateway = <R = GatewayToolServices>(
         if (tool.idempotent === false) return yield* work
 
         // Idempotency (D3.3): replay by harness call id; join identical in-flight calls otherwise.
-        const key = callId !== undefined
-          ? `call:${tool.name}:${callId}`
-          : `args:${tool.name}:${yield* sha256Hex(stableJson(decoded.value))}`
+        const key =
+          callId !== undefined
+            ? `call:${tool.name}:${callId}`
+            : `args:${tool.name}:${yield* sha256Hex(stableJson(decoded.value))}`
         const existing = session.cache.get(key)
         if (existing !== undefined) {
           const heartbeat = progress.enabled
-            ? Effect.forkScoped(Effect.forever(Effect.sleep(progressIntervalMs).pipe(Effect.andThen(progress.heartbeat))))
+            ? Effect.forkScoped(
+                Effect.forever(Effect.sleep(progressIntervalMs).pipe(Effect.andThen(progress.heartbeat))),
+              )
             : Effect.void
           return yield* Effect.scoped(heartbeat.pipe(Effect.andThen(Deferred.await(existing))))
         }
@@ -379,8 +415,11 @@ export const makeMcpGateway = <R = GatewayToolServices>(
                 return Deferred.succeed(deferred, exit.value)
               }
               session.cache.delete(key, deferred)
-              return Deferred.succeed(deferred, toWireResult(errorResult("The original call was cancelled; call the tool again.")))
-            })
+              return Deferred.succeed(
+                deferred,
+                toWireResult(errorResult("The original call was cancelled; call the tool again.")),
+              )
+            }),
           ),
         )
       })
@@ -404,33 +443,41 @@ export const makeMcpGateway = <R = GatewayToolServices>(
 
     const wireTool = (tool: AnyTool<R>): Tool => ({
       name: tool.name,
-      description: tool.description.length > MAX_DESCRIPTION_CHARS
-        ? `${tool.description.slice(0, MAX_DESCRIPTION_CHARS - 1)}…`
-        : tool.description,
+      description:
+        tool.description.length > MAX_DESCRIPTION_CHARS
+          ? `${tool.description.slice(0, MAX_DESCRIPTION_CHARS - 1)}…`
+          : tool.description,
       inputSchema: tool.params.inputSchema as Tool["inputSchema"],
       ...(tool.annotations === undefined ? {} : { annotations: { ...tool.annotations } }),
       // R9: never deferred behind Claude's tool search.
       _meta: { "anthropic/alwaysLoad": true },
     })
 
-    const createSession = async (auth: { readonly hash: string; readonly claims: McpClaims }): Promise<GatewaySession> => {
+    const createSession = async (auth: {
+      readonly hash: string
+      readonly claims: McpClaims
+    }): Promise<GatewaySession> => {
       const hostNode = await run(
         directory.get(auth.claims.hostNodeId).pipe(Effect.option, Effect.map(Option.getOrUndefined)),
       )
       const slack = await run(
         Effect.serviceOption(SlackConnector).pipe(
-          Effect.flatMap(Option.match({
-            onNone: () => Effect.succeed(false),
-            onSome: (connector) => connector.status.pipe(Effect.map((status) => status.connected)),
-          })),
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.succeed(false),
+              onSome: (connector) => connector.status.pipe(Effect.map((status) => status.connected)),
+            }),
+          ),
         ),
       )
       const botSearch = await run(
         Effect.serviceOption(SettingsService).pipe(
-          Effect.flatMap(Option.match({
-            onNone: () => Effect.succeed(true),
-            onSome: (settings) => settings.get.pipe(Effect.map((s) => s.botSearch)),
-          })),
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.succeed(true),
+              onSome: (settings) => settings.get.pipe(Effect.map((s) => s.botSearch)),
+            }),
+          ),
         ),
       )
       const sessionTools = toolListFor(auth.claims, hostNode, slack, botSearch)
@@ -509,7 +556,12 @@ export const makeMcpGateway = <R = GatewayToolServices>(
       if (claims.botId !== pathBotId) {
         return json(403, { error: "forbidden", message: "This token does not belong to this bot." })
       }
-      const authInfo: AuthInfo = { token: "redacted", clientId: claims.botId, scopes: ["openbot"], extra: { sessionKey: claims.sessionKey } }
+      const authInfo: AuthInfo = {
+        token: "redacted",
+        clientId: claims.botId,
+        scopes: ["openbot"],
+        extra: { sessionKey: claims.sessionKey },
+      }
 
       if (sessionId !== undefined) {
         const session = sessions.get(sessionId)
@@ -522,7 +574,11 @@ export const makeMcpGateway = <R = GatewayToolServices>(
       }
 
       if (request.method !== "POST") {
-        return json(400, { jsonrpc: "2.0", error: { code: -32000, message: "Bad Request: Mcp-Session-Id header is required" }, id: null })
+        return json(400, {
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Bad Request: Mcp-Session-Id header is required" },
+          id: null,
+        })
       }
       await evictSessions(Date.now())
       const session = await createSession({ hash: auth.hash, claims })
@@ -534,7 +590,7 @@ export const makeMcpGateway = <R = GatewayToolServices>(
         run(Effect.logError("McpGateway: request failed", Cause.die(error))).then(
           () => json(500, { jsonrpc: "2.0", error: { code: -32603, message: "Internal error" }, id: null }),
           () => json(500, { jsonrpc: "2.0", error: { code: -32603, message: "Internal error" }, id: null }),
-        )
+        ),
       )
 
     return {
@@ -542,7 +598,9 @@ export const makeMcpGateway = <R = GatewayToolServices>(
       sessionCount: Effect.sync(() => sessions.size),
       closeSessions: (filter) =>
         Effect.promise(async () => {
-          const matching = [...sessions.values()].filter((s) => filter?.botId === undefined || s.claims.botId === filter.botId)
+          const matching = [...sessions.values()].filter(
+            (s) => filter?.botId === undefined || s.claims.botId === filter.botId,
+          )
           await Promise.allSettled(matching.map(closeSession))
           return matching.length
         }),

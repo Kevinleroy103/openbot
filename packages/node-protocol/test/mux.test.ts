@@ -7,7 +7,17 @@ import * as Layer from "effect/Layer"
 import * as Stream from "effect/Stream"
 import { RpcClient } from "effect/rpc"
 import * as Socket from "effect/socket/Socket"
-import { generateKeyPair, isServerBound, makePeer, mux, NodeRpcs, PathDenied, BrainRpcs, signHello, StreamRefused } from "../src/index.ts"
+import {
+  generateKeyPair,
+  isServerBound,
+  makePeer,
+  mux,
+  NodeRpcs,
+  PathDenied,
+  BrainRpcs,
+  signHello,
+  StreamRefused,
+} from "../src/index.ts"
 import { makeMemorySocketPair, rawJsonPeer } from "../src/testing.ts"
 import { connectedPeers, inv, NODE_ID, NodeHandlers, ORIGIN, type NodeState } from "./fixtures.ts"
 
@@ -36,7 +46,16 @@ describe("direction mux", () => {
           Effect.flatMap((w) =>
             w.write(
               JSON.stringify([
-                { jsonrpc: "2.0", id: 7, method: "node.event", params: { type: "x", data: 1 }, headers: [["x-openbot-node-id", "evil"], ["x-trace", "1"]] },
+                {
+                  jsonrpc: "2.0",
+                  id: 7,
+                  method: "node.event",
+                  params: { type: "x", data: 1 },
+                  headers: [
+                    ["x-openbot-node-id", "evil"],
+                    ["x-trace", "1"],
+                  ],
+                },
                 { jsonrpc: "2.0", id: 3, result: "ok" },
               ]),
             ),
@@ -44,7 +63,10 @@ describe("direction mux", () => {
         )
         const req = (yield* server.next) as any
         expect(req.method).toBe("node.event")
-        expect(req.headers).toEqual([["x-openbot-node-id", "nod_real"], ["x-trace", "1"]])
+        expect(req.headers).toEqual([
+          ["x-openbot-node-id", "nod_real"],
+          ["x-trace", "1"],
+        ])
         const res = (yield* client.next) as any
         expect(res).toEqual({ jsonrpc: "2.0", id: 3, result: "ok" })
         expect(m.stats).toMatchObject({ toServer: 1, toClient: 1, stamped: 1, strippedSpoof: 1 })
@@ -68,7 +90,13 @@ describe("direction mux", () => {
         const [read, approval, denied] = yield* Effect.all(
           [
             brain.client["fs.read"]({ inv: inv(), path: "/w/a.txt" }),
-            node.client["node.requestApproval"]({ invocationId: "i1", botId: "bot_1", action: "run-command", target: "ls", reason: "ask" }),
+            node.client["node.requestApproval"]({
+              invocationId: "i1",
+              botId: "bot_1",
+              action: "run-command",
+              target: "ls",
+              reason: "ask",
+            }),
             Effect.flip(brain.client["fs.read"]({ inv: inv(), path: "/etc/shadow" })),
           ],
           { concurrency: "unbounded" },
@@ -83,12 +111,17 @@ describe("direction mux", () => {
         expect(refused).toBeInstanceOf(StreamRefused)
 
         // spoofed identity header from the node is replaced by the brain stamp
-        yield* node.client["node.event"]({ type: "spoof", data: { a: 1 } }).pipe(RpcClient.withHeaders({ "x-openbot-node-id": "evil-node" }))
+        yield* node.client["node.event"]({ type: "spoof", data: { a: 1 } }).pipe(
+          RpcClient.withHeaders({ "x-openbot-node-id": "evil-node" }),
+        )
         expect(brainState.events).toEqual([{ nodeId: NODE_ID, type: "spoof", data: { a: 1 } }])
         expect(brain.mux.stats.strippedSpoof).toBe(1)
 
         // union payloads survive the wire
-        const nav = yield* brain.client["browser.action"]({ inv: inv(), action: { _tag: "navigate", url: "https://example.com" } })
+        const nav = yield* brain.client["browser.action"]({
+          inv: inv(),
+          action: { _tag: "navigate", url: "https://example.com" },
+        })
         expect(nav).toEqual({ text: "did navigate", url: "https://example.com" })
       }),
     ))
@@ -98,10 +131,12 @@ describe("direction mux", () => {
       Effect.gen(function* () {
         const { brain, hello, nodeState } = yield* connectedPeers
         yield* hello()
-        const events = yield* brain.client["shell.exec"]({ inv: inv(), command: "yes", cwd: ".", timeoutMs: 60_000 }).pipe(
-          Stream.take(4),
-          Stream.runCollect,
-        )
+        const events = yield* brain.client["shell.exec"]({
+          inv: inv(),
+          command: "yes",
+          cwd: ".",
+          timeoutMs: 60_000,
+        }).pipe(Stream.take(4), Stream.runCollect)
         expect(events[0]).toEqual({ _tag: "Started", pid: 100, pgid: 100 })
         expect(events.slice(1).map((e) => e._tag)).toEqual(["Output", "Output", "Output"])
         // Stream.take ended the consumer -> @effect/rpc/Interrupt -> node handler finalizer ran
@@ -118,8 +153,15 @@ describe("direction mux", () => {
         const { brain, hello, nodeState } = yield* connectedPeers
         yield* hello()
         const got = yield* Deferred.make<void>()
-        const fiber = yield* brain.client["shell.exec"]({ inv: inv(), command: "yes", cwd: ".", timeoutMs: 60_000 }).pipe(
-          Stream.runForEach((e) => (e._tag === "Output" && e.seq >= 2 ? Deferred.succeed(got, undefined) : Effect.void)),
+        const fiber = yield* brain.client["shell.exec"]({
+          inv: inv(),
+          command: "yes",
+          cwd: ".",
+          timeoutMs: 60_000,
+        }).pipe(
+          Stream.runForEach((e) =>
+            e._tag === "Output" && e.seq >= 2 ? Deferred.succeed(got, undefined) : Effect.void,
+          ),
           Effect.forkScoped,
         )
         yield* Deferred.await(got)
@@ -133,11 +175,12 @@ describe("direction mux", () => {
       Effect.gen(function* () {
         const { pair, brain, node, hello, nodeState } = yield* connectedPeers
         yield* hello()
-        const inflight = yield* brain.client["shell.exec"]({ inv: inv(), command: "yes", cwd: ".", timeoutMs: 60_000 }).pipe(
-          Stream.runDrain,
-          Effect.exit,
-          Effect.forkScoped,
-        )
+        const inflight = yield* brain.client["shell.exec"]({
+          inv: inv(),
+          command: "yes",
+          cwd: ".",
+          timeoutMs: 60_000,
+        }).pipe(Stream.runDrain, Effect.exit, Effect.forkScoped)
         yield* Effect.sleep("30 millis")
         pair.drop(1006, "network")
         const exit = yield* Fiber.join(inflight)
@@ -148,7 +191,9 @@ describe("direction mux", () => {
         expect(closedNode.reason._tag).toBe("SocketCloseError")
         yield* Deferred.await(nodeState.execInterrupted).pipe(Effect.timeout("2 seconds"))
         // later calls fail fast
-        const after = yield* Effect.exit(brain.client["fs.read"]({ inv: inv(), path: "/w/x" }).pipe(Effect.timeout("2 seconds")))
+        const after = yield* Effect.exit(
+          brain.client["fs.read"]({ inv: inv(), path: "/w/x" }).pipe(Effect.timeout("2 seconds")),
+        )
         expect(Exit.isFailure(after)).toBe(true)
       }),
     ))
@@ -192,17 +237,28 @@ describe("liveness (half-open connections)", () => {
     run(
       Effect.gen(function* () {
         const pair = makeMemorySocketPair()
-        const brain = yield* makePeer({ socket: pair.b, serve: BrainRpcs, call: NodeRpcs, livenessTimeout: 150, pingInterval: 60_000 }).pipe(
-          Effect.provide(BrainRpcs.toLayer({
-            "node.requestApproval": () => Effect.succeed({ decision: "deny" as const, by: "test" }),
-            "node.openStream": () => Effect.fail(new StreamRefused({ kind: "pty", reason: "no" })),
-            "node.event": () => Effect.void,
-            "node.heartbeat": () => Effect.void,
-          })),
+        const brain = yield* makePeer({
+          socket: pair.b,
+          serve: BrainRpcs,
+          call: NodeRpcs,
+          livenessTimeout: 150,
+          pingInterval: 60_000,
+        }).pipe(
+          Effect.provide(
+            BrainRpcs.toLayer({
+              "node.requestApproval": () => Effect.succeed({ decision: "deny" as const, by: "test" }),
+              "node.openStream": () => Effect.fail(new StreamRefused({ kind: "pty", reason: "no" })),
+              "node.event": () => Effect.void,
+              "node.heartbeat": () => Effect.void,
+            }),
+          ),
         )
         // the "node" never answers (half-open)
         yield* rawJsonPeer(pair.a)
-        const call = yield* brain.client["fs.read"]({ inv: inv(), path: "/w/a.txt" }).pipe(Effect.exit, Effect.forkScoped)
+        const call = yield* brain.client["fs.read"]({ inv: inv(), path: "/w/a.txt" }).pipe(
+          Effect.exit,
+          Effect.forkScoped,
+        )
         const closed = yield* brain.closed.pipe(Effect.timeout("2 seconds"))
         expect(closed.reason.message).toContain("liveness timeout")
         expect(Exit.isFailure(yield* Fiber.join(call).pipe(Effect.timeout("2 seconds")))).toBe(true)
@@ -228,10 +284,21 @@ describe("foreign (non-Effect) peer: wire rules from docs/node-protocol.md", () 
         yield* makePeer({ socket: pair.a, serve: NodeRpcs, call: BrainRpcs }).pipe(Effect.provide(nodeCtx))
         const raw = yield* rawJsonPeer(pair.b)
         // answer the node client's pings; ignore everything else that is not ours
-        const skipPing = (m: any) => (m.method === "@effect/rpc/Ping" ? raw.send({ jsonrpc: "2.0", method: "@effect/rpc/Pong" }) : Effect.void)
+        const skipPing = (m: any) =>
+          m.method === "@effect/rpc/Ping" ? raw.send({ jsonrpc: "2.0", method: "@effect/rpc/Pong" }) : Effect.void
 
-        const brainSig = yield* signHello({ brainPrivateKey: brainKeys.privateKey, nodeId: NODE_ID, nonce: "n0nce", brainOrigin: ORIGIN })
-        yield* raw.send({ jsonrpc: "2.0", id: 1, method: "node.hello", params: { protocol: { min: 1, max: 1 }, brainVersion: "foreign", brainSig } })
+        const brainSig = yield* signHello({
+          brainPrivateKey: brainKeys.privateKey,
+          nodeId: NODE_ID,
+          nonce: "n0nce",
+          brainOrigin: ORIGIN,
+        })
+        yield* raw.send({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "node.hello",
+          params: { protocol: { min: 1, max: 1 }, brainVersion: "foreign", brainSig },
+        })
         const hello = yield* raw.nextWhere((m) => m.id === 1, skipPing)
         expect(hello.result.brainVerified).toBe(true)
         expect(hello.result.capabilities).toContain("fs@1")
@@ -244,7 +311,12 @@ describe("foreign (non-Effect) peer: wire rules from docs/node-protocol.md", () 
         expect(err.error.data[0].error).toMatchObject({ _tag: "PathDenied", path: "/etc/passwd" })
 
         // streaming: exactly one chunk until we Ack
-        yield* raw.send({ jsonrpc: "2.0", id: 3, method: "shell.exec", params: { inv: inv(), command: "yes", cwd: ".", timeoutMs: 1000 } })
+        yield* raw.send({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "shell.exec",
+          params: { inv: inv(), command: "yes", cwd: ".", timeoutMs: 1000 },
+        })
         const c1 = yield* raw.nextWhere((m) => m.id === 3, skipPing)
         expect(c1.chunk).toBe(true)
         expect(Array.isArray(c1.result)).toBe(true)
@@ -286,9 +358,13 @@ describe("foreign (non-Effect) peer: wire rules from docs/node-protocol.md", () 
         const nodeCtx = yield* Layer.build(NodeHandlers(nodeState))
         const node = yield* makePeer({ socket: pair.a, serve: NodeRpcs, call: BrainRpcs }).pipe(Effect.provide(nodeCtx))
         const raw = yield* rawJsonPeer(pair.b)
-        const answer = yield* node.client["node.requestApproval"]({ invocationId: "i", botId: "b", action: "write-file", target: "/x", reason: "r" }).pipe(
-          Effect.forkScoped,
-        )
+        const answer = yield* node.client["node.requestApproval"]({
+          invocationId: "i",
+          botId: "b",
+          action: "write-file",
+          target: "/x",
+          reason: "r",
+        }).pipe(Effect.forkScoped)
         const req = yield* raw.nextWhere((m) => m.method === "node.requestApproval")
         expect(req.params).toEqual({ invocationId: "i", botId: "b", action: "write-file", target: "/x", reason: "r" })
         yield* raw.send({ jsonrpc: "2.0", id: req.id, result: { decision: "deny", by: "foreign" } })

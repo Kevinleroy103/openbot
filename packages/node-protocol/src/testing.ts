@@ -110,7 +110,10 @@ export const makeMemorySocketPair = (options?: {
       reader: Effect.gen(function* () {
         if (self.err) return yield* Effect.fail(self.err)
         const scope = yield* Effect.scope
-        yield* Scope.addFinalizer(scope, Effect.sync(() => drop(1000, "closed")))
+        yield* Scope.addFinalizer(
+          scope,
+          Effect.sync(() => drop(1000, "closed")),
+        )
         return { pull, upgrade: Socket.SocketUpgradeError.unsupported }
       }),
       writer: Effect.succeed(writer),

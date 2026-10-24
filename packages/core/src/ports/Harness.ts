@@ -206,7 +206,7 @@ export class HarnessRegistry extends Context.Service<HarnessRegistry, HarnessReg
   /** Live registry (no dependencies). Drivers add themselves with `HarnessRegistry.registerLayer`. */
   static readonly layer: Layer.Layer<HarnessRegistry> = Layer.effect(
     HarnessRegistry,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const drivers = yield* Ref.make<ReadonlyMap<string, HarnessDriver>>(new Map())
       return HarnessRegistry.of({
         get: (kind, profileId) =>
@@ -218,9 +218,10 @@ export class HarnessRegistry extends Context.Service<HarnessRegistry, HarnessReg
             return Effect.fail(
               new HarnessUnavailable({
                 harness: kind,
-                message: profile === undefined || known === undefined
-                  ? `Harness "${kind}" is not available.`
-                  : `The ${known.displayName} account "${profile}" is not available.`,
+                message:
+                  profile === undefined || known === undefined
+                    ? `Harness "${kind}" is not available.`
+                    : `The ${known.displayName} account "${profile}" is not available.`,
               }),
             )
           }),
@@ -247,7 +248,7 @@ export class HarnessRegistry extends Context.Service<HarnessRegistry, HarnessReg
     driver: Effect.Effect<HarnessDriver, E, R>,
   ): Layer.Layer<never, E, HarnessRegistry | Exclude<R, Scope.Scope>> =>
     Layer.effectDiscard(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const registry = yield* HarnessRegistry
         yield* registry.register(yield* driver)
       }),

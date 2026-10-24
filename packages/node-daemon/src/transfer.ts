@@ -86,12 +86,19 @@ const sendFile = (io: Duplex, real: string, limit: number) =>
         hasher.update(chunk)
         yield* io.writer.write(chunk)
       }
-    }).pipe(Effect.catch((e) => (typeof e === "string" ? Effect.succeed(`reading the file failed: ${e}`) : Effect.fail(e))))
+    }).pipe(
+      Effect.catch((e) => (typeof e === "string" ? Effect.succeed(`reading the file failed: ${e}`) : Effect.fail(e))),
+    )
     yield* io.writer.write(
-      JSON.stringify(failure === undefined ? { done: true, sha256: hasher.digest("hex"), size: sent } : { error: failure }),
+      JSON.stringify(
+        failure === undefined ? { done: true, sha256: hasher.digest("hex"), size: sent } : { error: failure },
+      ),
     )
     // the brain closes once it has the final frame (acks may still arrive meanwhile)
-    yield* Effect.forever(Effect.map(io.pull, takeAcks)).pipe(Effect.ignore, Effect.timeoutOrElse({ duration: CLOSE_WAIT, orElse: () => Effect.void }))
+    yield* Effect.forever(Effect.map(io.pull, takeAcks)).pipe(
+      Effect.ignore,
+      Effect.timeoutOrElse({ duration: CLOSE_WAIT, orElse: () => Effect.void }),
+    )
   })
 
 export const makeFsDownload = (deps: SessionDeps) => (p: DownloadPayload) =>
@@ -106,10 +113,12 @@ export const makeFsDownload = (deps: SessionDeps) => (p: DownloadPayload) =>
         op: "download",
         path: p.path,
         code: "EISDIR",
-        reason: "is a directory; send its files one by one, or archive it first (e.g. `tar czf dir.tgz dir` or `zip -r dir.zip dir`)",
+        reason:
+          "is a directory; send its files one by one, or archive it first (e.g. `tar czf dir.tgz dir` or `zip -r dir.zip dir`)",
       })
     }
-    if (!st.isFile()) return yield* new FsError({ op: "download", path: p.path, code: "EINVAL", reason: "not a regular file" })
+    if (!st.isFile())
+      return yield* new FsError({ op: "download", path: p.path, code: "EINVAL", reason: "not a regular file" })
     const limit = Math.max(0, Math.min(p.maxBytes ?? Number.POSITIVE_INFINITY, deps.config.limits.transferBytes))
     if (st.size > limit) {
       return yield* new FsError({
@@ -132,7 +141,8 @@ export const makeFsDownload = (deps: SessionDeps) => (p: DownloadPayload) =>
         const io = yield* dialSession(deps, { streamId: p.streamId, streamToken: p.streamToken }, "transfer")
         yield* Deferred.succeed(ready, result)
         yield* sendFile(io, resolved.real, limit).pipe(Effect.ignore)
-      }))
+      }),
+    )
   })
 
 // ---------------------------------------------------------------- fs.upload (brain → node)
@@ -165,18 +175,33 @@ export const makeFsUpload = (deps: SessionDeps) => (p: UploadPayload) =>
       })
     }
     const target = resolved.real
-    const existing = yield* attempt("upload", p.path, () => fsp.lstat(target).then((st) => st, () => undefined))
-    if (existing?.isDirectory()) return yield* new FsError({ op: "upload", path: p.path, code: "EISDIR", reason: "is a directory" })
+    const existing = yield* attempt("upload", p.path, () =>
+      fsp.lstat(target).then(
+        (st) => st,
+        () => undefined,
+      ),
+    )
+    if (existing?.isDirectory())
+      return yield* new FsError({ op: "upload", path: p.path, code: "EISDIR", reason: "is a directory" })
     yield* attempt("upload", p.path, () => fsp.mkdir(path.dirname(target), { recursive: true }))
     // the parent may only now exist: re-check containment (a symlinked parent could escape the root)
     yield* deps.paths.resolve({ path: target, botId: p.inv.botId, access: "write" })
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const io = yield* dialSession(deps, { streamId: p.streamId, streamToken: p.streamToken }, "transfer")
-        const temp = path.join(path.dirname(target), `.${path.basename(target)}.openbot-upload-${process.pid}-${Math.random().toString(36).slice(2, 8)}`)
+        const temp = path.join(
+          path.dirname(target),
+          `.${path.basename(target)}.openbot-upload-${process.pid}-${Math.random().toString(36).slice(2, 8)}`,
+        )
         const handle = yield* Effect.acquireRelease(
           attempt("upload", p.path, () => fsp.open(temp, "wx", 0o644)),
-          (fh) => Effect.promise(() => fh.close().catch(() => undefined).then(() => fsp.rm(temp, { force: true }).catch(() => undefined))),
+          (fh) =>
+            Effect.promise(() =>
+              fh
+                .close()
+                .catch(() => undefined)
+                .then(() => fsp.rm(temp, { force: true }).catch(() => undefined)),
+            ),
         )
         const failed = (reason: string) => new TunnelFailed({ kind: "transfer", reason })
         const hasher = new Bun.CryptoHasher("sha256")
@@ -184,7 +209,9 @@ export const makeFsUpload = (deps: SessionDeps) => (p: UploadPayload) =>
         let acked = 0
         let done: { readonly sha256: string; readonly size: number } | undefined
         while (done === undefined) {
-          const frames = yield* io.pull.pipe(Effect.mapError(() => failed("the brain closed the transfer before it finished")))
+          const frames = yield* io.pull.pipe(
+            Effect.mapError(() => failed("the brain closed the transfer before it finished")),
+          )
           for (const frame of frames) {
             if (typeof frame === "string") {
               const control = decodeControlFrame(TransferControl, frame)
@@ -205,7 +232,9 @@ export const makeFsUpload = (deps: SessionDeps) => (p: UploadPayload) =>
         }
         const sha256 = hasher.digest("hex")
         if (done.size !== received || done.sha256 !== sha256) {
-          return yield* failed(`the file arrived damaged (${received} bytes, sha256 ${sha256.slice(0, 12)}…; the brain sent ${done.size} bytes)`)
+          return yield* failed(
+            `the file arrived damaged (${received} bytes, sha256 ${sha256.slice(0, 12)}…; the brain sent ${done.size} bytes)`,
+          )
         }
         yield* attempt("upload", p.path, () => handle.sync().then(() => fsp.rename(temp, target)))
         return { path: target, size: received, sha256 } satisfies FsUploadResult

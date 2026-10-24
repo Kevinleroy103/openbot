@@ -41,7 +41,10 @@ const caps = (remotePlacements: HarnessCapabilities["remotePlacements"]): Harnes
   remotePlacements,
 })
 
-const driverOf = (kind: HarnessDriver["kind"], remotePlacements: HarnessCapabilities["remotePlacements"]): HarnessDriver => ({
+const driverOf = (
+  kind: HarnessDriver["kind"],
+  remotePlacements: HarnessCapabilities["remotePlacements"],
+): HarnessDriver => ({
   kind,
   displayName: kind,
   capabilities: caps(remotePlacements),
@@ -55,7 +58,12 @@ const remoteWithCodex = remoteNodeSummary("nod_codex", { capabilities: ["fs@1", 
 const remoteWithBrowser = remoteNodeSummary("nod_browser", { capabilities: ["fs@1", "browser@1", "desktop@1"] })
 
 describe("planPlacement (§3.3 / D1.5 matrix)", () => {
-  const plan = (kind: string, remotePlacements: HarnessCapabilities["remotePlacements"], hostNode: NodeSummary, boundNodeIds: ReadonlyArray<string> = []) =>
+  const plan = (
+    kind: string,
+    remotePlacements: HarnessCapabilities["remotePlacements"],
+    hostNode: NodeSummary,
+    boundNodeIds: ReadonlyArray<string> = [],
+  ) =>
     planPlacement({
       bot: makeBot({ hostNodeId: hostNode.id, boundNodeIds: boundNodeIds.map(nodeId) }),
       driverKind: kind,
@@ -90,7 +98,11 @@ describe("planPlacement (§3.3 / D1.5 matrix)", () => {
     expect(Result.isSuccess(local) && local.success.toolsets).toEqual(["bot", "browser"])
     expect(Result.isSuccess(r) && r.success.sharedScreen).toBeFalsy()
     // a Mac's own screen: the computer toolset too, marked shared
-    const mac = plan("claude", ["brain-mcp-hands"], remoteNodeSummary("nod_mac", { capabilities: ["fs@1", "browser@1", "screen@1"] }))
+    const mac = plan(
+      "claude",
+      ["brain-mcp-hands"],
+      remoteNodeSummary("nod_mac", { capabilities: ["fs@1", "browser@1", "screen@1"] }),
+    )
     expect(Result.isSuccess(mac) && mac.success.toolsets).toEqual(["bot", "node", "browser", "computer"])
     expect(Result.isSuccess(mac) && mac.success.sharedScreen).toBe(true)
   })
@@ -109,12 +121,15 @@ describe("planPlacement (§3.3 / D1.5 matrix)", () => {
 describe("PlacementServiceFake", () => {
   test("resolves via NodeDirectory and releases when the scope closes", async () => {
     const result = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const placement = yield* PlacementService
         const fake = yield* PlacementServiceFake
         const scope = yield* Scope.make()
         const resolved = yield* placement
-          .resolve({ bot: makeBot({ id: botId("bot_r"), hostNodeId: remote.id }), driver: driverOf("claude", ["brain-mcp-hands"]) })
+          .resolve({
+            bot: makeBot({ id: botId("bot_r"), hostNodeId: remote.id }),
+            driver: driverOf("claude", ["brain-mcp-hands"]),
+          })
           .pipe(Scope.provide(scope))
         const before = (yield* fake.resolutions).map((r) => r.released)
         yield* Scope.close(scope, Exit.void)
@@ -133,8 +148,11 @@ describe("PlacementServiceFake", () => {
 
   test("local bots get native-local with workspace = harness cwd", async () => {
     const resolved = await runTest(
-      Effect.scoped(Effect.flatMap(PlacementService, (p) =>
-        p.resolve({ bot: makeBot({ id: botId("bot_l") }), driver: driverOf("fake", ["brain-mcp-hands"]) }))),
+      Effect.scoped(
+        Effect.flatMap(PlacementService, (p) =>
+          p.resolve({ bot: makeBot({ id: botId("bot_l") }), driver: driverOf("fake", ["brain-mcp-hands"]) }),
+        ),
+      ),
       TestPorts(),
     )
     expect(resolved.mode).toBe("native-local")
@@ -143,8 +161,16 @@ describe("PlacementServiceFake", () => {
 
   test("unknown host node → PlacementError(node-unavailable)", async () => {
     const exit = await runTest(
-      Effect.exit(Effect.scoped(Effect.flatMap(PlacementService, (p) =>
-        p.resolve({ bot: makeBot({ hostNodeId: nodeId("nod_gone") }), driver: driverOf("fake", ["brain-mcp-hands"]) })))),
+      Effect.exit(
+        Effect.scoped(
+          Effect.flatMap(PlacementService, (p) =>
+            p.resolve({
+              bot: makeBot({ hostNodeId: nodeId("nod_gone") }),
+              driver: driverOf("fake", ["brain-mcp-hands"]),
+            }),
+          ),
+        ),
+      ),
       TestPorts(),
     )
     expect(Exit.isFailure(exit)).toBe(true)
@@ -155,7 +181,7 @@ describe("PlacementServiceFake", () => {
 describe("McpBindingIssuerFake", () => {
   test("bindings carry the token in headers and are revoked with their scope", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const issuer = yield* McpBindingIssuer
         const fake = yield* McpBindingIssuerFake
         const scope = yield* Scope.make()
@@ -189,13 +215,15 @@ describe("McpBindingIssuerFake", () => {
 describe("NodeDirectoryFake", () => {
   test("client requires an online node with a client; changes are published", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const directory = yield* NodeDirectory
         const control = yield* NodeDirectoryFake
         const noClient = yield* Effect.exit(directory.client(LOCAL_NODE_ID))
         yield* control.setClient(LOCAL_NODE_ID, {} as NodeClient)
         const withClient = yield* Effect.exit(directory.client(LOCAL_NODE_ID))
-        const watcher = yield* Stream.runCollect(Stream.take(directory.changes, 3)).pipe(Effect.forkChild({ startImmediately: true }))
+        const watcher = yield* Stream.runCollect(Stream.take(directory.changes, 3)).pipe(
+          Effect.forkChild({ startImmediately: true }),
+        )
         yield* control.upsert(localNodeSummary({ status: "offline" }))
         yield* control.upsert(remoteNodeSummary("nod_gone"))
         yield* control.remove(nodeId("nod_gone"))
@@ -208,7 +236,11 @@ describe("NodeDirectoryFake", () => {
     )
     expect(Exit.isFailure(out.noClient)).toBe(true)
     expect(Exit.isSuccess(out.withClient)).toBe(true)
-    expect(out.changes.map((c) => (c.type === "node.upserted" ? c.node.status : c.type))).toEqual(["offline", "online", "node.removed"])
+    expect(out.changes.map((c) => (c.type === "node.upserted" ? c.node.status : c.type))).toEqual([
+      "offline",
+      "online",
+      "node.removed",
+    ])
     expect(JSON.stringify(out.offline)).toContain("offline")
     expect(JSON.stringify(out.unknown)).toContain("NodeUnavailable")
   })
@@ -217,7 +249,7 @@ describe("NodeDirectoryFake", () => {
 describe("ComputerPortFake and NotifierFake", () => {
   test("ensure → ready, lease toggles controller", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const computer = yield* ComputerPort
         yield* ComputerPortFake
         const absent = yield* computer.status(botId("bot_c"))
@@ -232,7 +264,7 @@ describe("ComputerPortFake and NotifierFake", () => {
 
   test("notifications are recorded with ids and Clock time", async () => {
     const sent = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const notifier = yield* Notifier
         yield* advance("5 seconds")
         yield* notifier.notify({ kind: "finished", botId: botId("bot_n"), title: "Scout", body: "Done" })

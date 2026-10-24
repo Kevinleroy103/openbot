@@ -12,7 +12,17 @@ import { useSelection } from "../app/uiState.ts"
 import type { EventEntry, MessageEntry, ReasoningEntry, ToolCallEntry } from "../chat/grouping.ts"
 import { Markdown } from "../chat/Markdown.tsx"
 import { StepList } from "../chat/Steps.tsx"
-import { EmptyNote, ErrorLine, LoadingLine, Section, SectionSheet, formatAgo, useCommand, useQuery, useRosterValue } from "./kit.tsx"
+import {
+  EmptyNote,
+  ErrorLine,
+  LoadingLine,
+  Section,
+  SectionSheet,
+  formatAgo,
+  useCommand,
+  useQuery,
+  useRosterValue,
+} from "./kit.tsx"
 
 /** "12 s", "3 min", "1 h 5 min". */
 export const formatElapsed = (ms: number): string => {
@@ -40,7 +50,15 @@ const pill = (task: Task): { readonly tone: StatusTone; readonly label: string }
 }
 
 const statusIcon = (task: Task) =>
-  task.status === "running" ? LoaderCircle : task.status === "queued" ? Clock : task.status === "succeeded" ? CircleCheck : task.status === "failed" ? CircleX : Ban
+  task.status === "running"
+    ? LoaderCircle
+    : task.status === "queued"
+      ? Clock
+      : task.status === "succeeded"
+        ? CircleCheck
+        : task.status === "failed"
+          ? CircleX
+          : Ban
 
 /** The roster's copy wins when it is newer (live progress); the query brings older tasks. */
 export const mergeTasks = (listed: ReadonlyArray<Task>, live: ReadonlyArray<Task>): ReadonlyArray<Task> => {
@@ -83,7 +101,14 @@ export function TasksTab({ bot }: { readonly bot: Bot }): ReactNode {
   const query = useQuery(tasksQueryAtom(bot.id))
   const live = useRosterValue<ReadonlyArray<Task>>(rosterTasksAtom, [])
   const conversations = useRosterValue<ReadonlyArray<ConversationSummary>>(conversationSummariesAtom, [])
-  const tasks = useMemo(() => mergeTasks(query.value ?? [], live.filter((t) => t.botId === bot.id)), [query.value, live, bot.id])
+  const tasks = useMemo(
+    () =>
+      mergeTasks(
+        query.value ?? [],
+        live.filter((t) => t.botId === bot.id),
+      ),
+    [query.value, live, bot.id],
+  )
   const running = tasks.filter((t) => t.status === "running").sort((a, b) => a.createdAt - b.createdAt)
   const waiting = tasks.filter((t) => t.status === "queued").sort((a, b) => a.createdAt - b.createdAt)
   const finished = tasks
@@ -111,11 +136,20 @@ export function TasksTab({ bot }: { readonly bot: Bot }): ReactNode {
       {query.error && !query.value && <ErrorLine onRetry={query.refresh}>{query.error}</ErrorLine>}
       <Section title="In progress">
         {running.length + waiting.length === 0 ? (
-          <EmptyNote>Nothing in progress. Longer work {bot.name} takes on shows up here while it keeps chatting with you.</EmptyNote>
+          <EmptyNote>
+            Nothing in progress. Longer work {bot.name} takes on shows up here while it keeps chatting with you.
+          </EmptyNote>
         ) : (
           <SectionSheet>
             {[...running, ...waiting].map((t) => (
-              <TaskRow key={t.id} task={t} now={now} chat={chatName(t)} open={expanded.has(t.id)} onToggle={() => toggle(t.id)} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                now={now}
+                chat={chatName(t)}
+                open={expanded.has(t.id)}
+                onToggle={() => toggle(t.id)}
+              />
             ))}
           </SectionSheet>
         )}
@@ -124,7 +158,14 @@ export function TasksTab({ bot }: { readonly bot: Bot }): ReactNode {
         <Section title="Finished">
           <SectionSheet>
             {finished.map((t) => (
-              <TaskRow key={t.id} task={t} now={now} chat={chatName(t)} open={expanded.has(t.id)} onToggle={() => toggle(t.id)} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                now={now}
+                chat={chatName(t)}
+                open={expanded.has(t.id)}
+                onToggle={() => toggle(t.id)}
+              />
             ))}
           </SectionSheet>
         </Section>
@@ -151,7 +192,12 @@ function TaskRow({
   const p = pill(task)
   const active = !isTerminalTaskStatus(task.status)
   return (
-    <div className={cn("flex flex-col rounded-lg", open && "bg-hover")} data-testid="task-row" data-task={task.id} data-status={task.status}>
+    <div
+      className={cn("flex flex-col rounded-lg", open && "bg-hover")}
+      data-testid="task-row"
+      data-task={task.id}
+      data-status={task.status}
+    >
       <div className="flex min-h-12 items-center gap-1.5 rounded-lg pe-1">
         <button
           type="button"
@@ -165,11 +211,19 @@ function TaskRow({
             size="sm"
             className={cn(
               "shrink-0",
-              task.status === "running" ? "animate-spin text-accent-fg" : task.status === "failed" ? "text-danger-fg" : task.status === "succeeded" ? "text-success-fg" : "text-fg-tertiary",
+              task.status === "running"
+                ? "animate-spin text-accent-fg"
+                : task.status === "failed"
+                  ? "text-danger-fg"
+                  : task.status === "succeeded"
+                    ? "text-success-fg"
+                    : "text-fg-tertiary",
             )}
           />
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-sm text-fg" data-testid="task-title">{task.title}</span>
+            <span className="truncate text-sm text-fg" data-testid="task-title">
+              {task.title}
+            </span>
             <span className="min-w-0 text-xs leading-4 text-fg-tertiary">
               {[...taskTiming(task, now).split(" · "), ...(chat === undefined ? [] : [`in ${chat}`])].map((part, i) => (
                 <Fragment key={part}>
@@ -196,20 +250,34 @@ function TaskRow({
           />
         )}
       </div>
-      {open && <TaskDetailView task={task} onOpenChat={chat === undefined ? undefined : () => select(task.conversationId)} />}
+      {open && (
+        <TaskDetailView task={task} onOpenChat={chat === undefined ? undefined : () => select(task.conversationId)} />
+      )}
       {stop.error && <ErrorLine>{stop.error}</ErrorLine>}
     </div>
   )
 }
 
-function TaskDetailView({ task, onOpenChat }: { readonly task: Task; readonly onOpenChat: (() => void) | undefined }): ReactNode {
+function TaskDetailView({
+  task,
+  onOpenChat,
+}: {
+  readonly task: Task
+  readonly onOpenChat: (() => void) | undefined
+}): ReactNode {
   const detail = useQuery(taskDetailAtom(task.id))
-  const steps = (detail.value?.steps ?? []).flatMap((s): Array<ToolCallEntry | ReasoningEntry> => (s.kind === "tool-call" || s.kind === "reasoning" ? [s] : []))
+  const steps = (detail.value?.steps ?? []).flatMap((s): Array<ToolCallEntry | ReasoningEntry> =>
+    s.kind === "tool-call" || s.kind === "reasoning" ? [s] : [],
+  )
   const decisions = (detail.value?.steps ?? []).flatMap((s): Array<EventEntry> => (s.kind === "event" ? [s] : []))
   // updates passed on while it runs (`update_task`): the work's input messages
-  const updates = (detail.value?.steps ?? []).flatMap((s): Array<MessageEntry> => (s.kind === "message" && s.role === "user" ? [s] : []))
+  const updates = (detail.value?.steps ?? []).flatMap((s): Array<MessageEntry> =>
+    s.kind === "message" && s.role === "user" ? [s] : [],
+  )
   const latest = detail.value?.task ?? task
-  const partial = [...(detail.value?.steps ?? [])].reverse().find((s) => s.kind === "message" && s.role === "bot" && s.text.trim() !== "")
+  const partial = [...(detail.value?.steps ?? [])]
+    .reverse()
+    .find((s) => s.kind === "message" && s.role === "bot" && s.text.trim() !== "")
   const [showBrief, setShowBrief] = useState(false)
   return (
     <div className="flex flex-col gap-2.5 px-2 pt-0.5 pb-2.5" data-testid="task-detail">
@@ -224,14 +292,21 @@ function TaskDetailView({ task, onOpenChat }: { readonly task: Task; readonly on
       {latest.status === "succeeded" && latest.result && (
         <div className="flex flex-col gap-1">
           <span className="text-xs text-fg-tertiary">Result</span>
-          <div className="max-h-80 overflow-y-auto rounded-xl bg-elevated px-3 py-2 text-sm scrollbar-thin" data-testid="task-result">
+          <div
+            className="max-h-80 overflow-y-auto rounded-xl bg-elevated px-3 py-2 text-sm scrollbar-thin"
+            data-testid="task-result"
+          >
             <Markdown text={latest.result} />
           </div>
         </div>
       )}
       {(latest.status === "failed" || latest.status === "cancelled") && (
         <p className={cn("text-sm", latest.status === "failed" ? "text-danger-fg" : "text-fg-secondary")}>
-          {latest.status === "failed" ? `Could not be finished: ${latest.error ?? "unknown error"}` : latest.stoppedBy === "owner" ? "You stopped it." : "Stopped."}
+          {latest.status === "failed"
+            ? `Could not be finished: ${latest.error ?? "unknown error"}`
+            : latest.stoppedBy === "owner"
+              ? "You stopped it."
+              : "Stopped."}
         </p>
       )}
       {latest.status !== "succeeded" && partial?.kind === "message" && (
@@ -243,11 +318,19 @@ function TaskDetailView({ task, onOpenChat }: { readonly task: Task; readonly on
         </div>
       )}
       <div className="flex items-center gap-3">
-        <button type="button" className="text-xs text-fg-tertiary transition-colors hover:text-fg" onClick={() => setShowBrief((v) => !v)}>
+        <button
+          type="button"
+          className="text-xs text-fg-tertiary transition-colors hover:text-fg"
+          onClick={() => setShowBrief((v) => !v)}
+        >
           {showBrief ? "Hide the brief" : "Show the brief"}
         </button>
         {onOpenChat && (
-          <button type="button" className="text-xs text-fg-tertiary transition-colors hover:text-fg" onClick={onOpenChat}>
+          <button
+            type="button"
+            className="text-xs text-fg-tertiary transition-colors hover:text-fg"
+            onClick={onOpenChat}
+          >
             Open the chat
           </button>
         )}

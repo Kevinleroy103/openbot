@@ -103,7 +103,11 @@ export function InlineEdit({
       aria-label={`${label}: ${value || placeholder}`}
       data-testid={testId}
       onClick={start}
-      className={cn("max-w-full truncate rounded-md border border-transparent px-1 transition-colors hover:bg-hover", className, !value && (placeholderClassName ?? "text-fg-tertiary"))}
+      className={cn(
+        "max-w-full truncate rounded-md border border-transparent px-1 transition-colors hover:bg-hover",
+        className,
+        !value && (placeholderClassName ?? "text-fg-tertiary"),
+      )}
     >
       {value || placeholder}
     </button>

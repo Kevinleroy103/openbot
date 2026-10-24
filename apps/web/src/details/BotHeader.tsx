@@ -2,7 +2,18 @@
 // avatar editor popover; a bottom sheet on a phone), inline-editable name (17/24 medium) and label
 // ("Add a label", 12 px).
 import type { Bot } from "@openbot/contracts"
-import { Avatar, AvatarPicker, Icon, IconButton, PillButton, Popover, SegmentedTabs, cn, defaultBotAvatar, normalizeAvatar } from "@openbot/ui"
+import {
+  Avatar,
+  AvatarPicker,
+  Icon,
+  IconButton,
+  PillButton,
+  Popover,
+  SegmentedTabs,
+  cn,
+  defaultBotAvatar,
+  normalizeAvatar,
+} from "@openbot/ui"
 import { Pencil, Shuffle } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { ActionSheet } from "../app/ActionSheet.tsx"
@@ -63,11 +74,20 @@ function AvatarEditor({ bot, working }: { readonly bot: Bot; readonly working: b
         tabs={[{ value: "bot", label: "Bot" }]}
         trailing={
           <div className="flex items-center gap-0.5">
-            <IconButton icon={Shuffle} label="Shuffle" size={phone ? 36 : 28} iconSize="sm" onClick={() => save(defaultBotAvatar(`${bot.id}:${Date.now().toString(36)}`))} />
+            <IconButton
+              icon={Shuffle}
+              label="Shuffle"
+              size={phone ? 36 : 28}
+              iconSize="sm"
+              onClick={() => save(defaultBotAvatar(`${bot.id}:${Date.now().toString(36)}`))}
+            />
             <button
               type="button"
               onClick={() => save(defaultBotAvatar(bot.id))}
-              className={cn("rounded-full text-sm text-fg-secondary transition-colors hover:bg-hover hover:text-fg", phone ? "h-9 px-3" : "h-7 px-2")}
+              className={cn(
+                "rounded-full text-sm text-fg-secondary transition-colors hover:bg-hover hover:text-fg",
+                phone ? "h-9 px-3" : "h-7 px-2",
+              )}
             >
               Reset
             </button>
@@ -83,7 +103,14 @@ function AvatarEditor({ bot, working }: { readonly bot: Bot; readonly working: b
     <>
       {/* hover / open: the body darkens and a pencil sits on it (grok-bot-ui.md §4.2, R:light-07) */}
       <span className="inline-flex transition-[filter] duration-150 group-hover:brightness-[.45] group-aria-expanded:brightness-[.45]">
-        <Avatar shape={local.shape} color={local.color} size={64} working={working} idle={!working} label={`${bot.name}'s avatar`} />
+        <Avatar
+          shape={local.shape}
+          color={local.color}
+          size={64}
+          working={working}
+          idle={!working}
+          label={`${bot.name}'s avatar`}
+        />
       </span>
       <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-aria-expanded:opacity-100">
         <Icon icon={Pencil} size="lg" />

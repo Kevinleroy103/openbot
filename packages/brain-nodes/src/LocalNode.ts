@@ -51,7 +51,7 @@ export interface LocalNodeOptions<E, R> {
 }
 
 /** The in-process seams the local node's handlers need. */
-export const localNodeLinks = Effect.gen(function*() {
+export const localNodeLinks = Effect.gen(function* () {
   const { handlers } = yield* BrainSide
   const broker = yield* StreamBroker
   const brainLink = BrainLink.of({
@@ -96,7 +96,7 @@ export const LocalNodeLive = <E, R>(
   | InternalAddress
 > =>
   Layer.effectDiscard(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const config = yield* BrainNodesConfig
       if (!config.localNode.enabled) return
       const identity = yield* BrainIdentity
@@ -159,23 +159,21 @@ export const localNodeConfig = (
  * `LocalNodeLive` running `@openbot/node-daemon`'s `NodeHandlersLive` with `localNodeConfig`. This is
  * what the server composes by default (unless `--no-local-node`, which `BrainNodesConfig` reflects).
  */
-export const LocalNodeDaemonLive = (options?: LocalNodeDaemonOptions): Layer.Layer<
+export const LocalNodeDaemonLive = (
+  options?: LocalNodeDaemonOptions,
+): Layer.Layer<
   never,
   never,
-  | DataDir
-  | BrainNodesConfig
-  | BrainIdentity
-  | NodeRegistry
-  | StreamBroker
-  | ApprovalService
-  | BotRepo
-  | InternalAddress
+  DataDir | BrainNodesConfig | BrainIdentity | NodeRegistry | StreamBroker | ApprovalService | BotRepo | InternalAddress
 > =>
   Layer.unwrap(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const dataDir = yield* DataDir
       // Project folders become roots of the local node only (when a LiveHub is around to track them).
       const extraRoots = yield* projectFolderRoots
-      return LocalNodeLive({ handlers: NodeHandlersLive(localNodeConfig(dataDir, options, extraRoots)), describe: options?.describe })
+      return LocalNodeLive({
+        handlers: NodeHandlersLive(localNodeConfig(dataDir, options, extraRoots)),
+        describe: options?.describe,
+      })
     }),
   )

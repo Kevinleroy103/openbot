@@ -1,6 +1,5 @@
 Read AGENTS.md first: it holds the OpenBot working rules. The Bun guidance below also applies.
 
-
 Default to using Bun instead of Node.js.
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`

@@ -107,14 +107,15 @@ export const macSteps = (plan: ActionPlan): MacPlan | string => {
       body.push(op)
     }
   }
-  const steps: ReadonlyArray<MacStep> = held.length === 0
-    ? body
-    : [
-      ...held.map((keyCode): MacStep => ({ op: "keyEvent", keyCode, down: true })),
-      { op: "hold", flags },
-      ...body,
-      { op: "hold", flags: 0 },
-      ...[...held].reverse().map((keyCode): MacStep => ({ op: "keyEvent", keyCode, down: false })),
-    ]
+  const steps: ReadonlyArray<MacStep> =
+    held.length === 0
+      ? body
+      : [
+          ...held.map((keyCode): MacStep => ({ op: "keyEvent", keyCode, down: true })),
+          { op: "hold", flags },
+          ...body,
+          { op: "hold", flags: 0 },
+          ...[...held].reverse().map((keyCode): MacStep => ({ op: "keyEvent", keyCode, down: false })),
+        ]
   return { steps, needsPointer, held }
 }

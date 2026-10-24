@@ -26,7 +26,18 @@ export function InstructionsSection({ bot }: { readonly bot: Bot }): ReactNode {
     <Section
       title="Instructions"
       id="details-instructions"
-      trailing={!editing && <IconButton icon={Pencil} label="Edit instructions" size={24} iconSize="sm" onClick={start} data-testid="edit-instructions" />}
+      trailing={
+        !editing && (
+          <IconButton
+            icon={Pencil}
+            label="Edit instructions"
+            size={24}
+            iconSize="sm"
+            onClick={start}
+            data-testid="edit-instructions"
+          />
+        )
+      }
     >
       {editing ? (
         <div className="flex flex-col gap-2">
@@ -55,23 +66,40 @@ export function InstructionsSection({ bot }: { readonly bot: Bot }): ReactNode {
             <PillButton variant="ghost" size="md" onClick={() => setEditing(false)}>
               Cancel
             </PillButton>
-            <PillButton variant="primary" size="md" loading={update.pending} onClick={() => void save()} data-testid="save-instructions">
+            <PillButton
+              variant="primary"
+              size="md"
+              loading={update.pending}
+              onClick={() => void save()}
+              data-testid="save-instructions"
+            >
               Save
             </PillButton>
           </div>
         </div>
       ) : (
         <SectionSheet>
-          <button type="button" onClick={start} className="rounded-lg px-2 py-1.5 text-start transition-colors hover:bg-hover" data-testid="instructions-text">
+          <button
+            type="button"
+            onClick={start}
+            className="rounded-lg px-2 py-1.5 text-start transition-colors hover:bg-hover"
+            data-testid="instructions-text"
+          >
             {bot.instructions.trim() ? (
               <p className="line-clamp-6 text-sm whitespace-pre-wrap text-fg">{bot.instructions}</p>
             ) : (
-              <p className="text-sm text-fg-tertiary">Tell {bot.name} what its job is. It reads this before every task.</p>
+              <p className="text-sm text-fg-tertiary">
+                Tell {bot.name} what its job is. It reads this before every task.
+              </p>
             )}
           </button>
         </SectionSheet>
       )}
-      <button type="button" onClick={() => setShowPrompt(true)} className="w-fit px-3 text-xs text-fg-tertiary transition-colors hover:text-fg-secondary">
+      <button
+        type="button"
+        onClick={() => setShowPrompt(true)}
+        className="w-fit px-3 text-xs text-fg-tertiary transition-colors hover:text-fg-secondary"
+      >
         Show the full prompt ›
       </button>
       {showPrompt && <RenderedPromptDialog bot={bot} onClose={() => setShowPrompt(false)} />}
@@ -83,14 +111,20 @@ function RenderedPromptDialog({ bot, onClose }: { readonly bot: Bot; readonly on
   const ctx = useQuery(botContextAtom(bot.id))
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} width={640} height={560} label={`${bot.name}'s full prompt`}>
-      <DialogHeader title={`${bot.name}'s full prompt`} description="What the harness receives: instructions, team, memory index and where tools run." onClose={onClose} />
+      <DialogHeader
+        title={`${bot.name}'s full prompt`}
+        description="What the harness receives: instructions, team, memory index and where tools run."
+        onClose={onClose}
+      />
       <DialogBody>
         {ctx.loading ? (
           <LoadingLine />
         ) : ctx.error && !ctx.value ? (
           <ErrorLine onRetry={ctx.refresh}>{ctx.error}</ErrorLine>
         ) : (
-          <pre className="rounded-xl bg-quaternary p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-fg-secondary hairline border-line-quaternary">{ctx.value?.instructions}</pre>
+          <pre className="rounded-xl bg-quaternary p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-fg-secondary hairline border-line-quaternary">
+            {ctx.value?.instructions}
+          </pre>
         )}
       </DialogBody>
     </Dialog>

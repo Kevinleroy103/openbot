@@ -5,7 +5,11 @@
  */
 import { contextBridge, ipcRenderer } from "electron"
 
-const info = ipcRenderer.sendSync("openbot:info") as { readonly version: string; readonly build: string; readonly origin: string }
+const info = ipcRenderer.sendSync("openbot:info") as {
+  readonly version: string
+  readonly build: string
+  readonly origin: string
+}
 
 contextBridge.exposeInMainWorld("openbotDesktop", {
   version: info.version,

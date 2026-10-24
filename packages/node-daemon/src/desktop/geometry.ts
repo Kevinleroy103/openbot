@@ -79,7 +79,8 @@ export const zoomRect = (g: ScreenGeometry, region: ReadonlyArray<number> | unde
   const x1 = clamp(Math.max(a, c), 0, g.apiWidth)
   const y0 = clamp(Math.min(b, d), 0, g.apiHeight)
   const y1 = clamp(Math.max(b, d), 0, g.apiHeight)
-  if (x1 - x0 < 1 || y1 - y0 < 1) return `region [${region.join(", ")}] is empty or outside the ${g.apiWidth}x${g.apiHeight} screenshot`
+  if (x1 - x0 < 1 || y1 - y0 < 1)
+    return `region [${region.join(", ")}] is empty or outside the ${g.apiWidth}x${g.apiHeight} screenshot`
   const sx = clamp(Math.floor((x0 * g.width) / g.apiWidth), 0, g.width - 1)
   const sy = clamp(Math.floor((y0 * g.height) / g.apiHeight), 0, g.height - 1)
   const ex = clamp(Math.ceil((x1 * g.width) / g.apiWidth), sx + 1, g.width)

@@ -9,7 +9,8 @@ import { awaitReconnect, connectionStateAtom } from "./connection.ts"
  * domain errors such as `NotFound` (the conversation was deleted) end the subscription.
  */
 export const isRetryableSubscribeError = (error: unknown): boolean =>
-  error instanceof RpcClientError.RpcClientError || (typeof error === "object" && error !== null && (error as { _tag?: unknown })._tag === "Internal")
+  error instanceof RpcClientError.RpcClientError ||
+  (typeof error === "object" && error !== null && (error as { _tag?: unknown })._tag === "Internal")
 
 /** Sleep for the backoff, but wake as soon as the socket reconnects (resume right away, D4.3). */
 export const waitForRetry =

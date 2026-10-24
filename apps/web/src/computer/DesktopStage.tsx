@@ -20,14 +20,27 @@ export interface DesktopStageProps {
   readonly passive?: boolean
 }
 
-export function DesktopStage({ targetRef, aspect, live, interactive, overlay, frameClassName, label, passive = false }: DesktopStageProps): ReactNode {
+export function DesktopStage({
+  targetRef,
+  aspect,
+  live,
+  interactive,
+  overlay,
+  frameClassName,
+  label,
+  passive = false,
+}: DesktopStageProps): ReactNode {
   const boxRef = useRef<HTMLDivElement>(null)
   const fit = useContainFit(boxRef, aspect)
   return (
     <div ref={boxRef} className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
       <div
         className={cn("relative overflow-hidden", frameClassName)}
-        style={{ width: fit.width || undefined, height: fit.height || undefined, aspectRatio: fit.width ? undefined : String(aspect) }}
+        style={{
+          width: fit.width || undefined,
+          height: fit.height || undefined,
+          aspectRatio: fit.width ? undefined : String(aspect),
+        }}
       >
         <div
           ref={targetRef}

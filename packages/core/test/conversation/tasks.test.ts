@@ -20,7 +20,11 @@ import {
   TaskRepo,
 } from "../../src/ports/index.ts"
 import { McpBindingIssuerFake, runTest } from "../../src/testing/index.ts"
-import { renderTaskTurn, TASK_CONTEXT_BYTES, TASK_CONTEXT_MESSAGES } from "../../src/services/conversation/BackgroundTasks.ts"
+import {
+  renderTaskTurn,
+  TASK_CONTEXT_BYTES,
+  TASK_CONTEXT_MESSAGES,
+} from "../../src/services/conversation/BackgroundTasks.ts"
 import {
   appLayer,
   turnsOf,
@@ -42,7 +46,11 @@ const briefOf = (text: string) => {
   const at = text.lastIndexOf("[The brief]\n")
   return at < 0 ? text : text.slice(at + "[The brief]\n".length).split("\n\n[Update to this work]")[0]!
 }
-const taskById = (id: TaskId) => Effect.map(Effect.flatMap(BackgroundTasks, (t) => t.get(id)), (d) => d.task)
+const taskById = (id: TaskId) =>
+  Effect.map(
+    Effect.flatMap(BackgroundTasks, (t) => t.get(id)),
+    (d) => d.task,
+  )
 const statusOf = (id: TaskId) => Effect.map(taskById(id), (t) => t.status)
 
 /**
@@ -52,61 +60,77 @@ const statusOf = (id: TaskId) => Effect.map(taskById(id), (t) => t.status)
  * - a task's own session: waits on the gate named in its brief, then answers with its result;
  * - anything else: a quick reply.
  */
-const behavior = (
-  tasks: BackgroundTasks["Service"],
-  gates: Map<string, Deferred.Deferred<void>>,
-  onTask?: (turn: TurnHandle) => Effect.Effect<void>,
-) => (turn: TurnHandle) =>
-  Effect.gen(function*() {
-    const text = turn.input.text
-    if (turn.taskId !== undefined) {
-      if (text.startsWith("[Update to this work]")) {
-        // a later turn of the task's session: it applied the update and answers again
-        yield* turn.say(`${turn.turnId}/m`, `Redone with: ${text.split("\n")[1]}`)
+const behavior =
+  (
+    tasks: BackgroundTasks["Service"],
+    gates: Map<string, Deferred.Deferred<void>>,
+    onTask?: (turn: TurnHandle) => Effect.Effect<void>,
+  ) =>
+  (turn: TurnHandle) =>
+    Effect.gen(function* () {
+      const text = turn.input.text
+      if (turn.taskId !== undefined) {
+        if (text.startsWith("[Update to this work]")) {
+          // a later turn of the task's session: it applied the update and answers again
+          yield* turn.say(`${turn.turnId}/m`, `Redone with: ${text.split("\n")[1]}`)
+          yield* turn.complete("end_turn")
+          return
+        }
+        const brief = briefOf(text)
+        yield* turn.emit({ _tag: "Activity", label: "Reading the front page", toolKind: "web" })
+        yield* turn.emit({
+          _tag: "ItemUpserted",
+          turnId: turn.turnId,
+          key: `${turn.turnId}/tool`,
+          item: {
+            _tag: "ToolCall",
+            toolName: "web_fetch",
+            title: "Fetch",
+            kind: "web",
+            status: "running",
+            inputSummary: "news.ycombinator.com",
+          },
+        })
+        const gate = [...gates.entries()].find(([k]) => brief.includes(k))?.[1]
+        if (gate !== undefined) yield* Deferred.await(gate)
+        if (onTask !== undefined) yield* onTask(turn)
+        const steered = turn.steered.map((t) => t.text.split("\n")[1]).join("; ")
+        yield* turn.emit({
+          _tag: "ItemUpserted",
+          turnId: turn.turnId,
+          key: `${turn.turnId}/tool`,
+          item: {
+            _tag: "ToolCall",
+            toolName: "web_fetch",
+            title: "Fetch",
+            kind: "web",
+            status: "completed",
+            inputSummary: "news.ycombinator.com",
+          },
+        })
+        yield* turn.say(`${turn.turnId}/m`, `Result for ${brief}${steered === "" ? "" : ` (with: ${steered})`}`)
         yield* turn.complete("end_turn")
         return
       }
-      const brief = briefOf(text)
-      yield* turn.emit({ _tag: "Activity", label: "Reading the front page", toolKind: "web" })
-      yield* turn.emit({
-        _tag: "ItemUpserted",
-        turnId: turn.turnId,
-        key: `${turn.turnId}/tool`,
-        item: { _tag: "ToolCall", toolName: "web_fetch", title: "Fetch", kind: "web", status: "running", inputSummary: "news.ycombinator.com" },
-      })
-      const gate = [...gates.entries()].find(([k]) => brief.includes(k))?.[1]
-      if (gate !== undefined) yield* Deferred.await(gate)
-      if (onTask !== undefined) yield* onTask(turn)
-      const steered = turn.steered.map((t) => t.text.split("\n")[1]).join("; ")
-      yield* turn.emit({
-        _tag: "ItemUpserted",
-        turnId: turn.turnId,
-        key: `${turn.turnId}/tool`,
-        item: { _tag: "ToolCall", toolName: "web_fetch", title: "Fetch", kind: "web", status: "completed", inputSummary: "news.ycombinator.com" },
-      })
-      yield* turn.say(`${turn.turnId}/m`, `Result for ${brief}${steered === "" ? "" : ` (with: ${steered})`}`)
+      const start = /^(?:\[[^\n]*\]\n)?(?:\[@[^\]]+\]: )?start (.+)$/.exec(text)
+      if (start !== null) {
+        const title = start[1]!.trim()
+        const task = yield* Effect.orDie(tasks.start(turn.tool, { title, brief: `work on ${title}` }))
+        yield* turn.say(`${turn.turnId}/m`, `Sure (${task.status})`)
+        yield* turn.complete("end_turn")
+        return
+      }
+      if (text.includes("[Result of ")) {
+        yield* turn.say(`${turn.turnId}/m`, `Report: ${text.split("\n").slice(-1)[0]}`)
+        yield* turn.complete("end_turn")
+        return
+      }
+      yield* turn.say(`${turn.turnId}/m`, `Quick answer to ${text}`)
       yield* turn.complete("end_turn")
-      return
-    }
-    const start = /^(?:\[[^\n]*\]\n)?(?:\[@[^\]]+\]: )?start (.+)$/.exec(text)
-    if (start !== null) {
-      const title = start[1]!.trim()
-      const task = yield* Effect.orDie(tasks.start(turn.tool, { title, brief: `work on ${title}` }))
-      yield* turn.say(`${turn.turnId}/m`, `Sure (${task.status})`)
-      yield* turn.complete("end_turn")
-      return
-    }
-    if (text.includes("[Result of ")) {
-      yield* turn.say(`${turn.turnId}/m`, `Report: ${text.split("\n").slice(-1)[0]}`)
-      yield* turn.complete("end_turn")
-      return
-    }
-    yield* turn.say(`${turn.turnId}/m`, `Quick answer to ${text}`)
-    yield* turn.complete("end_turn")
-  })
+    })
 
 const makeGates = (...names: Array<string>) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const gates = new Map<string, Deferred.Deferred<void>>()
     for (const name of names) gates.set(name, yield* Deferred.make<void>())
     return gates
@@ -115,7 +139,7 @@ const makeGates = (...names: Array<string>) =>
 describe("background tasks", () => {
   test("start_task returns at once; the task runs in its own session while the bot answers the owner; its result wakes the bot in the origin conversation", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const hub = yield* LiveHub
         const roster = yield* collect(hub.subscribeRoster({}))
@@ -127,7 +151,10 @@ describe("background tasks", () => {
         yield* send(dm, "start HN digest")
         yield* settled(dm, 1) // the starting turn ended normally
         const [task] = yield* tasksOf(ada.id)
-        yield* eventually(Effect.map(statusOf(task!.id), (s) => s === "running"), "task running")
+        yield* eventually(
+          Effect.map(statusOf(task!.id), (s) => s === "running"),
+          "task running",
+        )
 
         // the owner talks to the bot meanwhile: an immediate answer from the main session
         yield* send(dm, "how are you?")
@@ -136,7 +163,10 @@ describe("background tasks", () => {
         const stillRunning = yield* statusOf(task!.id)
 
         yield* Deferred.succeed(gates.get("HN digest")!, undefined)
-        yield* eventually(Effect.map(statusOf(task!.id), (s) => s === "succeeded"), "task done")
+        yield* eventually(
+          Effect.map(statusOf(task!.id), (s) => s === "succeeded"),
+          "task done",
+        )
         yield* settled(dm, 3) // the result's turn
         return {
           ada,
@@ -163,13 +193,18 @@ describe("background tasks", () => {
     expect(out.opened[0]!.instructions.text).toContain("`start_task`")
     expect(out.opened[0]!.instructions.text).not.toContain("## Right now")
     // its token carries the task and keeps the origin conversation
-    expect(out.issued.at(-1)).toMatchObject({ claims: { taskId: out.task.id, conversationId: out.ada.directConversationId }, revoked: true })
+    expect(out.issued.at(-1)).toMatchObject({
+      claims: { taskId: out.task.id, conversationId: out.ada.directConversationId },
+      revoked: true,
+    })
     const taskTurn = out.handles.find((h) => h.taskId !== undefined)!
     // its first turn: the DM's recent messages (so the brief stays short), then the brief
     expect(taskTurn.input.text).toBe(
       "[Recent messages of your direct chat with the owner, where this work was started (oldest first, for context)]\n[Owner]: start HN digest\n\n[The brief]\nwork on HN digest",
     )
-    expect(out.opened[1]!.instructions.text).toContain("opens with the recent messages of the conversation the work was started from")
+    expect(out.opened[1]!.instructions.text).toContain(
+      "opens with the recent messages of the conversation the work was started from",
+    )
     expect(out.opened[1]!.instructions.text).not.toContain("it is everything you know about this work")
     // the result came back to the main session in the DM, as content
     const report = out.handles.at(-1)!
@@ -185,10 +220,12 @@ describe("background tasks", () => {
       "Sure (running)",
       "how are you?",
       "Quick answer to how are you?",
-      'Report: Result for work on HN digest',
+      "Report: Result for work on HN digest",
     ])
     // the roster carried the task through queued → running → succeeded
-    const statuses = out.roster.flatMap((i) => (i.kind === "change" && i.change.type === "task.upserted" ? [i.change.task.status] : []))
+    const statuses = out.roster.flatMap((i) =>
+      i.kind === "change" && i.change.type === "task.upserted" ? [i.change.task.status] : [],
+    )
     expect(statuses[0]).toBe("queued")
     expect(statuses).toContain("running")
     expect(statuses.at(-1)).toBe("succeeded")
@@ -196,7 +233,7 @@ describe("background tasks", () => {
 
   test("work started on a voice call reports back on the call while it lasts, and to the chat after", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const orchestrator = yield* Orchestrator
         const presence = yield* CallPresence
@@ -207,32 +244,46 @@ describe("background tasks", () => {
         presence.enter(ada.id)
         // on the call: "start …" arrives as a voice delivery
         for (const title of ["inbox sweep", "calendar sweep"]) {
-          const receipt = yield* orchestrator.deliver({ conversationId: dm, botId: ada.id, kind: "user-message", text: `start ${title}`, urgency: "urgent", voice: true })
+          const receipt = yield* orchestrator.deliver({
+            conversationId: dm,
+            botId: ada.id,
+            kind: "user-message",
+            text: `start ${title}`,
+            urgency: "urgent",
+            voice: true,
+          })
           yield* orchestrator.awaitDelivery(receipt.deliveryId)
         }
         const [inbox, calendar] = [...(yield* tasksOf(ada.id))].sort((a, b) => a.title.localeCompare(b.title)).reverse()
         // the inbox finishes while the call is on: its report is a voice turn
         yield* Deferred.succeed(gates.get("inbox sweep")!, undefined)
-        yield* eventually(Effect.map(statusOf(inbox!.id), (s) => s === "succeeded"), "inbox done")
+        yield* eventually(
+          Effect.map(statusOf(inbox!.id), (s) => s === "succeeded"),
+          "inbox done",
+        )
         yield* settled(dm, 3)
         // the owner hangs up; the calendar finishes after: a normal turn, in the chat
         presence.leave(ada.id)
         yield* Deferred.succeed(gates.get("calendar sweep")!, undefined)
-        yield* eventually(Effect.map(statusOf(calendar!.id), (s) => s === "succeeded"), "calendar done")
+        yield* eventually(
+          Effect.map(statusOf(calendar!.id), (s) => s === "succeeded"),
+          "calendar done",
+        )
         yield* settled(dm, 4)
         return { turns: yield* turnsOf(dm), handles: yield* driver.turns }
       }),
       appLayer(),
     )
     const reports = out.handles.filter((h) => h.taskId === undefined && h.input.text.startsWith("[Result of "))
-    const voiceOf = (text: string) => out.turns.find((t) => t.id === reports.find((r) => r.input.text.includes(text))?.turnId)?.voice
+    const voiceOf = (text: string) =>
+      out.turns.find((t) => t.id === reports.find((r) => r.input.text.includes(text))?.turnId)?.voice
     expect(voiceOf("inbox sweep")).toBe(true)
     expect(voiceOf("calendar sweep")).toBeUndefined()
   })
 
   test("cancel stops only that task; the owner's stop is reported, the bot's own is not", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const tasks = yield* BackgroundTasks
         const ada = yield* createBot("Ada")
@@ -245,7 +296,10 @@ describe("background tasks", () => {
         yield* settled(dm, 3)
         const list = yield* tasksOf(ada.id)
         const id = (title: string) => list.find((t) => t.title === title)!.id
-        yield* eventually(Effect.map(tasksOf(ada.id), (ts) => ts.every((t) => t.status === "running")), "all running")
+        yield* eventually(
+          Effect.map(tasksOf(ada.id), (ts) => ts.every((t) => t.status === "running")),
+          "all running",
+        )
 
         const stopped = yield* tasks.cancel(id("alpha"), "owner")
         yield* settled(dm, 4) // the owner's stop is reported to the bot
@@ -253,7 +307,10 @@ describe("background tasks", () => {
         const afterBot = (yield* transcript(dm)).length
         const others = yield* statusOf(id("gamma"))
         yield* Deferred.succeed(gates.get("gamma")!, undefined)
-        yield* eventually(Effect.map(statusOf(id("gamma")), (s) => s === "succeeded"), "gamma done")
+        yield* eventually(
+          Effect.map(statusOf(id("gamma")), (s) => s === "succeeded"),
+          "gamma done",
+        )
         yield* settled(dm, 5)
         return { stopped, byBot, others, afterBot, handles: yield* driver.turns, dm: yield* transcript(dm) }
       }),
@@ -271,7 +328,7 @@ describe("background tasks", () => {
 
   test("at most maxPerBot run at once; more wait in line and start when one ends", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         const dm = ada.directConversationId
@@ -280,14 +337,27 @@ describe("background tasks", () => {
         for (const name of ["one", "two", "three"]) yield* send(dm, `start ${name}`)
         yield* settled(dm, 3)
         const byTitle = (title: string) => Effect.map(tasksOf(ada.id), (ts) => ts.find((t) => t.title === title)!)
-        yield* eventually(Effect.map(byTitle("two"), (t) => t.status === "running"), "two running")
-        const before = [(yield* byTitle("one")).status, (yield* byTitle("two")).status, (yield* byTitle("three")).status]
+        yield* eventually(
+          Effect.map(byTitle("two"), (t) => t.status === "running"),
+          "two running",
+        )
+        const before = [
+          (yield* byTitle("one")).status,
+          (yield* byTitle("two")).status,
+          (yield* byTitle("three")).status,
+        ]
         yield* Deferred.succeed(gates.get("one")!, undefined)
-        yield* eventually(Effect.map(byTitle("three"), (t) => t.status === "running"), "three started")
+        yield* eventually(
+          Effect.map(byTitle("three"), (t) => t.status === "running"),
+          "three started",
+        )
         const middle = [(yield* byTitle("one")).status, (yield* byTitle("two")).status]
         yield* Deferred.succeed(gates.get("two")!, undefined)
         yield* Deferred.succeed(gates.get("three")!, undefined)
-        yield* eventually(Effect.map(tasksOf(ada.id), (ts) => ts.every((t) => t.status === "succeeded")), "all done")
+        yield* eventually(
+          Effect.map(tasksOf(ada.id), (ts) => ts.every((t) => t.status === "succeeded")),
+          "all done",
+        )
         return { before, middle, sessions: (yield* driver.opened).length }
       }),
       appLayer({ tasks: { maxPerBot: 2 } }),
@@ -299,37 +369,88 @@ describe("background tasks", () => {
 
   test("a task's approval lands in its origin group, labelled with its title, and the answer goes back to the task", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const approvals = yield* ApprovalService
         const orchestrator = yield* Orchestrator
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
         yield* (yield* BotService).update(ada.id, { autonomy: "ask" })
-        const group = yield* (yield* ConversationService).createGroup({ title: "launch", memberBotIds: [ada.id, bob.id], leadBotId: ada.id })
+        const group = yield* (yield* ConversationService).createGroup({
+          title: "launch",
+          memberBotIds: [ada.id, bob.id],
+          leadBotId: ada.id,
+        })
         const answers: Array<unknown> = []
-        yield* driver.setBehavior(ada.id, behavior(yield* BackgroundTasks, new Map(), (turn) =>
-          Effect.gen(function*() {
-            // a native request, then a gateway tool's (through the Orchestrator)
-            answers.push(yield* turn.request({ kind: "command-approval", toolName: "fake_shell", title: "Run make deploy", detail: "", surface: "shell", command: "make deploy", cwd: "/srv/app" }))
-            answers.push(yield* orchestrator.approveToolCall(turn.tool, { kind: "command-approval", toolName: "shell", title: "Run rm -rf build", detail: "", surface: "shell", command: "rm -rf build", cwd: "/srv/app" }))
-          })))
+        yield* driver.setBehavior(
+          ada.id,
+          behavior(yield* BackgroundTasks, new Map(), (turn) =>
+            Effect.gen(function* () {
+              // a native request, then a gateway tool's (through the Orchestrator)
+              answers.push(
+                yield* turn.request({
+                  kind: "command-approval",
+                  toolName: "fake_shell",
+                  title: "Run make deploy",
+                  detail: "",
+                  surface: "shell",
+                  command: "make deploy",
+                  cwd: "/srv/app",
+                }),
+              )
+              answers.push(
+                yield* orchestrator.approveToolCall(turn.tool, {
+                  kind: "command-approval",
+                  toolName: "shell",
+                  title: "Run rm -rf build",
+                  detail: "",
+                  surface: "shell",
+                  command: "rm -rf build",
+                  cwd: "/srv/app",
+                }),
+              )
+            }),
+          ),
+        )
         yield* send(group.id, "start deploy")
-        yield* eventually(Effect.map(tasksOf(ada.id), (ts) => ts.length === 1), "started")
+        yield* eventually(
+          Effect.map(tasksOf(ada.id), (ts) => ts.length === 1),
+          "started",
+        )
         const [task] = yield* tasksOf(ada.id)
         const requests = yield* RequestRepo
-        const pendingIn = (id: ConversationId) => Effect.map(Effect.orDie(requests.list({ conversationId: id, statuses: ["pending"] })), (rs) => rs)
-        yield* eventually(Effect.map(pendingIn(group.id), (rs) => rs.length === 1), "first card")
+        const pendingIn = (id: ConversationId) =>
+          Effect.map(Effect.orDie(requests.list({ conversationId: id, statuses: ["pending"] })), (rs) => rs)
+        yield* eventually(
+          Effect.map(pendingIn(group.id), (rs) => rs.length === 1),
+          "first card",
+        )
         const first = (yield* pendingIn(group.id))[0]!
         const waiting = yield* taskById(task!.id)
         yield* approvals.respond({ requestId: first.id, response: { type: "decision", decision: "allow-once" } })
-        yield* eventually(Effect.map(pendingIn(group.id), (rs) => rs.length === 1 && rs[0]!.id !== first.id), "second card")
+        yield* eventually(
+          Effect.map(pendingIn(group.id), (rs) => rs.length === 1 && rs[0]!.id !== first.id),
+          "second card",
+        )
         const second = (yield* pendingIn(group.id))[0]!
         yield* approvals.respond({ requestId: second.id, response: { type: "decision", decision: "deny" } })
-        yield* eventually(Effect.map(statusOf(task!.id), (s) => s === "succeeded"), "task done")
+        yield* eventually(
+          Effect.map(statusOf(task!.id), (s) => s === "succeeded"),
+          "task done",
+        )
         yield* settled(group.id, 2)
         const entries = yield* transcript(group.id)
-        return { group, task: task!, first, second, waiting, answers, entries, dm: yield* transcript(ada.directConversationId), handles: yield* driver.turns }
+        return {
+          group,
+          task: task!,
+          first,
+          second,
+          waiting,
+          answers,
+          entries,
+          dm: yield* transcript(ada.directConversationId),
+          handles: yield* driver.turns,
+        }
       }),
       appLayer({ approvals: "live" }),
     )
@@ -338,7 +459,10 @@ describe("background tasks", () => {
     expect(out.first.turnId).toBeUndefined()
     expect(out.waiting).toMatchObject({ waiting: true, progress: "Waiting for you: Run make deploy" })
     const cards = out.entries.flatMap((e) => (e.kind === "card" && e.card.type === "approval" ? [e.card] : []))
-    expect(cards.map((c) => [c.title, c.taskTitle])).toEqual([["Run make deploy", "deploy"], ["Run rm -rf build", "deploy"]])
+    expect(cards.map((c) => [c.title, c.taskTitle])).toEqual([
+      ["Run make deploy", "deploy"],
+      ["Run rm -rf build", "deploy"],
+    ])
     expect(out.answers).toEqual([{ decision: "allow-once" }, { decision: "deny" }])
     // the task saw the group's recent messages
     expect(out.handles.find((h) => h.taskId !== undefined)!.input.text).toStartWith(
@@ -353,18 +477,40 @@ describe("background tasks", () => {
 
   test("auto-allowed requests of a task become its steps, never conversation lines", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         yield* (yield* BotService).update(ada.id, { autonomy: "full" })
-        yield* driver.setBehavior(ada.id, behavior(yield* BackgroundTasks, new Map(), (turn) =>
-          Effect.asVoid(turn.request({ kind: "command-approval", toolName: "fake_shell", title: "Run ls", detail: "", surface: "shell", command: "ls" }))))
+        yield* driver.setBehavior(
+          ada.id,
+          behavior(yield* BackgroundTasks, new Map(), (turn) =>
+            Effect.asVoid(
+              turn.request({
+                kind: "command-approval",
+                toolName: "fake_shell",
+                title: "Run ls",
+                detail: "",
+                surface: "shell",
+                command: "ls",
+              }),
+            ),
+          ),
+        )
         yield* send(ada.directConversationId, "start look")
-        yield* eventually(Effect.map(tasksOf(ada.id), (ts) => ts.length === 1), "started")
+        yield* eventually(
+          Effect.map(tasksOf(ada.id), (ts) => ts.length === 1),
+          "started",
+        )
         const [task] = yield* tasksOf(ada.id)
-        yield* eventually(Effect.map(statusOf(task!.id), (s) => s === "succeeded"), "done")
+        yield* eventually(
+          Effect.map(statusOf(task!.id), (s) => s === "succeeded"),
+          "done",
+        )
         yield* settled(ada.directConversationId, 2)
-        return { dm: yield* transcript(ada.directConversationId), steps: (yield* (yield* BackgroundTasks).get(task!.id)).steps }
+        return {
+          dm: yield* transcript(ada.directConversationId),
+          steps: (yield* (yield* BackgroundTasks).get(task!.id)).steps,
+        }
       }),
       appLayer({ approvals: "live" }),
     )
@@ -375,41 +521,51 @@ describe("background tasks", () => {
   /** A task left running by the previous run, then boot recovery and `recover`. */
   const afterRestart = (extra: Partial<Task>) =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         yield* driver.setBehavior(ada.id, behavior(yield* BackgroundTasks, new Map()))
         const repo = yield* TaskRepo
-        yield* Effect.orDie(repo.upsert({
-          id: "tsk_old" as TaskId,
-          botId: ada.id,
-          conversationId: ada.directConversationId,
-          title: "Nightly audit",
-          brief: "audit",
-          status: "running",
-          createdAt: 0,
-          updatedAt: 0,
-          startedAt: 0,
-          ...extra,
-        }))
+        yield* Effect.orDie(
+          repo.upsert({
+            id: "tsk_old" as TaskId,
+            botId: ada.id,
+            conversationId: ada.directConversationId,
+            title: "Nightly audit",
+            brief: "audit",
+            status: "running",
+            createdAt: 0,
+            updatedAt: 0,
+            startedAt: 0,
+            ...extra,
+          }),
+        )
         const report = yield* Effect.orDie((yield* BootRecovery).run)
         yield* (yield* BackgroundTasks).recover(report)
         yield* settled(ada.directConversationId, 1)
-        return { report, task: yield* taskById("tsk_old" as TaskId), handles: yield* driver.turns, opened: yield* driver.opened }
+        return {
+          report,
+          task: yield* taskById("tsk_old" as TaskId),
+          handles: yield* driver.turns,
+          opened: yield* driver.opened,
+        }
       }),
       appLayer(),
     )
 
   test("hand-off: a running task is interrupted and stays running (untold) for the next boot to run again", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         const gates = yield* makeGates("long render")
         yield* driver.setBehavior(ada.id, behavior(yield* BackgroundTasks, gates))
         yield* send(ada.directConversationId, "start long render")
         yield* settled(ada.directConversationId, 1)
-        yield* eventually(Effect.map(tasksOf(ada.id), (ts) => ts[0]?.status === "running"), "running")
+        yield* eventually(
+          Effect.map(tasksOf(ada.id), (ts) => ts[0]?.status === "running"),
+          "running",
+        )
         const turnsBefore = (yield* driver.turns).filter((t) => t.taskId === undefined).length
         yield* (yield* Orchestrator).handOff
         // were it still running, it would finish now
@@ -444,32 +600,48 @@ describe("background tasks", () => {
 
     const tooMany = await afterRestart({ restarts: MAX_TASK_RESTARTS })
     expect(tooMany.task).toMatchObject({ status: "failed", error: "interrupted by a restart" })
-    expect(tooMany.handles.at(-1)!.input.text).toBe('[Result of "Nightly audit"]\nIt could not be finished: interrupted by a restart.')
+    expect(tooMany.handles.at(-1)!.input.text).toBe(
+      '[Result of "Nightly audit"]\nIt could not be finished: interrupted by a restart.',
+    )
   })
 
   test("deleting a group stops the work started there (untold); deleting the bot stops and removes its tasks", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
         const gates = yield* makeGates("in group", "in dm")
         yield* driver.setBehavior(ada.id, behavior(yield* BackgroundTasks, gates))
-        const group = yield* (yield* ConversationService).createGroup({ title: "g", memberBotIds: [ada.id, bob.id], leadBotId: ada.id })
+        const group = yield* (yield* ConversationService).createGroup({
+          title: "g",
+          memberBotIds: [ada.id, bob.id],
+          leadBotId: ada.id,
+        })
         yield* send(group.id, "start in group")
         yield* send(ada.directConversationId, "start in dm")
         yield* settled(ada.directConversationId, 1)
         yield* settled(group.id, 1)
         const list = yield* tasksOf(ada.id)
         const id = (title: string) => list.find((t) => t.title === title)!.id
-        yield* eventually(Effect.map(tasksOf(ada.id), (ts) => ts.length === 2 && ts.every((t) => t.status === "running")), "running")
+        yield* eventually(
+          Effect.map(tasksOf(ada.id), (ts) => ts.length === 2 && ts.every((t) => t.status === "running")),
+          "running",
+        )
         yield* (yield* Orchestrator).deleteConversation(group.id)
         const groupTask = yield* taskById(id("in group"))
         const dmTask = yield* taskById(id("in dm"))
         const turnsBefore = (yield* driver.turns).length
         yield* (yield* BotService).delete(ada.id)
         const left = yield* Effect.orDie((yield* TaskRepo).list({ botId: ada.id }))
-        return { groupTask, dmTask, turnsBefore, turnsAfter: (yield* driver.turns).length, left, bot: yield* Effect.orDie((yield* BotRepo).get(ada.id)) }
+        return {
+          groupTask,
+          dmTask,
+          turnsBefore,
+          turnsAfter: (yield* driver.turns).length,
+          left,
+          bot: yield* Effect.orDie((yield* BotRepo).get(ada.id)),
+        }
       }),
       appLayer(),
     )
@@ -482,7 +654,7 @@ describe("background tasks", () => {
 
   test("start_task refuses a task session and empty input", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ada = yield* createBot("Ada")
         const tasks = yield* BackgroundTasks
         const ctx = {
@@ -496,7 +668,9 @@ describe("background tasks", () => {
             boundNodeIds: [],
           },
         }
-        const fromTask = yield* Effect.flip(tasks.start({ ...ctx, taskId: "tsk_x" as TaskId }, { title: "a", brief: "b" }))
+        const fromTask = yield* Effect.flip(
+          tasks.start({ ...ctx, taskId: "tsk_x" as TaskId }, { title: "a", brief: "b" }),
+        )
         const empty = yield* Effect.flip(tasks.start(ctx, { title: " ", brief: "b" }))
         const again1 = yield* tasks.start({ ...ctx, callId: "call-1" }, { title: "a", brief: "b" })
         const again2 = yield* tasks.start({ ...ctx, callId: "call-1" }, { title: "a", brief: "b" })
@@ -528,7 +702,7 @@ const mainCtx = (bot: { readonly id: Task["botId"]; readonly hostNodeId: string 
 describe("a task sees its origin conversation", () => {
   test("its first turn opens with the recent messages (speakers, oldest first), then the short brief", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         const dm = ada.directConversationId
@@ -540,7 +714,10 @@ describe("a task sees its origin conversation", () => {
         yield* send(dm, "start film")
         yield* settled(dm, 3)
         const [task] = yield* tasksOf(ada.id)
-        yield* eventually(Effect.map(statusOf(task!.id), (s) => s === "succeeded"), "done")
+        yield* eventually(
+          Effect.map(statusOf(task!.id), (s) => s === "succeeded"),
+          "done",
+        )
         return { handles: yield* driver.turns, task: yield* taskById(task!.id) }
       }),
       appLayer(),
@@ -565,7 +742,10 @@ describe("a task sees its origin conversation", () => {
   })
 
   test("the context keeps the newest messages within the limits; long ones are capped", () => {
-    const messages = Array.from({ length: 45 }, (_, i) => ({ speaker: i % 2 === 0 ? "Owner" : "You", text: `message ${i}` }))
+    const messages = Array.from({ length: 45 }, (_, i) => ({
+      speaker: i % 2 === 0 ? "Owner" : "You",
+      text: `message ${i}`,
+    }))
     const text = renderTaskTurn({ where: "your direct chat with the owner", messages, brief: "do it" })
     const lines = text.split("\n").filter((l) => l.startsWith("[Owner]") || l.startsWith("[You]"))
     expect(lines).toHaveLength(TASK_CONTEXT_MESSAGES)
@@ -591,7 +771,7 @@ describe("a task sees its origin conversation", () => {
 describe("updates to running work (update_task)", () => {
   test("steered into the running turn when the driver can steer; one of its steps", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const tasks = yield* BackgroundTasks
         const ada = yield* createBot("Ada")
@@ -601,10 +781,19 @@ describe("updates to running work (update_task)", () => {
         yield* send(dm, "start film")
         yield* settled(dm, 1)
         const [task] = yield* tasksOf(ada.id)
-        yield* eventually(Effect.map(driver.turns, (hs) => hs.some((h) => h.taskId === task!.id)), "task turn running")
-        const updated = yield* tasks.update(mainCtx(ada, dm), { taskId: task!.id, message: "The globe at the start is off screen; center it." })
+        yield* eventually(
+          Effect.map(driver.turns, (hs) => hs.some((h) => h.taskId === task!.id)),
+          "task turn running",
+        )
+        const updated = yield* tasks.update(mainCtx(ada, dm), {
+          taskId: task!.id,
+          message: "The globe at the start is off screen; center it.",
+        })
         yield* Deferred.succeed(gates.get("film")!, undefined)
-        yield* eventually(Effect.map(statusOf(task!.id), (s) => s === "succeeded"), "done")
+        yield* eventually(
+          Effect.map(statusOf(task!.id), (s) => s === "succeeded"),
+          "done",
+        )
         yield* settled(dm, 2)
         return {
           updated,
@@ -619,19 +808,26 @@ describe("updates to running work (update_task)", () => {
     expect(out.updated.delivery).toBe("steered")
     const taskTurns = out.handles.filter((h) => h.taskId !== undefined)
     expect(taskTurns).toHaveLength(1)
-    expect(taskTurns[0]!.steered.map((t) => t.text)).toEqual(["[Update to this work]\nThe globe at the start is off screen; center it."])
-    expect(out.task).toMatchObject({ status: "succeeded", result: "Result for work on film (with: The globe at the start is off screen; center it.)" })
-    // the update is one of the work's steps (the Tasks tab shows it), never a chat bubble
-    expect(out.steps.filter((s) => s.kind === "message" && s.role === "user").map((s) => s.kind === "message" ? s.text : "")).toEqual([
-      "The globe at the start is off screen; center it.",
+    expect(taskTurns[0]!.steered.map((t) => t.text)).toEqual([
+      "[Update to this work]\nThe globe at the start is off screen; center it.",
     ])
+    expect(out.task).toMatchObject({
+      status: "succeeded",
+      result: "Result for work on film (with: The globe at the start is off screen; center it.)",
+    })
+    // the update is one of the work's steps (the Tasks tab shows it), never a chat bubble
+    expect(
+      out.steps
+        .filter((s) => s.kind === "message" && s.role === "user")
+        .map((s) => (s.kind === "message" ? s.text : "")),
+    ).toEqual(["The globe at the start is off screen; center it."])
     // the result came back to the main session once
     expect(out.handles.filter((h) => h.taskId === undefined && h.input.text.includes("[Result of")).length).toBe(1)
   })
 
   test("without steering it waits for the turn to end; the work goes on with it and answers again", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const tasks = yield* BackgroundTasks
         const ada = yield* createBot("Ada")
@@ -641,14 +837,27 @@ describe("updates to running work (update_task)", () => {
         yield* send(dm, "start film")
         yield* settled(dm, 1)
         const [task] = yield* tasksOf(ada.id)
-        yield* eventually(Effect.map(driver.turns, (hs) => hs.some((h) => h.taskId === task!.id)), "task turn running")
+        yield* eventually(
+          Effect.map(driver.turns, (hs) => hs.some((h) => h.taskId === task!.id)),
+          "task turn running",
+        )
         const updated = yield* tasks.update(mainCtx(ada, dm), { taskId: task!.id, message: "Center the globe." })
         const between = yield* statusOf(task!.id)
         yield* Deferred.succeed(gates.get("film")!, undefined)
-        yield* eventually(Effect.map(statusOf(task!.id), (s) => s === "succeeded"), "done")
+        yield* eventually(
+          Effect.map(statusOf(task!.id), (s) => s === "succeeded"),
+          "done",
+        )
         yield* settled(dm, 2)
         const after = yield* tasks.update(mainCtx(ada, dm), { taskId: task!.id, message: "One more thing." })
-        return { updated, between, after, handles: yield* driver.turns, task: yield* taskById(task!.id), opened: yield* driver.opened }
+        return {
+          updated,
+          between,
+          after,
+          handles: yield* driver.turns,
+          task: yield* taskById(task!.id),
+          opened: yield* driver.opened,
+        }
       }),
       appLayer(),
     )
@@ -670,7 +879,7 @@ describe("updates to running work (update_task)", () => {
 
   test("work still waiting to start takes the update in its first turn", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const tasks = yield* BackgroundTasks
         const ada = yield* createBot("Ada")
@@ -684,7 +893,10 @@ describe("updates to running work (update_task)", () => {
         const waiting = two.status
         const updated = yield* tasks.update(mainCtx(ada, dm), { taskId: two.id, message: "Mention the sidebar." })
         yield* Deferred.succeed(gates.get("one")!, undefined)
-        yield* eventually(Effect.map(statusOf(two.id), (s) => s === "succeeded"), "two done")
+        yield* eventually(
+          Effect.map(statusOf(two.id), (s) => s === "succeeded"),
+          "two done",
+        )
         return { waiting, updated, handles: yield* driver.turns }
       }),
       appLayer({ tasks: { maxPerBot: 1 } }),
@@ -697,15 +909,19 @@ describe("updates to running work (update_task)", () => {
 
   test("refuses a task session, an empty update and another bot's work", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const tasks = yield* BackgroundTasks
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
         const ctx = mainCtx(ada, ada.directConversationId)
         const task = yield* tasks.start(ctx, { title: "a", brief: "b" })
-        const fromTask = yield* Effect.flip(tasks.update({ ...ctx, taskId: task.id }, { taskId: task.id, message: "x" }))
+        const fromTask = yield* Effect.flip(
+          tasks.update({ ...ctx, taskId: task.id }, { taskId: task.id, message: "x" }),
+        )
         const empty = yield* Effect.flip(tasks.update(ctx, { taskId: task.id, message: "  " }))
-        const foreign = yield* Effect.flip(tasks.update(mainCtx(bob, bob.directConversationId), { taskId: task.id, message: "x" }))
+        const foreign = yield* Effect.flip(
+          tasks.update(mainCtx(bob, bob.directConversationId), { taskId: task.id, message: "x" }),
+        )
         return { fromTask, empty, foreign }
       }),
       appLayer(),

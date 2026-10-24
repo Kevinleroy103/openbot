@@ -27,8 +27,11 @@ describe("Codex profiles: discovery", () => {
       { configDir: join(home, ".codex"), isDefault: true, suggestedLabel: "codex" },
       { configDir: join(home, ".codex-work"), isDefault: false, suggestedLabel: "codex-work" },
     ])
-    expect(discoverCodexHomes({ home, env: { CODEX_HOME: join(home, ".codex-work") } }).filter((c) => c.isDefault).map((c) => c.configDir))
-      .toEqual([join(home, ".codex-work")])
+    expect(
+      discoverCodexHomes({ home, env: { CODEX_HOME: join(home, ".codex-work") } })
+        .filter((c) => c.isDefault)
+        .map((c) => c.configDir),
+    ).toEqual([join(home, ".codex-work")])
     expect(looksLikeCodexHome(join(home, ".codex-empty"))).toBe(false)
     expect(discoverCodexHomes({ home: join(home, "missing"), env: {} })).toEqual([])
   })
@@ -53,19 +56,21 @@ describe("Codex profiles: driver", () => {
     const dataDir = makeDataDir(root)
     const codexHome = profileCodexHome(dataDir.codexHome, "hpf_work")
     const fake = fakeLauncher(() => FakeAppServer.make())
-    const { status, profileId } = await run(Effect.gen(function*() {
-      const driver = yield* makeCodexDriver(
-        {
-          binaryPath: process.execPath,
-          launcher: fake.launcher,
-          codexHome,
-          userCodexHome: join(home, ".codex-work"),
-          profile: { id: "hpf_work", label: "Work" },
-        },
-        { dataDir },
-      )
-      return { status: yield* driver.probe, profileId: driver.profileId }
-    }))
+    const { status, profileId } = await run(
+      Effect.gen(function* () {
+        const driver = yield* makeCodexDriver(
+          {
+            binaryPath: process.execPath,
+            launcher: fake.launcher,
+            codexHome,
+            userCodexHome: join(home, ".codex-work"),
+            profile: { id: "hpf_work", label: "Work" },
+          },
+          { dataDir },
+        )
+        return { status: yield* driver.probe, profileId: driver.profileId }
+      }),
+    )
     expect(profileId).toBe("hpf_work")
     expect(fake.launches.map((l) => l.spec.codexHome)).toEqual([codexHome])
     const link = join(codexHome, "auth.json")
@@ -83,13 +88,15 @@ describe("Codex profiles: driver", () => {
 
   test("the default driver has no profile id and no profile stamp", async () => {
     const fake = fakeLauncher(() => FakeAppServer.make())
-    const { status, profileId } = await run(Effect.gen(function*() {
-      const driver = yield* makeCodexDriver(
-        { binaryPath: process.execPath, launcher: fake.launcher, linkUserAuth: false },
-        { dataDir: makeDataDir(tempDir()) },
-      )
-      return { status: yield* driver.probe, profileId: driver.profileId }
-    }))
+    const { status, profileId } = await run(
+      Effect.gen(function* () {
+        const driver = yield* makeCodexDriver(
+          { binaryPath: process.execPath, launcher: fake.launcher, linkUserAuth: false },
+          { dataDir: makeDataDir(tempDir()) },
+        )
+        return { status: yield* driver.probe, profileId: driver.profileId }
+      }),
+    )
     expect(profileId).toBeUndefined()
     expect(status.profileId).toBeUndefined()
   })

@@ -31,7 +31,7 @@ const readGrace = (dataDir: string) =>
   })
 
 export const DrainOnSignalLive: Layer.Layer<never, never, Orchestrator | ServerConfig> = Layer.effectDiscard(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const orchestrator = yield* Orchestrator
     const config = yield* ServerConfig
     const requested = yield* Deferred.make<void>()
@@ -40,13 +40,15 @@ export const DrainOnSignalLive: Layer.Layer<never, never, Orchestrator | ServerC
       Effect.sync(() => process.on("SIGUSR2", onSignal)),
       () => Effect.sync(() => process.off("SIGUSR2", onSignal)),
     )
-    yield* Effect.forkScoped(Effect.gen(function*() {
-      yield* Deferred.await(requested)
-      const graceMs = yield* readGrace(config.dataDir)
-      setShutdownPhase("draining for a deploy")
-      yield* orchestrator.drain({ graceMs })
-      yield* Effect.logInfo("drained: stopping for the deploy")
-      process.kill(process.pid, "SIGTERM")
-    }))
+    yield* Effect.forkScoped(
+      Effect.gen(function* () {
+        yield* Deferred.await(requested)
+        const graceMs = yield* readGrace(config.dataDir)
+        setShutdownPhase("draining for a deploy")
+        yield* orchestrator.drain({ graceMs })
+        yield* Effect.logInfo("drained: stopping for the deploy")
+        process.kill(process.pid, "SIGTERM")
+      }),
+    )
   }),
 )

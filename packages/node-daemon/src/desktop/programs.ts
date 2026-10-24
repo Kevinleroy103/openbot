@@ -60,7 +60,11 @@ export const detectDesktopPrograms = (which: (name: string) => string | undefine
           : undefined,
     dock: which("plank"),
     dbus: which("dbus-daemon"),
-    terminal: xfceTerminal ? { kind: "xfce4-terminal", path: xfceTerminal } : xterm ? { kind: "xterm", path: xterm } : undefined,
+    terminal: xfceTerminal
+      ? { kind: "xfce4-terminal", path: xfceTerminal }
+      : xterm
+        ? { kind: "xterm", path: xterm }
+        : undefined,
     fileManager: which("thunar"),
     editor: which("mousepad"),
   }
@@ -77,7 +81,9 @@ export const detectDesktopPrograms = (which: (name: string) => string | undefine
  * The window managers to try, in order. xfwm4 + plank is Grok's stack; without a dock, openbox is
  * preferred because its desktop right-click menu still opens the apps.
  */
-export const windowManagerOrder = (p: DesktopPrograms): ReadonlyArray<{ readonly kind: WindowManagerKind; readonly path: string }> => {
+export const windowManagerOrder = (
+  p: DesktopPrograms,
+): ReadonlyArray<{ readonly kind: WindowManagerKind; readonly path: string }> => {
   if (p.dock) return p.windowManagers
   return [...p.windowManagers].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "openbox" ? -1 : 1))
 }

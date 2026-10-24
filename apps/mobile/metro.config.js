@@ -10,7 +10,12 @@ const config = getDefaultConfig(projectRoot)
 const fromApp = path.join(projectRoot, "package.json")
 const upstream = config.resolver.resolveRequest
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === "react" || moduleName.startsWith("react/") || moduleName === "react-dom" || moduleName.startsWith("react-dom/")) {
+  if (
+    moduleName === "react" ||
+    moduleName.startsWith("react/") ||
+    moduleName === "react-dom" ||
+    moduleName.startsWith("react-dom/")
+  ) {
     return context.resolveRequest({ ...context, originModulePath: fromApp }, moduleName, platform)
   }
   return upstream ? upstream(context, moduleName, platform) : context.resolveRequest(context, moduleName, platform)

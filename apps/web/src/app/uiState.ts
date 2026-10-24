@@ -39,20 +39,27 @@ export interface JumpTarget {
 let jumps = 0
 export const nextJumpNonce = (): number => ++jumps
 export const jumpTargetAtom: Atom.Writable<JumpTarget | null> = Atom.make<JumpTarget | null>(
-  bootRoute.kind === "chat" && bootRoute.entryId !== undefined ? { conversationId: bootRoute.conversationId, entryId: bootRoute.entryId, nonce: nextJumpNonce(), openExchange: true } : null,
+  bootRoute.kind === "chat" && bootRoute.entryId !== undefined
+    ? {
+        conversationId: bootRoute.conversationId,
+        entryId: bootRoute.entryId,
+        nonce: nextJumpNonce(),
+        openExchange: true,
+      }
+    : null,
 ).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/jumpTarget"))
 
 /** The Search view and its filters (`#/search?…`); null = not shown. It takes the chat column. */
-export const searchViewAtom: Atom.Writable<SearchFilters | null> = Atom.make<SearchFilters | null>(bootRoute.kind === "search" ? bootRoute.filters : null).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("openbot/web/searchView"),
-)
+export const searchViewAtom: Atom.Writable<SearchFilters | null> = Atom.make<SearchFilters | null>(
+  bootRoute.kind === "search" ? bootRoute.filters : null,
+).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/searchView"))
 
 /** The in-chat Find bar (Cmd/Ctrl+F) of one chat; `nonce` refocuses it when asked again. */
-export const findBarAtom: Atom.Writable<{ readonly conversationId: ConversationId; readonly nonce: number } | null> = Atom.make<{
-  readonly conversationId: ConversationId
-  readonly nonce: number
-} | null>(null).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/findBar"))
+export const findBarAtom: Atom.Writable<{ readonly conversationId: ConversationId; readonly nonce: number } | null> =
+  Atom.make<{
+    readonly conversationId: ConversationId
+    readonly nonce: number
+  } | null>(null).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/findBar"))
 
 /** `#/c/<id>`, `#/new` or `#/search`: a screen of the chat column. Anything else (`#/`, no hash) is Home on a phone. */
 export const isChatHash = (): boolean => typeof location !== "undefined" && parseRoute(location.hash).kind !== "other"
@@ -72,7 +79,8 @@ export const phoneHomeAtom: Atom.Writable<boolean> = Atom.make<boolean>(!isChatH
  * - `{ ob: "sheet", sheet, depth }`: pushed while a phone sheet is open (Back closes it, nav.ts);
  *   `depth` counts the sheets open under it, itself included (Settings › a page › an editor = 3).
  */
-export type HistoryMark = { readonly ob: "chat" } | { readonly ob: "sheet"; readonly sheet: string; readonly depth?: number }
+export type HistoryMark =
+  { readonly ob: "chat" } | { readonly ob: "sheet"; readonly sheet: string; readonly depth?: number }
 export const historyMark = (): HistoryMark | undefined => {
   if (typeof history === "undefined") return undefined
   const s = history.state as { ob?: unknown } | null
@@ -80,10 +88,9 @@ export const historyMark = (): HistoryMark | undefined => {
 }
 
 /** The last non-null selection (Esc / × in New chat returns to it). */
-export const previousConversationAtom: Atom.Writable<ConversationId | null> = Atom.make<ConversationId | null>(null).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("openbot/web/previousConversation"),
-)
+export const previousConversationAtom: Atom.Writable<ConversationId | null> = Atom.make<ConversationId | null>(
+  null,
+).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/previousConversation"))
 
 export interface DetailsPaneState {
   readonly open: boolean
@@ -94,30 +101,31 @@ export interface DetailsPaneState {
    */
   readonly botId?: BotId | undefined
 }
-export const detailsPaneAtom: Atom.Writable<DetailsPaneState> = Atom.make<DetailsPaneState>({ open: false, tab: "details" }).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("openbot/web/detailsPane"),
-)
+export const detailsPaneAtom: Atom.Writable<DetailsPaneState> = Atom.make<DetailsPaneState>({
+  open: false,
+  tab: "details",
+}).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/detailsPane"))
 
 export interface SettingsDialogState {
   readonly open: boolean
   readonly page: SettingsPage
 }
-export const settingsDialogAtom: Atom.Writable<SettingsDialogState> = Atom.make<SettingsDialogState>({ open: false, page: "general" }).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("openbot/web/settingsDialog"),
-)
+export const settingsDialogAtom: Atom.Writable<SettingsDialogState> = Atom.make<SettingsDialogState>({
+  open: false,
+  page: "general",
+}).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/settingsDialog"))
 
 /** Connect apps (D3.4): the catalog, the manage view of connected apps, or one app's page. */
-export type ConnectAppsView = { readonly kind: "browse" } | { readonly kind: "manage" } | { readonly kind: "app"; readonly id: string }
+export type ConnectAppsView =
+  { readonly kind: "browse" } | { readonly kind: "manage" } | { readonly kind: "app"; readonly id: string }
 export interface ConnectAppsState {
   readonly open: boolean
   readonly view: ConnectAppsView
 }
-export const connectAppsAtom: Atom.Writable<ConnectAppsState> = Atom.make<ConnectAppsState>({ open: false, view: { kind: "browse" } }).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("openbot/web/connectApps"),
-)
+export const connectAppsAtom: Atom.Writable<ConnectAppsState> = Atom.make<ConnectAppsState>({
+  open: false,
+  view: { kind: "browse" },
+}).pipe(Atom.keepAlive, Atom.withLabel("openbot/web/connectApps"))
 
 export interface ComputerViewState {
   readonly botId: BotId | null
@@ -182,7 +190,13 @@ export const useSelection = () => {
       if (search !== null) setSearch(null)
       const entryId = id === null ? undefined : options?.entryId
       if (id !== null && entryId !== undefined) {
-        setJump({ conversationId: id, entryId, nonce: nextJumpNonce(), terms: options?.terms, openExchange: options?.openExchange })
+        setJump({
+          conversationId: id,
+          entryId,
+          nonce: nextJumpNonce(),
+          terms: options?.terms,
+          openExchange: options?.openExchange,
+        })
       }
       if (home) setHome(false)
       showHash(id ? chatHash(id, entryId) : "#/new", home)
@@ -282,7 +296,8 @@ export const useComputerView = () => {
       botId: state.botId,
       takeControl: state.takeControl === true,
       /** `takeControl`: open in control (the view takes the lease) instead of Watching. */
-      open: (botId: BotId, options?: { readonly takeControl?: boolean }) => set({ botId, ...(options?.takeControl ? { takeControl: true } : {}) }),
+      open: (botId: BotId, options?: { readonly takeControl?: boolean }) =>
+        set({ botId, ...(options?.takeControl ? { takeControl: true } : {}) }),
       close: () => set({ botId: null }),
     }),
     [state, set],
@@ -291,7 +306,10 @@ export const useComputerView = () => {
 
 export const useDialogs = () => {
   const [dialog, set] = useAtom(dialogAtom)
-  return useMemo(() => ({ dialog, show: (d: Exclude<ActiveDialog, null>) => set(d), hide: () => set(null) }), [dialog, set])
+  return useMemo(
+    () => ({ dialog, show: (d: Exclude<ActiveDialog, null>) => set(d), hide: () => set(null) }),
+    [dialog, set],
+  )
 }
 
 const prefersDark = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches

@@ -13,7 +13,8 @@ import { type CodexPeerError, toHarnessError } from "./errors.ts"
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
-const str = (value: unknown): string | undefined => (typeof value === "string" && value.trim() !== "" ? value : undefined)
+const str = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() !== "" ? value : undefined
 
 export const DISPLAY_NAME = "Codex"
 
@@ -35,11 +36,7 @@ export const parseAccount = (result: unknown, authLink?: CodexAuthLink | undefin
     if (type === "chatgpt") {
       const email = str(account.email)
       const plan = str(account.planType)
-      const label = email
-        ? plan ? `${email} (ChatGPT ${plan})` : email
-        : plan
-        ? `ChatGPT ${plan}`
-        : "ChatGPT"
+      const label = email ? (plan ? `${email} (ChatGPT ${plan})` : email) : plan ? `ChatGPT ${plan}` : "ChatGPT"
       const info: HarnessAccount = { ...(email ? { email } : {}), ...(plan ? { plan: `ChatGPT ${plan}` } : {}) }
       return { auth: { state: "signed-in", label }, problems: [], ...(email || plan ? { account: info } : {}) }
     }
@@ -48,9 +45,10 @@ export const parseAccount = (result: unknown, authLink?: CodexAuthLink | undefin
     return { auth: { state: "signed-in", ...(type ? { label: type } : {}) }, problems: [] }
   }
   if (record.requiresOpenaiAuth === false) return { auth: { state: "unknown" }, problems: [] }
-  const problems = authLink === "own-file"
-    ? ["Codex is not signed in (OpenBot's Codex profile has its own login file that is not valid)."]
-    : ["Codex is not signed in. " + LOGIN_HINT]
+  const problems =
+    authLink === "own-file"
+      ? ["Codex is not signed in (OpenBot's Codex profile has its own login file that is not valid)."]
+      : ["Codex is not signed in. " + LOGIN_HINT]
   return { auth: { state: "signed-out" }, problems }
 }
 
@@ -79,12 +77,16 @@ const MAX_MODEL_PAGES = 10
 
 /** Every page of `model/list`. */
 export const listModelsOn = (connection: Pick<AppServerConnection, "request">, timeout: Duration.Input) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const models: Array<ModelInfo> = []
     const seen = new Set<string>()
     let cursor: string | undefined
     for (let page = 0; page < MAX_MODEL_PAGES; page++) {
-      const result: unknown = yield* connection.request("model/list", { limit: 100, ...(cursor ? { cursor } : {}) }, { timeout })
+      const result: unknown = yield* connection.request(
+        "model/list",
+        { limit: 100, ...(cursor ? { cursor } : {}) },
+        { timeout },
+      )
       for (const model of parseModels(result)) {
         if (seen.has(model.id)) continue
         seen.add(model.id)
@@ -109,7 +111,7 @@ export interface ProbeOptions {
 
 /** The probe. Never fails; problems are reported in `problems`. */
 export const runProbe = (options: ProbeOptions): Effect.Effect<HarnessStatus> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const checkedAt = yield* Clock.currentTimeMillis
     const base = { kind: "codex", displayName: DISPLAY_NAME, capabilities: options.capabilities, checkedAt } as const
     const binary = options.binary()
@@ -124,24 +126,26 @@ export const runProbe = (options: ProbeOptions): Effect.Effect<HarnessStatus> =>
       } satisfies HarnessStatus
     }
     const timeout = options.timeout ?? Duration.seconds(30)
-    const probed = yield* options.runtime.withConnection((connection) =>
-      Effect.gen(function*() {
-        const account: unknown = yield* connection.request("account/read", { refreshToken: false }, { timeout })
-        const models = yield* listModelsOn(connection, timeout).pipe(
-          Effect.map((list): ReadonlyArray<ModelInfo> | undefined => list),
-          Effect.catch((error: CodexPeerError) =>
-            Effect.logWarning(`Codex model/list failed during the probe: ${error._tag}`).pipe(Effect.as(undefined))
-          ),
-        )
-        return { info: connection.info, account, models }
-      }).pipe(Effect.mapError((error: CodexPeerError) => toHarnessError("other", error)))
-    ).pipe(
-      Effect.timeoutOrElse({
-        duration: Duration.sum(Duration.fromInputUnsafe(timeout), Duration.seconds(5)),
-        orElse: () => Effect.fail<HarnessError | undefined>(undefined),
-      }),
-      Effect.result,
-    )
+    const probed = yield* options.runtime
+      .withConnection((connection) =>
+        Effect.gen(function* () {
+          const account: unknown = yield* connection.request("account/read", { refreshToken: false }, { timeout })
+          const models = yield* listModelsOn(connection, timeout).pipe(
+            Effect.map((list): ReadonlyArray<ModelInfo> | undefined => list),
+            Effect.catch((error: CodexPeerError) =>
+              Effect.logWarning(`Codex model/list failed during the probe: ${error._tag}`).pipe(Effect.as(undefined)),
+            ),
+          )
+          return { info: connection.info, account, models }
+        }).pipe(Effect.mapError((error: CodexPeerError) => toHarnessError("other", error))),
+      )
+      .pipe(
+        Effect.timeoutOrElse({
+          duration: Duration.sum(Duration.fromInputUnsafe(timeout), Duration.seconds(5)),
+          orElse: () => Effect.fail<HarnessError | undefined>(undefined),
+        }),
+        Effect.result,
+      )
     if (probed._tag === "Failure") {
       const error = probed.failure
       return {

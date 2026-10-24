@@ -181,7 +181,11 @@ export const OutputStream = Schema.Literals(["stdout", "stderr"])
 export type OutputStream = typeof OutputStream.Type
 
 export const ExecStarted = Schema.TaggedStruct("Started", { pid: Schema.Number, pgid: Schema.Number })
-export const ExecOutput = Schema.TaggedStruct("Output", { stream: OutputStream, data: Schema.String, seq: Schema.Number })
+export const ExecOutput = Schema.TaggedStruct("Output", {
+  stream: OutputStream,
+  data: Schema.String,
+  seq: Schema.Number,
+})
 export const ExecExit = Schema.TaggedStruct("Exit", {
   code: Schema.NullOr(Schema.Number),
   signal: Schema.NullOr(Schema.String),

@@ -3,13 +3,32 @@
 import { useAtomValue } from "@effect/atom-react"
 import { botsAtom, conversationAtom } from "@openbot/client"
 import { type Bot, type BotId, type ConversationId, MAX_GROUP_BOTS, MIN_GROUP_BOTS } from "@openbot/contracts"
-import { Avatar, AvatarStack, Icon, Menu, MenuItem, MenuLabel, MenuSeparator, PillButton, StatusPill } from "@openbot/ui"
+import {
+  Avatar,
+  AvatarStack,
+  Icon,
+  Menu,
+  MenuItem,
+  MenuLabel,
+  MenuSeparator,
+  PillButton,
+  StatusPill,
+} from "@openbot/ui"
 import { Crown, Ellipsis, MessageSquare, Plus, Trash2, UserMinus } from "lucide-react"
 import { AsyncResult } from "effect/reactivity"
 import { type ReactNode, useState } from "react"
 import { useSelection } from "../contracts.ts"
 import { InlineEdit } from "./InlineEdit.tsx"
-import { ConfirmDialog, EmptyNote, ErrorLine, LoadingLine, Section, SectionSheet, useCommand, useRosterValue } from "./kit.tsx"
+import {
+  ConfirmDialog,
+  EmptyNote,
+  ErrorLine,
+  LoadingLine,
+  Section,
+  SectionSheet,
+  useCommand,
+  useRosterValue,
+} from "./kit.tsx"
 
 export function GroupDetails({ conversationId }: { readonly conversationId: ConversationId }): ReactNode {
   const state = useAtomValue(conversationAtom(conversationId))
@@ -31,12 +50,20 @@ export function GroupDetails({ conversationId }: { readonly conversationId: Conv
   const error = rename.error ?? setMembers.error
 
   const save = (memberBotIds: ReadonlyArray<BotId>, leadBotId?: BotId | null) =>
-    setMembers.run({ conversationId, memberBotIds: [...memberBotIds], ...(leadBotId !== undefined ? { leadBotId } : {}) })
+    setMembers.run({
+      conversationId,
+      memberBotIds: [...memberBotIds],
+      ...(leadBotId !== undefined ? { leadBotId } : {}),
+    })
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-1 px-4">
-        <AvatarStack avatars={members.slice(0, 3).map((b) => ({ shape: b.avatar.shape, color: b.avatar.color, key: b.id }))} size={64} outlineColor="var(--ob-chrome)" />
+        <AvatarStack
+          avatars={members.slice(0, 3).map((b) => ({ shape: b.avatar.shape, color: b.avatar.color, key: b.id }))}
+          size={64}
+          outlineColor="var(--ob-chrome)"
+        />
         <InlineEdit
           value={conv.title}
           placeholder="Name this group"
@@ -47,13 +74,25 @@ export function GroupDetails({ conversationId }: { readonly conversationId: Conv
           onSave={(title) => rename.run({ conversationId, title })}
         />
         <span className="text-xs text-fg-secondary">
-          {members.length} Bots · {lead ? `${bots.find((b) => b.id === lead)?.name ?? "Lead"} answers first` : "No lead"}
+          {members.length} Bots ·{" "}
+          {lead ? `${bots.find((b) => b.id === lead)?.name ?? "Lead"} answers first` : "No lead"}
         </span>
       </div>
-      <Section title="Members" trailing={<span className="text-xs text-fg-tertiary">{members.length} / {MAX_GROUP_BOTS}</span>}>
+      <Section
+        title="Members"
+        trailing={
+          <span className="text-xs text-fg-tertiary">
+            {members.length} / {MAX_GROUP_BOTS}
+          </span>
+        }
+      >
         <SectionSheet>
           {members.map((b) => (
-            <div key={b.id} className="group flex min-h-14 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-hover" data-testid="group-member">
+            <div
+              key={b.id}
+              className="group flex min-h-14 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-hover"
+              data-testid="group-member"
+            >
               <Avatar shape={b.avatar.shape} color={b.avatar.color} size={36} />
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-base text-fg">{b.name}</span>
@@ -107,7 +146,11 @@ export function GroupDetails({ conversationId }: { readonly conversationId: Conv
               label="Add member"
               align="start"
               trigger={(p) => (
-                <button {...p} type="button" className="flex min-h-10 items-center gap-2.5 rounded-lg px-2 py-1.5 text-start text-sm text-fg-secondary transition-colors hover:bg-hover">
+                <button
+                  {...p}
+                  type="button"
+                  className="flex min-h-10 items-center gap-2.5 rounded-lg px-2 py-1.5 text-start text-sm text-fg-secondary transition-colors hover:bg-hover"
+                >
                   <span className="inline-flex size-9 items-center justify-center rounded-full bg-secondary">
                     <Icon icon={Plus} size="md" />
                   </span>
@@ -117,7 +160,11 @@ export function GroupDetails({ conversationId }: { readonly conversationId: Conv
             >
               <MenuLabel>Add to the group</MenuLabel>
               {candidates.map((b) => (
-                <MenuItem key={b.id} leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={20} />} onSelect={() => void save([...conv.memberBotIds, b.id])}>
+                <MenuItem
+                  key={b.id}
+                  leading={<Avatar shape={b.avatar.shape} color={b.avatar.color} size={20} />}
+                  onSelect={() => void save([...conv.memberBotIds, b.id])}
+                >
                   {b.name}
                 </MenuItem>
               ))}
@@ -125,10 +172,18 @@ export function GroupDetails({ conversationId }: { readonly conversationId: Conv
           )}
         </SectionSheet>
         {error && <ErrorLine>{error}</ErrorLine>}
-        <p className="px-3 text-2xs text-fg-quaternary">Messages go to @mentioned Bots, @everyone, or the Bot you reply to. Otherwise the lead answers.</p>
+        <p className="px-3 text-2xs text-fg-quaternary">
+          Messages go to @mentioned Bots, @everyone, or the Bot you reply to. Otherwise the lead answers.
+        </p>
       </Section>
       <div className="flex flex-col items-center gap-2 px-3 pt-2">
-        <PillButton variant="danger-soft" size="md" leadingIcon={Trash2} onClick={() => setConfirmDelete(true)} data-testid="delete-group">
+        <PillButton
+          variant="danger-soft"
+          size="md"
+          leadingIcon={Trash2}
+          onClick={() => setConfirmDelete(true)}
+          data-testid="delete-group"
+        >
           Delete group…
         </PillButton>
       </div>

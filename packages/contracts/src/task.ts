@@ -56,7 +56,8 @@ export type TaskDetail = typeof TaskDetail.Type
 export const isTerminalTaskStatus = (status: TaskStatus): boolean =>
   status === "succeeded" || status === "failed" || status === "cancelled"
 
-export const isActiveTask = (task: Pick<Task, "status">): boolean => task.status === "queued" || task.status === "running"
+export const isActiveTask = (task: Pick<Task, "status">): boolean =>
+  task.status === "queued" || task.status === "running"
 
 /** Limits (characters). */
 export const TASK_TITLE_MAX_CHARS = 120

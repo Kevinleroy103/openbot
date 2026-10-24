@@ -38,27 +38,35 @@ const B = botId("bot_b")
 const dmA = conversationId("cnv_a")
 const dmB = conversationId("cnv_b")
 
-const seed = Effect.gen(function*() {
+const seed = Effect.gen(function* () {
   const conversations = yield* ConversationRepo
   yield* conversations.upsert(makeDirectConversation({ id: dmA, botId: A }))
   yield* conversations.upsert(makeDirectConversation({ id: dmB, botId: B }))
 })
 
 const put = (entry: KnownTranscriptEntry) => Effect.flatMap(EntryRepo, (repo) => repo.upsert(entry))
-const message = (id: string, conversation: ConversationId, createdAt: number, text: string, from: "owner" | typeof A = "owner") =>
-  put(makeMessageEntry({
-    id: entryId(id),
-    conversationId: conversation,
-    createdAt,
-    text,
-    role: from === "owner" ? "user" : "bot",
-    author: from === "owner" ? { kind: "user", userId: OWNER_USER_ID } : { kind: "bot", botId: from },
-  }))
+const message = (
+  id: string,
+  conversation: ConversationId,
+  createdAt: number,
+  text: string,
+  from: "owner" | typeof A = "owner",
+) =>
+  put(
+    makeMessageEntry({
+      id: entryId(id),
+      conversationId: conversation,
+      createdAt,
+      text,
+      role: from === "owner" ? "user" : "bot",
+      author: from === "owner" ? { kind: "user", userId: OWNER_USER_ID } : { kind: "bot", botId: from },
+    }),
+  )
 
 describe("SearchService", () => {
   test("hits carry the contract's author, snippet highlights and the words looked for", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         yield* message("ent_1", dmA, 1, "Lekë wants the deploy after the migration")
         yield* message("ent_2", dmA, 2, "deploy is done", A)
@@ -79,7 +87,7 @@ describe("SearchService", () => {
 
   test("pages with the cursor it returns; bad input is refused", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         for (let i = 1; i <= 5; i++) yield* message(`ent_${i}`, dmA, i, `kestrel ${i}`)
         const search = yield* SearchService
@@ -95,7 +103,13 @@ describe("SearchService", () => {
           yield* Effect.flip(search.query({ query: "kestrel", limit: 5, sort: "oldest", cursor: first.nextCursor! })),
           yield* Effect.flip(search.query({ query: "kestrel", limit: 5, from: 9, to: 1 })),
         ]
-        expect(refused.map((e) => e._tag)).toEqual(["InvalidInput", "InvalidInput", "InvalidInput", "InvalidInput", "InvalidInput"])
+        expect(refused.map((e) => e._tag)).toEqual([
+          "InvalidInput",
+          "InvalidInput",
+          "InvalidInput",
+          "InvalidInput",
+          "InvalidInput",
+        ])
         expect((yield* search.query({ query: "!!!", limit: 5 })).hits).toEqual([])
         // a bot's page also says where it continues after each hit (for showing fewer)
         for (const sort of ["newest", "relevance"] as const) {
@@ -112,27 +126,44 @@ describe("SearchService", () => {
 
   test("a task hit opens its chat at the bot's report after the work ended", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const tasks = yield* TaskRepo
         yield* message("ent_before", dmA, 5, "starting", A)
-        yield* tasks.upsert(makeTask({ id: taskId("tsk_1"), botId: A, conversationId: dmA, title: "Falcon digest", createdAt: 4, endedAt: 10, result: "Three stories" }))
+        yield* tasks.upsert(
+          makeTask({
+            id: taskId("tsk_1"),
+            botId: A,
+            conversationId: dmA,
+            title: "Falcon digest",
+            createdAt: 4,
+            endedAt: 10,
+            result: "Three stories",
+          }),
+        )
         yield* message("ent_owner", dmA, 11, "thanks")
         yield* message("ent_report", dmA, 12, "Here is the digest", A)
         const page = yield* (yield* SearchService).query({ query: "falcon", limit: 5 })
-        expect(page.hits[0]).toMatchObject({ ref: { kind: "task", taskId: "tsk_1" }, kind: "task", jumpEntryId: "ent_report", createdAt: 10 })
+        expect(page.hits[0]).toMatchObject({
+          ref: { kind: "task", taskId: "tsk_1" },
+          kind: "task",
+          jumpEntryId: "ent_report",
+          createdAt: 10,
+        })
       }),
       layer,
     ))
 
   test("bots see only their scope", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         yield* message("ent_1", dmA, 1, "osprey for Alpha")
         yield* message("ent_2", dmB, 2, "osprey for Beta")
         const search = yield* SearchService
-        expect((yield* search.forBot(B, { query: "osprey", limit: 10 })).hits.map((h) => h.ref)).toEqual([{ kind: "entry", entryId: entryId("ent_2") }])
+        expect((yield* search.forBot(B, { query: "osprey", limit: 10 })).hits.map((h) => h.ref)).toEqual([
+          { kind: "entry", entryId: entryId("ent_2") },
+        ])
         expect(yield* search.canRead(B, dmB)).toBe(true)
         expect(yield* search.canRead(B, dmA)).toBe(false)
       }),
@@ -141,7 +172,7 @@ describe("SearchService", () => {
 
   test("inConversation: every hit position, and a substring when words find nothing", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         yield* message("ent_1", dmA, 1, "see config.yaml please")
         yield* message("ent_2", dmA, 2, "the parrot")
@@ -149,12 +180,21 @@ describe("SearchService", () => {
         yield* message("ent_4", dmB, 4, "parrot elsewhere")
         const search = yield* SearchService
         const words = yield* search.inConversation({ conversationId: dmA, query: "parrot", limit: 100 })
-        expect(words).toEqual({ hits: [{ entryId: entryId("ent_2"), createdAt: 2 as never }, { entryId: entryId("ent_3"), createdAt: 3 as never }], more: false, terms: ["parrot"] })
+        expect(words).toEqual({
+          hits: [
+            { entryId: entryId("ent_2"), createdAt: 2 as never },
+            { entryId: entryId("ent_3"), createdAt: 3 as never },
+          ],
+          more: false,
+          terms: ["parrot"],
+        })
         const punctuation = yield* search.inConversation({ conversationId: dmA, query: ".yaml", limit: 100 })
         expect(punctuation.hits.map((h) => h.entryId)).toEqual([entryId("ent_1")])
         const midWord = yield* search.inConversation({ conversationId: dmA, query: "nfig.ya", limit: 100 })
         expect(midWord).toMatchObject({ hits: [{ entryId: "ent_1" }], terms: ["nfig.ya"] })
-        const missing = yield* Effect.flip(search.inConversation({ conversationId: conversationId("cnv_nope"), query: "x", limit: 5 }))
+        const missing = yield* Effect.flip(
+          search.inConversation({ conversationId: conversationId("cnv_nope"), query: "x", limit: 5 }),
+        )
         expect(missing._tag).toBe("NotFound")
       }),
       layer,
@@ -163,7 +203,7 @@ describe("SearchService", () => {
 
 describe("ConversationService.around", () => {
   const fill = (count: number) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       yield* seed
       for (let i = 1; i <= count; i++) yield* message(`ent_${String(i).padStart(3, "0")}`, dmA, i * 10, `m${i}`)
     })
@@ -172,7 +212,7 @@ describe("ConversationService.around", () => {
 
   test("a window around an entry, then pages before and after it", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* fill(30)
         const conversations = yield* ConversationService
         const window = yield* conversations.around({ conversationId: dmA, entryId: at(15), limit: 5 })
@@ -193,7 +233,7 @@ describe("ConversationService.around", () => {
 
   test("near an edge the other side gets the room", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* fill(10)
         const conversations = yield* ConversationService
         const start = yield* conversations.around({ conversationId: dmA, entryId: at(2), limit: 5 })
@@ -208,18 +248,60 @@ describe("ConversationService.around", () => {
 
   test("voice calls' work stays out; the window brings its turns and card requests", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const turns = yield* TurnRepo
         const requests = yield* RequestRepo
         yield* turns.upsert(makeTurn({ id: turnId("trn_chat"), conversationId: dmA, botId: A, status: "completed" }))
-        yield* turns.upsert(makeTurn({ id: turnId("trn_voice"), conversationId: dmA, botId: A, status: "completed", voice: true }))
-        yield* requests.upsert(makeRequest({ id: requestId("req_1"), conversationId: dmA, botId: A, cardEntryId: entryId("ent_card"), status: "approved" as never }))
+        yield* turns.upsert(
+          makeTurn({ id: turnId("trn_voice"), conversationId: dmA, botId: A, status: "completed", voice: true }),
+        )
+        yield* requests.upsert(
+          makeRequest({
+            id: requestId("req_1"),
+            conversationId: dmA,
+            botId: A,
+            cardEntryId: entryId("ent_card"),
+            status: "approved" as never,
+          }),
+        )
         yield* message("ent_1", dmA, 1, "hello")
-        yield* put(makeMessageEntry({ id: entryId("ent_2"), conversationId: dmA, createdAt: 2, role: "bot", author: { kind: "bot", botId: A }, text: "on it", turnId: turnId("trn_chat") }))
-        yield* put(makeMessageEntry({ id: entryId("ent_3"), conversationId: dmA, createdAt: 3, role: "bot", author: { kind: "bot", botId: A }, text: "call work", turnId: turnId("trn_voice") }))
-        yield* put(makeCardEntry({ id: entryId("ent_card"), conversationId: dmA, createdAt: 4, turnId: turnId("trn_chat"), card: { type: "approval", requestId: requestId("req_1"), title: "Run" } }))
-        const window = yield* (yield* ConversationService).around({ conversationId: dmA, entryId: entryId("ent_2"), limit: 10 })
+        yield* put(
+          makeMessageEntry({
+            id: entryId("ent_2"),
+            conversationId: dmA,
+            createdAt: 2,
+            role: "bot",
+            author: { kind: "bot", botId: A },
+            text: "on it",
+            turnId: turnId("trn_chat"),
+          }),
+        )
+        yield* put(
+          makeMessageEntry({
+            id: entryId("ent_3"),
+            conversationId: dmA,
+            createdAt: 3,
+            role: "bot",
+            author: { kind: "bot", botId: A },
+            text: "call work",
+            turnId: turnId("trn_voice"),
+          }),
+        )
+        yield* put(
+          makeCardEntry({
+            id: entryId("ent_card"),
+            conversationId: dmA,
+            createdAt: 4,
+            turnId: turnId("trn_chat"),
+            card: { type: "approval", requestId: requestId("req_1"), title: "Run" },
+          }),
+        )
+        const window = yield* (yield* ConversationService).around({
+          conversationId: dmA,
+          entryId: entryId("ent_2"),
+          limit: 10,
+        })
         expect(idsOf(window.entries)).toEqual(["ent_1", "ent_2", "ent_card"])
         expect(window.turns.map((t) => t.id)).toEqual([turnId("trn_chat")])
         expect(window.requests.map((r) => r.id)).toEqual([requestId("req_1")])
@@ -229,7 +311,7 @@ describe("ConversationService.around", () => {
 
   test("refuses what it can't open", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* fill(3)
         yield* message("ent_b", dmB, 1, "elsewhere")
         const conversations = yield* ConversationService
@@ -237,11 +319,20 @@ describe("ConversationService.around", () => {
           yield* Effect.flip(conversations.around({ conversationId: dmA, entryId: entryId("ent_b"), limit: 5 })),
           yield* Effect.flip(conversations.around({ conversationId: dmA, limit: 0 })),
           yield* Effect.flip(conversations.around({ conversationId: dmA, limit: 201 })),
-          yield* Effect.flip(conversations.around({ conversationId: dmA, entryId: at(1), beforeCursor: "1:x", limit: 5 })),
+          yield* Effect.flip(
+            conversations.around({ conversationId: dmA, entryId: at(1), beforeCursor: "1:x", limit: 5 }),
+          ),
           yield* Effect.flip(conversations.around({ conversationId: dmA, afterCursor: "nope", limit: 5 })),
           yield* Effect.flip(conversations.around({ conversationId: conversationId("cnv_nope"), limit: 5 })),
         ]
-        expect(errors.map((e) => e._tag)).toEqual(["NotFound", "InvalidInput", "InvalidInput", "InvalidInput", "InvalidInput", "NotFound"])
+        expect(errors.map((e) => e._tag)).toEqual([
+          "NotFound",
+          "InvalidInput",
+          "InvalidInput",
+          "InvalidInput",
+          "InvalidInput",
+          "NotFound",
+        ])
       }),
       layer,
     ))
@@ -250,7 +341,7 @@ describe("ConversationService.around", () => {
 describe("group membership in the service", () => {
   test("a group member reads earlier history; after leaving, nothing", () =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const conversations = yield* ConversationRepo
         const group = conversationId("cnv_g")

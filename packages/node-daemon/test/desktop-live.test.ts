@@ -85,7 +85,10 @@ const buildNode = (dataDir: string) =>
   Effect.gen(function* () {
     const brain = makeFakeBrain()
     const scope = yield* Scope.make()
-    const ctx = yield* Layer.buildWithScope(NodeHandlersLive(config(dataDir)).pipe(Layer.provide(fakeLinks(brain))), scope)
+    const ctx = yield* Layer.buildWithScope(
+      NodeHandlersLive(config(dataDir)).pipe(Layer.provide(fakeLinks(brain))),
+      scope,
+    )
     const client = yield* RpcTest.makeClient(NodeRpcs).pipe(Effect.provide(ctx), Scope.provide(scope))
     return { client, brain, scope, close: Scope.close(scope, Exit.void) }
   })
@@ -105,7 +108,8 @@ const collect = (socket: Socket.Socket) =>
     return end
   })
 
-const text = (frames: ReadonlyArray<string | Uint8Array>) => frames.map((f) => (typeof f === "string" ? f : new TextDecoder().decode(f))).join("")
+const text = (frames: ReadonlyArray<string | Uint8Array>) =>
+  frames.map((f) => (typeof f === "string" ? f : new TextDecoder().decode(f))).join("")
 
 const waitFor = (pred: () => boolean, ms = 5000) =>
   Effect.gen(function* () {
@@ -133,7 +137,9 @@ describe("desktop (live)", () => {
           expect(hello.desktop).toEqual({ missing: [], width: 1920, height: 1200 })
 
           // concurrent ensures share one start
-          const [a, b] = yield* Effect.all([client["desktop.ensure"]({ botId }), client["desktop.ensure"]({ botId })], { concurrency: 2 })
+          const [a, b] = yield* Effect.all([client["desktop.ensure"]({ botId }), client["desktop.ensure"]({ botId })], {
+            concurrency: 2,
+          })
           expect(a.display).toBe(b.display)
           expect(a.display).toMatch(/^:\d+$/)
           expect({ width: a.width, height: a.height }).toEqual({ width: 1920, height: 1200 })
@@ -141,7 +147,10 @@ describe("desktop (live)", () => {
           expect(existsSync(displayLockPath(displayNumber))).toBe(true)
 
           // the bot's browser runs on its screen
-          yield* client["browser.action"]({ inv: inv(botId), action: { _tag: "navigate", url: `http://127.0.0.1:${server.port}/` } })
+          yield* client["browser.action"]({
+            inv: inv(botId),
+            action: { _tag: "navigate", url: `http://127.0.0.1:${server.port}/` },
+          })
           const title = () =>
             client["browser.action"]({ inv: inv(botId), action: { _tag: "tabs", op: "list" } }).pipe(
               Effect.map((r) => r.tabs?.find((x) => x.active)?.title ?? ""),
@@ -195,7 +204,9 @@ describe("desktop (live)", () => {
           expect(yield* waitFor(() => text(view.frames).startsWith("RFB 003.008"))).toBe(true)
 
           // control needs the lease
-          const refused = yield* Effect.flip(client["computer.stream"]({ botId, mode: "control", streamId: "vnc_c0", streamToken: "tok" }))
+          const refused = yield* Effect.flip(
+            client["computer.stream"]({ botId, mode: "control", streamId: "vnc_c0", streamToken: "tok" }),
+          )
           expect(refused._tag).toBe("LeaseHeld")
           yield* client["lease.set"]({ botId, holder: "user" })
           const held = yield* Effect.flip(act({ action: "screenshot" }))

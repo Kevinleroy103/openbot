@@ -21,7 +21,8 @@ export function LibraryTab({ bot }: { readonly bot: Bot }): ReactNode {
   const library = skills.value ?? []
   const mine = skillsOfBot(bot, library)
   const others = library.filter((s) => !bot.skills.includes(s.name)).sort((a, b) => a.name.localeCompare(b.name))
-  const setSkills = (names: ReadonlyArray<SkillName>) => void update.run({ botId: bot.id, patch: { skills: [...names] } })
+  const setSkills = (names: ReadonlyArray<SkillName>) =>
+    void update.run({ botId: bot.id, patch: { skills: [...names] } })
   const open = editing === "new" ? undefined : editing && (library.find((s) => s.name === editing.name) ?? editing)
 
   return (
@@ -33,9 +34,17 @@ export function LibraryTab({ bot }: { readonly bot: Bot }): ReactNode {
             label="Add a skill"
             align="end"
             panelClassName="max-h-[min(420px,60vh)] max-w-[300px] overflow-y-auto scrollbar-thin"
-            trigger={(p) => <IconButton {...p} icon={Plus} label="Add skill" size={24} iconSize="sm" data-testid="add-skill" />}
+            trigger={(p) => (
+              <IconButton {...p} icon={Plus} label="Add skill" size={24} iconSize="sm" data-testid="add-skill" />
+            )}
           >
-            <MenuLabel>{others.length > 0 ? "From the library" : library.length > 0 ? `${bot.name} has every library skill` : "The library is empty"}</MenuLabel>
+            <MenuLabel>
+              {others.length > 0
+                ? "From the library"
+                : library.length > 0
+                  ? `${bot.name} has every library skill`
+                  : "The library is empty"}
+            </MenuLabel>
             {others.map((s) => (
               <MenuItem key={s.name} icon={Sparkles} onSelect={() => setSkills([...bot.skills, s.name])}>
                 <span title={s.description}>{s.name}</span>
@@ -62,9 +71,19 @@ export function LibraryTab({ bot }: { readonly bot: Bot }): ReactNode {
         ) : (
           <SectionSheet>
             {mine.map((s) => (
-              <div key={s.name} role="group" aria-label={s.name} data-testid="skill-row" className="group flex min-h-12 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-hover">
+              <div
+                key={s.name}
+                role="group"
+                aria-label={s.name}
+                data-testid="skill-row"
+                className="group flex min-h-12 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-hover"
+              >
                 <Icon icon={Sparkles} size="md" className="shrink-0 text-accent" />
-                <button type="button" onClick={() => s.updatedAt !== undefined && setEditing(s as Skill)} className="flex min-w-0 flex-1 flex-col text-start">
+                <button
+                  type="button"
+                  onClick={() => s.updatedAt !== undefined && setEditing(s as Skill)}
+                  className="flex min-w-0 flex-1 flex-col text-start"
+                >
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-sm text-fg">{s.name}</span>
                     {s.source && <SkillsShChip id={s.source.id} />}
@@ -88,11 +107,23 @@ export function LibraryTab({ bot }: { readonly bot: Bot }): ReactNode {
           </SectionSheet>
         )}
         {update.error && <ErrorLine>{update.error}</ErrorLine>}
-        <button type="button" onClick={() => settings.show("skills")} data-testid="manage-library" className="self-start px-3 text-sm text-fg-secondary underline-offset-2 transition-colors hover:text-fg hover:underline">
+        <button
+          type="button"
+          onClick={() => settings.show("skills")}
+          data-testid="manage-library"
+          className="self-start px-3 text-sm text-fg-secondary underline-offset-2 transition-colors hover:text-fg hover:underline"
+        >
           Manage the library
         </button>
       </Section>
-      {editing && <SkillEditorDialog key={editing === "new" ? "new" : editing.name} skill={open} botIds={[bot.id]} onClose={() => setEditing(undefined)} />}
+      {editing && (
+        <SkillEditorDialog
+          key={editing === "new" ? "new" : editing.name}
+          skill={open}
+          botIds={[bot.id]}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
       {importing && <SkillImportDialog botIds={[bot.id]} onClose={() => setImporting(false)} />}
     </div>
   )

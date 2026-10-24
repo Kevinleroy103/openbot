@@ -42,7 +42,13 @@ export function HarnessesPage({ focus }: { readonly focus?: string }): ReactNode
         title="Harnesses"
         description="Each Bot thinks with one of these. OpenBot reuses the logins already on the machine where the harness runs, so you can mix subscriptions and accounts."
         actions={
-          <PillButton size="md" variant="secondary" leadingIcon={RefreshCw} loading={statuses.waiting && !statuses.loading} onClick={statuses.refresh}>
+          <PillButton
+            size="md"
+            variant="secondary"
+            leadingIcon={RefreshCw}
+            loading={statuses.waiting && !statuses.loading}
+            onClick={statuses.refresh}
+          >
             Check again
           </PillButton>
         }
@@ -55,7 +61,13 @@ export function HarnessesPage({ focus }: { readonly focus?: string }): ReactNode
       ) : (
         <div className="flex flex-col gap-3">
           {groups.map((g) => (
-            <HarnessCard key={g.kind} kind={g.kind} accounts={g.accounts} highlighted={focus === g.kind} onRefresh={statuses.refresh} />
+            <HarnessCard
+              key={g.kind}
+              kind={g.kind}
+              accounts={g.accounts}
+              highlighted={focus === g.kind}
+              onRefresh={statuses.refresh}
+            />
           ))}
         </div>
       )}
@@ -89,7 +101,10 @@ function HarnessCard({
   const isFake = kind === "fake"
   const installed = accounts.some((s) => s.installed)
   const version = accounts.find((s) => s.version)?.version
-  const checkedAt = accounts.reduce<number | undefined>((at, s) => (s.checkedAt !== undefined && (at === undefined || s.checkedAt > at) ? s.checkedAt : at), undefined)
+  const checkedAt = accounts.reduce<number | undefined>(
+    (at, s) => (s.checkedAt !== undefined && (at === undefined || s.checkedAt > at) ? s.checkedAt : at),
+    undefined,
+  )
   const modelsFrom = accounts.find(harnessReady)
   const caps = first.capabilities
   const install = INSTALL_HINTS[kind]
@@ -97,10 +112,19 @@ function HarnessCard({
   const description = isFake
     ? "Scripted offline harness. Try OpenBot without any account."
     : installed
-      ? [version ? `v${version}` : "Installed", checkedAt ? `checked ${formatAgo(checkedAt)}` : undefined, accounts.length > 1 ? `${accounts.length} accounts` : undefined].filter(Boolean).join(" · ")
+      ? [
+          version ? `v${version}` : "Installed",
+          checkedAt ? `checked ${formatAgo(checkedAt)}` : undefined,
+          accounts.length > 1 ? `${accounts.length} accounts` : undefined,
+        ]
+          .filter(Boolean)
+          .join(" · ")
       : "Not found on this server"
   return (
-    <SettingsCard className={cn(highlighted && "ring-2 ring-[color-mix(in_srgb,var(--ob-focus)_35%,transparent)]")} testId={`harness-${kind}`}>
+    <SettingsCard
+      className={cn(highlighted && "ring-2 ring-[color-mix(in_srgb,var(--ob-focus)_35%,transparent)]")}
+      testId={`harness-${kind}`}
+    >
       <div className="flex min-h-14 items-center gap-3 px-4 py-2.5">
         <HarnessTile kind={kind} />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -109,7 +133,13 @@ function HarnessCard({
         </div>
         {accounts.length === 1 && <HarnessStatusPill status={first} />}
         {multi && installed && (
-          <PillButton size="md" variant="secondary" leadingIcon={Plus} onClick={() => setAdding(!adding)} data-testid={`add-account-${kind}`}>
+          <PillButton
+            size="md"
+            variant="secondary"
+            leadingIcon={Plus}
+            onClick={() => setAdding(!adding)}
+            data-testid={`add-account-${kind}`}
+          >
             Add account
           </PillButton>
         )}
@@ -144,7 +174,12 @@ function HarnessCard({
                 </span>
               ))}
               <span className="rounded-sm bg-secondary px-1.5 py-px text-2xs text-fg-secondary">
-                Approvals: {caps.approvals === "interactive" ? "ask you" : caps.approvals === "policy-only" ? "rules only" : "none"}
+                Approvals:{" "}
+                {caps.approvals === "interactive"
+                  ? "ask you"
+                  : caps.approvals === "policy-only"
+                    ? "rules only"
+                    : "none"}
               </span>
             </span>
           }
@@ -159,27 +194,44 @@ function HarnessCard({
   )
 }
 
-function AccountRow({ status, showPill, onRefresh }: { readonly status: HarnessStatus; readonly showPill: boolean; readonly onRefresh: () => void }): ReactNode {
+function AccountRow({
+  status,
+  showPill,
+  onRefresh,
+}: {
+  readonly status: HarnessStatus
+  readonly showPill: boolean
+  readonly onRefresh: () => void
+}): ReactNode {
   const profileId = statusProfileId(status)
   const isDefault = profileId === "default"
   const [confirm, setConfirm] = useState(false)
   const remove = useCommand("harnesses.removeProfile", profileId)
   const signIn = signInCommand(status)
   const nick = accountNickname(status)
-  const name = status.auth.state === "signed-in" || status.account ? accountName(status) : status.auth.state === "signed-out" ? "Not signed in" : accountName(status)
+  const name =
+    status.auth.state === "signed-in" || status.account
+      ? accountName(status)
+      : status.auth.state === "signed-out"
+        ? "Not signed in"
+        : accountName(status)
   return (
     <SettingsRow
       title={
         <span className="flex min-w-0 items-center gap-1.5" data-testid={`account-${status.kind}-${profileId}`}>
           <span className="truncate">{nick ? `${nick} · ${name}` : name}</span>
-          {isDefault && <span className="shrink-0 rounded-sm bg-secondary px-1.5 py-px text-2xs text-fg-secondary">Default</span>}
+          {isDefault && (
+            <span className="shrink-0 rounded-sm bg-secondary px-1.5 py-px text-2xs text-fg-secondary">Default</span>
+          )}
         </span>
       }
       description={status.configDir ? <span className="font-mono text-xs">{status.configDir}</span> : undefined}
       control={
         <span className="flex shrink-0 items-center gap-1.5">
           {showPill && <HarnessStatusPill status={status} />}
-          {!isDefault && <IconButton icon={Trash2} label="Remove account" size={28} iconSize="sm" onClick={() => setConfirm(true)} />}
+          {!isDefault && (
+            <IconButton icon={Trash2} label="Remove account" size={28} iconSize="sm" onClick={() => setConfirm(true)} />
+          )}
         </span>
       }
     >
@@ -194,7 +246,10 @@ function AccountRow({ status, showPill, onRefresh }: { readonly status: HarnessS
       )}
       {status.installed && status.auth.state !== "signed-in" && signIn && (
         <div className="flex flex-col gap-2">
-          <span className="text-sm text-fg-secondary">Run this in a terminal on the server with your own account, then check again. OpenBot never sees your password or tokens.</span>
+          <span className="text-sm text-fg-secondary">
+            Run this in a terminal on the server with your own account, then check again. OpenBot never sees your
+            password or tokens.
+          </span>
           <CommandBlock command={signIn} />
           <div className="flex justify-end">
             <PillButton size="md" variant="secondary" onClick={onRefresh}>
@@ -238,8 +293,9 @@ function AddAccount({ kind, onDone }: { readonly kind: string; readonly onDone: 
     <div className="flex flex-col gap-3 px-4 py-3" data-testid={`add-account-form-${kind}`}>
       <div className="text-base text-fg">Add a {harnessName(kind)} account</div>
       <p className="text-sm text-fg-secondary">
-        An account is a separate login on this server, kept in its own config folder (for example the folder a <span className="font-mono">{kind === "claude" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME"}</span> points at).
-        OpenBot runs the CLI with that folder; it never reads or copies your tokens.
+        An account is a separate login on this server, kept in its own config folder (for example the folder a{" "}
+        <span className="font-mono">{kind === "claude" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME"}</span> points at). OpenBot
+        runs the CLI with that folder; it never reads or copies your tokens.
       </p>
       {found.loading ? (
         <LoadingLine className="justify-start px-0 py-1">Looking for logins…</LoadingLine>
@@ -247,19 +303,29 @@ function AddAccount({ kind, onDone }: { readonly kind: string; readonly onDone: 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-fg-secondary">Found on this server</span>
           {candidates.map((c) => (
-            <div key={c.configDir} className="flex items-center gap-3 rounded-xl px-3 py-2 hairline border-line-tertiary">
+            <div
+              key={c.configDir}
+              className="flex items-center gap-3 rounded-xl px-3 py-2 hairline border-line-tertiary"
+            >
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm text-fg">{c.suggestedLabel}</span>
                 <span className="truncate font-mono text-xs text-fg-secondary">{c.configDir}</span>
               </div>
-              <PillButton size="sm" variant="secondary" loading={add.pending} onClick={() => void submit({ configDir: c.configDir, label: c.suggestedLabel })}>
+              <PillButton
+                size="sm"
+                variant="secondary"
+                loading={add.pending}
+                onClick={() => void submit({ configDir: c.configDir, label: c.suggestedLabel })}
+              >
                 Add
               </PillButton>
             </div>
           ))}
         </div>
       ) : (
-        <span className="text-xs text-fg-tertiary">No other logins found in your home folder. Enter the folder below.</span>
+        <span className="text-xs text-fg-tertiary">
+          No other logins found in your home folder. Enter the folder below.
+        </span>
       )}
       <form
         className="flex flex-wrap items-end gap-2"
@@ -268,8 +334,22 @@ function AddAccount({ kind, onDone }: { readonly kind: string; readonly onDone: 
           void submit({ configDir, label })
         }}
       >
-        <TextField label="Config folder" placeholder={CONFIG_DIR_HINT[kind] ?? "~/.config-dir"} value={configDir} onChange={(e) => setConfigDir(e.target.value)} wrapperClassName="min-w-[220px] flex-1" className="font-mono text-sm" />
-        <TextField label="Label" placeholder="Work" value={label} maxLength={64} onChange={(e) => setLabel(e.target.value)} wrapperClassName="w-[160px]" />
+        <TextField
+          label="Config folder"
+          placeholder={CONFIG_DIR_HINT[kind] ?? "~/.config-dir"}
+          value={configDir}
+          onChange={(e) => setConfigDir(e.target.value)}
+          wrapperClassName="min-w-[220px] flex-1"
+          className="font-mono text-sm"
+        />
+        <TextField
+          label="Label"
+          placeholder="Work"
+          value={label}
+          maxLength={64}
+          onChange={(e) => setLabel(e.target.value)}
+          wrapperClassName="w-[160px]"
+        />
         <PillButton type="submit" size="md" variant="primary" loading={add.pending} disabled={configDir.trim() === ""}>
           Add
         </PillButton>
@@ -290,10 +370,20 @@ function ModelsRow({ kind, profileId }: { readonly kind: string; readonly profil
   return (
     <SettingsRow
       title="Models"
-      description={models.loading ? "Loading…" : models.error && !models.value ? models.error : `${list.length} available${def ? ` · default ${def.label || def.id}` : ""}`}
+      description={
+        models.loading
+          ? "Loading…"
+          : models.error && !models.value
+            ? models.error
+            : `${list.length} available${def ? ` · default ${def.label || def.id}` : ""}`
+      }
       control={
         list.length > 0 && (
-          <button type="button" onClick={() => setOpen(!open)} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-sm text-fg-secondary hover:bg-hover">
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-sm text-fg-secondary hover:bg-hover"
+          >
             {open ? "Hide" : "Show"}
             <Icon icon={ChevronDown} size="sm" className={cn("transition-transform", open && "rotate-180")} />
           </button>
@@ -303,7 +393,14 @@ function ModelsRow({ kind, profileId }: { readonly kind: string; readonly profil
       {open && (
         <div className="flex flex-wrap gap-1.5">
           {list.map((m) => (
-            <span key={m.id} title={m.id} className={cn("rounded-md px-2 py-0.5 text-xs hairline", m.default ? "border-line bg-active text-fg" : "border-line-tertiary text-fg-secondary")}>
+            <span
+              key={m.id}
+              title={m.id}
+              className={cn(
+                "rounded-md px-2 py-0.5 text-xs hairline",
+                m.default ? "border-line bg-active text-fg" : "border-line-tertiary text-fg-secondary",
+              )}
+            >
               {m.label || m.id}
             </span>
           ))}

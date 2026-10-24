@@ -60,7 +60,10 @@ export const isNoReply = (text: string): boolean => {
 
 /** A streaming message that may still turn out to be `NO_REPLY` (held back until it diverges). */
 const mayBecomeNoReply = (text: string): boolean => {
-  const t = text.trim().replace(/^[`*_"'“”]+/, "").toLowerCase()
+  const t = text
+    .trim()
+    .replace(/^[`*_"'“”]+/, "")
+    .toLowerCase()
   return t === "" || NO_REPLY.toLowerCase().startsWith(t) || isNoReply(text)
 }
 
@@ -69,7 +72,8 @@ export const CONTEXT_USAGE_THROTTLE_MS = 2_000
 
 export const addUsage = (a: Usage | undefined, b: Usage): Usage => {
   if (a === undefined) return b
-  const sum = (x: number | undefined, y: number | undefined) => (x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0))
+  const sum = (x: number | undefined, y: number | undefined) =>
+    x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0)
   return compact({
     inputTokens: a.inputTokens + b.inputTokens,
     outputTokens: a.outputTokens + b.outputTokens,
@@ -104,7 +108,11 @@ export const itemFields = (
     case "ToolCall": {
       const startedAt = previous?.kind === "tool-call" ? previous.startedAt : now
       const terminal = TERMINAL_TOOL.has(item.status)
-      const completedAt = terminal ? (previous?.kind === "tool-call" && previous.completedAt !== undefined ? previous.completedAt : now) : undefined
+      const completedAt = terminal
+        ? previous?.kind === "tool-call" && previous.completedAt !== undefined
+          ? previous.completedAt
+          : now
+        : undefined
       return {
         kind: "tool-call",
         toolCallId: key,
@@ -197,20 +205,29 @@ export const persistBotSession = (
     readonly instructionsHash?: string | undefined
   },
 ): Effect.Effect<void> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const existing = yield* orDie(bots.getSession(input.botId))
     const now = yield* Clock.currentTimeMillis
     const same = Option.isSome(existing) && existing.value.driver === input.driver ? existing.value : undefined
-    if (same !== undefined && same.nativeSessionId === input.nativeSessionId && same.instructionsHash === input.instructionsHash) return
-    yield* orDie(bots.setSession(compact({
-      botId: input.botId,
-      driver: input.driver,
-      nativeSessionId: input.nativeSessionId,
-      instructionsHash: input.instructionsHash,
-      seen: same?.seen,
-      lastConversationId: same?.lastConversationId,
-      updatedAt: now,
-    })))
+    if (
+      same !== undefined &&
+      same.nativeSessionId === input.nativeSessionId &&
+      same.instructionsHash === input.instructionsHash
+    )
+      return
+    yield* orDie(
+      bots.setSession(
+        compact({
+          botId: input.botId,
+          driver: input.driver,
+          nativeSessionId: input.nativeSessionId,
+          instructionsHash: input.instructionsHash,
+          seen: same?.seen,
+          lastConversationId: same?.lastConversationId,
+          updatedAt: now,
+        }),
+      ),
+    )
   })
 
 /** Upserts the bot's `Conversation.sessions` row (context ring, D6.5). */
@@ -220,16 +237,18 @@ export const updateSessionRow = (
   botId: BotId,
   f: (row: ConversationSession | undefined, now: number) => ConversationSession | undefined,
 ): Effect.Effect<void> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis
-    yield* Effect.ignore(store.update(conversationId, (c) => {
-      const rows = c.sessions ?? []
-      const current = rows.find((r) => r.botId === botId)
-      const next = f(current, now)
-      if (next === undefined) return c
-      const others = rows.filter((r) => r.botId !== botId)
-      return { ...c, sessions: [...others, compact(next)] }
-    }))
+    yield* Effect.ignore(
+      store.update(conversationId, (c) => {
+        const rows = c.sessions ?? []
+        const current = rows.find((r) => r.botId === botId)
+        const next = f(current, now)
+        if (next === undefined) return c
+        const others = rows.filter((r) => r.botId !== botId)
+        return { ...c, sessions: [...others, compact(next)] }
+      }),
+    )
   })
 
 export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<SessionIngest> =>
@@ -240,7 +259,9 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
     let lastConversationId: ConversationId | undefined
     /** The conversation of a turn (late events: the session's latest turn, else the bot's DM). */
     const conversationOf = (turnId: TurnId | undefined): ConversationId =>
-      (turnId === undefined ? undefined : turnConversations.get(turnId)) ?? lastConversationId ?? deps.homeConversationId
+      (turnId === undefined ? undefined : turnConversations.get(turnId)) ??
+      lastConversationId ??
+      deps.homeConversationId
     const usage = new Map<TurnId, Usage>()
     let lastContextPublish = Number.NEGATIVE_INFINITY
     let pendingContext: { readonly usedTokens: number; readonly windowTokens: number } | undefined
@@ -257,9 +278,11 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
     const publishContext = (value: { readonly usedTokens: number; readonly windowTokens: number }) =>
       updateSessionRow(deps.store, deps.homeConversationId, deps.botId, (row, now) => {
         if (
-          row?.contextUsage?.usedTokens === value.usedTokens && row.contextUsage.windowTokens === value.windowTokens &&
+          row?.contextUsage?.usedTokens === value.usedTokens &&
+          row.contextUsage.windowTokens === value.windowTokens &&
           row.active
-        ) return undefined
+        )
+          return undefined
         return { botId: deps.botId, active: true, contextUsage: { ...value }, updatedAt: now }
       })
 
@@ -276,7 +299,7 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
       })
 
     const upsertItem = (turnId: TurnId, key: string, item: HarnessItem) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const conversationId = conversationOf(turnId)
         let id = keys.get(key)
@@ -291,7 +314,9 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
           const found = yield* orDie(deps.entries.findByNativeId(conversationId, key))
           // Native keys are only unique per harness session: never adopt another bot's entry.
           if (
-            Option.isSome(found) && found.value.author.kind === "bot" && found.value.author.botId === deps.botId &&
+            Option.isSome(found) &&
+            found.value.author.kind === "bot" &&
+            found.value.author.botId === deps.botId &&
             found.value.harnessRef?.harness === deps.harness
           ) {
             id = found.value.id
@@ -299,22 +324,26 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
           }
         }
         if (id !== undefined) {
-          const result = yield* Effect.result(deps.conversationService.updateEntry(id, (current) =>
-            compact({
-              id: current.id,
-              conversationId: current.conversationId,
-              revision: current.revision,
-              createdAt: current.createdAt,
-              updatedAt: current.updatedAt,
-              author: current.author,
-              turnId: current.turnId ?? turnId,
-              replyToId: current.replyToId,
-              threadRootId: current.threadRootId,
-              parentToolCallId: current.parentToolCallId,
-              harnessRef: current.harnessRef ?? { harness: deps.harness, nativeId: key },
-              ...itemFields(item, key, now, current),
-            }) as KnownTranscriptEntry
-          ))
+          const result = yield* Effect.result(
+            deps.conversationService.updateEntry(
+              id,
+              (current) =>
+                compact({
+                  id: current.id,
+                  conversationId: current.conversationId,
+                  revision: current.revision,
+                  createdAt: current.createdAt,
+                  updatedAt: current.updatedAt,
+                  author: current.author,
+                  turnId: current.turnId ?? turnId,
+                  replyToId: current.replyToId,
+                  threadRootId: current.threadRootId,
+                  parentToolCallId: current.parentToolCallId,
+                  harnessRef: current.harnessRef ?? { harness: deps.harness, nativeId: key },
+                  ...itemFields(item, key, now, current),
+                }) as KnownTranscriptEntry,
+            ),
+          )
           if (result._tag === "Success") return
           keys.delete(key) // vanished: append a fresh entry below
         }
@@ -332,7 +361,7 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
     const handle = (event: HarnessEvent): Effect.Effect<void> => {
       switch (event._tag) {
         case "SessionBound":
-          return Effect.gen(function*() {
+          return Effect.gen(function* () {
             yield* persistBotSession(deps.bots, {
               botId: deps.botId,
               driver: deps.harness,
@@ -343,7 +372,7 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
           })
         case "TurnStarted":
           if (event.initiator !== "harness") return Effect.void
-          return Effect.gen(function*() {
+          return Effect.gen(function* () {
             const route = yield* deps.onHarnessTurn(event.turnId, self)
             if (route === undefined) return
             routes.set(event.turnId, route)
@@ -353,33 +382,37 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
         case "ItemUpserted":
           return upsertItem(routeOf(event.turnId), event.key, event.item)
         case "Activity":
-          return Effect.gen(function*() {
+          return Effect.gen(function* () {
             const turnId = deps.activeTurnId()
             if (turnId === undefined) return
-            yield* deps.hub.setActivity(compact({
-              botId: deps.botId,
-              conversationId: conversationOf(turnId),
-              state: event.toolKind === undefined ? ("thinking" as const) : ("working" as const),
-              label: event.label,
-              toolKind: event.toolKind,
-              since: yield* Clock.currentTimeMillis,
-            }))
+            yield* deps.hub.setActivity(
+              compact({
+                botId: deps.botId,
+                conversationId: conversationOf(turnId),
+                state: event.toolKind === undefined ? ("thinking" as const) : ("working" as const),
+                label: event.label,
+                toolKind: event.toolKind,
+                since: yield* Clock.currentTimeMillis,
+              }),
+            )
           })
         case "Usage":
-          return Effect.gen(function*() {
+          return Effect.gen(function* () {
             const turnId = event.turnId !== undefined ? routeOf(event.turnId) : deps.activeTurnId()
             if (turnId !== undefined) usage.set(turnId, addUsage(usage.get(turnId), event.usage))
-            yield* deps.usage.record(compact({
-              botId: deps.botId,
-              conversationId: conversationOf(turnId),
-              turnId,
-              harness: deps.harness,
-              model: deps.model(),
-              usage: event.usage,
-            }))
+            yield* deps.usage.record(
+              compact({
+                botId: deps.botId,
+                conversationId: conversationOf(turnId),
+                turnId,
+                harness: deps.harness,
+                model: deps.model(),
+                usage: event.usage,
+              }),
+            )
           })
         case "ContextUsage":
-          return Effect.gen(function*() {
+          return Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis
             const value = { usedTokens: event.usedTokens, windowTokens: event.windowTokens }
             if (now - lastContextPublish < CONTEXT_USAGE_THROTTLE_MS) {
@@ -408,7 +441,7 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
 
     const self: SessionIngest = {
       beginTurn: (turnId, conversationId) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const deferred = yield* Deferred.make<TurnTerminal>()
           terminals.set(turnId, deferred)
           turnConversations.set(turnId, conversationId)
@@ -454,7 +487,7 @@ export const finalizeTurnEntries = (
   turnId: TurnId,
   status: "completed" | "failed" | "interrupted",
 ): Effect.Effect<FinalizedTurn> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const all = yield* orDie(deps.entries.listByTurn(turnId))
     const now = yield* Clock.currentTimeMillis
     const botMessages: Array<TranscriptEntryOf<"message">> = []
@@ -462,9 +495,10 @@ export const finalizeTurnEntries = (
       if (entry.kind === "unknown") continue
       let next: KnownTranscriptEntry | undefined
       if (entry.kind === "message" && entry.streaming) {
-        next = entry.role === "bot" && status !== "completed"
-          ? { ...entry, streaming: false, aborted: true }
-          : { ...entry, streaming: false }
+        next =
+          entry.role === "bot" && status !== "completed"
+            ? { ...entry, streaming: false, aborted: true }
+            : { ...entry, streaming: false }
       } else if (entry.kind === "reasoning" && entry.streaming) {
         next = { ...entry, streaming: false }
       } else if (

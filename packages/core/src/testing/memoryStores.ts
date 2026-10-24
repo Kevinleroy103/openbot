@@ -6,13 +6,24 @@ import { Clock, Effect, Layer, Option, Stream } from "effect"
 import { joinPath } from "../ports/DataDir.ts"
 import { RepoError } from "../ports/errors.ts"
 import { IdGen } from "../ports/IdGen.ts"
-import { type AttachmentRecord, AttachmentStore, CarryoverStore, EMPTY_CARRYOVER, MemoryStore, mergeCarryover, type ParsedSkillFile, SkillStore } from "../ports/stores.ts"
+import {
+  type AttachmentRecord,
+  AttachmentStore,
+  CarryoverStore,
+  EMPTY_CARRYOVER,
+  MemoryStore,
+  mergeCarryover,
+  type ParsedSkillFile,
+  SkillStore,
+} from "../ports/stores.ts"
 
-const byKey = <A>(key: (a: A) => string) => (a: A, b: A) => {
-  const x = key(a)
-  const y = key(b)
-  return x < y ? -1 : x > y ? 1 : 0
-}
+const byKey =
+  <A>(key: (a: A) => string) =>
+  (a: A, b: A) => {
+    const x = key(a)
+    const y = key(b)
+    return x < y ? -1 : x > y ? 1 : 0
+  }
 
 export const makeMemoryMemoryStore = () =>
   Effect.sync(() => {
@@ -45,7 +56,11 @@ export const makeMemoryMemoryStore = () =>
 const parseSkillFile = (text: string): ParsedSkillFile => {
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text)
   if (match === null) return { body: text }
-  const field = (key: string) => new RegExp(`^${key}:\\s*(.*)$`, "m").exec(match[1]!)?.[1]?.trim().replace(/^["']|["']$/g, "")
+  const field = (key: string) =>
+    new RegExp(`^${key}:\\s*(.*)$`, "m")
+      .exec(match[1]!)?.[1]
+      ?.trim()
+      .replace(/^["']|["']$/g, "")
   return { name: field("name"), description: field("description"), body: match[2]! }
 }
 
@@ -67,7 +82,10 @@ export const makeMemorySkillStore = (root = "/openbot-test/skills-lib") =>
         }),
       install: (skill, files) =>
         Effect.sync(() => {
-          const others = files.map((file) => file.path).filter((path) => path !== "SKILL.md").sort()
+          const others = files
+            .map((file) => file.path)
+            .filter((path) => path !== "SKILL.md")
+            .sort()
           skills.set(skill.name, { ...skill, ...(others.length === 0 ? {} : { files: others }) })
         }),
       parse: parseSkillFile,
@@ -79,13 +97,13 @@ export const makeMemorySkillStore = (root = "/openbot-test/skills-lib") =>
 
 /** Requires `IdGen` for attachment ids; paths are virtual (`<root>/<id>`). */
 export const makeMemoryAttachmentStore = (root = "/openbot-test/attachments") =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const ids = yield* IdGen
     const records = new Map<AttachmentId, AttachmentRecord>()
     const bytes = new Map<AttachmentId, Uint8Array>()
     return AttachmentStore.of({
       put: (input) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const id = yield* ids.attachmentId
           const createdAt = yield* Clock.currentTimeMillis
           const record: AttachmentRecord = {
@@ -101,7 +119,7 @@ export const makeMemoryAttachmentStore = (root = "/openbot-test/attachments") =>
           return record
         }),
       putStream: (input) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const parts = yield* Stream.runCollect(input.chunks)
           const size = parts.reduce((n, part) => n + part.byteLength, 0)
           const data = new Uint8Array(size)
@@ -133,13 +151,16 @@ export const makeMemoryAttachmentStore = (root = "/openbot-test/attachments") =>
           return data === undefined ? Option.none() : Option.some(data.slice())
         }),
       stream: (id) =>
-        Stream.unwrap(Effect.suspend(() => {
-          const data = bytes.get(id)
-          if (data === undefined) return Effect.fail(new RepoError({ op: "AttachmentStore.stream", message: `No attachment ${id}` }))
-          const slices: Array<Uint8Array> = []
-          for (let at = 0; at < data.byteLength; at += 65_536) slices.push(data.slice(at, at + 65_536))
-          return Effect.succeed(Stream.fromIterable(slices))
-        })),
+        Stream.unwrap(
+          Effect.suspend(() => {
+            const data = bytes.get(id)
+            if (data === undefined)
+              return Effect.fail(new RepoError({ op: "AttachmentStore.stream", message: `No attachment ${id}` }))
+            const slices: Array<Uint8Array> = []
+            for (let at = 0; at < data.byteLength; at += 65_536) slices.push(data.slice(at, at + 65_536))
+            return Effect.succeed(Stream.fromIterable(slices))
+          }),
+        ),
       delete: (id) =>
         Effect.sync(() => {
           bytes.delete(id)

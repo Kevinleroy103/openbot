@@ -27,7 +27,13 @@
  * routed by the presence of `method`, never by `id`.
  */
 import { Cause, Deferred, Duration, Effect, Exit, Queue, Scope, type Sink, Stream } from "effect"
-import { CodexRequestTimeout, CodexRpcError, CodexTransportClosed, type CodexPeerError, RpcErrorCodes } from "./errors.ts"
+import {
+  CodexRequestTimeout,
+  CodexRpcError,
+  CodexTransportClosed,
+  type CodexPeerError,
+  RpcErrorCodes,
+} from "./errors.ts"
 
 export type JsonRpcId = string | number
 
@@ -111,7 +117,7 @@ interface PendingRequest {
  * Starts the peer's reader and writer fibers in the current scope. Closing the scope stops them;
  * the transport (e.g. the child process) is owned by the caller.
  */
-export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptions) {
+export const makeCodexPeer = Effect.fnUntraced(function* (options: CodexPeerOptions) {
   const scope = yield* Effect.scope
   const handlerScope = yield* Scope.fork(scope, "parallel")
   const outgoing = yield* Queue.unbounded<string, Cause.Done>()
@@ -134,14 +140,16 @@ export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptio
       const error = new CodexTransportClosed({ reason })
       // Uninterruptible and in this order: whoever waits on `terminated` may close the scope this
       // fiber runs in, so the owners (`onTermination`) and the waiters hear about it first.
-      return Effect.uninterruptible(Effect.gen(function*() {
-        if (options.onTermination) yield* options.onTermination(reason)
-        for (const entry of failing) yield* Deferred.fail(entry.deferred, error)
-        yield* Queue.end(outgoing)
-        yield* Deferred.succeed(terminatedSignal, reason)
-        // Forked: terminate may run on a handler fiber that lives in handlerScope.
-        yield* Effect.forkIn(Scope.close(handlerScope, Exit.void), scope, { startImmediately: true })
-      }))
+      return Effect.uninterruptible(
+        Effect.gen(function* () {
+          if (options.onTermination) yield* options.onTermination(reason)
+          for (const entry of failing) yield* Deferred.fail(entry.deferred, error)
+          yield* Queue.end(outgoing)
+          yield* Deferred.succeed(terminatedSignal, reason)
+          // Forked: terminate may run on a handler fiber that lives in handlerScope.
+          yield* Effect.forkIn(Scope.close(handlerScope, Exit.void), scope, { startImmediately: true })
+        }),
+      )
     })
 
   const send = (message: Record<string, unknown>): Effect.Effect<void, CodexTransportClosed> =>
@@ -162,7 +170,10 @@ export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptio
     Effect.suspend(() => {
       const key = String(id)
       const entry = pending.get(key)
-      if (!entry) return Effect.logDebug("Codex app-server: response for an unknown request").pipe(Effect.annotateLogs({ id: key }))
+      if (!entry)
+        return Effect.logDebug("Codex app-server: response for an unknown request").pipe(
+          Effect.annotateLogs({ id: key }),
+        )
       pending.delete(key)
       const error = message.error
       if (error !== undefined && error !== null) {
@@ -181,7 +192,7 @@ export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptio
     })
 
   const handleRequest = (request: IncomingRequest): Effect.Effect<void> =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       if (activeHandlers >= maxHandlers) {
         yield* sendReply(request.id, {
           error: { code: RpcErrorCodes.overloaded, message: "Too many Codex requests are already pending." },
@@ -192,10 +203,12 @@ export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptio
       const answer = yield* options.onRequest(request).pipe(
         Effect.catchCause((cause) =>
           Effect.logError("Codex app-server: routing a server request failed", cause).pipe(
-            Effect.as(Effect.succeed<RequestReply>({
-              error: { code: RpcErrorCodes.internal, message: "OpenBot failed to route the request." },
-            })),
-          )
+            Effect.as(
+              Effect.succeed<RequestReply>({
+                error: { code: RpcErrorCodes.internal, message: "OpenBot failed to route the request." },
+              }),
+            ),
+          ),
         ),
       )
       yield* answer.pipe(
@@ -204,13 +217,15 @@ export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptio
             Effect.as<RequestReply>({
               error: { code: RpcErrorCodes.internal, message: "OpenBot failed to handle the request." },
             }),
-          )
+          ),
         ),
         Effect.flatMap((reply) => (reply === NoReply ? Effect.void : sendReply(request.id, reply))),
         Effect.ignore,
-        Effect.ensuring(Effect.sync(() => {
-          activeHandlers--
-        })),
+        Effect.ensuring(
+          Effect.sync(() => {
+            activeHandlers--
+          }),
+        ),
         Effect.forkIn(handlerScope, { startImmediately: true }),
       )
     })
@@ -256,7 +271,8 @@ export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptio
     Effect.matchCauseEffect({
       onFailure: (cause) =>
         Cause.hasInterruptsOnly(cause) ? Effect.void : terminate(`reading from Codex failed: ${Cause.pretty(cause)}`),
-      onSuccess: () => Effect.flatMap(options.transport.terminationReason ?? Effect.succeed("Codex closed its output"), terminate),
+      onSuccess: () =>
+        Effect.flatMap(options.transport.terminationReason ?? Effect.succeed("Codex closed its output"), terminate),
     }),
     Effect.forkIn(scope),
   )
@@ -287,19 +303,22 @@ export const makeCodexPeer = Effect.fnUntraced(function*(options: CodexPeerOptio
       const deferred = Deferred.makeUnsafe<unknown, CodexPeerError>()
       pending.set(key, { method, deferred })
       const timeout = requestOptions?.timeout
-      const wait: Effect.Effect<unknown, CodexPeerError> = timeout === undefined
-        ? Deferred.await(deferred)
-        : Deferred.await(deferred).pipe(
-          Effect.timeoutOrElse({
-            duration: timeout,
-            orElse: () => Effect.fail(new CodexRequestTimeout({ method, timeoutMs: Duration.toMillis(timeout) })),
-          }),
-        )
+      const wait: Effect.Effect<unknown, CodexPeerError> =
+        timeout === undefined
+          ? Deferred.await(deferred)
+          : Deferred.await(deferred).pipe(
+              Effect.timeoutOrElse({
+                duration: timeout,
+                orElse: () => Effect.fail(new CodexRequestTimeout({ method, timeoutMs: Duration.toMillis(timeout) })),
+              }),
+            )
       return send({ id, method, ...(params === undefined ? {} : { params }) }).pipe(
         Effect.andThen(wait),
-        Effect.ensuring(Effect.sync(() => {
-          pending.delete(key)
-        })),
+        Effect.ensuring(
+          Effect.sync(() => {
+            pending.delete(key)
+          }),
+        ),
       )
     })
 

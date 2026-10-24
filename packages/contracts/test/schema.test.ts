@@ -53,7 +53,8 @@ const roundTrip = <S extends Schema.Codec<any, any, never, never>>(schema: S, va
   expect(Schema.decodeUnknownSync(json)(text)).toEqual(value)
   return JSON.parse(text)
 }
-const decodes = (schema: Schema.Codec<any, any, never, never>, raw: unknown) => Result.isSuccess(Schema.decodeUnknownResult(schema)(raw))
+const decodes = (schema: Schema.Codec<any, any, never, never>, raw: unknown) =>
+  Result.isSuccess(Schema.decodeUnknownResult(schema)(raw))
 
 const base = {
   id: "ent_1",
@@ -93,9 +94,22 @@ describe("domain", () => {
     expect(decodes(Bot, { ...bot, name: "" })).toBe(false)
     expect(decodes(Bot, { ...bot, name: "x".repeat(65) })).toBe(false)
     // rows written before a field existed decode with defaults
-    const { hostNodeId: _h, boundNodeIds: _b, pinned: _p, hidden: _x, notify: _n, ...minimal } = Schema.encodeSync(Bot)(bot)
+    const {
+      hostNodeId: _h,
+      boundNodeIds: _b,
+      pinned: _p,
+      hidden: _x,
+      notify: _n,
+      ...minimal
+    } = Schema.encodeSync(Bot)(bot)
     const old = Schema.decodeUnknownSync(Bot)(minimal)
-    expect([old.hostNodeId, old.boundNodeIds, old.pinned, old.hidden, old.notify]).toEqual(["node_local" as any, [], false, false, "all"])
+    expect([old.hostNodeId, old.boundNodeIds, old.pinned, old.hidden, old.notify]).toEqual([
+      "node_local" as any,
+      [],
+      false,
+      false,
+      "all",
+    ])
   })
 
   test("Bot projectFolders: stored bots without it decode as []; the patch takes a list", () => {
@@ -106,7 +120,7 @@ describe("domain", () => {
     expect(decodes(BotPatch, { projectFolders: "/srv/app" })).toBe(false)
   })
 
-  test("Bot autonomy: stored bots without it decode as \"workspace\"; create/patch accept it", () => {
+  test('Bot autonomy: stored bots without it decode as "workspace"; create/patch accept it', () => {
     const { autonomy: _a, ...stored } = Schema.encodeSync(Bot)(bot)
     expect(Schema.decodeUnknownSync(Bot)(stored).autonomy).toBe("workspace")
     expect(DEFAULT_BOT_AUTONOMY).toBe("workspace")
@@ -121,11 +135,26 @@ describe("domain", () => {
   })
 
   test("Conversation kinds round-trip", () => {
-    const common = { id: "cnv_1", title: "t", createdAt: 1, lastActivityAt: 2, unreadCount: 0, hiddenFromSidebar: false, epoch: "e1" }
+    const common = {
+      id: "cnv_1",
+      title: "t",
+      createdAt: 1,
+      lastActivityAt: 2,
+      unreadCount: 0,
+      hiddenFromSidebar: false,
+      epoch: "e1",
+    }
     for (const raw of [
       { ...common, kind: "direct", botId: "bot_1" },
       { ...common, kind: "group", memberBotIds: ["bot_1", "bot_2"], leadBotId: "bot_2", namedBy: "user" },
-      { ...common, kind: "routine-run", botId: "bot_1", routineId: "rtn_1", runId: "run_1", triggerSummary: "Every day at 9" },
+      {
+        ...common,
+        kind: "routine-run",
+        botId: "bot_1",
+        routineId: "rtn_1",
+        runId: "run_1",
+        triggerSummary: "Every day at 9",
+      },
     ]) {
       expect(roundTrip(Conversation, Schema.decodeUnknownSync(Conversation)(raw))).toEqual(raw)
     }
@@ -133,8 +162,16 @@ describe("domain", () => {
 
   test("Conversation sessions (context ring) round-trip", () => {
     const raw = {
-      id: "cnv_1", title: "t", createdAt: 1, lastActivityAt: 2, unreadCount: 0, hiddenFromSidebar: false, epoch: "e1",
-      kind: "group", memberBotIds: ["bot_1", "bot_2"], namedBy: "app",
+      id: "cnv_1",
+      title: "t",
+      createdAt: 1,
+      lastActivityAt: 2,
+      unreadCount: 0,
+      hiddenFromSidebar: false,
+      epoch: "e1",
+      kind: "group",
+      memberBotIds: ["bot_1", "bot_2"],
+      namedBy: "app",
       sessions: [
         { botId: "bot_1", active: true, contextUsage: { usedTokens: 12_000, windowTokens: 200_000 }, updatedAt: 3 },
         { botId: "bot_2", active: false, updatedAt: 4 },
@@ -155,7 +192,9 @@ describe("domain", () => {
   })
 
   test("routine triggers: cron needs a timezone, interval >= 5 minutes, webhook is decode-only", () => {
-    expect(decodes(RoutineTriggerInput, { type: "cron", schedule: "0 9 * * 1-5", timezone: "Europe/Berlin" })).toBe(true)
+    expect(decodes(RoutineTriggerInput, { type: "cron", schedule: "0 9 * * 1-5", timezone: "Europe/Berlin" })).toBe(
+      true,
+    )
     expect(decodes(RoutineTriggerInput, { type: "cron", schedule: "0 9 * * 1-5" })).toBe(false)
     expect(decodes(RoutineTriggerInput, { type: "interval", everyMinutes: 5 })).toBe(true)
     expect(decodes(RoutineTriggerInput, { type: "interval", everyMinutes: 4 })).toBe(false)
@@ -174,7 +213,17 @@ describe("domain", () => {
       updatedAt: 1,
     })
     roundTrip(Routine, routine)
-    roundTrip(RoutineRun, Schema.decodeUnknownSync(RoutineRun)({ id: "run_1", routineId: "rtn_1", firedBy: "manual", startedAt: 1, status: "running", conversationId: "cnv_1" }))
+    roundTrip(
+      RoutineRun,
+      Schema.decodeUnknownSync(RoutineRun)({
+        id: "run_1",
+        routineId: "rtn_1",
+        firedBy: "manual",
+        startedAt: 1,
+        status: "running",
+        conversationId: "cnv_1",
+      }),
+    )
   })
 
   test("NodeSummary round-trips", () => {
@@ -216,7 +265,14 @@ describe("transcript", () => {
   })
 
   test("old clients drop unknown optional fields on known kinds", () => {
-    const decoded = Schema.decodeUnknownSync(TranscriptEntry)({ ...base, kind: "notice", level: "info", code: "compacted", text: "Compacted", future: 1 })
+    const decoded = Schema.decodeUnknownSync(TranscriptEntry)({
+      ...base,
+      kind: "notice",
+      level: "info",
+      code: "compacted",
+      text: "Compacted",
+      future: 1,
+    })
     expect("future" in decoded).toBe(false)
   })
 
@@ -227,7 +283,14 @@ describe("transcript", () => {
       { type: "member-added", botId: "bot_2", name: "Ada" },
       { type: "member-removed", botId: "bot_2", name: "Ada" },
       { type: "bot-exchange", peerBotIds: ["bot_2"], messageCount: 2 },
-      { type: "messaged-bot", toBotId: "bot_2", toName: "Ada", conversationId: "cnv_2", entryId: "ent_9", urgency: "urgent" },
+      {
+        type: "messaged-bot",
+        toBotId: "bot_2",
+        toName: "Ada",
+        conversationId: "cnv_2",
+        entryId: "ent_9",
+        urgency: "urgent",
+      },
       { type: "posted-to-group", conversationId: "cnv_3", title: "Launch" },
       { type: "handoff", fromBotId: "bot_1", toBotId: "bot_2", toName: "Ada", task: "Ship it" },
       { type: "hop-limit", hops: 8 },
@@ -238,16 +301,40 @@ describe("transcript", () => {
       { type: "auto-decided", decision: "allowed", summary: "git status", toolName: "Bash", ruleId: "rul_1" },
       { type: "request-elsewhere", botId: "bot_1", requestId: "req_1", conversationId: "cnv_1" },
       { type: "session-changed", botId: "bot_1", action: "new-session" },
-      { type: "voice-call", botId: "bot_1", durationMs: 31_000, lines: [{ who: "you", text: "Yo, what's up?" }, { who: "bot", text: "Not much." }] },
+      {
+        type: "voice-call",
+        botId: "bot_1",
+        durationMs: 31_000,
+        lines: [
+          { who: "you", text: "Yo, what's up?" },
+          { who: "bot", text: "Not much." },
+        ],
+      },
     ]
     for (const event of events) {
       const entry = Schema.decodeUnknownSync(KnownTranscriptEntry)({ ...base, kind: "event", event })
       expect(roundTrip(KnownTranscriptEntry, entry).event).toEqual(event)
     }
     expect(events.length).toBe(KnownConversationEvent.members.length)
-    const byAutonomy = { type: "auto-decided", decision: "allowed", summary: "Write hello.ts", toolName: "Write", autonomy: "workspace", toolKey: "toolu_1" }
-    expect(roundTrip(KnownTranscriptEntry, Schema.decodeUnknownSync(KnownTranscriptEntry)({ ...base, kind: "event", event: byAutonomy })).event).toEqual(byAutonomy)
-    const future = Schema.decodeUnknownSync(TranscriptEntry)({ ...base, kind: "event", event: { type: "team-shared", x: 1 } }) as any
+    const byAutonomy = {
+      type: "auto-decided",
+      decision: "allowed",
+      summary: "Write hello.ts",
+      toolName: "Write",
+      autonomy: "workspace",
+      toolKey: "toolu_1",
+    }
+    expect(
+      roundTrip(
+        KnownTranscriptEntry,
+        Schema.decodeUnknownSync(KnownTranscriptEntry)({ ...base, kind: "event", event: byAutonomy }),
+      ).event,
+    ).toEqual(byAutonomy)
+    const future = Schema.decodeUnknownSync(TranscriptEntry)({
+      ...base,
+      kind: "event",
+      event: { type: "team-shared", x: 1 },
+    }) as any
     expect(future.event).toEqual({ type: "unknown", originalTag: "team-shared" })
   })
 
@@ -269,24 +356,60 @@ describe("transcript", () => {
   })
 
   test("unknown card type / change type / stream kind are tolerated", () => {
-    expect((Schema.decodeUnknownSync(Card)({ type: "calendar-event", event: {} }) as any).originalTag).toBe("calendar-event")
+    expect((Schema.decodeUnknownSync(Card)({ type: "calendar-event", event: {} }) as any).originalTag).toBe(
+      "calendar-event",
+    )
     expect((Schema.decodeUnknownSync(ConversationChange)({ type: "reaction.added", x: 1 }) as any).type).toBe("unknown")
-    const item = Schema.decodeUnknownSync(ConversationStreamItem)({ kind: "presence", cursor: { epoch: "e", sequence: 3 } }) as any
+    const item = Schema.decodeUnknownSync(ConversationStreamItem)({
+      kind: "presence",
+      cursor: { epoch: "e", sequence: 3 },
+    }) as any
     expect(item).toEqual({ kind: "unknown", originalTag: "presence", cursor: { epoch: "e", sequence: 3 } })
-    expect((Schema.decodeUnknownSync(RosterStreamItem)({ kind: "change", cursor: { epoch: "e", sequence: 1 }, change: { type: "plan.updated" } }) as any).change.type).toBe("unknown")
+    expect(
+      (
+        Schema.decodeUnknownSync(RosterStreamItem)({
+          kind: "change",
+          cursor: { epoch: "e", sequence: 1 },
+          change: { type: "plan.updated" },
+        }) as any
+      ).change.type,
+    ).toBe("unknown")
   })
 
   test("cards round-trip, including informational routine cards", () => {
     const cards = [
-      { type: "approval", requestId: "req_1", requestKind: "command-approval", title: "Run this?", command: "rm -rf build", suggestedRule: { surface: "shell", match: { commandPrefix: "rm -rf build" } } },
-      { type: "question", requestId: "req_2", questions: [{ id: "q1", prompt: "Color?", options: [{ label: "Blue" }], multiSelect: false, allowFreeText: true }] },
-      { type: "form", requestId: "req_3", title: "Details", fields: [{ key: "k", label: "K", type: "string", required: true }] },
+      {
+        type: "approval",
+        requestId: "req_1",
+        requestKind: "command-approval",
+        title: "Run this?",
+        command: "rm -rf build",
+        suggestedRule: { surface: "shell", match: { commandPrefix: "rm -rf build" } },
+      },
+      {
+        type: "question",
+        requestId: "req_2",
+        questions: [
+          { id: "q1", prompt: "Color?", options: [{ label: "Blue" }], multiSelect: false, allowFreeText: true },
+        ],
+      },
+      {
+        type: "form",
+        requestId: "req_3",
+        title: "Details",
+        fields: [{ key: "k", label: "K", type: "string", required: true }],
+      },
       { type: "secret-request", requestId: "req_4", label: "API key", envVar: "API_KEY" },
       { type: "handoff", requestId: "req_5", nodeId: "node_local", instruction: "Log in for me" },
       { type: "routine", action: "created", routineId: "rtn_1", name: "Daily", triggerSummary: "Every day at 9:00 AM" },
     ]
     for (const card of cards) {
-      const entry = Schema.decodeUnknownSync(KnownTranscriptEntry)({ ...base, kind: "card", card, state: { status: card.type === "routine" ? "info" : "pending" } })
+      const entry = Schema.decodeUnknownSync(KnownTranscriptEntry)({
+        ...base,
+        kind: "card",
+        card,
+        state: { status: card.type === "routine" ? "info" : "pending" },
+      })
       expect(roundTrip(KnownTranscriptEntry, entry).card).toEqual(card)
     }
   })
@@ -305,7 +428,11 @@ describe("runtime requests", () => {
       statusReason: "timeout",
       title: "Run this command?",
       subject: { command: "make", cwd: "/w", nodeId: "node_local" },
-      responseCapability: { type: "decision", options: [{ id: "allow-once" }, { id: "allow-always" }, { id: "deny" }], allowMessage: true },
+      responseCapability: {
+        type: "decision",
+        options: [{ id: "allow-once" }, { id: "allow-always" }, { id: "deny" }],
+        allowMessage: true,
+      },
       suggestedRule: { surface: "shell", match: { commandPrefix: "make" } },
       source: { origin: "codex", method: "item/commandExecution/requestApproval", nativeRequestId: "7" },
       blocking: true,
@@ -315,15 +442,34 @@ describe("runtime requests", () => {
     roundTrip(RuntimeRequest, request)
     expect(decodes(RuntimeResponseInput, { type: "secret", value: "s3cret" })).toBe(true)
     expect(decodes(RuntimeResponseInput, { type: "decision", decision: "allow-session", message: "ok" })).toBe(true)
-    expect(decodes(RuntimeResponseInput, { type: "decision", decision: "allow-once", scope: "project-folder" })).toBe(true)
+    expect(decodes(RuntimeResponseInput, { type: "decision", decision: "allow-once", scope: "project-folder" })).toBe(
+      true,
+    )
     expect(decodes(RuntimeResponseInput, { type: "decision", decision: "allow-once", scope: "everywhere" })).toBe(false)
-    expect(decodes(RuntimeRequest, { ...Schema.encodeSync(RuntimeRequest)(request), status: "resolved", response: { type: "secret", value: "leak" } })).toBe(false)
+    expect(
+      decodes(RuntimeRequest, {
+        ...Schema.encodeSync(RuntimeRequest)(request),
+        status: "resolved",
+        response: { type: "secret", value: "leak" },
+      }),
+    ).toBe(false)
   })
 })
 
 describe("policy, settings, memory, skills", () => {
   test("ApprovalRule round-trips", () => {
-    roundTrip(ApprovalRule, Schema.decodeUnknownSync(ApprovalRule)({ id: "rul_1", botId: "bot_1", surface: "shell", match: { commandPrefix: "git " }, action: "allow", origin: "always-allow", createdAt: 1 }))
+    roundTrip(
+      ApprovalRule,
+      Schema.decodeUnknownSync(ApprovalRule)({
+        id: "rul_1",
+        botId: "bot_1",
+        surface: "shell",
+        match: { commandPrefix: "git " },
+        action: "allow",
+        origin: "always-allow",
+        createdAt: 1,
+      }),
+    )
     expect(decodes(ApprovalRuleInput, { surface: "file-edit", match: {}, action: "ask" })).toBe(true)
     expect(decodes(ApprovalRuleInput, { surface: "files", match: {}, action: "ask" })).toBe(false)
   })
@@ -332,7 +478,11 @@ describe("policy, settings, memory, skills", () => {
     expect(Schema.decodeUnknownSync(Settings)({})).toEqual(DEFAULT_SETTINGS)
     expect(Schema.decodeUnknownSync(Settings)({ theme: "dark" }).theme).toBe("dark")
     roundTrip(Settings, { ...DEFAULT_SETTINGS, defaultHarness: "codex", ownerName: "Leke" })
-    const patch = Schema.decodeUnknownSync(SettingsPatch)({ showSteps: false, defaultHarness: "codex", approvalExpiryMinutes: 30 })
+    const patch = Schema.decodeUnknownSync(SettingsPatch)({
+      showSteps: false,
+      defaultHarness: "codex",
+      approvalExpiryMinutes: 30,
+    })
     const next = applySettingsPatch(DEFAULT_SETTINGS, patch)
     expect(next).toEqual({ ...DEFAULT_SETTINGS, showSteps: false, defaultHarness: "codex", approvalExpiryMinutes: 30 })
     expect("defaultHarness" in applySettingsPatch(next, { defaultHarness: null })).toBe(false)
@@ -343,20 +493,39 @@ describe("policy, settings, memory, skills", () => {
     const decoded = Schema.decodeUnknownSync(Settings)({ theme: "dark" })
     expect(decoded.sharedProjectFolders).toEqual([])
     expect(decoded.defaultAutonomy).toBe("workspace")
-    roundTrip(Settings, { ...DEFAULT_SETTINGS, sharedProjectFolders: ["~/projects", "/srv/code"], defaultAutonomy: "ask" })
+    roundTrip(Settings, {
+      ...DEFAULT_SETTINGS,
+      sharedProjectFolders: ["~/projects", "/srv/code"],
+      defaultAutonomy: "ask",
+    })
     const next = applySettingsPatch(DEFAULT_SETTINGS, { sharedProjectFolders: ["~/projects"], defaultAutonomy: "full" })
     expect(next).toMatchObject({ sharedProjectFolders: ["~/projects"], defaultAutonomy: "full" })
     expect(decodes(SettingsPatch, { defaultAutonomy: "yolo" })).toBe(false)
     expect(decodes(SettingsPatch, { sharedProjectFolders: [""] })).toBe(false)
-    expect(decodes(SettingsPatch, { sharedProjectFolders: Array.from({ length: 33 }, (_, i) => `/p/${i}`) })).toBe(false)
+    expect(decodes(SettingsPatch, { sharedProjectFolders: Array.from({ length: 33 }, (_, i) => `/p/${i}`) })).toBe(
+      false,
+    )
   })
 
   test("project folder helpers: normalize, refuse roots / whole homes / `..`, minAutonomy", () => {
     expect(normalizeProjectFolder(" /home/me/projects// ")).toBe("/home/me/projects")
     expect(normalizeProjectFolder("~/projects/./snip/")).toBe("~/projects/snip")
     expect(normalizeProjectFolder("C:\\code\\x\\")).toBe("C:\\code\\x")
-    for (const ok of ["/home/me/projects", "~/projects", "/srv", "C:\\code"]) expect(projectFolderProblem(ok)).toBeUndefined()
-    for (const bad of ["", "/", "~", "~/", "~other/x", "/home", "/home/me", "/Users/me", "relative/x", "/opt/a/../b", "C:\\"]) {
+    for (const ok of ["/home/me/projects", "~/projects", "/srv", "C:\\code"])
+      expect(projectFolderProblem(ok)).toBeUndefined()
+    for (const bad of [
+      "",
+      "/",
+      "~",
+      "~/",
+      "~other/x",
+      "/home",
+      "/home/me",
+      "/Users/me",
+      "relative/x",
+      "/opt/a/../b",
+      "C:\\",
+    ]) {
       expect(projectFolderProblem(bad)).toBeDefined()
     }
     expect(minAutonomy("full", "workspace")).toBe("workspace")
@@ -373,7 +542,13 @@ describe("policy, settings, memory, skills", () => {
     expect(decodes(MemoryFactId, "../etc/passwd")).toBe(false)
     expect(decodes(SkillName, "triage-inbox")).toBe(true)
     expect(decodes(SkillName, "Triage Inbox")).toBe(false)
-    roundTrip(BotMemory, Schema.decodeUnknownSync(BotMemory)({ index: "- [Tea](likes-tea.md)", facts: [{ id: "likes-tea", title: "Tea", body: "Green", updatedAt: 1 }] }))
+    roundTrip(
+      BotMemory,
+      Schema.decodeUnknownSync(BotMemory)({
+        index: "- [Tea](likes-tea.md)",
+        facts: [{ id: "likes-tea", title: "Tea", body: "Green", updatedAt: 1 }],
+      }),
+    )
   })
 })
 
@@ -397,9 +572,36 @@ describe("search", () => {
   test("a page of hits round-trips (entry, bot-to-bot and task hits)", () => {
     const page = Schema.decodeUnknownSync(SearchPage)({
       hits: [
-        { ref: { kind: "entry", entryId: "ent_1" }, conversationId: "cnv_1", kind: "message", author: { kind: "owner" }, createdAt: 5, snippet: "the deploy waits", highlights: [{ start: 4, end: 10 }] },
-        { ref: { kind: "entry", entryId: "ent_2" }, conversationId: "cnv_2", kind: "message", author: { kind: "bot", botId: "bot_1" }, toBotId: "bot_2", turnId: "trn_1", createdAt: 6, snippet: "ok", highlights: [] },
-        { ref: { kind: "task", taskId: "tsk_1" }, conversationId: "cnv_1", kind: "task", author: { kind: "bot", botId: "bot_1" }, jumpEntryId: "ent_9", createdAt: 7, snippet: "report", highlights: [] },
+        {
+          ref: { kind: "entry", entryId: "ent_1" },
+          conversationId: "cnv_1",
+          kind: "message",
+          author: { kind: "owner" },
+          createdAt: 5,
+          snippet: "the deploy waits",
+          highlights: [{ start: 4, end: 10 }],
+        },
+        {
+          ref: { kind: "entry", entryId: "ent_2" },
+          conversationId: "cnv_2",
+          kind: "message",
+          author: { kind: "bot", botId: "bot_1" },
+          toBotId: "bot_2",
+          turnId: "trn_1",
+          createdAt: 6,
+          snippet: "ok",
+          highlights: [],
+        },
+        {
+          ref: { kind: "task", taskId: "tsk_1" },
+          conversationId: "cnv_1",
+          kind: "task",
+          author: { kind: "bot", botId: "bot_1" },
+          jumpEntryId: "ent_9",
+          createdAt: 7,
+          snippet: "report",
+          highlights: [],
+        },
       ],
       nextCursor: "r:-1.5:7:tsk_1",
       totalCapped: 3,
@@ -411,14 +613,25 @@ describe("search", () => {
   })
 
   test("positions and a transcript window round-trip", () => {
-    roundTrip(SearchPositions, Schema.decodeUnknownSync(SearchPositions)({ hits: [{ entryId: "ent_1", createdAt: 1 }], more: false, terms: ["leke"] }))
+    roundTrip(
+      SearchPositions,
+      Schema.decodeUnknownSync(SearchPositions)({
+        hits: [{ entryId: "ent_1", createdAt: 1 }],
+        more: false,
+        terms: ["leke"],
+      }),
+    )
     const window = Schema.decodeUnknownSync(TranscriptWindow)({
-      entries: [{ ...base, kind: "message", role: "bot", text: "hi", attachments: [], streaming: false, turnId: "trn_1" }],
+      entries: [
+        { ...base, kind: "message", role: "bot", text: "hi", attachments: [], streaming: false, turnId: "trn_1" },
+      ],
       hasMoreBefore: true,
       hasMoreAfter: false,
       beforeCursor: "1:ent_1",
       afterCursor: null,
-      turns: [{ id: "trn_1", conversationId: "cnv_1", botId: "bot_1", status: "completed", trigger: "user", startedAt: 1 }],
+      turns: [
+        { id: "trn_1", conversationId: "cnv_1", botId: "bot_1", status: "completed", trigger: "user", startedAt: 1 },
+      ],
       requests: [],
     })
     roundTrip(TranscriptWindow, window)

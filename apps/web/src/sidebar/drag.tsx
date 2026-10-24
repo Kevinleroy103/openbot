@@ -58,17 +58,17 @@ export const useSidebarDrag = (enabled: boolean) => {
     !enabled
       ? {}
       : {
-        draggable: true,
-        onDragStart: (e: DragEvent) => {
-          e.dataTransfer.effectAllowed = "move"
-          e.dataTransfer.setData(MIME, item.key)
-          e.dataTransfer.setData("text/plain", item.key)
-          dragged.current = item
-          // after the drag has started: changing the layout during dragstart makes Chrome cancel it
-          setTimeout(() => dragged.current === item && setDragging(item), 0)
-        },
-        onDragEnd: finish,
-      }
+          draggable: true,
+          onDragStart: (e: DragEvent) => {
+            e.dataTransfer.effectAllowed = "move"
+            e.dataTransfer.setData(MIME, item.key)
+            e.dataTransfer.setData("text/plain", item.key)
+            dragged.current = item
+            // after the drag has started: changing the layout during dragstart makes Chrome cancel it
+            setTimeout(() => dragged.current === item && setDragging(item), 0)
+          },
+          onDragEnd: finish,
+        }
 
   const accept = (place: SidebarPlace, e: DragEvent): boolean => {
     const item = dragged.current
@@ -80,34 +80,38 @@ export const useSidebarDrag = (enabled: boolean) => {
 
   /** A row (or tile) at `index` of `place`: the drop lands before or after it, by the pointer. */
   const row = (place: SidebarPlace, list: ReadonlyArray<SidebarItem>, index: number, axis: "y" | "x" = "y") =>
-    !enabled ? {} : {
-      onDragOver: (e: DragEvent<HTMLElement>) => {
-        if (!accept(place, e)) return
-        e.stopPropagation()
-        const rect = e.currentTarget.getBoundingClientRect()
-        const after = axis === "y" ? e.clientY > rect.top + rect.height / 2 : e.clientX > rect.left + rect.width / 2
-        const next = after ? index + 1 : index
-        if (target?.place !== place || target.index !== next) setTarget({ place, index: next })
-      },
-      onDrop: (e: DragEvent) => {
-        if (!accept(place, e)) return
-        e.stopPropagation()
-        void land(place, list, target?.place === place ? target.index : index)
-      },
-    }
+    !enabled
+      ? {}
+      : {
+          onDragOver: (e: DragEvent<HTMLElement>) => {
+            if (!accept(place, e)) return
+            e.stopPropagation()
+            const rect = e.currentTarget.getBoundingClientRect()
+            const after = axis === "y" ? e.clientY > rect.top + rect.height / 2 : e.clientX > rect.left + rect.width / 2
+            const next = after ? index + 1 : index
+            if (target?.place !== place || target.index !== next) setTarget({ place, index: next })
+          },
+          onDrop: (e: DragEvent) => {
+            if (!accept(place, e)) return
+            e.stopPropagation()
+            void land(place, list, target?.place === place ? target.index : index)
+          },
+        }
 
   /** A whole place (its header, its empty space): the drop lands at the end. */
   const zone = (place: SidebarPlace, list: ReadonlyArray<SidebarItem>) =>
-    !enabled ? {} : {
-      onDragOver: (e: DragEvent) => {
-        if (!accept(place, e)) return
-        if (target?.place !== place || target.index !== list.length) setTarget({ place, index: list.length })
-      },
-      onDrop: (e: DragEvent) => {
-        if (!accept(place, e)) return
-        void land(place, list, list.length)
-      },
-    }
+    !enabled
+      ? {}
+      : {
+          onDragOver: (e: DragEvent) => {
+            if (!accept(place, e)) return
+            if (target?.place !== place || target.index !== list.length) setTarget({ place, index: list.length })
+          },
+          onDrop: (e: DragEvent) => {
+            if (!accept(place, e)) return
+            void land(place, list, list.length)
+          },
+        }
 
   const isTarget = (place: SidebarPlace, index: number) => target?.place === place && target.index === index
   const accepts = (place: SidebarPlace) => dragging !== undefined && canDrop(dragging, place)

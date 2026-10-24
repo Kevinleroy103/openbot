@@ -24,26 +24,46 @@ import { screenNotice } from "../src/computer/notice.ts"
 import { computerSocketUrl } from "../src/computer/protocol.ts"
 import { availabilityOf } from "../src/computer/useComputer.ts"
 
-const close = (code: number, extra: Partial<{ reason: string; mode: "view" | "control"; opened: boolean; connected: boolean }> = {}): DesktopEvent => ({
+const close = (
+  code: number,
+  extra: Partial<{ reason: string; mode: "view" | "control"; opened: boolean; connected: boolean }> = {},
+): DesktopEvent => ({
   type: "closed",
-  close: { code, reason: extra.reason ?? "", mode: extra.mode ?? "view", opened: extra.opened ?? true, connected: extra.connected ?? false },
+  close: {
+    code,
+    reason: extra.reason ?? "",
+    mode: extra.mode ?? "view",
+    opened: extra.opened ?? true,
+    connected: extra.connected ?? false,
+  },
 })
-const run = (events: ReadonlyArray<DesktopEvent>, from: DesktopConn = initialDesktopConn): DesktopConn => events.reduce(desktopReducer, from)
+const run = (events: ReadonlyArray<DesktopEvent>, from: DesktopConn = initialDesktopConn): DesktopConn =>
+  events.reduce(desktopReducer, from)
 
 describe("close verdicts (brain DesktopCloseCodes)", () => {
   test("1000 on a control socket = control released: watch again", () => {
-    expect(classifyClose({ code: 1000, reason: "control released", mode: "control", opened: true, connected: true })).toBe("lease-lost")
+    expect(
+      classifyClose({ code: 1000, reason: "control released", mode: "control", opened: true, connected: true }),
+    ).toBe("lease-lost")
   })
   test("4403 take control first: watch again (control), retry (view)", () => {
-    expect(classifyClose({ code: 4403, reason: "", mode: "control", opened: true, connected: false })).toBe("lease-lost")
+    expect(classifyClose({ code: 4403, reason: "", mode: "control", opened: true, connected: false })).toBe(
+      "lease-lost",
+    )
     expect(classifyClose({ code: 4403, reason: "", mode: "view", opened: true, connected: false })).toBe("retry")
   })
   test("1012 screen reset: asleep, in both modes", () => {
-    expect(classifyClose({ code: 1012, reason: "screen reset", mode: "view", opened: true, connected: true })).toBe("asleep")
-    expect(classifyClose({ code: 1012, reason: "screen reset", mode: "control", opened: true, connected: true })).toBe("asleep")
+    expect(classifyClose({ code: 1012, reason: "screen reset", mode: "view", opened: true, connected: true })).toBe(
+      "asleep",
+    )
+    expect(classifyClose({ code: 1012, reason: "screen reset", mode: "control", opened: true, connected: true })).toBe(
+      "asleep",
+    )
   })
   test("1011, 1006 (never opened: 404 / 409 / 503) and a 1000 on a view socket: retry", () => {
-    expect(classifyClose({ code: 1011, reason: "The screen stream ended", mode: "view", opened: true, connected: true })).toBe("retry")
+    expect(
+      classifyClose({ code: 1011, reason: "The screen stream ended", mode: "view", opened: true, connected: true }),
+    ).toBe("retry")
     expect(classifyClose({ code: 1006, reason: "", mode: "view", opened: false, connected: false })).toBe("retry")
     expect(classifyClose({ code: 1000, reason: "", mode: "view", opened: true, connected: true })).toBe("retry")
   })
@@ -55,10 +75,18 @@ describe("close verdicts (brain DesktopCloseCodes)", () => {
 describe("viewer state machine", () => {
   test("connecting → live", () => {
     expect(run([{ type: "enable" }]).phase).toBe("connecting")
-    expect(run([{ type: "attempt" }, { type: "connected" }])).toEqual({ phase: "live", failures: 0, message: undefined })
+    expect(run([{ type: "attempt" }, { type: "connected" }])).toEqual({
+      phase: "live",
+      failures: 0,
+      message: undefined,
+    })
   })
   test("a live connection that drops reconnects; the reason is kept", () => {
-    const s = run([{ type: "attempt" }, { type: "connected" }, close(1011, { reason: "The screen stream ended", connected: true })])
+    const s = run([
+      { type: "attempt" },
+      { type: "connected" },
+      close(1011, { reason: "The screen stream ended", connected: true }),
+    ])
     expect(s).toEqual({ phase: "reconnecting", failures: 1, message: "The screen stream ended" })
     expect(run([{ type: "attempt" }, { type: "connected" }], s).phase).toBe("live")
   })
@@ -69,11 +97,19 @@ describe("viewer state machine", () => {
     expect(two).toEqual({ phase: "unreachable", failures: 2, message: undefined })
   })
   test("control released → connecting again (in view mode)", () => {
-    const s = run([{ type: "attempt" }, { type: "connected" }, close(1000, { mode: "control", connected: true, reason: "control released" })])
+    const s = run([
+      { type: "attempt" },
+      { type: "connected" },
+      close(1000, { mode: "control", connected: true, reason: "control released" }),
+    ])
     expect(s).toEqual({ phase: "connecting", failures: 0, message: undefined })
   })
   test("reset → asleep until enabled again", () => {
-    const s = run([{ type: "attempt" }, { type: "connected" }, close(1012, { connected: true, reason: "screen reset" })])
+    const s = run([
+      { type: "attempt" },
+      { type: "connected" },
+      close(1012, { connected: true, reason: "screen reset" }),
+    ])
     expect(s.phase).toBe("asleep")
     expect(run([{ type: "disable" }], s).phase).toBe("idle")
     expect(run([{ type: "enable" }], s).phase).toBe("connecting")
@@ -83,7 +119,11 @@ describe("viewer state machine", () => {
     expect(run([close(1011)]).phase).toBe("idle")
   })
   test("noVNC failing to load counts as a failure", () => {
-    expect(run([{ type: "attempt" }, { type: "load-failed", message: "boom" }])).toEqual({ phase: "unreachable", failures: 1, message: "boom" })
+    expect(run([{ type: "attempt" }, { type: "load-failed", message: "boom" }])).toEqual({
+      phase: "unreachable",
+      failures: 1,
+      message: "boom",
+    })
   })
 })
 
@@ -121,8 +161,14 @@ describe("phone keyboard keysyms", () => {
 describe("desktop setup hints", () => {
   test("Arch and Debian commands on Linux", () => {
     expect(desktopInstallHints("linux")).toEqual([
-      { label: "Arch", command: "sudo pacman -S --needed xorg-server-xvfb x11vnc xdotool xfwm4 plank xfce4-terminal thunar mousepad" },
-      { label: "Debian / Ubuntu", command: "sudo apt install xvfb x11vnc xdotool xfwm4 plank xfce4-terminal thunar mousepad imagemagick" },
+      {
+        label: "Arch",
+        command: "sudo pacman -S --needed xorg-server-xvfb x11vnc xdotool xfwm4 plank xfce4-terminal thunar mousepad",
+      },
+      {
+        label: "Debian / Ubuntu",
+        command: "sudo apt install xvfb x11vnc xdotool xfwm4 plank xfce4-terminal thunar mousepad imagemagick",
+      },
     ])
   })
   test("ImageMagick joins the Arch line when it is what's missing; no hints off Linux", () => {
@@ -138,34 +184,69 @@ describe("desktop setup hints", () => {
     expect(missingSentence([], "vps-1")).toBe("Full desktop isn't set up on vps-1.")
   })
   test("node desktop state from capabilities", () => {
-    expect(nodeDesktopState({ capabilities: ["fs@1", "desktop@1"], declaredCapabilities: ["fs@1", "desktop@1"] })).toBe("on")
+    expect(nodeDesktopState({ capabilities: ["fs@1", "desktop@1"], declaredCapabilities: ["fs@1", "desktop@1"] })).toBe(
+      "on",
+    )
     expect(nodeDesktopState({ capabilities: ["fs@1"], declaredCapabilities: ["fs@1", "desktop@1"] })).toBe("unapproved")
     expect(nodeDesktopState({ capabilities: ["fs@1"], declaredCapabilities: ["fs@1"] })).toBe("off")
   })
   test("a Mac's own screen from capabilities", () => {
-    expect(nodeScreenState({ capabilities: ["fs@1", "screen@1"], declaredCapabilities: ["fs@1", "screen@1"] })).toBe("on")
+    expect(nodeScreenState({ capabilities: ["fs@1", "screen@1"], declaredCapabilities: ["fs@1", "screen@1"] })).toBe(
+      "on",
+    )
     expect(nodeScreenState({ capabilities: ["fs@1"], declaredCapabilities: ["fs@1", "screen@1"] })).toBe("unapproved")
-    expect(nodeScreenState({ capabilities: ["fs@1", "desktop@1"], declaredCapabilities: ["fs@1", "desktop@1"] })).toBe("off")
+    expect(nodeScreenState({ capabilities: ["fs@1", "desktop@1"], declaredCapabilities: ["fs@1", "desktop@1"] })).toBe(
+      "off",
+    )
   })
 })
 
-const status = (patch: Partial<ComputerStatus>): ComputerStatus => ({ botId: "bot_a" as ComputerStatus["botId"], nodeId: "node_local" as NodeId, state: "ready", surface: "desktop", controller: "bot", ...patch })
+const status = (patch: Partial<ComputerStatus>): ComputerStatus => ({
+  botId: "bot_a" as ComputerStatus["botId"],
+  nodeId: "node_local" as NodeId,
+  state: "ready",
+  surface: "desktop",
+  controller: "bot",
+  ...patch,
+})
 
 describe("availability", () => {
   test("desktop and browser surfaces stream when ready or starting", () => {
     expect(availabilityOf(status({}), undefined)).toEqual({ kind: "stream", surface: "desktop" })
-    expect(availabilityOf(status({ state: "starting", surface: "browser" }), undefined)).toEqual({ kind: "stream", surface: "browser" })
+    expect(availabilityOf(status({ state: "starting", surface: "browser" }), undefined)).toEqual({
+      kind: "stream",
+      surface: "browser",
+    })
   })
   test("asleep, failed, unsupported (with what's missing), loading", () => {
     expect(availabilityOf(status({ state: "absent" }), undefined)).toEqual({ kind: "absent", surface: "desktop" })
-    expect(availabilityOf(status({ state: "error", message: "Xvfb crashed" }), undefined)).toEqual({ kind: "unreachable", message: "Xvfb crashed", surface: "desktop" })
-    expect(availabilityOf(status({ state: "unsupported", surface: "none", missing: ["x11vnc"] }), undefined)).toEqual({ kind: "unsupported", message: "This computer has no screen to show", missing: ["x11vnc"] })
+    expect(availabilityOf(status({ state: "error", message: "Xvfb crashed" }), undefined)).toEqual({
+      kind: "unreachable",
+      message: "Xvfb crashed",
+      surface: "desktop",
+    })
+    expect(availabilityOf(status({ state: "unsupported", surface: "none", missing: ["x11vnc"] }), undefined)).toEqual({
+      kind: "unsupported",
+      message: "This computer has no screen to show",
+      missing: ["x11vnc"],
+    })
     expect(availabilityOf(undefined, undefined)).toEqual({ kind: "loading" })
-    expect(availabilityOf(undefined, "Can't reach OpenBot.")).toEqual({ kind: "unreachable", message: "Can't reach OpenBot." })
+    expect(availabilityOf(undefined, "Can't reach OpenBot.")).toEqual({
+      kind: "unreachable",
+      message: "Can't reach OpenBot.",
+    })
   })
   test("a Mac's screen is always there: watching it checks it; a missing permission comes along", () => {
-    expect(availabilityOf(status({ state: "absent", surface: "screen" }), undefined)).toEqual({ kind: "stream", surface: "screen" })
-    expect(availabilityOf(status({ state: "error", surface: "screen", message: "Allow Accessibility…", missing: ["Accessibility"] }), undefined)).toEqual({
+    expect(availabilityOf(status({ state: "absent", surface: "screen" }), undefined)).toEqual({
+      kind: "stream",
+      surface: "screen",
+    })
+    expect(
+      availabilityOf(
+        status({ state: "error", surface: "screen", message: "Allow Accessibility…", missing: ["Accessibility"] }),
+        undefined,
+      ),
+    ).toEqual({
       kind: "unreachable",
       message: "Allow Accessibility…",
       surface: "screen",
@@ -181,25 +262,66 @@ describe("screen notices", () => {
     expect(screenNotice({ name, availability: stream, phase: "live" })).toBeUndefined()
   })
   test("connecting, waking, reconnecting", () => {
-    expect(screenNotice({ name, availability: stream, phase: "connecting" })).toMatchObject({ icon: "spinner", title: "Connecting to Scout's computer…", busy: true })
+    expect(screenNotice({ name, availability: stream, phase: "connecting" })).toMatchObject({
+      icon: "spinner",
+      title: "Connecting to Scout's computer…",
+      busy: true,
+    })
     expect(screenNotice({ name, availability: stream, phase: "connecting", starting: true })?.title).toBe("Waking up…")
-    expect(screenNotice({ name, availability: stream, phase: "reconnecting", message: "The screen stream ended" })).toMatchObject({ title: "Reconnecting…", body: "The screen stream ended" })
+    expect(
+      screenNotice({ name, availability: stream, phase: "reconnecting", message: "The screen stream ended" }),
+    ).toMatchObject({ title: "Reconnecting…", body: "The screen stream ended" })
   })
   test("the brain's \"Can't reach the screen:\" prefix is not repeated under the title", () => {
-    expect(screenNotice({ name, availability: stream, phase: "unreachable", message: "Can't reach the screen: node offline" })?.body).toBe("Node offline")
+    expect(
+      screenNotice({
+        name,
+        availability: stream,
+        phase: "unreachable",
+        message: "Can't reach the screen: node offline",
+      })?.body,
+    ).toBe("Node offline")
   })
   test("can't reach: retry", () => {
-    expect(screenNotice({ name, availability: stream, phase: "unreachable" })).toMatchObject({ icon: "unplug", title: "Can't reach Scout's screen", body: "Retrying…", action: "retry" })
-    expect(screenNotice({ name, availability: { kind: "unreachable", message: "node offline", surface: "desktop" }, phase: "idle" })).toMatchObject({ title: "Can't reach Scout's screen", body: "Node offline", action: "wake" })
+    expect(screenNotice({ name, availability: stream, phase: "unreachable" })).toMatchObject({
+      icon: "unplug",
+      title: "Can't reach Scout's screen",
+      body: "Retrying…",
+      action: "retry",
+    })
+    expect(
+      screenNotice({
+        name,
+        availability: { kind: "unreachable", message: "node offline", surface: "desktop" },
+        phase: "idle",
+      }),
+    ).toMatchObject({ title: "Can't reach Scout's screen", body: "Node offline", action: "wake" })
   })
   test("asleep desktops wake; absent browsers open", () => {
-    expect(screenNotice({ name, availability: { kind: "absent", surface: "desktop" }, phase: "idle" })).toMatchObject({ icon: "asleep", title: "Scout's computer is asleep", body: "It wakes up when Scout needs it.", action: "wake" })
-    expect(screenNotice({ name, availability: stream, phase: "asleep" })).toMatchObject({ icon: "asleep", action: "wake" })
-    expect(screenNotice({ name, availability: { kind: "absent", surface: "browser" }, phase: "idle" })).toMatchObject({ action: "open-browser" })
+    expect(screenNotice({ name, availability: { kind: "absent", surface: "desktop" }, phase: "idle" })).toMatchObject({
+      icon: "asleep",
+      title: "Scout's computer is asleep",
+      body: "It wakes up when Scout needs it.",
+      action: "wake",
+    })
+    expect(screenNotice({ name, availability: stream, phase: "asleep" })).toMatchObject({
+      icon: "asleep",
+      action: "wake",
+    })
+    expect(screenNotice({ name, availability: { kind: "absent", surface: "browser" }, phase: "idle" })).toMatchObject({
+      action: "open-browser",
+    })
   })
   test("a Mac that still needs permissions says what to allow", () => {
-    const message = "Allow Screen Recording for openbot-node on the Mac (System Settings › Privacy & Security), then try again."
-    expect(screenNotice({ name, availability: { kind: "unreachable", message, surface: "screen", missing: ["Screen Recording"] }, phase: "idle" })).toEqual({
+    const message =
+      "Allow Screen Recording for openbot-node on the Mac (System Settings › Privacy & Security), then try again."
+    expect(
+      screenNotice({
+        name,
+        availability: { kind: "unreachable", message, surface: "screen", missing: ["Screen Recording"] },
+        phase: "idle",
+      }),
+    ).toEqual({
       icon: "off",
       title: "Scout can't use the Mac's screen yet",
       body: message,
@@ -207,8 +329,16 @@ describe("screen notices", () => {
     })
   })
   test("unsupported: how to set it up only when the node said what it lacks", () => {
-    expect(screenNotice({ name, availability: { kind: "unsupported", message: "No screen", missing: ["x11vnc"] }, phase: "idle" })).toMatchObject({ title: "No screen to show", action: "setup" })
-    expect(screenNotice({ name, availability: { kind: "unsupported", message: "No screen" }, phase: "idle" })?.action).toBeUndefined()
+    expect(
+      screenNotice({
+        name,
+        availability: { kind: "unsupported", message: "No screen", missing: ["x11vnc"] },
+        phase: "idle",
+      }),
+    ).toMatchObject({ title: "No screen to show", action: "setup" })
+    expect(
+      screenNotice({ name, availability: { kind: "unsupported", message: "No screen" }, phase: "idle" })?.action,
+    ).toBeUndefined()
   })
 })
 
@@ -216,13 +346,20 @@ describe("socket URL and hand-offs", () => {
   test("view / control sockets on the page origin (viewPath from computer.status wins)", () => {
     expect(computerSocketUrl("bot_a", "view")).toBe("ws://127.0.0.1:7420/ws/computer/bot_a?mode=view")
     expect(computerSocketUrl("bot a", "control")).toBe("ws://127.0.0.1:7420/ws/computer/bot%20a?mode=control")
-    expect(computerSocketUrl("bot_a", "control", "/ws/computer/bot_a")).toBe("ws://127.0.0.1:7420/ws/computer/bot_a?mode=control")
+    expect(computerSocketUrl("bot_a", "control", "/ws/computer/bot_a")).toBe(
+      "ws://127.0.0.1:7420/ws/computer/bot_a?mode=control",
+    )
     // the side preview: it does not keep the screen awake
-    expect(computerSocketUrl("bot_a", "view", undefined, true)).toBe("ws://127.0.0.1:7420/ws/computer/bot_a?mode=view&passive=1")
+    expect(computerSocketUrl("bot_a", "view", undefined, true)).toBe(
+      "ws://127.0.0.1:7420/ws/computer/bot_a?mode=view&passive=1",
+    )
   })
   test("the bot's pending hand-off", () => {
-    const req = (patch: Partial<RuntimeRequest>) => ({ id: "req_1", botId: "bot_a", kind: "handoff", status: "pending", ...patch }) as RuntimeRequest
-    expect(pendingHandoffOf([req({ kind: "question" }), req({ id: "req_2" as RuntimeRequest["id"] })], "bot_a")?.id).toBe("req_2" as RuntimeRequest["id"])
+    const req = (patch: Partial<RuntimeRequest>) =>
+      ({ id: "req_1", botId: "bot_a", kind: "handoff", status: "pending", ...patch }) as RuntimeRequest
+    expect(
+      pendingHandoffOf([req({ kind: "question" }), req({ id: "req_2" as RuntimeRequest["id"] })], "bot_a")?.id,
+    ).toBe("req_2" as RuntimeRequest["id"])
     expect(pendingHandoffOf([req({ status: "resolved" })], "bot_a")).toBeUndefined()
     expect(pendingHandoffOf([req({ botId: "bot_b" as RuntimeRequest["botId"] })], "bot_a")).toBeUndefined()
     expect(pendingHandoffOf(undefined, "bot_a")).toBeUndefined()

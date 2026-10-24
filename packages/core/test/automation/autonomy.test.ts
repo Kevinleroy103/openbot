@@ -1,13 +1,24 @@
 import { describe, expect, test } from "bun:test"
 import type { BotAutonomy, HarnessApprovalRequest, NodeId } from "@openbot/contracts"
-import { commandRisk, evaluateAutonomy, isInsideRoots, isInsideWorkspace, offerableFolder, outsideWorkDir } from "../../src/services/automation/index.ts"
+import {
+  commandRisk,
+  evaluateAutonomy,
+  isInsideRoots,
+  isInsideWorkspace,
+  offerableFolder,
+  outsideWorkDir,
+} from "../../src/services/automation/index.ts"
 
 const W = "/data/bots/bot_a/workspace"
 const HOST = "node_local" as NodeId
 const ws = { nodeId: HOST, path: W }
 
 /** `cwd: null` = the request reports no working directory. */
-const command = (cmd: string, cwd: string | null = W, extra?: Partial<HarnessApprovalRequest>): HarnessApprovalRequest => ({
+const command = (
+  cmd: string,
+  cwd: string | null = W,
+  extra?: Partial<HarnessApprovalRequest>,
+): HarnessApprovalRequest => ({
   kind: "command-approval",
   toolName: "Bash",
   title: `Run ${cmd}`,
@@ -100,7 +111,7 @@ describe("commandRisk (workspace command heuristic)", () => {
     ["python3 -c 'open(\"/etc/passwd\").read()'", "outside"],
     ["PATH=/opt/evil:$PATH bun x", "expansion"],
     ["echo $HOME", "expansion"],
-    ["echo \"${SECRET}\"", "expansion"],
+    ['echo "${SECRET}"', "expansion"],
     ["ls `pwd`/..", "expansion"],
     ["ls 'x'$(rm -rf ~)", "expansion"],
     ["sudo rm -rf build", "sudo"],
@@ -137,7 +148,13 @@ describe("evaluateAutonomy matrix", () => {
       command("sudo rm -rf /", "/"),
       file([`${W}/x.ts`]),
       file(["/etc/passwd"]),
-      { kind: "mcp-approval", toolName: "mcp__github__create_issue", title: "Create issue", detail: "", server: "github" },
+      {
+        kind: "mcp-approval",
+        toolName: "mcp__github__create_issue",
+        title: "Create issue",
+        detail: "",
+        server: "github",
+      },
       { kind: "tool-approval", toolName: "WebFetch", title: "Fetch", detail: "", surface: "network" },
     ]
     for (const request of requests) {
@@ -157,8 +174,15 @@ describe("evaluateAutonomy matrix", () => {
     expect(decide("workspace", file([`${W}/../../x`]))).toBe("ask")
     expect(decide("workspace", file([]))).toBe("ask")
     // reads outside (Claude Read / OpenCode external_directory) ask too
-    expect(decide("workspace", file(["/home/me/.ssh/id_rsa"], { kind: "tool-approval", surface: "file-read", toolName: "Read" }))).toBe("ask")
-    expect(decide("workspace", file([`${W}/notes.md`], { kind: "tool-approval", surface: "file-read", toolName: "Read" }))).toBe("allow")
+    expect(
+      decide(
+        "workspace",
+        file(["/home/me/.ssh/id_rsa"], { kind: "tool-approval", surface: "file-read", toolName: "Read" }),
+      ),
+    ).toBe("ask")
+    expect(
+      decide("workspace", file([`${W}/notes.md`], { kind: "tool-approval", surface: "file-read", toolName: "Read" })),
+    ).toBe("allow")
   })
 
   test("workspace: commands inside allowed; outside cwd, outside paths, risky commands and no cwd ask", () => {
@@ -192,14 +216,37 @@ describe("evaluateAutonomy matrix", () => {
       input: { fileSystem: { write: [`${W}/.cache`] } },
     }
     expect(decide("workspace", permissions)).toBe("allow")
-    expect(decide("workspace", { ...permissions, input: { network: { enabled: true }, fileSystem: { write: [`${W}/.cache`] } } })).toBe("ask")
+    expect(
+      decide("workspace", {
+        ...permissions,
+        input: { network: { enabled: true }, fileSystem: { write: [`${W}/.cache`] } },
+      }),
+    ).toBe("ask")
     expect(decide("workspace", { ...permissions, paths: ["/usr/local"] })).toBe("ask")
   })
 
   test("workspace: MCP, network, browser, other tools, other computers and an unknown workspace ask", () => {
-    expect(decide("workspace", { kind: "mcp-approval", toolName: "mcp__x__y", title: "y", detail: "", server: "x" })).toBe("ask")
-    expect(decide("workspace", { kind: "tool-approval", toolName: "WebFetch", title: "Fetch", detail: "", surface: "network" })).toBe("ask")
-    expect(decide("workspace", { kind: "tool-approval", toolName: "browser", title: "Browse", detail: "", surface: "browser" })).toBe("ask")
+    expect(
+      decide("workspace", { kind: "mcp-approval", toolName: "mcp__x__y", title: "y", detail: "", server: "x" }),
+    ).toBe("ask")
+    expect(
+      decide("workspace", {
+        kind: "tool-approval",
+        toolName: "WebFetch",
+        title: "Fetch",
+        detail: "",
+        surface: "network",
+      }),
+    ).toBe("ask")
+    expect(
+      decide("workspace", {
+        kind: "tool-approval",
+        toolName: "browser",
+        title: "Browse",
+        detail: "",
+        surface: "browser",
+      }),
+    ).toBe("ask")
     expect(decide("workspace", { kind: "tool-approval", toolName: "Task", title: "Subagent", detail: "" })).toBe("ask")
     expect(decide("workspace", command("bun test", W, { nodeId: "nod_other" as NodeId }))).toBe("ask")
     expect(decide("workspace", command("bun test", W, { nodeId: HOST }))).toBe("allow")
@@ -208,8 +255,17 @@ describe("evaluateAutonomy matrix", () => {
 
   test("workspace on a remote node: compares paths on that node (`~` root)", () => {
     const remote = { nodeId: "nod_mac" as NodeId, path: "~/openbot/workspaces/bot_a" }
-    expect(evaluateAutonomy("workspace", file(["~/openbot/workspaces/bot_a/x.ts"], { nodeId: remote.nodeId }), remote).action).toBe("allow")
-    expect(evaluateAutonomy("workspace", command("bun test", "~/openbot/workspaces/bot_a", { nodeId: remote.nodeId }), remote).action).toBe("allow")
+    expect(
+      evaluateAutonomy("workspace", file(["~/openbot/workspaces/bot_a/x.ts"], { nodeId: remote.nodeId }), remote)
+        .action,
+    ).toBe("allow")
+    expect(
+      evaluateAutonomy(
+        "workspace",
+        command("bun test", "~/openbot/workspaces/bot_a", { nodeId: remote.nodeId }),
+        remote,
+      ).action,
+    ).toBe("allow")
     expect(evaluateAutonomy("workspace", file(["~/Documents/x"], { nodeId: remote.nodeId }), remote).action).toBe("ask")
   })
 })
@@ -217,7 +273,11 @@ describe("evaluateAutonomy matrix", () => {
 describe("project folders (shared ∪ per-bot) count as workspace", () => {
   const HOME = "/home/me"
   const P = "/home/me/projects"
-  const withFolders = (folders: ReadonlyArray<string>, home?: string) => ({ ...ws, projectFolders: folders, ...(home === undefined ? {} : { home }) })
+  const withFolders = (folders: ReadonlyArray<string>, home?: string) => ({
+    ...ws,
+    projectFolders: folders,
+    ...(home === undefined ? {} : { home }),
+  })
   const decideIn = (request: HarnessApprovalRequest, folders: ReadonlyArray<string>, home?: string) =>
     evaluateAutonomy("workspace", request, withFolders(folders, home)).action
 
@@ -239,7 +299,9 @@ describe("project folders (shared ∪ per-bot) count as workspace", () => {
     expect(decideIn(command(`cd ${P}/snip && bun test`), [P])).toBe("allow")
     expect(decideIn(command(`cp ${P}/snip/a /etc/`, `${P}/snip`), [P])).toBe("ask")
     expect(decideIn(command("git push", `${P}/snip`), [P])).toBe("ask")
-    expect(commandRisk("ls ../other", `${P}/snip`, W, { projectFolders: [`${P}/snip`] })).toBe("path outside the workspace: ../other")
+    expect(commandRisk("ls ../other", `${P}/snip`, W, { projectFolders: [`${P}/snip`] })).toBe(
+      "path outside the workspace: ../other",
+    )
     expect(commandRisk("ls", `${P}/snip`, W, { projectFolders: [P] })).toBeUndefined()
   })
 
@@ -252,8 +314,13 @@ describe("project folders (shared ∪ per-bot) count as workspace", () => {
     expect(decideIn(file(["~/projects/snip/a.ts"]), ["~/projects"])).toBe("ask")
     // a remote node with a `~` workspace still compares symbolically
     const remote = { nodeId: "nod_mac" as NodeId, path: "~/openbot/workspaces/bot_a", projectFolders: ["~/code"] }
-    expect(evaluateAutonomy("workspace", command("ls", "~/openbot/workspaces/bot_a", { nodeId: remote.nodeId }), remote).action).toBe("allow")
-    expect(evaluateAutonomy("workspace", command("ls", "/Users/me/code", { nodeId: remote.nodeId }), remote).action).toBe("ask")
+    expect(
+      evaluateAutonomy("workspace", command("ls", "~/openbot/workspaces/bot_a", { nodeId: remote.nodeId }), remote)
+        .action,
+    ).toBe("allow")
+    expect(
+      evaluateAutonomy("workspace", command("ls", "/Users/me/code", { nodeId: remote.nodeId }), remote).action,
+    ).toBe("ask")
   })
 
   test("symlink-agnostic path math: `.`/`..` are resolved lexically, symlinks are not followed", () => {
@@ -274,7 +341,7 @@ describe("project folders (shared ∪ per-bot) count as workspace", () => {
   })
 })
 
-describe("outsideWorkDir / offerableFolder (the \"Allow in ‹folder›\" offer)", () => {
+describe('outsideWorkDir / offerableFolder (the "Allow in ‹folder›" offer)', () => {
   test("the cwd of a command or file request outside every root; file paths' directory otherwise", () => {
     expect(outsideWorkDir(command("bun test", "/home/me/projects/snip/src"), ws)).toBe("/home/me/projects/snip/src")
     expect(outsideWorkDir(command("bun test", "/home/me/projects/snip/./src/.."), ws)).toBe("/home/me/projects/snip")
@@ -288,7 +355,9 @@ describe("outsideWorkDir / offerableFolder (the \"Allow in ‹folder›\" offer)
     expect(outsideWorkDir(command("cat /etc/passwd"), ws)).toBeUndefined()
     expect(outsideWorkDir(command("bun test", "/home/me/p", { nodeId: "nod_x" as NodeId }), ws)).toBeUndefined()
     expect(outsideWorkDir({ kind: "mcp-approval", toolName: "x", title: "x", detail: "" }, ws)).toBeUndefined()
-    expect(outsideWorkDir({ kind: "tool-approval", toolName: "WebFetch", title: "x", detail: "", surface: "network" }, ws)).toBeUndefined()
+    expect(
+      outsideWorkDir({ kind: "tool-approval", toolName: "WebFetch", title: "x", detail: "", surface: "network" }, ws),
+    ).toBeUndefined()
     expect(outsideWorkDir(command("bun test", "/home/me/p"), { ...ws, projectFolders: ["/home/me/p"] })).toBeUndefined()
     expect(outsideWorkDir(command("bun test", null), ws)).toBeUndefined()
     expect(outsideWorkDir(command("bun test", "~/p"), ws)).toBeUndefined() // home unknown

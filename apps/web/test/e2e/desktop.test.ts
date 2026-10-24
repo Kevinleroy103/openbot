@@ -5,7 +5,17 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import type { Browser } from "playwright-core"
 import type { ConversationId } from "@openbot/contracts"
-import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, startBrain } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  startBrain,
+} from "./brain.ts"
 
 const recordNotifications = () => {
   if (!location.protocol.startsWith("http")) return
@@ -36,8 +46,12 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     brain = await startBrain()
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
-    const ada = await rpc.call((c) => c["bots.create"]({ name: "Ada", harness: { kind: "fake" }, clientNonce: "e2e-desktop-ada", introduce: false }))
-    const bob = await rpc.call((c) => c["bots.create"]({ name: "Bob", harness: { kind: "fake" }, clientNonce: "e2e-desktop-bob", introduce: false }))
+    const ada = await rpc.call((c) =>
+      c["bots.create"]({ name: "Ada", harness: { kind: "fake" }, clientNonce: "e2e-desktop-ada", introduce: false }),
+    )
+    const bob = await rpc.call((c) =>
+      c["bots.create"]({ name: "Bob", harness: { kind: "fake" }, clientNonce: "e2e-desktop-bob", introduce: false }),
+    )
     adaDm = ada.directConversationId as ConversationId
     bobDm = bob.directConversationId as ConversationId
     app = await openApp(browser, brain, { theme: "dark" })
@@ -54,7 +68,11 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
   test("Allow this computer: the app's code is allowed here, and its poll gets a session", async () => {
     const { page } = app
     const post = (path: string, body: unknown) =>
-      fetch(`${brain.base}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json())
+      fetch(`${brain.base}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }).then((r) => r.json())
     const started = (await post("/api/auth/device/start", {})) as { deviceCode: string; userCode: string }
     await page.goto("about:blank")
     await page.goto(`${brain.base}/#/connect-device?code=${started.userCode}`)
@@ -64,7 +82,10 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     await app.shot("e2e-70-connect-device")
     await dialog.getByRole("button", { name: "Allow" }).click()
     await page.getByText("The desktop app is connected", { exact: false }).waitFor()
-    const polled = (await post("/api/auth/device/poll", { deviceCode: started.deviceCode })) as { status: string; code: string }
+    const polled = (await post("/api/auth/device/poll", { deviceCode: started.deviceCode })) as {
+      status: string
+      code: string
+    }
     expect(polled.status).toBe("approved")
     const login = (await post("/api/auth/app-login", { code: polled.code })) as { sessionToken?: string }
     expect(login.sessionToken).toBeString()
@@ -75,16 +96,26 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     const { page } = app
     await page.goto(`${brain.base}/#/c/${encodeURIComponent(adaDm)}`)
     await page.getByRole("textbox", { name: "Message Ada" }).waitFor()
-    const shown = () => page.evaluate(() => (window as unknown as { __shown: Array<{ title: string; body?: string; icon?: string }> }).__shown)
+    const shown = () =>
+      page.evaluate(
+        () => (window as unknown as { __shown: Array<{ title: string; body?: string; icon?: string }> }).__shown,
+      )
     const focused = await page.evaluate(() => document.hasFocus())
-    await rpc.call((c) => c["messages.send"]({ conversationId: bobDm, text: "echo: the report is ready", clientNonce: "e2e-desktop-1" }))
+    await rpc.call((c) =>
+      c["messages.send"]({ conversationId: bobDm, text: "echo: the report is ready", clientNonce: "e2e-desktop-1" }),
+    )
     const notes = await eventually(shown, (n) => n.some((x) => x.title === "Bob"), { label: "Bob's notification" })
     const bob = notes.find((x) => x.title === "Bob")
     expect(bob?.body).toContain("the report is ready")
     // the Bot's avatar as the icon
     expect(bob?.icon).toStartWith("data:image/png;base64,")
-    await Bun.write(new URL("./screenshots/e2e-76-notification-icon.png", import.meta.url).pathname, Buffer.from(bob!.icon!.split(",")[1]!, "base64"))
-    await rpc.call((c) => c["messages.send"]({ conversationId: adaDm, text: "echo: on screen", clientNonce: "e2e-desktop-2" }))
+    await Bun.write(
+      new URL("./screenshots/e2e-76-notification-icon.png", import.meta.url).pathname,
+      Buffer.from(bob!.icon!.split(",")[1]!, "base64"),
+    )
+    await rpc.call((c) =>
+      c["messages.send"]({ conversationId: adaDm, text: "echo: on screen", clientNonce: "e2e-desktop-2" }),
+    )
     await page.getByTestId("transcript").getByText("on screen").first().waitFor()
     await page.waitForTimeout(500)
     if (focused) expect((await shown()).some((x) => x.title === "Ada")).toBe(false)
@@ -104,14 +135,21 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     })
     const page = await context.newPage()
     await page.goto(brain.loginUrl)
-    await page.getByRole("textbox", { name: /Message/ }).first().waitFor()
+    await page
+      .getByRole("textbox", { name: /Message/ })
+      .first()
+      .waitFor()
     expect(await page.evaluate(() => document.documentElement.dataset.desktop)).toBe("darwin")
     const strip = await page.evaluate(() => {
       const el = document.querySelector(".ob-titlebar")
-      return el ? { height: el.getBoundingClientRect().height, region: getComputedStyle(el).getPropertyValue("app-region") } : undefined
+      return el
+        ? { height: el.getBoundingClientRect().height, region: getComputedStyle(el).getPropertyValue("app-region") }
+        : undefined
     })
     expect(strip?.height).toBe(52)
-    const header = await page.evaluate(() => getComputedStyle(document.querySelector(".ob-sidebar-header")!).paddingInlineStart)
+    const header = await page.evaluate(
+      () => getComputedStyle(document.querySelector(".ob-sidebar-header")!).paddingInlineStart,
+    )
     expect(header).toBe("84px")
     // where macOS draws the window's buttons (x 18, y 23), for the screenshot
     await page.evaluate(() => {
@@ -167,7 +205,11 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
 
   test("quick send from a browser (the bookmarklet's popup): the page and selection go to the Bot picked", async () => {
     const page = await app.context.newPage()
-    const q = new URLSearchParams({ url: "https://x.com/someone/status/42", title: "A post about agents", text: "the part I liked" })
+    const q = new URLSearchParams({
+      url: "https://x.com/someone/status/42",
+      title: "A post about agents",
+      text: "the part I liked",
+    })
     await page.goto(`${brain.base}/#/quick-send?${q}`)
     const card = page.getByTestId("quick-send")
     await card.waitFor()
@@ -179,16 +221,27 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     await page.screenshot({ path: new URL("./screenshots/e2e-74-quick-send-browser.png", import.meta.url).pathname })
     await card.getByLabel("Note").press("Enter")
     await card.getByText("Sent to Bob").waitFor()
-    const state = await eventually(() => rpc.conversation(bobDm), (s) =>
-      [...s.entries.values()].some((e) => e.kind === "message" && e.role === "user" && e.text.includes("x.com/someone/status/42")), { label: "the quick send message" })
-    const sent = [...state.entries.values()].find((e) => e.kind === "message" && e.role === "user" && e.text.includes("x.com/someone/status/42"))
-    expect(sent?.kind === "message" ? sent.text : "").toBe("echo: worth a look?\n\nA post about agents\nhttps://x.com/someone/status/42\n\n> the part I liked")
+    const state = await eventually(
+      () => rpc.conversation(bobDm),
+      (s) =>
+        [...s.entries.values()].some(
+          (e) => e.kind === "message" && e.role === "user" && e.text.includes("x.com/someone/status/42"),
+        ),
+      { label: "the quick send message" },
+    )
+    const sent = [...state.entries.values()].find(
+      (e) => e.kind === "message" && e.role === "user" && e.text.includes("x.com/someone/status/42"),
+    )
+    expect(sent?.kind === "message" ? sent.text : "").toBe(
+      "echo: worth a look?\n\nA post about agents\nhttps://x.com/someone/status/42\n\n> the part I liked",
+    )
     await page.close()
   }, 60_000)
 
   test("quick send in the desktop app's panel: what it opened with (page, copy, image), sent with the image attached", async () => {
     const context = await browser.newContext({ viewport: { width: 700, height: 500 }, colorScheme: "dark" })
-    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=="
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=="
     await context.addInitScript((image) => {
       const w = window as unknown as { openbotDesktop: unknown; __closed: number }
       w.__closed = 0
@@ -229,11 +282,25 @@ describe.skipIf(!hasChromium)("e2e: the desktop app's side of the web app", () =
     await page.screenshot({ path: new URL("./screenshots/e2e-75-quick-send-panel.png", import.meta.url).pathname })
     await card.getByTestId("quick-send-send").click()
     await card.getByText("Sent to Ada").waitFor()
-    await eventually(() => page.evaluate(() => (window as unknown as { __closed: number }).__closed), (n) => n === 1, { label: "the panel closed" })
-    const state = await eventually(() => rpc.conversation(adaDm), (s) =>
-      [...s.entries.values()].some((e) => e.kind === "message" && e.role === "user" && e.text.includes("Show HN: OpenBot")), { label: "the panel's message" })
-    const sent = [...state.entries.values()].find((e) => e.kind === "message" && e.role === "user" && e.text.includes("Show HN: OpenBot"))
-    expect(sent?.kind === "message" ? sent.text : "").toBe("Show HN: OpenBot\nhttps://news.ycombinator.com/item?id=1\n\n> copied from Slack: ship it friday")
+    await eventually(
+      () => page.evaluate(() => (window as unknown as { __closed: number }).__closed),
+      (n) => n === 1,
+      { label: "the panel closed" },
+    )
+    const state = await eventually(
+      () => rpc.conversation(adaDm),
+      (s) =>
+        [...s.entries.values()].some(
+          (e) => e.kind === "message" && e.role === "user" && e.text.includes("Show HN: OpenBot"),
+        ),
+      { label: "the panel's message" },
+    )
+    const sent = [...state.entries.values()].find(
+      (e) => e.kind === "message" && e.role === "user" && e.text.includes("Show HN: OpenBot"),
+    )
+    expect(sent?.kind === "message" ? sent.text : "").toBe(
+      "Show HN: OpenBot\nhttps://news.ycombinator.com/item?id=1\n\n> copied from Slack: ship it friday",
+    )
     expect(sent?.kind === "message" ? sent.attachments.map((a) => a.mime) : []).toEqual(["image/png"])
     await context.close()
   }, 60_000)

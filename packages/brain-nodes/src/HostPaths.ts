@@ -70,42 +70,45 @@ export const localProjectRoots = (folders: ReadonlyArray<string>, home: string):
  * The local node's per-bot extra roots (`NodeConfigInput.extraRoots`), kept current from the roster
  * while the calling scope lives. Without a `LiveHub` (tests of the node layers alone) there are none.
  */
-export const projectFolderRoots: Effect.Effect<((botId: string) => ReadonlyArray<string>) | undefined, never, Scope.Scope> =
-  Effect.gen(function*() {
-    const hub = Option.getOrUndefined(yield* Effect.serviceOption(LiveHub))
-    if (hub === undefined) return undefined
-    const home = localHome()
-    let shared: ReadonlyArray<string> = []
-    const perBot = new Map<string, ReadonlyArray<string>>()
-    const setSettings = (settings: Settings) => {
-      shared = settings.sharedProjectFolders
-    }
-    const setBot = (bot: Bot) => {
-      if (bot.projectFolders.length === 0) perBot.delete(bot.id)
-      else perBot.set(bot.id, bot.projectFolders)
-    }
-    const ready = yield* Deferred.make<void>()
-    yield* hub.subscribeRoster({}).pipe(
-      Stream.runForEach((item) =>
-        Effect.gen(function*() {
-          if (item.kind === "snapshot") {
-            setSettings(item.settings)
-            perBot.clear()
-            for (const bot of item.bots) setBot(bot)
-            yield* Deferred.succeed(ready, undefined)
-            return
-          }
-          if (item.kind !== "change") return
-          const change = item.change
-          if (change.type === "settings.updated") setSettings(change.settings)
-          else if (change.type === "bot.upserted") setBot(change.bot)
-          else if (change.type === "bot.removed") perBot.delete(change.botId)
-        })
-      ),
-      Effect.catchCause((cause) => Effect.logWarning("local node: project folders no longer tracked", cause)),
-      Effect.forkScoped,
-    )
-    // the first snapshot (bounded: the node must come up even if the roster is slow)
-    yield* Deferred.await(ready).pipe(Effect.timeoutOption("5 seconds"))
-    return (botId: string) => localProjectRoots([...shared, ...(perBot.get(botId) ?? [])], home)
-  })
+export const projectFolderRoots: Effect.Effect<
+  ((botId: string) => ReadonlyArray<string>) | undefined,
+  never,
+  Scope.Scope
+> = Effect.gen(function* () {
+  const hub = Option.getOrUndefined(yield* Effect.serviceOption(LiveHub))
+  if (hub === undefined) return undefined
+  const home = localHome()
+  let shared: ReadonlyArray<string> = []
+  const perBot = new Map<string, ReadonlyArray<string>>()
+  const setSettings = (settings: Settings) => {
+    shared = settings.sharedProjectFolders
+  }
+  const setBot = (bot: Bot) => {
+    if (bot.projectFolders.length === 0) perBot.delete(bot.id)
+    else perBot.set(bot.id, bot.projectFolders)
+  }
+  const ready = yield* Deferred.make<void>()
+  yield* hub.subscribeRoster({}).pipe(
+    Stream.runForEach((item) =>
+      Effect.gen(function* () {
+        if (item.kind === "snapshot") {
+          setSettings(item.settings)
+          perBot.clear()
+          for (const bot of item.bots) setBot(bot)
+          yield* Deferred.succeed(ready, undefined)
+          return
+        }
+        if (item.kind !== "change") return
+        const change = item.change
+        if (change.type === "settings.updated") setSettings(change.settings)
+        else if (change.type === "bot.upserted") setBot(change.bot)
+        else if (change.type === "bot.removed") perBot.delete(change.botId)
+      }),
+    ),
+    Effect.catchCause((cause) => Effect.logWarning("local node: project folders no longer tracked", cause)),
+    Effect.forkScoped,
+  )
+  // the first snapshot (bounded: the node must come up even if the roster is slow)
+  yield* Deferred.await(ready).pipe(Effect.timeoutOption("5 seconds"))
+  return (botId: string) => localProjectRoots([...shared, ...(perBot.get(botId) ?? [])], home)
+})

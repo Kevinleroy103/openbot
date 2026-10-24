@@ -5,14 +5,49 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react"
 import { botsAtom, skillPreviewAtom, skillSearchAtom, skillsAtom } from "@openbot/client"
 import type { Bot, BotId, Skill, SkillName, SkillSearchResult } from "@openbot/contracts"
-import { Avatar, Dialog, DialogBody, DialogFooter, DialogHeader, Icon, IconButton, LabelChip, PillButton, TextArea, TextField, cn } from "@openbot/ui"
+import {
+  Avatar,
+  Dialog,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  Icon,
+  IconButton,
+  LabelChip,
+  PillButton,
+  TextArea,
+  TextField,
+  cn,
+} from "@openbot/ui"
 import { Cause } from "effect"
 import { AsyncResult, type Atom } from "effect/reactivity"
-import { ArrowUpRight, Check, ChevronLeft, ChevronRight, FileText, Search, Sparkles, Trash2, TriangleAlert, X } from "lucide-react"
+import {
+  ArrowUpRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Search,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+  X,
+} from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { useBackDismiss } from "../app/nav.ts"
 import { Markdown } from "../chat/Markdown.tsx"
-import { ConfirmDialog, EmptyNote, ErrorLine, LoadingLine, type QueryState, formatAgo, fromResult, useCommand, useQuery, useRosterValue } from "./kit.tsx"
+import {
+  ConfirmDialog,
+  EmptyNote,
+  ErrorLine,
+  LoadingLine,
+  type QueryState,
+  formatAgo,
+  fromResult,
+  useCommand,
+  useQuery,
+  useRosterValue,
+} from "./kit.tsx"
 import {
   SKILL_NAME_MAX,
   botsWithSkill,
@@ -49,12 +84,21 @@ export function BotPicker({
       <div className="flex min-h-5 items-center gap-2">
         <span className="min-w-0 flex-1 text-xs text-fg-secondary">{label}</span>
         {visible.length > 1 && (
-          <button type="button" className="text-xs text-fg-tertiary transition-colors hover:text-fg" onClick={() => onChange(allOn ? [] : visible.map((b) => b.id))}>
+          <button
+            type="button"
+            className="text-xs text-fg-tertiary transition-colors hover:text-fg"
+            onClick={() => onChange(allOn ? [] : visible.map((b) => b.id))}
+          >
             {allOn ? "Clear" : "Select all"}
           </button>
         )}
       </div>
-      <div role="group" aria-label={label} data-testid="skill-bot-picker" className="flex max-h-[232px] flex-col gap-px overflow-y-auto rounded-2xl max-sm:max-h-none bg-elevated p-1 hairline border-line-tertiary scrollbar-thin">
+      <div
+        role="group"
+        aria-label={label}
+        data-testid="skill-bot-picker"
+        className="flex max-h-[232px] flex-col gap-px overflow-y-auto rounded-2xl max-sm:max-h-none bg-elevated p-1 hairline border-line-tertiary scrollbar-thin"
+      >
         {visible.length === 0 && <p className="px-3 py-3 text-center text-sm text-fg-tertiary">No Bots yet.</p>}
         {visible.map((b) => {
           const on = value.includes(b.id)
@@ -65,12 +109,20 @@ export function BotPicker({
               role="checkbox"
               aria-checked={on}
               onClick={() => toggle(b.id)}
-              className={cn("flex min-h-10 items-center gap-2.5 rounded-lg px-2 py-1 text-start transition-colors hover:bg-hover", on && "bg-active hover:bg-active")}
+              className={cn(
+                "flex min-h-10 items-center gap-2.5 rounded-lg px-2 py-1 text-start transition-colors hover:bg-hover",
+                on && "bg-active hover:bg-active",
+              )}
             >
               <Avatar shape={b.avatar.shape} color={b.avatar.color} size={24} />
               <span className="min-w-0 truncate text-sm text-fg">{b.name}</span>
               {b.label && <LabelChip className="max-sm:hidden">{b.label}</LabelChip>}
-              <span className={cn("ms-auto inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] transition-colors", on ? "bg-primary text-fg-inverted" : "hairline border-line")}>
+              <span
+                className={cn(
+                  "ms-auto inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] transition-colors",
+                  on ? "bg-primary text-fg-inverted" : "hairline border-line",
+                )}
+              >
                 {on && <Icon icon={Check} size="xs" glyph={12} />}
               </span>
             </button>
@@ -89,7 +141,14 @@ export function SkillBots({ bots }: { readonly bots: ReadonlyArray<Bot> }): Reac
     <span className="flex shrink-0 items-center" title={names} data-testid="skill-bots">
       <span className="sr-only">{names}</span>
       {bots.slice(0, 4).map((b, i) => (
-        <Avatar key={b.id} shape={b.avatar.shape} color={b.avatar.color} size={20} outlineColor="var(--ob-elevated)" className={i > 0 ? "-ms-1.5" : undefined} />
+        <Avatar
+          key={b.id}
+          shape={b.avatar.shape}
+          color={b.avatar.color}
+          size={20}
+          outlineColor="var(--ob-elevated)"
+          className={i > 0 ? "-ms-1.5" : undefined}
+        />
       ))}
       {bots.length > 4 && <span className="ms-1 text-xs text-fg-tertiary tabular-nums">+{bots.length - 4}</span>}
     </span>
@@ -105,16 +164,38 @@ export function SkillsShChip({ id }: { readonly id: string }): ReactNode {
   )
 }
 
-function ExternalLink({ href, children, className }: { readonly href: string; readonly children: ReactNode; readonly className?: string }): ReactNode {
+function ExternalLink({
+  href,
+  children,
+  className,
+}: {
+  readonly href: string
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className={cn("inline-flex shrink-0 items-center gap-0.5 text-fg-secondary underline-offset-2 transition-colors hover:text-fg hover:underline", className)}>
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(
+        "inline-flex shrink-0 items-center gap-0.5 text-fg-secondary underline-offset-2 transition-colors hover:text-fg hover:underline",
+        className,
+      )}
+    >
       {children}
       <Icon icon={ArrowUpRight} size="xs" />
     </a>
   )
 }
 
-function FieldLabel({ children, trailing }: { readonly children: ReactNode; readonly trailing?: ReactNode }): ReactNode {
+function FieldLabel({
+  children,
+  trailing,
+}: {
+  readonly children: ReactNode
+  readonly trailing?: ReactNode
+}): ReactNode {
   return (
     <div className="flex items-center gap-2">
       <span className="min-w-0 flex-1 text-xs text-fg-secondary">{children}</span>
@@ -129,7 +210,9 @@ function useSkillsShQuery<A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>):
   const refresh = useAtomRefresh(atom)
   return useMemo(() => {
     const state = fromResult(result, refresh)
-    return AsyncResult.isFailure(result) ? { ...state, error: skillsShErrorText(Cause.squash(result.cause)) ?? state.error } : state
+    return AsyncResult.isFailure(result)
+      ? { ...state, error: skillsShErrorText(Cause.squash(result.cause)) ?? state.error }
+      : state
   }, [result, refresh])
 }
 
@@ -139,7 +222,15 @@ function useSkillsShQuery<A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>):
  * New skill (`skill` absent; `botIds` preselects Bots) or edit one. Saves the text (`skills.upsert`)
  * when it changed, then who has it (`skills.assign`) when that changed.
  */
-export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?: Skill | undefined; readonly botIds?: ReadonlyArray<BotId>; readonly onClose: () => void }): ReactNode {
+export function SkillEditorDialog({
+  skill,
+  botIds,
+  onClose,
+}: {
+  readonly skill?: Skill | undefined
+  readonly botIds?: ReadonlyArray<BotId>
+  readonly onClose: () => void
+}): ReactNode {
   useBackDismiss(true, onClose, "skill-editor")
   const bots = useRosterValue<ReadonlyArray<Bot>>(botsAtom, [])
   const library = useQuery(skillsAtom).value ?? []
@@ -150,7 +241,9 @@ export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?:
   const [name, setName] = useState("")
   const [description, setDescription] = useState(skill?.description ?? "")
   const [body, setBody] = useState(skill?.body ?? "")
-  const [picked, setPicked] = useState<ReadonlyArray<BotId>>(() => (skill ? botsWithSkill(bots, skill.name).map((b) => b.id) : [...(botIds ?? [])]))
+  const [picked, setPicked] = useState<ReadonlyArray<BotId>>(() =>
+    skill ? botsWithSkill(bots, skill.name).map((b) => b.id) : [...(botIds ?? [])],
+  )
   const [confirm, setConfirm] = useState(false)
   // a new skill whose text was saved but whose Bots were not (assign failed): Save again finishes it
   const [created, setCreated] = useState<SkillName | undefined>(undefined)
@@ -178,7 +271,13 @@ export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?:
 
   const error = upsert.error ?? assign.error ?? del.error
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} width={600} label={skill ? `Skill ${skill.name}` : "New skill"} className="ob-phone-full">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      width={600}
+      label={skill ? `Skill ${skill.name}` : "New skill"}
+      className="ob-phone-full"
+    >
       <DialogHeader
         title={<span className="break-all">{skill ? skill.name : "New skill"}</span>}
         description={skill ? `Updated ${formatAgo(skill.updatedAt)}` : "Skills are how-tos your Bots follow."}
@@ -186,7 +285,10 @@ export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?:
       />
       <DialogBody className="flex flex-col gap-4">
         {skill?.source && (
-          <div className="flex min-h-10 flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-secondary px-3 py-2 text-sm" data-testid="skill-source">
+          <div
+            className="flex min-h-10 flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-secondary px-3 py-2 text-sm"
+            data-testid="skill-source"
+          >
             <span className="text-fg-secondary">From skills.sh</span>
             <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg" title={skill.source.id}>
               {skill.source.id}
@@ -207,7 +309,9 @@ export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?:
             autoCorrect="off"
             spellCheck={false}
             error={nameError}
-            description={finalName && finalName !== name.trim() ? `Saved as ${finalName}` : "Lower-case letters, digits, - and _."}
+            description={
+              finalName && finalName !== name.trim() ? `Saved as ${finalName}` : "Lower-case letters, digits, - and _."
+            }
             data-autofocus
             data-testid="skill-name"
           />
@@ -227,7 +331,9 @@ export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?:
           rows={12}
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder={"Steps, checklists, examples… in Markdown.\n\n1. Collect last week's done tickets\n2. Group them by project\n3. Post the summary to #status"}
+          placeholder={
+            "Steps, checklists, examples… in Markdown.\n\n1. Collect last week's done tickets\n2. Group them by project\n3. Post the summary to #status"
+          }
           className="min-h-48 font-mono text-xs leading-[18px]"
           data-testid="skill-body"
         />
@@ -244,18 +350,37 @@ export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?:
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-fg-tertiary">Bots open these while they use the skill. Edit them on the server.</p>
+            <p className="text-xs text-fg-tertiary">
+              Bots open these while they use the skill. Edit them on the server.
+            </p>
           </div>
         )}
         <BotPicker bots={bots} value={picked} onChange={setPicked} />
         {error && <ErrorLine className="px-0">{error}</ErrorLine>}
       </DialogBody>
       <DialogFooter>
-        {skill && <IconButton icon={Trash2} label="Delete skill" size={36} variant="secondary" className="me-auto" onClick={() => setConfirm(true)} data-testid="delete-skill" />}
+        {skill && (
+          <IconButton
+            icon={Trash2}
+            label="Delete skill"
+            size={36}
+            variant="secondary"
+            className="me-auto"
+            onClick={() => setConfirm(true)}
+            data-testid="delete-skill"
+          />
+        )}
         <PillButton variant="secondary" size="card" onClick={onClose}>
           Cancel
         </PillButton>
-        <PillButton variant="primary" size="card" disabled={!canSave} loading={upsert.pending || assign.pending} onClick={() => void save()} data-testid="save-skill">
+        <PillButton
+          variant="primary"
+          size="card"
+          disabled={!canSave}
+          loading={upsert.pending || assign.pending}
+          onClick={() => void save()}
+          data-testid="save-skill"
+        >
           {skill ? "Save" : "Create"}
         </PillButton>
       </DialogFooter>
@@ -282,17 +407,38 @@ export function SkillEditorDialog({ skill, botIds, onClose }: { readonly skill?:
 // ------------------------------------------------------------------------------------------ import
 
 /** skills.sh import: search, then a preview of the picked skill, then Install (`botIds` preselects Bots). */
-export function SkillImportDialog({ botIds, onClose }: { readonly botIds?: ReadonlyArray<BotId>; readonly onClose: () => void }): ReactNode {
+export function SkillImportDialog({
+  botIds,
+  onClose,
+}: {
+  readonly botIds?: ReadonlyArray<BotId>
+  readonly onClose: () => void
+}): ReactNode {
   useBackDismiss(true, onClose, "skill-import")
   const [query, setQuery] = useState("")
   const [picked, setPicked] = useState<SkillSearchResult | undefined>(undefined)
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} width={640} height={680} label="Import from skills.sh" className="ob-phone-full">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      width={640}
+      height={680}
+      label="Import from skills.sh"
+      className="ob-phone-full"
+    >
       {/* the search stays mounted under the preview, so Back shows the same results */}
       <div className={cn("flex min-h-0 flex-1 flex-col", picked && "hidden")}>
         <ImportSearch query={query} setQuery={setQuery} onPick={setPicked} onClose={onClose} />
       </div>
-      {picked && <ImportPreview key={picked.id} result={picked} botIds={botIds} onBack={() => setPicked(undefined)} onClose={onClose} />}
+      {picked && (
+        <ImportPreview
+          key={picked.id}
+          result={picked}
+          botIds={botIds}
+          onBack={() => setPicked(undefined)}
+          onClose={onClose}
+        />
+      )}
     </Dialog>
   )
 }
@@ -313,9 +459,17 @@ function ImportSearch({
   const active = settled.length >= 2 ? settled : ""
   return (
     <>
-      <DialogHeader title="Import from skills.sh" description="Skills shared by the community. Look at what one does before you add it." onClose={onClose} />
+      <DialogHeader
+        title="Import from skills.sh"
+        description="Skills shared by the community. Look at what one does before you add it."
+        onClose={onClose}
+      />
       <div className="relative mx-4 mb-3">
-        <Icon icon={Search} size="sm" className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-icon-tertiary" />
+        <Icon
+          icon={Search}
+          size="sm"
+          className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-icon-tertiary"
+        />
         <TextField
           aria-label="Search skills.sh"
           enterKeyHint="search"
@@ -341,7 +495,13 @@ function ImportSearch({
   )
 }
 
-function SearchResults({ query, onPick }: { readonly query: string; readonly onPick: (r: SkillSearchResult) => void }): ReactNode {
+function SearchResults({
+  query,
+  onPick,
+}: {
+  readonly query: string
+  readonly onPick: (r: SkillSearchResult) => void
+}): ReactNode {
   const search = useSkillsShQuery(skillSearchAtom(query))
   const library = useQuery(skillsAtom).value ?? []
   // the last answer stays (dimmed) while the next query runs; only the current query's atom fills it
@@ -349,15 +509,33 @@ function SearchResults({ query, onPick }: { readonly query: string; readonly onP
   if (search.value !== undefined && search.value !== last) setLast(search.value)
   const results = search.value ?? last
   const busy = search.value === undefined && search.error === undefined
-  if (search.error && search.value === undefined) return <ErrorLine onRetry={search.refresh} className="px-1">{search.error}</ErrorLine>
+  if (search.error && search.value === undefined)
+    return (
+      <ErrorLine onRetry={search.refresh} className="px-1">
+        {search.error}
+      </ErrorLine>
+    )
   if (results === undefined || (results.length === 0 && busy)) return <LoadingLine>Searching skills.sh…</LoadingLine>
   if (results.length === 0) return <EmptyNote className="pt-10">Nothing on skills.sh matches “{query}”.</EmptyNote>
   return (
-    <div aria-busy={busy} data-testid="skills-sh-results" className={cn("flex flex-col gap-px rounded-2xl bg-elevated p-1 hairline border-line-tertiary transition-opacity", busy && "opacity-60")}>
+    <div
+      aria-busy={busy}
+      data-testid="skills-sh-results"
+      className={cn(
+        "flex flex-col gap-px rounded-2xl bg-elevated p-1 hairline border-line-tertiary transition-opacity",
+        busy && "opacity-60",
+      )}
+    >
       {results.map((r) => {
         const installed = library.some((s) => s.source?.id === r.id)
         return (
-          <button key={r.id} type="button" onClick={() => onPick(r)} data-testid="skills-sh-result" className="flex min-h-12 items-center gap-3 rounded-lg px-2 py-1.5 text-start transition-colors hover:bg-hover">
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => onPick(r)}
+            data-testid="skills-sh-result"
+            className="flex min-h-12 items-center gap-3 rounded-lg px-2 py-1.5 text-start transition-colors hover:bg-hover"
+          >
             <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-icon-secondary">
               <Icon icon={Sparkles} size="md" />
             </span>
@@ -365,7 +543,9 @@ function SearchResults({ query, onPick }: { readonly query: string; readonly onP
               <span className="truncate text-sm text-fg">{r.name}</span>
               <span className="truncate text-xs text-fg-secondary">{r.repo}</span>
             </span>
-            <span className="shrink-0 text-end text-xs text-fg-tertiary tabular-nums">{installed ? "In your library" : formatInstalls(r.installs)}</span>
+            <span className="shrink-0 text-end text-xs text-fg-tertiary tabular-nums">
+              {installed ? "In your library" : formatInstalls(r.installs)}
+            </span>
             <Icon icon={ChevronRight} size="xs" className="shrink-0 text-icon-tertiary" />
           </button>
         )
@@ -405,13 +585,22 @@ function ImportPreview({
     const r = await install.run({ id: result.id, botIds: [...picked] })
     if (!r.ok) return
     // install only gives the skill; Bots unchecked here that had it lose it
-    if (holders.some((id) => !picked.includes(id)) && !(await assign.run({ name: r.value.name, botIds: [...picked] })).ok) return
+    if (
+      holders.some((id) => !picked.includes(id)) &&
+      !(await assign.run({ name: r.value.name, botIds: [...picked] })).ok
+    )
+      return
     onClose()
   }
   return (
     <>
       <div className="flex shrink-0 items-center gap-1 px-2 pt-2.5 pb-1">
-        <button type="button" onClick={onBack} data-testid="skills-sh-back" className="inline-flex h-8 items-center gap-0.5 rounded-full ps-1 pe-3 text-sm text-fg-secondary transition-colors hover:bg-hover hover:text-fg">
+        <button
+          type="button"
+          onClick={onBack}
+          data-testid="skills-sh-back"
+          className="inline-flex h-8 items-center gap-0.5 rounded-full ps-1 pe-3 text-sm text-fg-secondary transition-colors hover:bg-hover hover:text-fg"
+        >
           <Icon icon={ChevronLeft} size="md" />
           Results
         </button>
@@ -439,19 +628,30 @@ function ImportPreview({
           <>
             {p.description && <p className="text-base text-fg">{p.description}</p>}
             {replaces && (
-              <div role="note" data-testid="skill-replaces" className="flex items-start gap-2 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn-fg">
+              <div
+                role="note"
+                data-testid="skill-replaces"
+                className="flex items-start gap-2 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn-fg"
+              >
                 <Icon icon={TriangleAlert} size="sm" className="mt-0.5 shrink-0" />
-                <span>Your library already has a skill named “{p.name}”. Installing replaces it, for every Bot that has it.</span>
+                <span>
+                  Your library already has a skill named “{p.name}”. Installing replaces it, for every Bot that has it.
+                </span>
               </div>
             )}
             <div className="flex flex-col gap-1.5">
               <FieldLabel>SKILL.md</FieldLabel>
-              <div className="max-h-[300px] overflow-y-auto rounded-xl bg-secondary px-3 py-2.5 text-sm text-fg scrollbar-thin" data-testid="skill-preview-body">
+              <div
+                className="max-h-[300px] overflow-y-auto rounded-xl bg-secondary px-3 py-2.5 text-sm text-fg scrollbar-thin"
+                data-testid="skill-preview-body"
+              >
                 <Markdown text={p.body} />
               </div>
             </div>
             <div className="flex flex-col gap-1.5" data-testid="skill-preview-files">
-              <FieldLabel trailing={<span className="text-xs text-fg-tertiary tabular-nums">{formatBytes(totalBytes)}</span>}>
+              <FieldLabel
+                trailing={<span className="text-xs text-fg-tertiary tabular-nums">{formatBytes(totalBytes)}</span>}
+              >
                 {p.files.length === 1 ? "1 file" : `${p.files.length} files`}
               </FieldLabel>
               <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-xl bg-secondary px-3 py-2 scrollbar-thin">
@@ -475,7 +675,14 @@ function ImportPreview({
         <PillButton variant="secondary" size="card" onClick={onBack}>
           Back
         </PillButton>
-        <PillButton variant="primary" size="card" disabled={!p} loading={install.pending || assign.pending} onClick={() => void go()} data-testid="install-skill">
+        <PillButton
+          variant="primary"
+          size="card"
+          disabled={!p}
+          loading={install.pending || assign.pending}
+          onClick={() => void go()}
+          data-testid="install-skill"
+        >
           {replaces ? "Replace" : "Install"}
         </PillButton>
       </DialogFooter>

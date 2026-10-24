@@ -90,7 +90,9 @@ export const makeAuditLog = (options: {
       lastHash = GENESIS
       if (!existsSync(file)) return
       try {
-        const lines = readFileSync(file, "utf8").split("\n").filter((l) => l.length > 0)
+        const lines = readFileSync(file, "utf8")
+          .split("\n")
+          .filter((l) => l.length > 0)
         const last = lines[lines.length - 1]
         if (last !== undefined) lastHash = sha256(last)
       } catch (err) {

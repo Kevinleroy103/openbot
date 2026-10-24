@@ -34,9 +34,20 @@ export const imageSize = (b: Uint8Array): ImageSize | undefined => {
     return undefined
   }
   // WebP: RIFF....WEBP + VP8 / VP8L / VP8X
-  if (b.length >= 30 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+  if (
+    b.length >= 30 &&
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50
+  ) {
     const chunk = String.fromCharCode(b[12]!, b[13]!, b[14]!, b[15]!)
-    if (chunk === "VP8 ") return { width: dv.getUint16(26, true) & 0x3fff, height: dv.getUint16(28, true) & 0x3fff, mime: "image/webp" }
+    if (chunk === "VP8 ")
+      return { width: dv.getUint16(26, true) & 0x3fff, height: dv.getUint16(28, true) & 0x3fff, mime: "image/webp" }
     if (chunk === "VP8L") {
       const bits = dv.getUint32(21, true)
       return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1, mime: "image/webp" }

@@ -61,7 +61,12 @@ export const SLACK_SHORTCUT_CALLBACK_ID = "openbot_send"
 export const SLACK_SHORTCUT_NAME = "Send to OpenBot"
 
 /** Messages Slack sends over Socket Mode (user events: what the owner can see). */
-export const SLACK_USER_EVENTS: ReadonlyArray<string> = ["message.im", "message.mpim", "message.channels", "message.groups"]
+export const SLACK_USER_EVENTS: ReadonlyArray<string> = [
+  "message.im",
+  "message.mpim",
+  "message.channels",
+  "message.groups",
+]
 
 /** The app manifest (JSON) the owner creates their Slack app from. */
 export const slackAppManifest = (name = "OpenBot") => ({
@@ -73,12 +78,14 @@ export const slackAppManifest = (name = "OpenBot") => ({
   features: {
     // Slack requires a bot user for the bot scope below; it never posts anything
     bot_user: { display_name: name, always_online: false },
-    shortcuts: [{
-      name: SLACK_SHORTCUT_NAME,
-      type: "message",
-      callback_id: SLACK_SHORTCUT_CALLBACK_ID,
-      description: "Send this message and its thread to your OpenBot",
-    }],
+    shortcuts: [
+      {
+        name: SLACK_SHORTCUT_NAME,
+        type: "message",
+        callback_id: SLACK_SHORTCUT_CALLBACK_ID,
+        description: "Send this message and its thread to your OpenBot",
+      },
+    ],
   },
   // `commands` (a bot scope) is what Slack requires for shortcuts; OpenBot never uses the bot token
   oauth_config: { scopes: { user: [...SLACK_USER_SCOPES], bot: ["commands"] } },

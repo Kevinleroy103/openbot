@@ -30,7 +30,16 @@ export const QUICK_SEND_SHORTCUT = "CommandOrControl+Alt+O"
 const CLIPBOARD_FRESH_MS = 2 * 60 * 1000
 const PANEL_WIDTH = 640
 
-const CHROMIUM = ["Google Chrome", "Google Chrome Canary", "Arc", "Brave Browser", "Microsoft Edge", "Chromium", "Vivaldi", "Opera"]
+const CHROMIUM = [
+  "Google Chrome",
+  "Google Chrome Canary",
+  "Arc",
+  "Brave Browser",
+  "Microsoft Edge",
+  "Chromium",
+  "Vivaldi",
+  "Opera",
+]
 const SAFARI = ["Safari", "Safari Technology Preview"]
 
 /** The page open in the browser in front, on macOS. */
@@ -44,11 +53,13 @@ const frontBrowserPage = async (): Promise<QuickSendPrefill["link"]> => {
     const script = SAFARI.includes(name)
       ? `tell application "${name}" to return (URL of front document) & linefeed & (name of front document)`
       : CHROMIUM.includes(name)
-      ? `tell application "${name}" to return (URL of active tab of front window) & linefeed & (title of active tab of front window)`
-      : undefined
+        ? `tell application "${name}" to return (URL of active tab of front window) & linefeed & (title of active tab of front window)`
+        : undefined
     if (script === undefined) return undefined
     const [url, ...title] = (await run("osascript", ["-e", script], { timeout: 2000 })).stdout.trim().split("\n")
-    return url !== undefined && /^https?:\/\//.test(url) ? { url, title: title.join(" ").trim(), from: name } : undefined
+    return url !== undefined && /^https?:\/\//.test(url)
+      ? { url, title: title.join(" ").trim(), from: name }
+      : undefined
   } catch {
     return undefined
   }
@@ -82,7 +93,12 @@ const shortcutPlist = () => {
 `
 }
 
-export const makeQuickSend = (input: { readonly origin: string; readonly preload: string; readonly canOpen: () => boolean; readonly fallback: () => void }) => {
+export const makeQuickSend = (input: {
+  readonly origin: string
+  readonly preload: string
+  readonly canOpen: () => boolean
+  readonly fallback: () => void
+}) => {
   let panel: BrowserWindow | undefined
   let prefill: QuickSendPrefill = { id: 0 }
   let shotting = false
@@ -158,7 +174,10 @@ export const makeQuickSend = (input: { readonly origin: string; readonly preload
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
     const { x, y, width, height } = display.workArea
     const [, h] = window.getSize()
-    window.setPosition(Math.round(x + (width - PANEL_WIDTH) / 2), Math.round(y + Math.max(40, height * 0.22 - (h ?? 0) / 4)))
+    window.setPosition(
+      Math.round(x + (width - PANEL_WIDTH) / 2),
+      Math.round(y + Math.max(40, height * 0.22 - (h ?? 0) / 4)),
+    )
   }
 
   /** Opens the panel filled in with `extra` (a link's), the clipboard and, on macOS, the browser's page. */
@@ -210,7 +229,10 @@ export const makeQuickSend = (input: { readonly origin: string; readonly preload
   const canScreenshot = async () => {
     if (isMac) return true
     if (process.platform !== "linux") return false
-    return run("sh", ["-c", "command -v grim && command -v slurp"]).then(() => true, () => false)
+    return run("sh", ["-c", "command -v grim && command -v slurp"]).then(
+      () => true,
+      () => false,
+    )
   }
 
   /** Adds "Send to OpenBot" to the Share menu and Services (macOS Shortcuts: signed, then opened to add). */

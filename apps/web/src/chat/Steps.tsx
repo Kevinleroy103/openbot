@@ -6,20 +6,43 @@
 // here instead of transcript lines: a tiny "auto-allowed" badge on the tool call they gated
 // (`event.toolKey` = `toolCallId`), else a row of their own. A background task's updates (D5.7
 // `update_task`: changes passed on while it runs) are rows of their own too ("Update", by time).
-import { Brain, ChevronDown, ChevronRight, CircleX, FilePen, FileText, Globe, LoaderCircle, MessageSquarePlus, Monitor, Plug, Search, ShieldCheck, SquareTerminal, Users, Wrench } from "lucide-react"
+import {
+  Brain,
+  ChevronDown,
+  ChevronRight,
+  CircleX,
+  FilePen,
+  FileText,
+  Globe,
+  LoaderCircle,
+  MessageSquarePlus,
+  Monitor,
+  Plug,
+  Search,
+  ShieldCheck,
+  SquareTerminal,
+  Users,
+  Wrench,
+} from "lucide-react"
 import { type ReactNode, useEffect, useState } from "react"
 import { Icon, cn } from "@openbot/ui"
 import type { EventEntry, MessageEntry, ReasoningEntry, ToolCallEntry } from "./grouping.ts"
 
 type Decision = Extract<EventEntry["event"], { type: "auto-decided" }>
 
-const decisionOf = (entry: EventEntry): Decision | undefined => (entry.event.type === "auto-decided" ? entry.event : undefined)
+const decisionOf = (entry: EventEntry): Decision | undefined =>
+  entry.event.type === "auto-decided" ? entry.event : undefined
 
 /** "rule", "workspace", "full auto": who allowed it. */
-const allowedBy = (d: Decision): string => (d.autonomy === "full" ? "full auto" : d.autonomy === "workspace" ? "workspace" : "rule")
+const allowedBy = (d: Decision): string =>
+  d.autonomy === "full" ? "full auto" : d.autonomy === "workspace" ? "workspace" : "rule"
 
 const allowedTitle = (d: Decision): string =>
-  d.autonomy === "full" ? "Allowed without asking (Full auto)" : d.autonomy === "workspace" ? "Allowed without asking: it stays in the Bot's workspace or project folders" : "Allowed by your rules"
+  d.autonomy === "full"
+    ? "Allowed without asking (Full auto)"
+    : d.autonomy === "workspace"
+      ? "Allowed without asking: it stays in the Bot's workspace or project folders"
+      : "Allowed by your rules"
 
 export function AutoBadge({ decision }: { readonly decision: Decision }): ReactNode {
   return (
@@ -90,11 +113,21 @@ const toolIcon = (t: ToolCallEntry) => {
   }
 }
 
-const firstLine = (s: string | undefined) => (s ?? "").split("\n").find((l) => l.trim().length > 0)?.trim() ?? ""
+const firstLine = (s: string | undefined) =>
+  (s ?? "")
+    .split("\n")
+    .find((l) => l.trim().length > 0)
+    ?.trim() ?? ""
 
 const preview = (step: ToolCallEntry | ReasoningEntry): string => {
   if (step.kind === "reasoning") return firstLine(step.text)
-  return firstLine(step.inputSummary ?? step.command?.command ?? step.fileChanges?.map((f) => f.path).join(", ") ?? step.title ?? (typeof step.input === "string" ? step.input : ""))
+  return firstLine(
+    step.inputSummary ??
+      step.command?.command ??
+      step.fileChanges?.map((f) => f.path).join(", ") ??
+      step.title ??
+      (typeof step.input === "string" ? step.input : ""),
+  )
 }
 
 const detail = (step: ToolCallEntry | ReasoningEntry): string => {
@@ -109,7 +142,8 @@ const detail = (step: ToolCallEntry | ReasoningEntry): string => {
       parts.push(String(step.input))
     }
   }
-  if (step.fileChanges) for (const f of step.fileChanges) parts.push(`${f.kind} ${f.path}${f.diff ? `\n${f.diff}` : ""}`)
+  if (step.fileChanges)
+    for (const f of step.fileChanges) parts.push(`${f.kind} ${f.path}${f.diff ? `\n${f.diff}` : ""}`)
   if (step.output?.text) parts.push(step.output.text)
   if (step.error) parts.push(`Error: ${step.error}`)
   if (step.command?.exitCode !== undefined) parts.push(`exit ${step.command.exitCode}`)
@@ -127,7 +161,13 @@ function DecisionRow({ entry, decision }: { readonly entry: EventEntry; readonly
   )
 }
 
-function StepRow({ step, decision }: { readonly step: ToolCallEntry | ReasoningEntry; readonly decision?: Decision | undefined }): ReactNode {
+function StepRow({
+  step,
+  decision,
+}: {
+  readonly step: ToolCallEntry | ReasoningEntry
+  readonly decision?: Decision | undefined
+}): ReactNode {
   const [open, setOpen] = useState(false)
   const [more, setMore] = useState(false)
   const failed = step.kind === "tool-call" && (step.status === "failed" || step.status === "declined")
@@ -148,16 +188,27 @@ function StepRow({ step, decision }: { readonly step: ToolCallEntry | ReasoningE
           icon={stepIcon}
           size="xs"
           glyph={12}
-          className={cn(step.kind === "reasoning" ? "text-accent-fg" : failed ? "text-danger-fg" : "text-fg-tertiary", running && "animate-spin")}
+          className={cn(
+            step.kind === "reasoning" ? "text-accent-fg" : failed ? "text-danger-fg" : "text-fg-tertiary",
+            running && "animate-spin",
+          )}
         />
-        <span className="shrink-0 text-xs leading-[18px] font-medium text-fg">{step.kind === "reasoning" ? "Thinking" : toolLabel(step)}</span>
+        <span className="shrink-0 text-xs leading-[18px] font-medium text-fg">
+          {step.kind === "reasoning" ? "Thinking" : toolLabel(step)}
+        </span>
         <span className="min-w-0 flex-1 truncate text-xs leading-[18px] text-fg-tertiary">{preview(step)}</span>
         {decision && <AutoBadge decision={decision} />}
-        {open ? <ChevronDown size={10} className="shrink-0 text-fg-quaternary" aria-hidden /> : <ChevronRight size={10} className="shrink-0 text-fg-quaternary" aria-hidden />}
+        {open ? (
+          <ChevronDown size={10} className="shrink-0 text-fg-quaternary" aria-hidden />
+        ) : (
+          <ChevronRight size={10} className="shrink-0 text-fg-quaternary" aria-hidden />
+        )}
       </button>
       {open && text && (
         <div className="pe-2.5 pb-2.5 ps-[30px] pt-0.5">
-          <pre className="font-mono text-[11px] leading-[16.5px] break-words whitespace-pre-wrap text-fg-secondary">{clipped ? lines.slice(0, 12).join("\n") : text}</pre>
+          <pre className="font-mono text-[11px] leading-[16.5px] break-words whitespace-pre-wrap text-fg-secondary">
+            {clipped ? lines.slice(0, 12).join("\n") : text}
+          </pre>
           {clipped && (
             <button type="button" className="mt-1 text-xs text-fg-tertiary hover:text-fg" onClick={() => setMore(true)}>
               Show more
@@ -183,7 +234,11 @@ function UpdateRow({ entry }: { readonly entry: MessageEntry }): ReactNode {
         <Icon icon={MessageSquarePlus} size="xs" glyph={12} className="text-accent-fg" />
         <span className="shrink-0 text-xs leading-[18px] font-medium text-fg">Update</span>
         <span className="min-w-0 flex-1 truncate text-xs leading-[18px] text-fg-tertiary">{firstLine(entry.text)}</span>
-        {open ? <ChevronDown size={10} className="shrink-0 text-fg-quaternary" aria-hidden /> : <ChevronRight size={10} className="shrink-0 text-fg-quaternary" aria-hidden />}
+        {open ? (
+          <ChevronDown size={10} className="shrink-0 text-fg-quaternary" aria-hidden />
+        ) : (
+          <ChevronRight size={10} className="shrink-0 text-fg-quaternary" aria-hidden />
+        )}
       </button>
       {open && (
         <div className="pe-2.5 pb-2.5 ps-[30px] pt-0.5">
@@ -220,8 +275,13 @@ export const stepItems = (
   const items: Array<Item> = []
   let next = 0
   for (const step of steps) {
-    while (next < loose.length && loose[next]!.entry.createdAt <= step.createdAt) items.push({ kind: "decision", ...loose[next++]! })
-    items.push({ kind: "step", step, ...(step.kind === "tool-call" && byKey.has(step.toolCallId) ? { decision: byKey.get(step.toolCallId) } : {}) })
+    while (next < loose.length && loose[next]!.entry.createdAt <= step.createdAt)
+      items.push({ kind: "decision", ...loose[next++]! })
+    items.push({
+      kind: "step",
+      step,
+      ...(step.kind === "tool-call" && byKey.has(step.toolCallId) ? { decision: byKey.get(step.toolCallId) } : {}),
+    })
   }
   while (next < loose.length) items.push({ kind: "decision", ...loose[next++]! })
   if (updates.length === 0) return items
@@ -252,7 +312,10 @@ export function StepList({
 }): ReactNode {
   const items = stepItems(steps, decisions, updates)
   return (
-    <div className={cn("flex flex-col gap-0.5 rounded-2xl border border-line-tertiary bg-elevated p-1", className)} data-step-list={items.length}>
+    <div
+      className={cn("flex flex-col gap-0.5 rounded-2xl border border-line-tertiary bg-elevated p-1", className)}
+      data-step-list={items.length}
+    >
       {items.map((item) =>
         item.kind === "step" ? (
           <StepRow key={item.step.id} step={item.step} decision={item.decision} />

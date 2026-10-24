@@ -1,4 +1,14 @@
-import { type InputHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref, type TextareaHTMLAttributes, useId, useLayoutEffect, useRef, useState } from "react"
+import {
+  type InputHTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type Ref,
+  type TextareaHTMLAttributes,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
 import { cn } from "../cn.ts"
 
 // --------------------------------------------------------------------------------------- TextField
@@ -14,7 +24,14 @@ export interface FieldShellProps {
   readonly error?: ReactNode
 }
 
-const FieldShell = ({ id, label, description, error, children, className }: FieldShellProps & { id: string; children: ReactNode; className?: string }) =>
+const FieldShell = ({
+  id,
+  label,
+  description,
+  error,
+  children,
+  className,
+}: FieldShellProps & { id: string; children: ReactNode; className?: string }) =>
   label || description || error ? (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
@@ -45,7 +62,17 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
 }
 
 /** Single-line input: radius 8, 0.5 px border, elevated fill (card answer field, settings, details). */
-export function TextField({ label, description, error, size: fieldSize = "md", className, wrapperClassName, id, ref, ...rest }: TextFieldProps): ReactNode {
+export function TextField({
+  label,
+  description,
+  error,
+  size: fieldSize = "md",
+  className,
+  wrapperClassName,
+  id,
+  ref,
+  ...rest
+}: TextFieldProps): ReactNode {
   const auto = useId()
   const fid = id ?? auto
   return (
@@ -67,7 +94,17 @@ export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   readonly ref?: Ref<HTMLTextAreaElement>
 }
 
-export function TextArea({ label, description, error, className, wrapperClassName, id, rows = 4, ref, ...rest }: TextAreaProps): ReactNode {
+export function TextArea({
+  label,
+  description,
+  error,
+  className,
+  wrapperClassName,
+  id,
+  rows = 4,
+  ref,
+  ...rest
+}: TextAreaProps): ReactNode {
   const auto = useId()
   const fid = id ?? auto
   return (
@@ -193,13 +230,23 @@ export function SegmentedTabs<V extends string>({
         role="tablist"
         aria-label={label}
         onKeyDown={onKeyDown}
-        className={cn("relative inline-flex items-center", fill && "flex-1", variant === "track" && "rounded-full bg-secondary p-0.5", size === "md" ? "gap-0.5" : "gap-0")}
+        className={cn(
+          "relative inline-flex items-center",
+          fill && "flex-1",
+          variant === "track" && "rounded-full bg-secondary p-0.5",
+          size === "md" ? "gap-0.5" : "gap-0",
+        )}
       >
         {thumb && (
           <span
             aria-hidden
             className="absolute rounded-full bg-active transition-[left,width] duration-200 ease-in-out-strong"
-            style={{ left: thumb.left, width: thumb.width, top: variant === "track" ? 2 : 0, bottom: variant === "track" ? 2 : 0 }}
+            style={{
+              left: thumb.left,
+              width: thumb.width,
+              top: variant === "track" ? 2 : 0,
+              bottom: variant === "track" ? 2 : 0,
+            }}
           />
         )}
         {tabs.map((t) => {

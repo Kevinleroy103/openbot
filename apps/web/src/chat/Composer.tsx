@@ -129,7 +129,9 @@ export function Composer(props: ComposerProps): ReactNode {
   const options = useMemo(() => {
     if (!mention) return []
     const q = mention.query.toLowerCase()
-    const bots = mentionable.filter((b) => b.name.toLowerCase().includes(q)).sort((a, b) => Number(!a.name.toLowerCase().startsWith(q)) - Number(!b.name.toLowerCase().startsWith(q)))
+    const bots = mentionable
+      .filter((b) => b.name.toLowerCase().includes(q))
+      .sort((a, b) => Number(!a.name.toLowerCase().startsWith(q)) - Number(!b.name.toLowerCase().startsWith(q)))
     const list: Array<{ id: string; name: string; bot?: Bot }> = bots.map((b) => ({ id: b.id, name: b.name, bot: b }))
     if (allowEveryone && "everyone".startsWith(q)) list.unshift({ id: "everyone", name: "everyone" })
     return list.slice(0, 8)
@@ -224,7 +226,8 @@ export function Composer(props: ComposerProps): ReactNode {
   const dictating = dictation.phase !== "idle"
   // while the microphone starts there is nothing spoken yet: Send sends what is typed, if anything
   const speaking = dictation.phase === "recording" || dictation.phase === "finishing"
-  const canSend = !props.disabled && !uploading && !draftBusyElsewhere && (speaking || text.trim().length > 0 || ready.length > 0)
+  const canSend =
+    !props.disabled && !uploading && !draftBusyElsewhere && (speaking || text.trim().length > 0 || ready.length > 0)
   const sendingDictation = useRef(false)
   // read when the send happens (after a transcript finishes, maybe after this Composer unmounted):
   // the files, the reply and where it goes as they are then (New chat's recipients picked meanwhile)
@@ -257,7 +260,11 @@ export function Composer(props: ComposerProps): ReactNode {
     const body = draft.trim()
     if (body.length === 0 && sentUploads.length === 0) return
     const scope = members ?? []
-    const addressed = scope.filter((b) => new RegExp(`(^|\\s)@${b.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$|[.,!?:;])`, "u").test(body)).map((b) => b.id)
+    const addressed = scope
+      .filter((b) =>
+        new RegExp(`(^|\\s)@${b.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$|[.,!?:;])`, "u").test(body),
+      )
+      .map((b) => b.id)
     const everyone = allowEveryone && /(^|\s)@everyone\b/.test(body)
     const submitted = onSubmit({
       text: body,
@@ -301,10 +308,12 @@ export function Composer(props: ComposerProps): ReactNode {
     const exit = await upload(files)
     setUploading(false)
     if (Exit.isSuccess(exit)) {
-      setUploads((u) => u.map((x) => {
-        const idx = batch.findIndex((b) => b.key === x.key)
-        return idx >= 0 && exit.value[idx] ? { ...x, attachment: exit.value[idx] } : x
-      }))
+      setUploads((u) =>
+        u.map((x) => {
+          const idx = batch.findIndex((b) => b.key === x.key)
+          return idx >= 0 && exit.value[idx] ? { ...x, attachment: exit.value[idx] } : x
+        }),
+      )
     } else {
       const msg = describeFailure(exit)
       setUploads((u) => u.filter((x) => !batch.some((b) => b.key === x.key)))
@@ -319,9 +328,23 @@ export function Composer(props: ComposerProps): ReactNode {
       align="start"
       trigger={(p) =>
         phone ? (
-          <IconButton {...p} icon={Plus} label="Composer actions" size={44} variant="elevated" className="shadow-composer" />
+          <IconButton
+            {...p}
+            icon={Plus}
+            label="Composer actions"
+            size={44}
+            variant="elevated"
+            className="shadow-composer"
+          />
         ) : (
-          <IconButton {...p} icon={Plus} label="Composer actions" size={28} variant="secondary" className="ring-[0.5px] ring-line-tertiary ring-inset" />
+          <IconButton
+            {...p}
+            icon={Plus}
+            label="Composer actions"
+            size={28}
+            variant="secondary"
+            className="ring-[0.5px] ring-line-tertiary ring-inset"
+          />
         )
       }
     >
@@ -334,14 +357,25 @@ export function Composer(props: ComposerProps): ReactNode {
   return (
     <div className={cn("relative w-full", phone && "flex items-end gap-2", props.className)}>
       {mention && options.length > 0 && (
-        <div className={cn("absolute bottom-full z-30 mb-2 animate-fade-in", phone ? "inset-x-0" : "w-[360px]")} style={phone ? undefined : { left: mention.left }}>
+        <div
+          className={cn("absolute bottom-full z-30 mb-2 animate-fade-in", phone ? "inset-x-0" : "w-[360px]")}
+          style={phone ? undefined : { left: mention.left }}
+        >
           <MenuPanel label="Mention a Bot" className="max-h-[360px] overflow-y-auto scrollbar-thin">
             {options.map((o, i) => (
               <div key={o.id} onPointerMove={() => setActive(i)} onMouseDown={(e) => e.preventDefault()}>
                 <MenuItem
                   active={i === active}
                   onSelect={() => pick(o)}
-                  leading={o.bot ? <Avatar shape={o.bot.avatar.shape} color={o.bot.avatar.color} size={20} /> : <span className="inline-flex size-5 items-center justify-center rounded-full bg-secondary text-xs text-fg-secondary">@</span>}
+                  leading={
+                    o.bot ? (
+                      <Avatar shape={o.bot.avatar.shape} color={o.bot.avatar.color} size={20} />
+                    ) : (
+                      <span className="inline-flex size-5 items-center justify-center rounded-full bg-secondary text-xs text-fg-secondary">
+                        @
+                      </span>
+                    )
+                  }
                   trailing={o.bot ? "Bot" : "Everyone"}
                   className="min-h-[30px] text-base"
                 >
@@ -379,10 +413,22 @@ export function Composer(props: ComposerProps): ReactNode {
         {uploads.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-2 pt-2">
             {uploads.map((u) => (
-              <span key={u.key} className="inline-flex h-7 max-w-[220px] items-center gap-1.5 rounded-full bg-secondary ps-2.5 pe-1 text-sm text-fg">
-                {u.attachment ? <Paperclip size={13} className="shrink-0 text-icon-secondary" aria-hidden /> : <Spinner size={12} />}
+              <span
+                key={u.key}
+                className="inline-flex h-7 max-w-[220px] items-center gap-1.5 rounded-full bg-secondary ps-2.5 pe-1 text-sm text-fg"
+              >
+                {u.attachment ? (
+                  <Paperclip size={13} className="shrink-0 text-icon-secondary" aria-hidden />
+                ) : (
+                  <Spinner size={12} />
+                )}
                 <span className="truncate">{u.name}</span>
-                <IconButton icon={X} label={`Remove ${u.name}`} size={20} onClick={() => setUploads((x) => x.filter((y) => y.key !== u.key))} />
+                <IconButton
+                  icon={X}
+                  label={`Remove ${u.name}`}
+                  size={20}
+                  onClick={() => setUploads((x) => x.filter((y) => y.key !== u.key))}
+                />
               </span>
             ))}
           </div>
@@ -429,14 +475,44 @@ export function Composer(props: ComposerProps): ReactNode {
             )}
           />
           {props.context && <ContextRing {...props.context} />}
-          {draftBusyElsewhere ? <Spinner size={14} label="Finishing the transcript" /> : dictation.available && !props.disabled && <DictationButton dictation={dictation} size={phone ? 36 : 28} />}
+          {draftBusyElsewhere ? (
+            <Spinner size={14} label="Finishing the transcript" />
+          ) : (
+            dictation.available && !props.disabled && <DictationButton dictation={dictation} size={phone ? 36 : 28} />
+          )}
           {working && (
-            <IconButton icon={Square} label="Stop" title="Stop the Bot" size={phone ? 36 : 28} variant={text.trim() ? "secondary" : "primary"} iconSize="xs" onClick={props.onStop} className="[&_svg]:fill-current" />
+            <IconButton
+              icon={Square}
+              label="Stop"
+              title="Stop the Bot"
+              size={phone ? 36 : 28}
+              variant={text.trim() ? "secondary" : "primary"}
+              iconSize="xs"
+              onClick={props.onStop}
+              className="[&_svg]:fill-current"
+            />
           )}
           {props.onCall !== undefined && !working && !dictating && text.trim() === "" && uploads.length === 0 ? (
-            <IconButton icon={AudioLines} label="Start a voice call" size={phone ? 36 : 28} variant="accent" onClick={props.onCall} data-testid="voice-call-button" />
-          ) : (!working || text.trim() || ready.length > 0) && (
-            <IconButton icon={ArrowUp} label="Send" size={phone ? 36 : 28} variant="accent" aria-disabled={!canSend || undefined} className={cn(!canSend && "cursor-default", phone && !canSend && "opacity-40")} onClick={() => void submit()} />
+            <IconButton
+              icon={AudioLines}
+              label="Start a voice call"
+              size={phone ? 36 : 28}
+              variant="accent"
+              onClick={props.onCall}
+              data-testid="voice-call-button"
+            />
+          ) : (
+            (!working || text.trim() || ready.length > 0) && (
+              <IconButton
+                icon={ArrowUp}
+                label="Send"
+                size={phone ? 36 : 28}
+                variant="accent"
+                aria-disabled={!canSend || undefined}
+                className={cn(!canSend && "cursor-default", phone && !canSend && "opacity-40")}
+                onClick={() => void submit()}
+              />
+            )
           )}
         </div>
       </div>

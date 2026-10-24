@@ -23,7 +23,7 @@ import {
 describe("DM turn end to end", () => {
   test("user message → session open → streamed bot reply, revisions, turn, usage, activity", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const hub = yield* LiveHub
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada", { instructions: "Be brief." })
@@ -95,18 +95,26 @@ describe("DM turn end to end", () => {
     expect(Option.getOrThrow(out.native).nativeSessionId).toBe("native-1")
 
     // Context ring on the conversation (D6.5) and a "finished" notification.
-    expect(out.conv.sessions?.[0]).toMatchObject({ botId: out.bot.id, active: true, contextUsage: { usedTokens: 1_100 } })
+    expect(out.conv.sessions?.[0]).toMatchObject({
+      botId: out.bot.id,
+      active: true,
+      contextUsage: { usedTokens: 1_100 },
+    })
     expect(out.notifications.map((n) => n.kind)).toEqual(["finished"])
 
     // The replica carried the user entry, the streamed upserts (increasing revisions) and the turn.
     const changes = out.convItems.flatMap((i: KnownConversationStreamItem) => (i.kind === "change" ? [i.change] : []))
-    const replyRevisions = changes.flatMap((c) => (c.type === "entry.upserted" && c.entry.id === reply!.id ? [c.entry.revision] : []))
+    const replyRevisions = changes.flatMap((c) =>
+      c.type === "entry.upserted" && c.entry.id === reply!.id ? [c.entry.revision] : [],
+    )
     expect(replyRevisions.length).toBeGreaterThanOrEqual(2)
     expect([...replyRevisions].sort((a, b) => a - b)).toEqual(replyRevisions)
     expect(changes.some((c) => c.type === "turn.upserted" && c.turn.status === "running")).toBe(true)
 
     // Activity: thinking → Typing… → idle.
-    const states = out.rosterItems.flatMap((i: KnownRosterStreamItem) => (i.kind === "change" && i.change.type === "activity.updated" ? [i.change.activity] : []))
+    const states = out.rosterItems.flatMap((i: KnownRosterStreamItem) =>
+      i.kind === "change" && i.change.type === "activity.updated" ? [i.change.activity] : [],
+    )
     expect(states[0]!.state).toBe("thinking")
     expect(states.some((a) => a.label === "Typing…")).toBe(true)
     expect(states[states.length - 1]!.state).toBe("idle")
@@ -114,15 +122,25 @@ describe("DM turn end to end", () => {
 
   test("duplicate clientNonce returns the first entry; lookupSend finds it", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const bot = yield* createBot("Ada")
-        const first = yield* orchestrator.send({ conversationId: bot.directConversationId, text: "hi", clientNonce: "n-1" })
-        const again = yield* orchestrator.send({ conversationId: bot.directConversationId, text: "hi", clientNonce: "n-1" })
+        const first = yield* orchestrator.send({
+          conversationId: bot.directConversationId,
+          text: "hi",
+          clientNonce: "n-1",
+        })
+        const again = yield* orchestrator.send({
+          conversationId: bot.directConversationId,
+          text: "hi",
+          clientNonce: "n-1",
+        })
         yield* settled(bot.directConversationId)
         const found = yield* orchestrator.lookupSend({ conversationId: bot.directConversationId, clientNonce: "n-1" })
         const missing = yield* orchestrator.lookupSend({ conversationId: bot.directConversationId, clientNonce: "n-2" })
-        const empty = yield* Effect.flip(orchestrator.send({ conversationId: bot.directConversationId, text: "  ", clientNonce: "n-3" }))
+        const empty = yield* Effect.flip(
+          orchestrator.send({ conversationId: bot.directConversationId, text: "  ", clientNonce: "n-3" }),
+        )
         return { first, again, found, missing, empty, turns: yield* turnsOf(bot.directConversationId) }
       }),
       appLayer(),
@@ -138,13 +156,15 @@ describe("DM turn end to end", () => {
 describe("finished notifications", () => {
   test("a turn that ends without a message (NO_REPLY, a reaction, only steps) notifies nobody", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
         yield* driver.setBehavior(bot.id, (turn) => turn.complete())
         yield* send(bot.directConversationId, "thanks!")
         yield* settled(bot.directConversationId)
-        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "Here it is.").pipe(Effect.andThen(turn.complete())))
+        yield* driver.setBehavior(bot.id, (turn) =>
+          turn.say(`${turn.turnId}/m`, "Here it is.").pipe(Effect.andThen(turn.complete())),
+        )
         yield* send(bot.directConversationId, "and the report?")
         yield* settled(bot.directConversationId, 2)
         return (yield* (yield* NotifierFake).sent).filter((n) => n.kind === "finished")
@@ -156,22 +176,28 @@ describe("finished notifications", () => {
 
   test("work handed over on a voice call: its turn is marked voice, notifies nobody and does not move the chat", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const orchestrator = yield* Orchestrator
         const bot = yield* createBot("Ada")
-        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "Two meetings tomorrow.").pipe(Effect.andThen(turn.complete())))
-        const before = Option.getOrThrow(yield* (yield* ConversationService).summary(bot.directConversationId).pipe(Effect.option))
+        yield* driver.setBehavior(bot.id, (turn) =>
+          turn.say(`${turn.turnId}/m`, "Two meetings tomorrow.").pipe(Effect.andThen(turn.complete())),
+        )
+        const before = Option.getOrThrow(
+          yield* (yield* ConversationService).summary(bot.directConversationId).pipe(Effect.option),
+        )
         const receipt = yield* orchestrator.deliver({
           conversationId: bot.directConversationId,
           botId: bot.id,
           kind: "user-message",
-          text: "On a voice call with you I said: \"what's on tomorrow?\"",
+          text: 'On a voice call with you I said: "what\'s on tomorrow?"',
           urgency: "urgent",
           voice: true,
         })
         const outcome = yield* orchestrator.awaitDelivery(receipt.deliveryId)
-        const after = Option.getOrThrow(yield* (yield* ConversationService).summary(bot.directConversationId).pipe(Effect.option))
+        const after = Option.getOrThrow(
+          yield* (yield* ConversationService).summary(bot.directConversationId).pipe(Effect.option),
+        )
         return {
           outcome,
           before,
@@ -181,7 +207,11 @@ describe("finished notifications", () => {
       }),
       appLayer(),
     )
-    expect(out.outcome).toMatchObject({ status: "completed", lastBotMessage: "Two meetings tomorrow.", turn: { voice: true } })
+    expect(out.outcome).toMatchObject({
+      status: "completed",
+      lastBotMessage: "Two meetings tomorrow.",
+      turn: { voice: true },
+    })
     expect(out.notified).toEqual([])
     expect(out.after.preview).toBe(out.before.preview)
     expect(out.after.unreadCount).toBe(out.before.unreadCount)
@@ -189,19 +219,32 @@ describe("finished notifications", () => {
 
   test("history pages leave voice calls' work out and still fill up with what the chat shows", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const orchestrator = yield* Orchestrator
         const bot = yield* createBot("Ada")
-        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "Done.").pipe(Effect.andThen(turn.complete())))
+        yield* driver.setBehavior(bot.id, (turn) =>
+          turn.say(`${turn.turnId}/m`, "Done.").pipe(Effect.andThen(turn.complete())),
+        )
         const ask = (voice: boolean) =>
           Effect.flatMap(
-            orchestrator.deliver({ conversationId: bot.directConversationId, botId: bot.id, kind: "user-message", text: "Check my orders.", urgency: "urgent", ...(voice ? { voice } : {}) }),
+            orchestrator.deliver({
+              conversationId: bot.directConversationId,
+              botId: bot.id,
+              kind: "user-message",
+              text: "Check my orders.",
+              urgency: "urgent",
+              ...(voice ? { voice } : {}),
+            }),
             (receipt) => orchestrator.awaitDelivery(receipt.deliveryId),
           )
         const shown = yield* ask(false)
         for (let i = 0; i < 3; i++) yield* ask(true)
-        const page = yield* (yield* ConversationService).history({ conversationId: bot.directConversationId, beforeCursor: "", limit: 1 })
+        const page = yield* (yield* ConversationService).history({
+          conversationId: bot.directConversationId,
+          beforeCursor: "",
+          limit: 1,
+        })
         return { shownTurn: shown.turn?.id, page }
       }),
       appLayer(),
@@ -213,19 +256,23 @@ describe("finished notifications", () => {
 describe("a signed-out harness", () => {
   test("says so in plain words, notifies once for the account, and leaves the bot no note", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
         for (const bot of [ada, bob]) {
-          yield* driver.setBehavior(bot.id, (turn) => turn.fail("auth", "Failed to authenticate: OAuth session expired"))
+          yield* driver.setBehavior(bot.id, (turn) =>
+            turn.fail("auth", "Failed to authenticate: OAuth session expired"),
+          )
         }
         yield* send(ada.directConversationId, "hi")
         yield* settled(ada.directConversationId)
         yield* send(bob.directConversationId, "hi")
         yield* settled(bob.directConversationId)
         // signed in again: the next turn carries no "ended early" note
-        yield* driver.setBehavior(ada.id, (turn) => turn.say(`${turn.turnId}/m`, "Hello!").pipe(Effect.andThen(turn.complete())))
+        yield* driver.setBehavior(ada.id, (turn) =>
+          turn.say(`${turn.turnId}/m`, "Hello!").pipe(Effect.andThen(turn.complete())),
+        )
         yield* send(ada.directConversationId, "again")
         yield* settled(ada.directConversationId, 2)
         return {
@@ -248,13 +295,16 @@ describe("a signed-out harness", () => {
 describe("queue vs steer", () => {
   test("auto steers into a running turn when the harness can; queue mode always queues", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
         const dm = bot.directConversationId
         yield* driver.setBehavior(bot.id, holdBehavior)
         const first = yield* send(dm, "start")
-        yield* eventually(Effect.map(driver.turns, (t) => t.length === 1), "turn 1 started")
+        yield* eventually(
+          Effect.map(driver.turns, (t) => t.length === 1),
+          "turn 1 started",
+        )
         const steered = yield* send(dm, "also this")
         const queued = yield* send(dm, "later", { mode: "queue" })
         const queuedTurn = (yield* turnsOf(dm)).find((t) => t.id === queued.turnIds[0])
@@ -290,13 +340,16 @@ describe("queue vs steer", () => {
 
   test("without steer support a busy bot queues auto sends (FIFO, one turn each)", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
         const dm = bot.directConversationId
         yield* driver.setBehavior(bot.id, holdBehavior)
         yield* send(dm, "one")
-        yield* eventually(Effect.map(driver.turns, (t) => t.length === 1), "turn 1 started")
+        yield* eventually(
+          Effect.map(driver.turns, (t) => t.length === 1),
+          "turn 1 started",
+        )
         const second = yield* send(dm, "two")
         const third = yield* send(dm, "three", { mode: "steer" })
         yield* driver.release(bot.id)
@@ -315,7 +368,7 @@ describe("queue vs steer", () => {
 describe("interrupts", () => {
   test("interrupting a running turn marks streaming bot text aborted and the turn interrupted", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
@@ -342,14 +395,17 @@ describe("interrupts", () => {
 
   test("interrupting a queued turn by id drops it; the running turn continues", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
         const dm = bot.directConversationId
         yield* driver.setBehavior(bot.id, holdBehavior)
         yield* send(dm, "one")
-        yield* eventually(Effect.map(driver.turns, (t) => t.length === 1), "turn 1 started")
+        yield* eventually(
+          Effect.map(driver.turns, (t) => t.length === 1),
+          "turn 1 started",
+        )
         const queued = yield* send(dm, "two")
         const affected = yield* orchestrator.interrupt({ conversationId: dm, turnId: queued.turnIds[0] })
         yield* driver.release(bot.id)
@@ -367,7 +423,7 @@ describe("interrupts", () => {
 describe("retry", () => {
   test("a failed turn's bot answers the same message again; nothing new is posted", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
@@ -376,11 +432,21 @@ describe("retry", () => {
         yield* send(dm, "fix the render")
         yield* settled(dm)
         const [failed] = yield* turnsOf(dm)
-        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "on it").pipe(Effect.andThen(turn.complete())))
+        yield* driver.setBehavior(bot.id, (turn) =>
+          turn.say(`${turn.turnId}/m`, "on it").pipe(Effect.andThen(turn.complete())),
+        )
         yield* orchestrator.retry({ conversationId: dm, turnId: failed!.id })
         yield* settled(dm, 2)
-        const completed = yield* Effect.flip(orchestrator.retry({ conversationId: dm, turnId: (yield* turnsOf(dm))[1]!.id }))
-        return { failed: failed!, turns: yield* turnsOf(dm), handles: yield* driver.turns, entries: yield* transcript(dm), completed }
+        const completed = yield* Effect.flip(
+          orchestrator.retry({ conversationId: dm, turnId: (yield* turnsOf(dm))[1]!.id }),
+        )
+        return {
+          failed: failed!,
+          turns: yield* turnsOf(dm),
+          handles: yield* driver.turns,
+          entries: yield* transcript(dm),
+          completed,
+        }
       }),
       appLayer(),
     )
@@ -397,7 +463,7 @@ describe("idle compaction", () => {
   /** One finished turn (context 1 100 tokens), then idle time passes. */
   const idleFor = (minutes: number, options: { readonly minTokens: number; readonly enabled?: boolean }) =>
     runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
         const dm = bot.directConversationId
@@ -419,7 +485,9 @@ describe("idle compaction", () => {
     expect(early.compactions).toBe(0)
     const out = await idleFor(11, { minTokens: 1_000 })
     expect(out.compactions).toBe(1)
-    expect(eventsOf(out.entries).filter((e) => e.type === "session-changed" && e.action === "compacted")).toHaveLength(1)
+    expect(eventsOf(out.entries).filter((e) => e.type === "session-changed" && e.action === "compacted")).toHaveLength(
+      1,
+    )
     expect(out.conv.sessions?.[0]?.contextUsage?.usedTokens).toBe(500)
     const later = await idleFor(20, { minTokens: 1_000 })
     expect(later.compactions).toBe(1)
@@ -434,7 +502,7 @@ describe("idle compaction", () => {
 describe("session lifecycle", () => {
   test("after SessionClosed the next turn reopens the session with resume", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
         const dm = bot.directConversationId
@@ -442,7 +510,9 @@ describe("session lifecycle", () => {
         yield* send(dm, "first")
         yield* settled(dm)
         const afterCrash = yield* turnsOf(dm)
-        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "back").pipe(Effect.andThen(turn.complete())))
+        yield* driver.setBehavior(bot.id, (turn) =>
+          turn.say(`${turn.turnId}/m`, "back").pipe(Effect.andThen(turn.complete())),
+        )
         yield* send(dm, "second")
         yield* settled(dm, 2)
         return { afterCrash, turns: yield* turnsOf(dm), opened: yield* driver.opened, entries: yield* transcript(dm) }
@@ -462,7 +532,7 @@ describe("session lifecycle", () => {
 
   test("New session: Conflict while busy, then forgets the native session, new epoch and event", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const driver = yield* TestDriver
         const bots = yield* BotRepo
@@ -470,7 +540,10 @@ describe("session lifecycle", () => {
         const dm = bot.directConversationId
         yield* driver.setBehavior(bot.id, holdBehavior)
         yield* send(dm, "one")
-        yield* eventually(Effect.map(driver.turns, (t) => t.length === 1), "turn started")
+        yield* eventually(
+          Effect.map(driver.turns, (t) => t.length === 1),
+          "turn started",
+        )
         const busy = yield* Effect.flip(orchestrator.newSession({ botId: bot.id }))
         yield* driver.release(bot.id)
         yield* settled(dm)
@@ -495,7 +568,7 @@ describe("session lifecycle", () => {
 
   test("Compact needs the capability and appends a session-changed event", async () => {
     const unsupported = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bot = yield* createBot("Ada")
         return yield* Effect.flip((yield* Orchestrator).compact({ botId: bot.id }))
       }),
@@ -504,10 +577,12 @@ describe("session lifecycle", () => {
     expect(unsupported._tag).toBe("HarnessUnavailable")
 
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const bot = yield* createBot("Ada")
-        yield* driver.setBehavior(bot.id, (turn) => turn.say(`${turn.turnId}/m`, "Hello there.").pipe(Effect.andThen(turn.complete())))
+        yield* driver.setBehavior(bot.id, (turn) =>
+          turn.say(`${turn.turnId}/m`, "Hello there.").pipe(Effect.andThen(turn.complete())),
+        )
         yield* send(bot.directConversationId, "hi")
         yield* settled(bot.directConversationId)
         const before = yield* conversation(bot.directConversationId)

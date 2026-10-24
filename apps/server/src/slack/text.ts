@@ -19,8 +19,10 @@ export const readableText = (text: string, names: NameLookup): string =>
   decodeEntities(
     text.replace(/<([^<>]+)>/g, (whole, inner: string) => {
       const [target = "", label] = inner.split("|", 2)
-      if (target.startsWith("@U") || target.startsWith("@W")) return `@${label ?? names.user(target.slice(1)) ?? "someone"}`
-      if (target.startsWith("#C") || target.startsWith("#G")) return `#${label ?? names.channel(target.slice(1)) ?? "a-channel"}`
+      if (target.startsWith("@U") || target.startsWith("@W"))
+        return `@${label ?? names.user(target.slice(1)) ?? "someone"}`
+      if (target.startsWith("#C") || target.startsWith("#G"))
+        return `#${label ?? names.channel(target.slice(1)) ?? "a-channel"}`
       if (target.startsWith("!subteam^")) return label ?? "@a-group"
       if (target.startsWith("!")) {
         const special = target.slice(1).split("^")[0]

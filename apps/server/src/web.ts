@@ -124,7 +124,7 @@ export const makeBundleCache = (options: { readonly dev: boolean }) => {
 // ============================================================================ pages
 
 const escapeHtml = (text: string): string =>
-  text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]!)
+  text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
 const shell = (title: string, body: string): string => `<!doctype html>
 <html lang="en">
@@ -188,14 +188,17 @@ export const PAGE_HEADERS = {
 } as const
 
 /** CSP of the login and error pages (no scripts). */
-export const STATIC_PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
+export const STATIC_PAGE_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
 
 // ============================================================================ the app page
 
 export interface WebApp {
   readonly mode: WebMode
   /** The app HTML for an authenticated request. */
-  readonly page: Effect.Effect<{ readonly ok: true; readonly html: string } | { readonly ok: false; readonly detail: string }>
+  readonly page: Effect.Effect<
+    { readonly ok: true; readonly html: string } | { readonly ok: false; readonly detail: string }
+  >
   /** `/assets/*` in bundle mode. */
   readonly asset: (path: string) => Effect.Effect<BuiltAsset | undefined>
 }
@@ -210,7 +213,10 @@ export const makeWebApp = (plan: WebPlan, options: { readonly dev: boolean; read
           const res = await fetch(`${options.selfBase}${HIDDEN_APP_ROUTE}`)
           const html = await res.text()
           if (!res.ok || !html.includes("<script")) {
-            return { ok: false as const, detail: `the Bun dev server answered ${res.status} without the app (see the brain's log)` }
+            return {
+              ok: false as const,
+              detail: `the Bun dev server answered ${res.status} without the app (see the brain's log)`,
+            }
           }
           return { ok: true as const, html }
         } catch (error) {
@@ -227,7 +233,7 @@ export const makeWebApp = (plan: WebPlan, options: { readonly dev: boolean; read
       cache.page().then(
         (bundle) => ({ ok: true as const, html: bundle.html }),
         (error: unknown) => ({ ok: false as const, detail: error instanceof Error ? error.message : String(error) }),
-      )
+      ),
     ),
     asset: (path) => Effect.promise(() => cache.asset(path)),
   }

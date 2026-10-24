@@ -172,17 +172,32 @@ const defaultHandlers = (): Record<string, Handler> => ({
         displayName: "GPT Test",
         hidden: false,
         isDefault: true,
-        supportedReasoningEfforts: [{ reasoningEffort: "low", description: "" }, { reasoningEffort: "high", description: "" }],
+        supportedReasoningEfforts: [
+          { reasoningEffort: "low", description: "" },
+          { reasoningEffort: "high", description: "" },
+        ],
       },
-      { id: "gpt-hidden", model: "gpt-hidden", displayName: "Hidden", hidden: true, isDefault: false, supportedReasoningEfforts: [] },
+      {
+        id: "gpt-hidden",
+        model: "gpt-hidden",
+        displayName: "Hidden",
+        hidden: true,
+        isDefault: false,
+        supportedReasoningEfforts: [],
+      },
     ],
     nextCursor: null,
   }),
   "thread/start": (params, server) => {
     const id = server.newThreadId()
-    const environments = Array.isArray(params.environments) ? params.environments : [{ environmentId: "local", cwd: params.cwd }]
+    const environments = Array.isArray(params.environments)
+      ? params.environments
+      : [{ environmentId: "local", cwd: params.cwd }]
     queueMicrotask(() => server.notify("thread/started", { thread: { id } }))
-    return { thread: { id, environments, cwd: params.cwd, status: { type: "idle" } }, model: params.model ?? "gpt-test" }
+    return {
+      thread: { id, environments, cwd: params.cwd, status: { type: "idle" } },
+      model: params.model ?? "gpt-test",
+    }
   },
   "thread/resume": (params) => ({ thread: { id: params.threadId, environments: [] } }),
   "thread/unsubscribe": () => ({ status: "unsubscribed" }),
@@ -197,7 +212,7 @@ export const fakeLauncher = (
 ): { readonly launcher: AppServerLauncher; readonly launches: Array<{ spec: LaunchSpec; server: FakeAppServer }> } => {
   const launches: Array<{ spec: LaunchSpec; server: FakeAppServer }> = []
   const launcher: AppServerLauncher = (spec) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const server = yield* make()
       launches.push({ spec, server })
       yield* Effect.addFinalizer(() => Effect.sync(() => server.close()))
@@ -211,9 +226,17 @@ export const fakeLauncher = (
 /** Emits a typical completed text turn on `threadId`/`turn`. */
 export const emitTextTurn = (server: FakeAppServer, threadId: string, turn: string, text: string, itemId = "msg_1") => {
   server.notify("turn/started", { threadId, turn: { id: turn, status: "inProgress" } })
-  server.notify("item/started", { threadId, turnId: turn, item: { type: "agentMessage", id: itemId, text: "", phase: null } })
+  server.notify("item/started", {
+    threadId,
+    turnId: turn,
+    item: { type: "agentMessage", id: itemId, text: "", phase: null },
+  })
   server.notify("item/agentMessage/delta", { threadId, turnId: turn, itemId, delta: text })
-  server.notify("item/completed", { threadId, turnId: turn, item: { type: "agentMessage", id: itemId, text, phase: "final_answer" } })
+  server.notify("item/completed", {
+    threadId,
+    turnId: turn,
+    item: { type: "agentMessage", id: itemId, text, phase: "final_answer" },
+  })
   server.notify("thread/tokenUsage/updated", {
     threadId,
     turnId: turn,
@@ -258,7 +281,13 @@ export const makeSessionInput = (
       sections: { base: "You are Scout, an OpenBot.", persona: "", team: "", memoryIndex: "", placement: "" },
       hash: "h1",
     },
-    mcp: [{ name: "openbot", url: "http://127.0.0.1:4555/mcp/bot_test", headers: { authorization: "Bearer secret-token-xyz" } }],
+    mcp: [
+      {
+        name: "openbot",
+        url: "http://127.0.0.1:4555/mcp/bot_test",
+        headers: { authorization: "Bearer secret-token-xyz" },
+      },
+    ],
     model: "gpt-test",
     effort: "low",
     onRequest,
@@ -274,21 +303,26 @@ export interface Collector {
 }
 
 export const collect = (events: Stream.Stream<HarnessEvent>) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const seen: Array<HarnessEvent> = []
     yield* Stream.runForEach(events, (e) => Effect.sync(() => void seen.push(e))).pipe(
       Effect.forkScoped({ startImmediately: true }),
     )
     const collector: Collector = {
       events: seen,
-      waitFor: (predicate, label) => waitUntil(() => predicate(seen), label, () => seen.map((e) => e._tag).join(",")),
+      waitFor: (predicate, label) =>
+        waitUntil(
+          () => predicate(seen),
+          label,
+          () => seen.map((e) => e._tag).join(","),
+        ),
     }
     return collector
   })
 
 /** Polls `condition` every 5 ms (up to `ms`). */
 export const waitUntil = (condition: () => boolean, label = "condition", detail?: () => string, ms = 3000) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     for (let i = 0; i < ms / 5; i++) {
       if (condition()) return
       yield* Effect.sleep(5)
@@ -296,8 +330,10 @@ export const waitUntil = (condition: () => boolean, label = "condition", detail?
     return yield* Effect.die(new Error(`timed out waiting for ${label}${detail ? `; ${detail()}` : ""}`))
   })
 
-export const has = (tag: HarnessEvent["_tag"], predicate: (e: HarnessEvent) => boolean = () => true) =>
-(events: ReadonlyArray<HarnessEvent>) => events.some((e) => e._tag === tag && predicate(e))
+export const has =
+  (tag: HarnessEvent["_tag"], predicate: (e: HarnessEvent) => boolean = () => true) =>
+  (events: ReadonlyArray<HarnessEvent>) =>
+    events.some((e) => e._tag === tag && predicate(e))
 
 export const ofTag = <T extends HarnessEvent["_tag"]>(events: ReadonlyArray<HarnessEvent>, tag: T) =>
   events.filter((e): e is Extract<HarnessEvent, { _tag: T }> => e._tag === tag)
@@ -305,7 +341,6 @@ export const ofTag = <T extends HarnessEvent["_tag"]>(events: ReadonlyArray<Harn
 /** Runs a scoped test program. */
 export const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
   Effect.runPromise(Effect.scoped(effect))
-
 
 // ---------------------------------------------------------------------------- fixture replay
 
@@ -391,24 +426,26 @@ export interface TurnContext {
 }
 
 /** `turn/start` handler: answers with a new native turn id, then runs `script` for the input text. */
-export const scriptedTurnStart = (
-  script: (text: string, ctx: TurnContext) => void | Promise<void>,
-): Handler =>
-(params, server) => {
-  const turn = server.newTurnId()
-  const threadId = String(params.threadId)
-  const input = Array.isArray(params.input) ? params.input : []
-  const first = input[0]
-  const text = isRecord(first) && typeof first.text === "string" ? first.text : ""
-  server.active = { threadId, turn }
-  setTimeout(() => void script(text, { server, threadId, turn, params }), 1)
-  return { turn: { id: turn, status: "inProgress", items: [] } }
-}
+export const scriptedTurnStart =
+  (script: (text: string, ctx: TurnContext) => void | Promise<void>): Handler =>
+  (params, server) => {
+    const turn = server.newTurnId()
+    const threadId = String(params.threadId)
+    const input = Array.isArray(params.input) ? params.input : []
+    const first = input[0]
+    const text = isRecord(first) && typeof first.text === "string" ? first.text : ""
+    server.active = { threadId, turn }
+    setTimeout(() => void script(text, { server, threadId, turn, params }), 1)
+    return { turn: { id: turn, status: "inProgress", items: [] } }
+  }
 
 /** `turn/interrupt` handler: ends the turn as interrupted. */
 export const interruptHandler: Handler = (params, server) => {
   setTimeout(() => {
-    server.notify("turn/completed", { threadId: params.threadId, turn: { id: params.turnId, status: "interrupted", error: null } })
+    server.notify("turn/completed", {
+      threadId: params.threadId,
+      turn: { id: params.turnId, status: "interrupted", error: null },
+    })
     server.active = undefined
   }, 1)
   return {}
@@ -425,7 +462,13 @@ export const compactHandler: Handler = (params, server) => {
       threadId,
       turnId: turn,
       tokenUsage: {
-        total: { totalTokens: 500, inputTokens: 400, cachedInputTokens: 0, outputTokens: 100, reasoningOutputTokens: 0 },
+        total: {
+          totalTokens: 500,
+          inputTokens: 400,
+          cachedInputTokens: 0,
+          outputTokens: 100,
+          reasoningOutputTokens: 0,
+        },
         last: { totalTokens: 120, inputTokens: 100, cachedInputTokens: 0, outputTokens: 20, reasoningOutputTokens: 0 },
         modelContextWindow: 1000,
       },

@@ -17,12 +17,12 @@ const MENTION_KINDS: ReadonlyArray<NotificationKind> = ["waiting", "error"]
 
 export const NotifierLive: Layer.Layer<Notifier, never, LiveHub | BotRepo | IdGen> = Layer.effect(
   Notifier,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const hub = yield* LiveHub
     const bots = yield* BotRepo
     const ids = yield* IdGen
     return Notifier.of({
-      notify: Effect.fn("Notifier.notify")(function*(input) {
+      notify: Effect.fn("Notifier.notify")(function* (input) {
         if (input.botId !== undefined) {
           const bot = yield* orDie(bots.get(input.botId))
           if (Option.isSome(bot)) {

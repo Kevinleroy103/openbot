@@ -3,7 +3,22 @@
 // characters on, a "Messages" section under them shows the best matches from every chat (the chat,
 // who wrote it, the snippet with the words marked) and "See all results", which opens the Search
 // view. Phone: a full-screen sheet with an iOS "Cancel", without the keyboard-only actions.
-import { Blocks, ChartNoAxesColumn, Cpu, MessageSquarePlus, Monitor, Moon, PanelLeft, Plus, Search, Settings, ShieldCheck, Sparkles, Sun, Users } from "lucide-react"
+import {
+  Blocks,
+  ChartNoAxesColumn,
+  Cpu,
+  MessageSquarePlus,
+  Monitor,
+  Moon,
+  PanelLeft,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Users,
+} from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { Exit } from "effect"
@@ -11,7 +26,21 @@ import { AsyncResult } from "effect/reactivity"
 import { DEFAULT_SETTINGS, type ConversationSummary } from "@openbot/contracts"
 import { hitEntryId, hitKey, isSearchable, searchFilters } from "@openbot/app-model"
 import { searchFirstPageAtom, searchIdleAtom, updateSettingsAtom } from "@openbot/client"
-import { Avatar, AvatarStack, CommandPalette, CommandPaletteBody, Dialog, Icon, KeyBadge, LabelChip, Spinner, UnreadDot, filterPaletteItems, type PaletteItem, useToast } from "@openbot/ui"
+import {
+  Avatar,
+  AvatarStack,
+  CommandPalette,
+  CommandPaletteBody,
+  Dialog,
+  Icon,
+  KeyBadge,
+  LabelChip,
+  Spinner,
+  UnreadDot,
+  filterPaletteItems,
+  type PaletteItem,
+  useToast,
+} from "@openbot/ui"
 import { describeFailure } from "../cards/useRespond.ts"
 import { useIsPhone } from "../app/layout.ts"
 import { useRoster } from "../app/data.ts"
@@ -51,7 +80,9 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
   }, [open])
   const settled = useDebouncedValue(query.trim(), 150)
   const searching = open && isSearchable(settled)
-  const hitsResult = useAtomValue(searching ? searchFirstPageAtom({ query: settled, limit: PALETTE_HITS }) : searchIdleAtom)
+  const hitsResult = useAtomValue(
+    searching ? searchFirstPageAtom({ query: settled, limit: PALETTE_HITS }) : searchIdleAtom,
+  )
 
   const items = useMemo((): ReadonlyArray<PaletteItem> => {
     const summaries = roster.state.conversations
@@ -59,14 +90,24 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
     const bots = [...roster.bots].sort((a, b) => {
       const ua = summaryOf(a.directConversationId)?.unreadCount ?? 0
       const ub = summaryOf(b.directConversationId)?.unreadCount ?? 0
-      if ((ua > 0) !== (ub > 0)) return ua > 0 ? -1 : 1
-      return (summaryOf(b.directConversationId)?.lastActivityAt ?? 0) - (summaryOf(a.directConversationId)?.lastActivityAt ?? 0)
+      if (ua > 0 !== ub > 0) return ua > 0 ? -1 : 1
+      return (
+        (summaryOf(b.directConversationId)?.lastActivityAt ?? 0) -
+        (summaryOf(a.directConversationId)?.lastActivityAt ?? 0)
+      )
     })
     const botItems: PaletteItem[] = bots.map((b) => ({
       id: `bot:${b.id}`,
       label: b.name,
       keywords: [b.label ?? "", b.harness.kind, "bot"],
-      leading: <Avatar shape={b.avatar.shape} color={b.avatar.color} size={22} className={b.hidden ? "opacity-50" : undefined} />,
+      leading: (
+        <Avatar
+          shape={b.avatar.shape}
+          color={b.avatar.color}
+          size={22}
+          className={b.hidden ? "opacity-50" : undefined}
+        />
+      ),
       ...(b.label ? { chip: <LabelChip>{b.label}</LabelChip> } : {}),
       ...((summaryOf(b.directConversationId)?.unreadCount ?? 0) > 0 ? { trailing: <UnreadDot /> } : {}),
       onSelect: () => select(b.directConversationId),
@@ -78,7 +119,17 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
         label: c.title,
         group: "Group chats",
         keywords: ["group", ...c.botIds.map((id) => roster.botById(id)?.name ?? "")],
-        leading: <AvatarStack size={22} outlineColor="var(--ob-elevated)" avatars={c.botIds.map((id) => ({ key: id, shape: roster.botById(id)?.avatar.shape, color: roster.botById(id)?.avatar.color }))} />,
+        leading: (
+          <AvatarStack
+            size={22}
+            outlineColor="var(--ob-elevated)"
+            avatars={c.botIds.map((id) => ({
+              key: id,
+              shape: roster.botById(id)?.avatar.shape,
+              color: roster.botById(id)?.avatar.color,
+            }))}
+          />
+        ),
         ...(c.unreadCount > 0 ? { trailing: <UnreadDot /> } : {}),
         onSelect: () => select(c.id),
       }))
@@ -99,8 +150,22 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
         trailing: <KeyBadge>{modKey}N</KeyBadge>,
         onSelect: () => select(null),
       },
-      { id: "action:new-bot", label: "Create new Bot", group: "Actions", keywords: ["add", "bot"], leading: <Icon icon={Plus} size="xl" className="text-icon-secondary" />, onSelect: () => dialogs.show({ kind: "new-bot" }) },
-      { id: "action:new-group", label: "Create group chat", group: "Actions", keywords: ["group", "team"], leading: <Icon icon={Users} size="xl" className="text-icon-secondary" />, onSelect: () => dialogs.show({ kind: "new-group" }) },
+      {
+        id: "action:new-bot",
+        label: "Create new Bot",
+        group: "Actions",
+        keywords: ["add", "bot"],
+        leading: <Icon icon={Plus} size="xl" className="text-icon-secondary" />,
+        onSelect: () => dialogs.show({ kind: "new-bot" }),
+      },
+      {
+        id: "action:new-group",
+        label: "Create group chat",
+        group: "Actions",
+        keywords: ["group", "team"],
+        leading: <Icon icon={Users} size="xl" className="text-icon-secondary" />,
+        onSelect: () => dialogs.show({ kind: "new-group" }),
+      },
       {
         id: "action:theme",
         label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme",
@@ -160,7 +225,19 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
       })),
       ...(phone ? actions.filter((a) => a.id !== "action:compact").map(({ trailing: _shortcut, ...a }) => a) : actions),
     ]
-  }, [roster, select, dialogs, settingsDialog, connectApps, theme, settings.showSteps, updateSettings, onToggleCompact, phone, toast])
+  }, [
+    roster,
+    select,
+    dialogs,
+    settingsDialog,
+    connectApps,
+    theme,
+    settings.showSteps,
+    updateSettings,
+    onToggleCompact,
+    phone,
+    toast,
+  ])
 
   // Roster, settings and actions filtered here; message hits come filtered by the brain.
   const messages = useMemo((): ReadonlyArray<PaletteItem> => {
@@ -168,12 +245,16 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
     const page = AsyncResult.isSuccess(hitsResult) && searching ? hitsResult.value : undefined
     const hits: PaletteItem[] = (page?.hits ?? []).map((hit) => ({
       id: `hit:${hitKey(hit)}`,
-      label: authorLabel(roster, hit) === chatLabel(roster, hit) ? chatLabel(roster, hit) : `${chatLabel(roster, hit)} · ${authorLabel(roster, hit)}`,
+      label:
+        authorLabel(roster, hit) === chatLabel(roster, hit)
+          ? chatLabel(roster, hit)
+          : `${chatLabel(roster, hit)} · ${authorLabel(roster, hit)}`,
       group: "Messages",
       leading: <HitLeading roster={roster} hit={hit} size={22} />,
       detail: <Snippet hit={hit} />,
       trailing: <span className="text-xs text-fg-tertiary tabular-nums">{formatListTime(hit.createdAt)}</span>,
-      onSelect: () => select(hit.conversationId, { entryId: hitEntryId(hit), terms: page?.terms ?? [], openExchange: true }),
+      onSelect: () =>
+        select(hit.conversationId, { entryId: hitEntryId(hit), terms: page?.terms ?? [], openExchange: true }),
     }))
     const pending = settled !== query.trim() || AsyncResult.isInitial(hitsResult) || hitsResult.waiting
     return [
@@ -184,7 +265,9 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
         group: "Messages",
         leading: <Icon icon={Search} size="xl" className="text-icon-secondary" />,
         ...(pending && hits.length === 0 ? { trailing: <Spinner size={14} label="Searching" /> } : {}),
-        ...(page?.indexing ? { chip: <span className="text-xs text-fg-tertiary">· still indexing, some may be missing</span> } : {}),
+        ...(page?.indexing
+          ? { chip: <span className="text-xs text-fg-tertiary">· still indexing, some may be missing</span> }
+          : {}),
         onSelect: () => openSearch(searchFilters(query.trim())),
       },
     ]
@@ -193,8 +276,22 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
 
   if (phone) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange} width={560} label="Search" className="ob-phone-full ob-search-sheet">
-        <CommandPaletteBody open={open} onOpenChange={onOpenChange} items={shown} query={query} onQueryChange={setQuery} placeholder="Search" emptyText="No results" />
+      <Dialog
+        open={open}
+        onOpenChange={onOpenChange}
+        width={560}
+        label="Search"
+        className="ob-phone-full ob-search-sheet"
+      >
+        <CommandPaletteBody
+          open={open}
+          onOpenChange={onOpenChange}
+          items={shown}
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Search"
+          emptyText="No results"
+        />
         <button
           type="button"
           onClick={() => onOpenChange(false)}
@@ -205,5 +302,15 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
       </Dialog>
     )
   }
-  return <CommandPalette open={open} onOpenChange={onOpenChange} items={shown} query={query} onQueryChange={setQuery} placeholder="Search" emptyText="No results" />
+  return (
+    <CommandPalette
+      open={open}
+      onOpenChange={onOpenChange}
+      items={shown}
+      query={query}
+      onQueryChange={setQuery}
+      placeholder="Search"
+      emptyText="No results"
+    />
+  )
 }

@@ -100,7 +100,12 @@ const describeAction = (a: BrowserAction): string => {
 }
 
 /** Capabilities this node declares, from its config and what is installed. */
-export const nodeCapabilities = (config: NodeConfigShape, browserAvailable: boolean, desktopOffered = false, screenOffered = false): ReadonlyArray<string> => [
+export const nodeCapabilities = (
+  config: NodeConfigShape,
+  browserAvailable: boolean,
+  desktopOffered = false,
+  screenOffered = false,
+): ReadonlyArray<string> => [
   Capabilities.fs,
   Capabilities.shell,
   Capabilities.pty,
@@ -139,7 +144,8 @@ export const makeNodeHandlers = Effect.gen(function* () {
   // the node's own ceiling can rule the computer out entirely: then it does not offer desktops
   const desktopOffered = desktop.offered && policy.ceilingFor("computer") !== "never"
   // a node with per-bot desktops does not share its own screen too
-  const screenOffered = !desktopOffered && screen !== undefined && screen.offered && policy.ceilingFor("computer") !== "never"
+  const screenOffered =
+    !desktopOffered && screen !== undefined && screen.offered && policy.ceilingFor("computer") !== "never"
   const capabilities = nodeCapabilities(config, browser.available, desktopOffered, screenOffered)
 
   const info: NodeInfoShape = {
@@ -165,7 +171,13 @@ export const makeNodeHandlers = Effect.gen(function* () {
 
   const browserAllowed = Effect.suspend(() =>
     policy.ceilingFor("browser") === "never"
-      ? Effect.fail(new PolicyRefused({ action: "browser", reason: "The node's policy does not allow the browser.", retry: false }))
+      ? Effect.fail(
+          new PolicyRefused({
+            action: "browser",
+            reason: "The node's policy does not allow the browser.",
+            retry: false,
+          }),
+        )
       : Effect.void,
   )
 
@@ -182,7 +194,9 @@ export const makeNodeHandlers = Effect.gen(function* () {
       Effect.gen(function* () {
         const chosen = negotiateProtocol({ min: MIN_SUPPORTED_PROTOCOL_VERSION, max: PROTOCOL_VERSION }, protocol)
         if (chosen === undefined) {
-          return yield* new NotAuthenticated({ reason: `no common protocol version (node ${MIN_SUPPORTED_PROTOCOL_VERSION}-${PROTOCOL_VERSION})` })
+          return yield* new NotAuthenticated({
+            reason: `no common protocol version (node ${MIN_SUPPORTED_PROTOCOL_VERSION}-${PROTOCOL_VERSION})`,
+          })
         }
         return info.hello({ brainVerified: false, protocol: chosen })
       }),
@@ -209,7 +223,8 @@ export const makeNodeHandlers = Effect.gen(function* () {
       guard({ inv, action: "browser", target: describeAction(action) }, browser.action(inv.botId, action)),
     "browser.screencast": ({ botId, streamId, streamToken, options }) =>
       Effect.gen(function* () {
-        if (!browser.available) return yield* new BrowserUnavailable({ reason: "no Chromium or Chrome was found on this node" })
+        if (!browser.available)
+          return yield* new BrowserUnavailable({ reason: "no Chromium or Chrome was found on this node" })
         const ready = yield* Deferred.make<string, BrowserUnavailable | TunnelFailed>()
         yield* FiberSet.run(
           sessions,
@@ -217,9 +232,15 @@ export const makeNodeHandlers = Effect.gen(function* () {
             Effect.gen(function* () {
               const socket = yield* dialer
                 .dial({ ticket: { streamId, streamToken }, kind: "cdp-screencast" })
-                .pipe(Effect.mapError((e) => new TunnelFailed({ kind: "cdp-screencast", reason: `stream refused: ${e.reason}` })))
+                .pipe(
+                  Effect.mapError(
+                    (e) => new TunnelFailed({ kind: "cdp-screencast", reason: `stream refused: ${e.reason}` }),
+                  ),
+                )
               const io = yield* openDuplex(socket).pipe(
-                Effect.mapError((e) => new TunnelFailed({ kind: "cdp-screencast", reason: `stream failed: ${e.message}` })),
+                Effect.mapError(
+                  (e) => new TunnelFailed({ kind: "cdp-screencast", reason: `stream failed: ${e.message}` }),
+                ),
               )
               yield* browser.screencast({
                 botId,
@@ -235,7 +256,10 @@ export const makeNodeHandlers = Effect.gen(function* () {
                 ready,
                 e instanceof BrowserUnavailable || e instanceof TunnelFailed
                   ? e
-                  : new TunnelFailed({ kind: "cdp-screencast", reason: Cause.hasInterruptsOnly(cause) ? "the node is shutting down" : String(e) }),
+                  : new TunnelFailed({
+                      kind: "cdp-screencast",
+                      reason: Cause.hasInterruptsOnly(cause) ? "the node is shutting down" : String(e),
+                    }),
               )
             }),
             Effect.asVoid,
@@ -251,10 +275,15 @@ export const makeNodeHandlers = Effect.gen(function* () {
       Effect.gen(function* () {
         // no approval question while the owner is at the controls
         if (leases.get(inv.botId).holder === "user") {
-          return yield* new LeaseHeld({ botId: inv.botId, holder: "user", reason: "The user is controlling this screen. Wait until they hand it back." })
+          return yield* new LeaseHeld({
+            botId: inv.botId,
+            holder: "user",
+            reason: "The user is controlling this screen. Wait until they hand it back.",
+          })
         }
         // the node's ceiling (never → PolicyRefused, ask → the owner is asked), audited
-        const run = screenOffered && screen !== undefined ? screen.act(inv.botId, action) : desktop.act(inv.botId, action)
+        const run =
+          screenOffered && screen !== undefined ? screen.act(inv.botId, action) : desktop.act(inv.botId, action)
         return yield* guard({ inv, action: "computer", target: describeComputerAction(action) }, run)
       }),
     "computer.stream": ({ botId, mode, streamId, streamToken }) =>
@@ -262,7 +291,11 @@ export const makeNodeHandlers = Effect.gen(function* () {
         const kind = mode === "control" ? "vnc-control" : "vnc-view"
         // the control server takes input: only while the owner holds the lease
         if (mode === "control" && leases.get(botId).holder !== "user") {
-          return yield* new LeaseHeld({ botId, holder: "bot", reason: "take control before opening the control stream" })
+          return yield* new LeaseHeld({
+            botId,
+            holder: "bot",
+            reason: "take control before opening the control stream",
+          })
         }
         yield* desktopAllowed
         const port = yield* desktop.vncPort(botId, mode)
@@ -286,7 +319,10 @@ export const makeNodeHandlers = Effect.gen(function* () {
         )
       }),
     "screen.ensure": ({ botId }) =>
-      Effect.andThen(desktopAllowed, screenOffered && screen !== undefined ? screen.ensure(botId) : Effect.fail(noScreen)),
+      Effect.andThen(
+        desktopAllowed,
+        screenOffered && screen !== undefined ? screen.ensure(botId) : Effect.fail(noScreen),
+      ),
     "screen.stream": ({ botId, streamId, streamToken }) =>
       Effect.gen(function* () {
         yield* desktopAllowed
@@ -298,7 +334,9 @@ export const makeNodeHandlers = Effect.gen(function* () {
             Effect.gen(function* () {
               const socket = yield* dialer
                 .dial({ ticket: { streamId, streamToken }, kind: "screen" })
-                .pipe(Effect.mapError((e) => new TunnelFailed({ kind: "screen", reason: `stream refused: ${e.reason}` })))
+                .pipe(
+                  Effect.mapError((e) => new TunnelFailed({ kind: "screen", reason: `stream refused: ${e.reason}` })),
+                )
               const io = yield* openDuplex(socket).pipe(
                 Effect.mapError((e) => new TunnelFailed({ kind: "screen", reason: `stream failed: ${e.message}` })),
               )
@@ -308,14 +346,18 @@ export const makeNodeHandlers = Effect.gen(function* () {
           ).pipe(
             Effect.catchCause((cause) => {
               const e = Cause.squash(cause)
-              return Deferred.fail(opened, e instanceof TunnelFailed ? e : new TunnelFailed({ kind: "screen", reason: String(e) }))
+              return Deferred.fail(
+                opened,
+                e instanceof TunnelFailed ? e : new TunnelFailed({ kind: "screen", reason: String(e) }),
+              )
             }),
             Effect.asVoid,
           ),
         )
         yield* Deferred.await(opened)
       }),
-    "screen.input": ({ botId, event }) => (screenOffered && screen !== undefined ? screen.input(botId, event) : Effect.fail(noScreen)),
+    "screen.input": ({ botId, event }) =>
+      screenOffered && screen !== undefined ? screen.input(botId, event) : Effect.fail(noScreen),
   })
 
   return { handlers, info }
@@ -343,7 +385,15 @@ export const NodeHandlersLive = (
 export const NodeHandlersFromServices: Layer.Layer<
   NodeHandlersContext | NodeInfo | NodeHandlers,
   never,
-  NodeConfig | PathPolicy | NodePolicy | AuditLog | BrowserManager | DesktopManager | LeaseBook | BrainLink | StreamDialer
+  | NodeConfig
+  | PathPolicy
+  | NodePolicy
+  | AuditLog
+  | BrowserManager
+  | DesktopManager
+  | LeaseBook
+  | BrainLink
+  | StreamDialer
 > = Layer.effectContext(
   Effect.gen(function* () {
     const { handlers, info } = yield* makeNodeHandlers

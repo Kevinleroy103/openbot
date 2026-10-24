@@ -59,8 +59,13 @@ export const discoverCodexHomes = (options?: {
     .map((name) => join(home, name))
     .filter(looksLikeCodexHome)
     .sort()
-    .map((configDir) => ({ configDir, isDefault: configDir === defaultDir, suggestedLabel: basename(configDir).replace(/^\./, "") }))
+    .map((configDir) => ({
+      configDir,
+      isDefault: configDir === defaultDir,
+      suggestedLabel: basename(configDir).replace(/^\./, ""),
+    }))
 }
 
 /** The Codex home the default profile links (`$CODEX_HOME`, else `~/.codex`). */
-export const defaultCodexConfigDir = (env: NodeJS.ProcessEnv = process.env): string => resolve(defaultUserCodexHome(env))
+export const defaultCodexConfigDir = (env: NodeJS.ProcessEnv = process.env): string =>
+  resolve(defaultUserCodexHome(env))

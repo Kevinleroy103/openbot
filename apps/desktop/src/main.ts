@@ -18,7 +18,20 @@
  * - Quick send (quickSend.ts): ⌥⌘O / Ctrl+Alt+O, `openbot://send?…` links and `--quick-send` open a
  *   small panel to send the page in the browser, a copy or a screenshot to a Bot.
  */
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, safeStorage, session, shell, Tray } from "electron"
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeImage,
+  powerMonitor,
+  safeStorage,
+  session,
+  shell,
+  Tray,
+} from "electron"
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { permits } from "./permissions.ts"
@@ -74,7 +87,10 @@ const forgetSession = () => rmSync(sessionFile(), { force: true })
 const post = async (path: string, body?: unknown, token?: string) => {
   const res = await fetch(`${origin}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(token === undefined ? {} : { authorization: `Bearer ${token}` }) },
+    headers: {
+      "content-type": "application/json",
+      ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+    },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   return { status: res.status, body: (await res.json().catch(() => ({}))) as Record<string, unknown> }
@@ -85,7 +101,9 @@ const openApp = async (token: string, page = "#/"): Promise<boolean> => {
   const minted = await post("/api/auth/web-code", undefined, token)
   if (minted.status === 401 || minted.status === 403) return false
   if (typeof minted.body.code !== "string") throw new Error(`OpenBot answered ${minted.status}`)
-  await win?.loadURL(`${origin}/api/auth/login?code=${encodeURIComponent(minted.body.code)}&next=${encodeURIComponent(page)}`)
+  await win?.loadURL(
+    `${origin}/api/auth/login?code=${encodeURIComponent(minted.body.code)}&next=${encodeURIComponent(page)}`,
+  )
   signedIn = true
   quick?.warm()
   return true
@@ -103,7 +121,8 @@ const connect = async () => {
   connecting = run
   const started = await post("/api/auth/device/start")
   const { deviceCode, userCode, expiresInSeconds } = started.body
-  if (typeof deviceCode !== "string" || typeof userCode !== "string") throw new Error(`OpenBot answered ${started.status}`)
+  if (typeof deviceCode !== "string" || typeof userCode !== "string")
+    throw new Error(`OpenBot answered ${started.status}`)
   const approve = `${origin}/#/connect-device?code=${encodeURIComponent(userCode)}`
   await showConnect({ code: userCode, approve })
   void shell.openExternal(approve)
@@ -201,10 +220,21 @@ const createWindow = () => {
 const limitPermissions = () => {
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
     const media = "mediaTypes" in details ? details : undefined
-    callback(permits(origin, { permission, from: media?.securityOrigin ?? details.requestingUrl, mediaTypes: media?.mediaTypes }))
+    callback(
+      permits(origin, {
+        permission,
+        from: media?.securityOrigin ?? details.requestingUrl,
+        mediaTypes: media?.mediaTypes,
+      }),
+    )
   })
   session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) =>
-    permits(origin, { permission, from: requestingOrigin, mediaTypes: details.mediaType === undefined ? undefined : [details.mediaType] }))
+    permits(origin, {
+      permission,
+      from: requestingOrigin,
+      mediaTypes: details.mediaType === undefined ? undefined : [details.mediaType],
+    }),
+  )
 }
 
 const createTray = () => {
@@ -212,12 +242,14 @@ const createTray = () => {
   const image = nativeImage.createFromPath(join(appDir, "tray.png"))
   tray = new Tray(image)
   tray.setToolTip("OpenBot")
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Open OpenBot", click: show },
-    { label: "Check for Updates", click: () => void checkFromMenu() },
-    { type: "separator" },
-    { label: "Quit", click: () => app.quit() },
-  ]))
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Open OpenBot", click: show },
+      { label: "Check for Updates", click: () => void checkFromMenu() },
+      { type: "separator" },
+      { label: "Quit", click: () => app.quit() },
+    ]),
+  )
   tray.on("click", show)
 }
 
@@ -330,23 +362,23 @@ void app.whenReady().then(() => {
   Menu.setApplicationMenu(
     isMac
       ? Menu.buildFromTemplate([
-        {
-          label: app.name,
-          submenu: [
-            { role: "about" },
-            { label: "Check for Updates…", click: () => void checkFromMenu() },
-            { type: "separator" },
-            { role: "hide" },
-            { role: "hideOthers" },
-            { role: "unhide" },
-            { type: "separator" },
-            { role: "quit" },
-          ],
-        },
-        { role: "editMenu" },
-        { role: "viewMenu" },
-        { role: "windowMenu" },
-      ])
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" },
+              { label: "Check for Updates…", click: () => void checkFromMenu() },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" },
+            ],
+          },
+          { role: "editMenu" },
+          { role: "viewMenu" },
+          { role: "windowMenu" },
+        ])
       : null,
   )
   limitPermissions()

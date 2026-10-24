@@ -18,7 +18,9 @@ export const botSkillsPlugin = (input: {
   readonly library: string
   readonly skills: ReadonlyArray<string>
 }): string | undefined => {
-  const skills = [...new Set(input.skills)].sort().filter((name) => existsSync(join(input.library, "skills", name, "SKILL.md")))
+  const skills = [...new Set(input.skills)]
+    .sort()
+    .filter((name) => existsSync(join(input.library, "skills", name, "SKILL.md")))
   if (skills.length === 0) return undefined
   const dir = join(input.root, createHash("sha256").update(skills.join("\n")).digest("hex").slice(0, 16))
   if (existsSync(join(dir, ".claude-plugin", "plugin.json"))) return dir

@@ -37,7 +37,10 @@ export interface FindBarProps {
 export function FindBar({ conversationId, focusNonce, kinds, layout, onChange, onClose }: FindBarProps): ReactNode {
   const [query, setQuery] = useState("")
   const settled = useDebouncedValue(query.trim(), 200)
-  const atom = useMemo(() => (settled === "" ? searchIdleAtom : searchPositionsAtom(conversationId, settled, kinds)), [conversationId, settled, kinds])
+  const atom = useMemo(
+    () => (settled === "" ? searchIdleAtom : searchPositionsAtom(conversationId, settled, kinds)),
+    [conversationId, settled, kinds],
+  )
   const result = useAtomValue(atom)
   const refresh = useAtomRefresh(atom)
   const [position, setPosition] = useState<FindPosition>(() => findStart([]))
@@ -80,7 +83,8 @@ export function FindBar({ conversationId, focusNonce, kinds, layout, onChange, o
     setStep((s) => s + 1)
   }
 
-  const label = settled === "" ? "" : failed ? "Couldn't search" : value === undefined ? "" : findLabel(position, value.more)
+  const label =
+    settled === "" ? "" : failed ? "Couldn't search" : value === undefined ? "" : findLabel(position, value.more)
   const phone = layout === "phone"
   return (
     <div
@@ -121,7 +125,10 @@ export function FindBar({ conversationId, focusNonce, kinds, layout, onChange, o
           enterKeyHint="search"
           spellCheck={false}
           autoComplete="off"
-          className={cn("min-w-0 flex-1 bg-transparent px-1.5 text-fg outline-none placeholder:text-fg-tertiary focus-visible:outline-none", phone ? "text-[16px]" : "text-base")}
+          className={cn(
+            "min-w-0 flex-1 bg-transparent px-1.5 text-fg outline-none placeholder:text-fg-tertiary focus-visible:outline-none",
+            phone ? "text-[16px]" : "text-base",
+          )}
           data-testid="find-input"
         />
         <span
@@ -133,8 +140,22 @@ export function FindBar({ conversationId, focusNonce, kinds, layout, onChange, o
           {searching && settled !== "" ? <Spinner size={12} label="Searching" /> : label}
           {indexing && !searching && <span data-testid="find-indexing">· indexing</span>}
         </span>
-        <IconButton icon={ChevronUp} label="Older match" size={phone ? 36 : 28} disabled={position.hits.length === 0} onClick={() => go("older")} data-testid="find-older" />
-        <IconButton icon={ChevronDown} label="Newer match" size={phone ? 36 : 28} disabled={position.hits.length === 0} onClick={() => go("newer")} data-testid="find-newer" />
+        <IconButton
+          icon={ChevronUp}
+          label="Older match"
+          size={phone ? 36 : 28}
+          disabled={position.hits.length === 0}
+          onClick={() => go("older")}
+          data-testid="find-older"
+        />
+        <IconButton
+          icon={ChevronDown}
+          label="Newer match"
+          size={phone ? 36 : 28}
+          disabled={position.hits.length === 0}
+          onClick={() => go("newer")}
+          data-testid="find-newer"
+        />
         <IconButton icon={X} label="Close" size={phone ? 36 : 28} onClick={onClose} data-testid="find-close" />
       </div>
     </div>

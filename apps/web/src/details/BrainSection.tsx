@@ -46,7 +46,8 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
   const [switchTo, setSwitchTo] = useState<{ readonly kind: string; readonly profileId: string } | undefined>(undefined)
 
   // Harness (kind) and, when it has several, the Account (harness profile: a login on the server)
-  const statusOf = (kind: string, profileId: string): HarnessStatus | undefined => statusFor(statuses.value, { kind, profileId })
+  const statusOf = (kind: string, profileId: string): HarnessStatus | undefined =>
+    statusFor(statuses.value, { kind, profileId })
   const botProfile = profileIdOf(bot.harness)
   const current = statusOf(bot.harness.kind, botProfile)
   const ready = harnessReady(current)
@@ -59,7 +60,10 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
   /** The account a switch to `kind` lands on: its default when ready, else its first ready one. */
   const accountFor = (kind: string): string => {
     const accounts = accountsOf(kind)
-    const pick = accounts.find((s) => statusProfileId(s) === "default" && harnessReady(s)) ?? accounts.find(harnessReady) ?? accounts[0]
+    const pick =
+      accounts.find((s) => statusProfileId(s) === "default" && harnessReady(s)) ??
+      accounts.find(harnessReady) ??
+      accounts[0]
     return pick ? statusProfileId(pick) : "default"
   }
 
@@ -89,12 +93,17 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
       label: (
         <span className="inline-flex min-w-0 items-center gap-1.5">
           {/* the pane is narrow: the nickname or email; the full "email (plan)" is the tooltip */}
-          <span className="truncate" title={accountChoiceLabel(s)}>{accountNickname(s) ?? s.account?.email ?? accountChoiceLabel(s)}</span>
-          {!harnessReady(s) && <StatusDot tone={harnessState(s).tone === "neutral" ? "danger" : harnessState(s).tone} />}
+          <span className="truncate" title={accountChoiceLabel(s)}>
+            {accountNickname(s) ?? s.account?.email ?? accountChoiceLabel(s)}
+          </span>
+          {!harnessReady(s) && (
+            <StatusDot tone={harnessState(s).tone === "neutral" ? "danger" : harnessState(s).tone} />
+          )}
         </span>
       ),
     }))
-    if (!accounts.some((s) => statusProfileId(s) === botProfile)) options.push({ value: botProfile, label: botProfile === "default" ? "Default account" : "Removed account" })
+    if (!accounts.some((s) => statusProfileId(s) === botProfile))
+      options.push({ value: botProfile, label: botProfile === "default" ? "Default account" : "Removed account" })
     return options
   })()
   const showAccount = accountOptions.length > 1 || botProfile !== "default"
@@ -102,9 +111,14 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
   const modelList = models.value ?? []
   const selectedModel = modelList.find((m) => m.id === bot.harness.model) ?? modelList.find((m) => m.default)
   const modelOptions: ReadonlyArray<SelectOption<string>> = [
-    { value: DEFAULT, label: modelList.find((m) => m.default) ? `Default (${modelList.find((m) => m.default)!.label})` : "Default" },
+    {
+      value: DEFAULT,
+      label: modelList.find((m) => m.default) ? `Default (${modelList.find((m) => m.default)!.label})` : "Default",
+    },
     ...modelList.map((m) => ({ value: m.id, label: m.label || m.id })),
-    ...(bot.harness.model && !modelList.some((m) => m.id === bot.harness.model) ? [{ value: bot.harness.model, label: bot.harness.model }] : []),
+    ...(bot.harness.model && !modelList.some((m) => m.id === bot.harness.model)
+      ? [{ value: bot.harness.model, label: bot.harness.model }]
+      : []),
   ]
   const efforts = selectedModel?.efforts ?? []
 
@@ -114,7 +128,9 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
     return update.run({ botId: bot.id, patch: { harness: next } })
   }
 
-  const nodeOptions: ReadonlyArray<SelectOption<string>> = (nodes.some((n) => n.id === bot.hostNodeId) ? nodes : [...nodes, undefined]).map((n) =>
+  const nodeOptions: ReadonlyArray<SelectOption<string>> = (
+    nodes.some((n) => n.id === bot.hostNodeId) ? nodes : [...nodes, undefined]
+  ).map((n) =>
     n
       ? {
           value: n.id,
@@ -138,7 +154,12 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
     <Section title="Brain" id="details-brain">
       <SectionSheet>
         <SheetLine label="Harness">
-          <Select label="Harness" value={bot.harness.kind} options={harnessOptions} onValueChange={(kind) => kind !== bot.harness.kind && setSwitchTo({ kind, profileId: accountFor(kind) })} />
+          <Select
+            label="Harness"
+            value={bot.harness.kind}
+            options={harnessOptions}
+            onValueChange={(kind) => kind !== bot.harness.kind && setSwitchTo({ kind, profileId: accountFor(kind) })}
+          />
         </SheetLine>
         {showAccount && (
           <SheetLine label="Account">
@@ -147,7 +168,9 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
               value={botProfile}
               options={accountOptions}
               className="max-w-[190px]"
-              onValueChange={(profileId) => profileId !== botProfile && setSwitchTo({ kind: bot.harness.kind, profileId })}
+              onValueChange={(profileId) =>
+                profileId !== botProfile && setSwitchTo({ kind: bot.harness.kind, profileId })
+              }
             />
           </SheetLine>
         )}
@@ -166,13 +189,22 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
             <Select
               label="Effort"
               value={bot.harness.effort ?? DEFAULT}
-              options={[{ value: DEFAULT, label: "Default" }, ...efforts.map((e) => ({ value: e, label: e.charAt(0).toUpperCase() + e.slice(1) }))]}
+              options={[
+                { value: DEFAULT, label: "Default" },
+                ...efforts.map((e) => ({ value: e, label: e.charAt(0).toUpperCase() + e.slice(1) })),
+              ]}
               onValueChange={(effort) => void setHarness({ effort })}
             />
           </SheetLine>
         )}
         <SheetLine label="Runs on">
-          <Select label="Runs on" value={bot.hostNodeId} options={nodeOptions} onValueChange={(id) => void update.run({ botId: bot.id, patch: { hostNodeId: id as NodeId } })} className="max-w-[170px]" />
+          <Select
+            label="Runs on"
+            value={bot.hostNodeId}
+            options={nodeOptions}
+            onValueChange={(id) => void update.run({ botId: bot.id, patch: { hostNodeId: id as NodeId } })}
+            className="max-w-[170px]"
+          />
         </SheetLine>
         {others.length > 0 && (
           <SheetLine label="Also reaches" hint="Other computers its tools may use">
@@ -185,14 +217,23 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
                   type="button"
                   className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg ps-2.5 pe-1.5 text-sm text-fg hairline border-line-tertiary transition-colors hover:bg-hover aria-expanded:bg-hover"
                 >
-                  {bound.size === 0 ? "None" : bound.size === 1 ? (others.find((n) => bound.has(n.id))?.label ?? "1 computer") : `${bound.size} computers`}
+                  {bound.size === 0
+                    ? "None"
+                    : bound.size === 1
+                      ? (others.find((n) => bound.has(n.id))?.label ?? "1 computer")
+                      : `${bound.size} computers`}
                   <Icon icon={ChevronDown} size="sm" className="text-icon-secondary" />
                 </button>
               )}
             >
               <MenuLabel>Computers</MenuLabel>
               {others.map((n) => (
-                <MenuItem key={n.id} checked={bound.has(n.id)} leading={<StatusDot tone={nodeTone(n)} className="mx-1" />} onSelect={() => toggleBound(n.id)}>
+                <MenuItem
+                  key={n.id}
+                  checked={bound.has(n.id)}
+                  leading={<StatusDot tone={nodeTone(n)} className="mx-1" />}
+                  onSelect={() => toggleBound(n.id)}
+                >
                   {n.label}
                 </MenuItem>
               ))}
@@ -200,12 +241,21 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
           </SheetLine>
         )}
         <SheetLine label="Autonomy">
-          <AutonomySelect value={bot.autonomy} onValueChange={(autonomy) => autonomy !== bot.autonomy && void update.run({ botId: bot.id, patch: { autonomy } })} />
+          <AutonomySelect
+            value={bot.autonomy}
+            onValueChange={(autonomy) =>
+              autonomy !== bot.autonomy && void update.run({ botId: bot.id, patch: { autonomy } })
+            }
+          />
         </SheetLine>
       </SectionSheet>
       <p className="px-3 text-xs text-fg-tertiary" data-testid="autonomy-hint">
         {autonomyChoice(bot.autonomy).hint}{" "}
-        <button type="button" className="underline-offset-2 hover:text-fg-secondary hover:underline" onClick={() => settings.show("permissions")}>
+        <button
+          type="button"
+          className="underline-offset-2 hover:text-fg-secondary hover:underline"
+          onClick={() => settings.show("permissions")}
+        >
           Edit rules
         </button>
       </p>
@@ -219,24 +269,41 @@ export function BrainSection({ bot }: { readonly bot: Bot }): ReactNode {
           folders={bot.projectFolders}
           pending={foldersUpdate.pending}
           placeholder="/home/me/projects/app"
-          emptyText={shared.length === 0 ? "None: it works in its own workspace." : `None of its own; shared: ${shared.join(", ")}`}
-          onChange={async (projectFolders) => (await foldersUpdate.run({ botId: bot.id, patch: { projectFolders } })).ok}
+          emptyText={
+            shared.length === 0
+              ? "None: it works in its own workspace."
+              : `None of its own; shared: ${shared.join(", ")}`
+          }
+          onChange={async (projectFolders) =>
+            (await foldersUpdate.run({ botId: bot.id, patch: { projectFolders } })).ok
+          }
         />
-        {shared.length > 0 && bot.projectFolders.length > 0 && <p className="text-2xs text-fg-quaternary">Also shared with every Bot: {shared.join(", ")}</p>}
+        {shared.length > 0 && bot.projectFolders.length > 0 && (
+          <p className="text-2xs text-fg-quaternary">Also shared with every Bot: {shared.join(", ")}</p>
+        )}
         {foldersUpdate.error && <ErrorLine className="px-0">{foldersUpdate.error}</ErrorLine>}
       </div>
       {current && !ready && (
         <div className={cn("flex items-center gap-2 rounded-xl px-3 py-2 text-sm", "bg-warn-soft text-warn-fg")}>
           <span className="min-w-0 flex-1">
-            {current.installed ? `${choiceName(bot.harness.kind, botProfile)} needs you to sign in on the server.` : `${harnessName(current.kind, current)} isn't installed on the server.`}
+            {current.installed
+              ? `${choiceName(bot.harness.kind, botProfile)} needs you to sign in on the server.`
+              : `${harnessName(current.kind, current)} isn't installed on the server.`}
           </span>
-          <button type="button" className="shrink-0 font-medium underline-offset-2 hover:underline" onClick={() => settings.show("harnesses")}>
+          <button
+            type="button"
+            className="shrink-0 font-medium underline-offset-2 hover:underline"
+            onClick={() => settings.show("harnesses")}
+          >
             Fix
           </button>
         </div>
       )}
       {update.error && <ErrorLine>{update.error}</ErrorLine>}
-      <p className="px-3 text-2xs text-fg-quaternary">Model and effort apply from the next turn. Changing the harness, account or computer starts a new session; memory and files stay.</p>
+      <p className="px-3 text-2xs text-fg-quaternary">
+        Model and effort apply from the next turn. Changing the harness, account or computer starts a new session;
+        memory and files stay.
+      </p>
       <ConfirmDialog
         open={switchTo !== undefined}
         title={`Switch to ${switchTo ? choiceName(switchTo.kind, switchTo.profileId) : ""}?`}

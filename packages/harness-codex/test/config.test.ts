@@ -32,14 +32,26 @@ describe("placement → thread plan (explicit environments always, G3)", () => {
   })
 
   test("codex-environment: registers the relay and selects only the node", () => {
-    const p = plan(makePlacement("/data/scratch", {
-      mode: "codex-environment",
-      hostNodeId: NODE,
-      workspacePath: "/home/u/openbot/workspaces/b",
-      codexEnvironment: { environmentId: NODE, execServerUrl: "ws://127.0.0.1:1/relay", authBearerToken: "t", cwd: "/home/u/openbot/workspaces/b" },
-    }))
+    const p = plan(
+      makePlacement("/data/scratch", {
+        mode: "codex-environment",
+        hostNodeId: NODE,
+        workspacePath: "/home/u/openbot/workspaces/b",
+        codexEnvironment: {
+          environmentId: NODE,
+          execServerUrl: "ws://127.0.0.1:1/relay",
+          authBearerToken: "t",
+          cwd: "/home/u/openbot/workspaces/b",
+        },
+      }),
+    )
     expect(p.environments).toEqual([{ environmentId: NODE, cwd: "/home/u/openbot/workspaces/b" }])
-    expect(p.register).toEqual({ environmentId: NODE, execServerUrl: "ws://127.0.0.1:1/relay", authBearerToken: "t", connectTimeoutMs: 10_000 })
+    expect(p.register).toEqual({
+      environmentId: NODE,
+      execServerUrl: "ws://127.0.0.1:1/relay",
+      authBearerToken: "t",
+      connectTimeoutMs: 10_000,
+    })
     expect(p.cwd).toBe("/data/scratch")
     expect(p.nodeIdForEnvironment(NODE)).toBe(NODE)
     expect(p.nodeIdForEnvironment("local")).toBeUndefined()
@@ -48,11 +60,13 @@ describe("placement → thread plan (explicit environments always, G3)", () => {
   test("codex-environment without a relay, or with a reserved id, fails", () => {
     const missing = planThread(makePlacement("/w", { mode: "codex-environment", hostNodeId: NODE }))
     expect(missing).toBeInstanceOf(HarnessError)
-    const reserved = planThread(makePlacement("/w", {
-      mode: "codex-environment",
-      hostNodeId: NODE,
-      codexEnvironment: { environmentId: "local", execServerUrl: "ws://x", authBearerToken: "t", cwd: "/w" },
-    }))
+    const reserved = planThread(
+      makePlacement("/w", {
+        mode: "codex-environment",
+        hostNodeId: NODE,
+        codexEnvironment: { environmentId: "local", execServerUrl: "ws://x", authBearerToken: "t", cwd: "/w" },
+      }),
+    )
     expect(reserved).toMatchObject({ code: "open-failed" })
     expect(isValidEnvironmentId("nod_01ABC-x")).toBe(true)
     expect(isValidEnvironmentId("none")).toBe(false)
@@ -60,7 +74,9 @@ describe("placement → thread plan (explicit environments always, G3)", () => {
   })
 
   test("brain-mcp-hands: no environments, read-only, a base prompt about the node tools", () => {
-    const p = plan(makePlacement("/data/scratch", { mode: "brain-mcp-hands", hostNodeId: NODE, workspacePath: "/srv/ws" }))
+    const p = plan(
+      makePlacement("/data/scratch", { mode: "brain-mcp-hands", hostNodeId: NODE, workspacePath: "/srv/ws" }),
+    )
     expect(p.environments).toEqual([])
     expect(p.sandbox).toBe("read-only")
     expect(p.baseInstructions).toContain("NO local shell")
@@ -77,10 +93,12 @@ describe("thread config", () => {
   })
 
   test("timeouts, skill rules and extras", () => {
-    const config = threadConfig(
-      [{ name: "openbot", url: "http://x/mcp/b", headers: { authorization: "Bearer t" } }],
-      { mcpToolTimeoutSec: 120, mcpStartupTimeoutSec: 5, skillRules: [{ path: "/s/SKILL.md", enabled: false }], extra: { model_provider: "mock" } },
-    )
+    const config = threadConfig([{ name: "openbot", url: "http://x/mcp/b", headers: { authorization: "Bearer t" } }], {
+      mcpToolTimeoutSec: 120,
+      mcpStartupTimeoutSec: 5,
+      skillRules: [{ path: "/s/SKILL.md", enabled: false }],
+      extra: { model_provider: "mock" },
+    })
     expect(config).toMatchObject({
       mcp_servers: { openbot: { tool_timeout_sec: 120, startup_timeout_sec: 5 } },
       "skills.config": [{ path: "/s/SKILL.md", enabled: false }],
@@ -89,15 +107,27 @@ describe("thread config", () => {
   })
 
   test("thread/start and thread/resume params; model omitted when unset", () => {
-    const input = makeSessionInput("/w", () => {
-      throw new Error("unused")
-    }, { model: undefined })
+    const input = makeSessionInput(
+      "/w",
+      () => {
+        throw new Error("unused")
+      },
+      { model: undefined },
+    )
     const p = plan(makePlacement("/w"))
     const start = threadStartParams(input, p, {})
     expect(start).not.toHaveProperty("model")
-    expect(start).toMatchObject({ approvalPolicy: "on-request", sandbox: "workspace-write", environments: p.environments })
+    expect(start).toMatchObject({
+      approvalPolicy: "on-request",
+      sandbox: "workspace-write",
+      environments: p.environments,
+    })
     const resume = threadResumeParams("thr", input, p, {})
-    expect(resume).toMatchObject({ threadId: "thr", excludeTurns: true, developerInstructions: "You are Scout, an OpenBot." })
+    expect(resume).toMatchObject({
+      threadId: "thr",
+      excludeTurns: true,
+      developerInstructions: "You are Scout, an OpenBot.",
+    })
     expect(resume).not.toHaveProperty("environments")
   })
 
@@ -109,7 +139,9 @@ describe("thread config", () => {
       environments: [{ environmentId: "local", cwd: "/w" }],
       summary: "auto",
     })
-    expect(userInputOf({ turnId: turnId(1), text: "see", attachments: [{ path: "/a.jpg", mime: "IMAGE/JPEG", name: "a" }] })).toEqual([
+    expect(
+      userInputOf({ turnId: turnId(1), text: "see", attachments: [{ path: "/a.jpg", mime: "IMAGE/JPEG", name: "a" }] }),
+    ).toEqual([
       { type: "text", text: "see", text_elements: [] },
       { type: "localImage", path: "/a.jpg" },
     ])
@@ -118,8 +150,14 @@ describe("thread config", () => {
   test("skill rules disable everything outside the library, once per path", () => {
     const listed = {
       data: [
-        { cwd: "/w", skills: [{ path: "/lib/skills/a/SKILL.md" }, { path: "/home/u/.agents/skills/x/SKILL.md" }, { path: "" }, {}] },
-        { cwd: "/v", skills: [{ path: "/home/u/.agents/skills/x/SKILL.md" }, { path: "/lib/skills-other/y/SKILL.md" }] },
+        {
+          cwd: "/w",
+          skills: [{ path: "/lib/skills/a/SKILL.md" }, { path: "/home/u/.agents/skills/x/SKILL.md" }, { path: "" }, {}],
+        },
+        {
+          cwd: "/v",
+          skills: [{ path: "/home/u/.agents/skills/x/SKILL.md" }, { path: "/lib/skills-other/y/SKILL.md" }],
+        },
       ],
     }
     expect(skillRulesFor(listed, "/lib/skills/")).toEqual([
@@ -131,7 +169,9 @@ describe("thread config", () => {
   })
 
   test("library skills the Bot does not have are disabled too (D5.5)", () => {
-    const listed = { data: [{ cwd: "/w", skills: [{ path: "/lib/skills/a/SKILL.md" }, { path: "/lib/skills/b/SKILL.md" }] }] }
+    const listed = {
+      data: [{ cwd: "/w", skills: [{ path: "/lib/skills/a/SKILL.md" }, { path: "/lib/skills/b/SKILL.md" }] }],
+    }
     expect(skillRulesFor(listed, "/lib/skills", ["a"])).toEqual([{ path: "/lib/skills/b/SKILL.md", enabled: false }])
     expect(skillRulesFor(listed, "/lib/skills", [])).toEqual([
       { path: "/lib/skills/a/SKILL.md", enabled: false },

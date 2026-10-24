@@ -33,7 +33,13 @@ import {
   type NodeConfigShape,
   type NodeIdentity,
 } from "@openbot/node-daemon"
-import { base64UrlDecode, NodeRoot, PolicyCeiling, PROTOCOL_VERSION, type NodeRoot as NodeRootType } from "@openbot/node-protocol"
+import {
+  base64UrlDecode,
+  NodeRoot,
+  PolicyCeiling,
+  PROTOCOL_VERSION,
+  type NodeRoot as NodeRootType,
+} from "@openbot/node-protocol"
 
 export const USAGE = `openbot-node ${NODE_DAEMON_VERSION}: the OpenBot node daemon (the "hands")
 
@@ -105,7 +111,9 @@ const FileConfig = Schema.Struct({
       extraArgs: Schema.optional(Schema.Array(Schema.String)),
     }),
   ),
-  shell: Schema.optional(Schema.Struct({ program: Schema.optional(Schema.String), interactive: Schema.optional(Schema.String) })),
+  shell: Schema.optional(
+    Schema.Struct({ program: Schema.optional(Schema.String), interactive: Schema.optional(Schema.String) }),
+  ),
   desktop: Schema.optional(
     Schema.Struct({
       enabled: Schema.optional(Schema.Boolean),
@@ -127,7 +135,11 @@ export const loadFileConfig = (dataDir: string): Effect.Effect<FileConfig, CliEr
     if (!existsSync(file)) return {}
     const raw = yield* Effect.try({
       try: () => JSON.parse(readFileSync(file, "utf8")) as unknown,
-      catch: (e) => new CliError({ message: `${file} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 }),
+      catch: (e) =>
+        new CliError({
+          message: `${file} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+          exitCode: 1,
+        }),
     })
     return yield* Schema.decodeUnknownEffect(FileConfig)(raw).pipe(
       Effect.mapError((e) => new CliError({ message: `${file} is invalid: ${e.message}`, exitCode: 1 })),
@@ -138,7 +150,11 @@ export const loadFileConfig = (dataDir: string): Effect.Effect<FileConfig, CliEr
 export const parseRootFlag = (flag: string, index: number): NodeRootType => {
   const m = /^(.*):(ro|rw)$/.exec(flag)
   const p = m ? m[1]! : flag
-  return { id: index === 0 ? "work" : `root${index + 1}`, path: path.resolve(expandHome(p)), mode: m ? (m[2] as "ro" | "rw") : "rw" }
+  return {
+    id: index === 0 ? "work" : `root${index + 1}`,
+    path: path.resolve(expandHome(p)),
+    mode: m ? (m[2] as "ro" | "rw") : "rw",
+  }
 }
 
 export interface RunFlags {
@@ -164,14 +180,20 @@ export const buildNodeConfig = (input: {
     let ceiling = file.ceiling
     if (flags.ceiling !== undefined) {
       if (!Schema.is(PolicyCeiling)(flags.ceiling)) {
-        return yield* new CliError({ message: `--ceiling must be never, ask or always (got ${flags.ceiling})`, exitCode: 2 })
+        return yield* new CliError({
+          message: `--ceiling must be never, ask or always (got ${flags.ceiling})`,
+          exitCode: 2,
+        })
       }
       ceiling = flags.ceiling
     }
     const actions: Partial<Record<NodeAction, PolicyCeiling>> = {}
     for (const [k, v] of Object.entries(file.actions ?? {})) {
       if (!(NodeActions as ReadonlyArray<string>).includes(k)) {
-        return yield* new CliError({ message: `config.json: unknown action "${k}" (known: ${NodeActions.join(", ")})`, exitCode: 1 })
+        return yield* new CliError({
+          message: `config.json: unknown action "${k}" (known: ${NodeActions.join(", ")})`,
+          exitCode: 1,
+        })
       }
       actions[k as NodeAction] = v
     }
@@ -193,7 +215,9 @@ export const buildNodeConfig = (input: {
       browser: {
         ...(file.browser?.enabled !== undefined ? { enabled: file.browser.enabled } : {}),
         ...(flags.noBrowser ? { enabled: false } : {}),
-        ...((flags.browser ?? file.browser?.executable) ? { executable: expandHome(flags.browser ?? file.browser!.executable!) } : {}),
+        ...((flags.browser ?? file.browser?.executable)
+          ? { executable: expandHome(flags.browser ?? file.browser!.executable!) }
+          : {}),
         ...(headless !== undefined ? { headless } : {}),
         ...(file.browser?.width !== undefined ? { width: file.browser.width } : {}),
         ...(file.browser?.height !== undefined ? { height: file.browser.height } : {}),
@@ -277,7 +301,9 @@ const describeState = (s: DialState): string => {
 }
 
 const loadIdentity = (dataDir: string) =>
-  makeKeyStore(dataDir).load.pipe(Effect.mapError((e) => new CliError({ message: `cannot read ${e.path}: ${e.message}`, exitCode: 1 })))
+  makeKeyStore(dataDir).load.pipe(
+    Effect.mapError((e) => new CliError({ message: `cannot read ${e.path}: ${e.message}`, exitCode: 1 })),
+  )
 
 const notPaired = (dataDir: string) =>
   new CliError({
@@ -305,7 +331,10 @@ export const pairCommand = (input: {
     }
     const running = readStatusFile(dataDir)
     if (running && running.pid !== process.pid && pidAlive(running.pid)) {
-      return yield* new CliError({ message: `The node daemon is running (pid ${running.pid}); stop it before pairing again.`, exitCode: 1 })
+      return yield* new CliError({
+        message: `The node daemon is running (pid ${running.pid}); stop it before pairing again.`,
+        exitCode: 1,
+      })
     }
     const identity = yield* pairNode({ brainUrl: input.brainUrl, code: input.code, keyStore }).pipe(
       Effect.mapError((e) => new CliError({ message: `Pairing failed: ${e.message}`, exitCode: 1 })),
@@ -313,11 +342,17 @@ export const pairCommand = (input: {
     io.out(`Paired with ${identity.brainUrl} as ${identity.nodeId}.`)
     io.out(`Brain key: ${keyFingerprint(identity.brainPublicKey)} (pinned)`)
     io.out(`Identity:  ${keyStore.path}`)
-    io.out(`Start the node with: openbot-node run${input.dataDir !== defaultDataDir(io.env) ? ` --data-dir ${dataDir}` : ""}`)
+    io.out(
+      `Start the node with: openbot-node run${input.dataDir !== defaultDataDir(io.env) ? ` --data-dir ${dataDir}` : ""}`,
+    )
     return 0
   })
 
-export const runCommand = (input: { readonly io: CliIo; readonly dataDir: string; readonly flags: RunFlags }): Effect.Effect<number, CliError> =>
+export const runCommand = (input: {
+  readonly io: CliIo
+  readonly dataDir: string
+  readonly flags: RunFlags
+}): Effect.Effect<number, CliError> =>
   Effect.gen(function* () {
     const { io, dataDir } = input
     const identity = Option.getOrUndefined(yield* loadIdentity(dataDir))
@@ -364,7 +399,11 @@ export const runCommand = (input: { readonly io: CliIo; readonly dataDir: string
     )
   })
 
-export const statusCommand = (input: { readonly io: CliIo; readonly dataDir: string; readonly json: boolean }): Effect.Effect<number, CliError> =>
+export const statusCommand = (input: {
+  readonly io: CliIo
+  readonly dataDir: string
+  readonly json: boolean
+}): Effect.Effect<number, CliError> =>
   Effect.gen(function* () {
     const { io, dataDir } = input
     const identity = Option.getOrUndefined(yield* loadIdentity(dataDir))
@@ -397,7 +436,9 @@ export const statusCommand = (input: { readonly io: CliIo; readonly dataDir: str
                   desktop: config.desktop.enabled,
                 }
               : {}),
-            daemon: running ? { pid: status.pid, startedAt: status.startedAt, state: status.state, capabilities: status.capabilities } : null,
+            daemon: running
+              ? { pid: status.pid, startedAt: status.startedAt, state: status.state, capabilities: status.capabilities }
+              : null,
           },
           null,
           2,
@@ -413,14 +454,20 @@ export const statusCommand = (input: { readonly io: CliIo; readonly dataDir: str
     }
     io.out(`node:      ${identity.nodeId}`)
     io.out(`brain:     ${identity.brainUrl} (origin ${identity.brainOrigin})`)
-    io.out(`brain key: ${keyFingerprint(identity.brainPublicKey)} (pinned ${new Date(identity.pairedAt).toISOString()})`)
+    io.out(
+      `brain key: ${keyFingerprint(identity.brainPublicKey)} (pinned ${new Date(identity.pairedAt).toISOString()})`,
+    )
     if (config) {
       io.out(`roots:     ${config.roots.map((r) => `${r.path}${r.mode === "ro" ? " (ro)" : ""}`).join(", ")}`)
       io.out(`ceiling:   ${config.policy.ceiling}`)
       io.out(`browser:   ${config.browser.enabled ? (config.browser.executable ?? "not found") : "disabled"}`)
-      io.out(`desktops:  ${config.desktop.enabled ? "on when Xvfb, x11vnc, xdotool, xfwm4/openbox and ImageMagick are installed" : "disabled"}`)
+      io.out(
+        `desktops:  ${config.desktop.enabled ? "on when Xvfb, x11vnc, xdotool, xfwm4/openbox and ImageMagick are installed" : "disabled"}`,
+      )
     }
-    io.out(running ? `daemon:    running (pid ${status.pid}), ${describeState(status.state)}` : "daemon:    not running")
+    io.out(
+      running ? `daemon:    running (pid ${status.pid}), ${describeState(status.state)}` : "daemon:    not running",
+    )
     return 0
   })
 
@@ -467,14 +514,18 @@ export const runCli = (argv: ReadonlyArray<string>, io: CliIo = processIo): Effe
     }
     const level = values["log-level"]
     if (level !== undefined && !(level in LOG_LEVELS)) {
-      return yield* new CliError({ message: `--log-level must be one of ${Object.keys(LOG_LEVELS).join(", ")}`, exitCode: 2 })
+      return yield* new CliError({
+        message: `--log-level must be one of ${Object.keys(LOG_LEVELS).join(", ")}`,
+        exitCode: 2,
+      })
     }
     const withLevel = <A, E>(e: Effect.Effect<A, E>) =>
       Effect.provideService(e, References.MinimumLogLevel, LOG_LEVELS[(level ?? "info") as keyof typeof LOG_LEVELS])
 
     switch (command) {
       case "pair": {
-        if (rest.length !== 2) return yield* new CliError({ message: `usage: openbot-node pair <brain-url> <code>`, exitCode: 2 })
+        if (rest.length !== 2)
+          return yield* new CliError({ message: `usage: openbot-node pair <brain-url> <code>`, exitCode: 2 })
         return yield* pairCommand({ io, dataDir, brainUrl: rest[0]!, code: rest[1]!, force: values.force ?? false })
       }
       case "run":

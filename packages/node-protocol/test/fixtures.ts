@@ -67,7 +67,13 @@ export const NodeHandlers = (state: NodeState) =>
       state.verified
         ? path.startsWith("/etc")
           ? Effect.fail(new PathDenied({ path, reason: "outside roots" }))
-          : Effect.succeed({ content: `content of ${path}`, encoding: "utf8" as const, sha256: "00", size: 3, truncated: false })
+          : Effect.succeed({
+              content: `content of ${path}`,
+              encoding: "utf8" as const,
+              sha256: "00",
+              size: 3,
+              truncated: false,
+            })
         : Effect.fail(new NotAuthenticated({ reason: "node.hello first" })),
     "fs.download": unused,
     "fs.upload": unused,
@@ -106,7 +112,8 @@ export const NodeHandlers = (state: NodeState) =>
     "desktop.stop": () => Effect.void,
     "computer.act": () => Effect.fail(new DesktopUnavailable({ message: "no desktop in tests" })),
     "computer.stream": () => Effect.fail(new DesktopUnavailable({ message: "no desktop in tests" })),
-    "screen.ensure": () => Effect.fail(new DesktopUnavailable({ message: "no screen in tests", missing: ["Screen Recording"] })),
+    "screen.ensure": () =>
+      Effect.fail(new DesktopUnavailable({ message: "no screen in tests", missing: ["Screen Recording"] })),
     "screen.stream": () => Effect.fail(new DesktopUnavailable({ message: "no screen in tests" })),
     "screen.input": () => Effect.fail(new DesktopUnavailable({ message: "no screen in tests" })),
   })
@@ -118,7 +125,10 @@ export interface BrainState {
 export const BrainHandlers = (state: BrainState) =>
   BrainRpcs.toLayer({
     "node.requestApproval": (req, { headers }) =>
-      Effect.succeed({ decision: req.action === "run-command" ? ("allow-once" as const) : ("deny" as const), by: `brain-saw:${stampedNodeId(headers)}` }),
+      Effect.succeed({
+        decision: req.action === "run-command" ? ("allow-once" as const) : ("deny" as const),
+        by: `brain-saw:${stampedNodeId(headers)}`,
+      }),
     "node.openStream": ({ kind, botId }) =>
       botId === "bot_1"
         ? Effect.succeed({ streamId: "s1", streamToken: "t".repeat(22) })
@@ -154,7 +164,12 @@ export const connectedPeers = Effect.gen(function* () {
   }).pipe(Effect.provide(brainCtx))
   const hello = () =>
     Effect.flatMap(
-      signHello({ brainPrivateKey: brainKeys.privateKey, nodeId: NODE_ID, nonce: nodeState.upgradeNonce, brainOrigin: ORIGIN }),
+      signHello({
+        brainPrivateKey: brainKeys.privateKey,
+        nodeId: NODE_ID,
+        nonce: nodeState.upgradeNonce,
+        brainOrigin: ORIGIN,
+      }),
       (brainSig) => brain.client["node.hello"]({ protocol: { min: 1, max: 1 }, brainVersion: "test", brainSig }),
     )
   return { pair, node, brain, nodeState, brainState, brainKeys, hello }

@@ -23,7 +23,8 @@ process.on("message", (request: RecognizerRequest) => {
   const peak = request.samples.reduce((loudest, sample) => Math.max(loudest, Math.abs(sample)), 0)
   if (peak > CRASHES_ABOVE) process.exit(7)
   if (peak > HANGS_ABOVE) return
-  if (peak > DECODE_FAILS_ABOVE) return reply({ type: "decode-failed", id: request.id, message: "the fake model could not decode" })
+  if (peak > DECODE_FAILS_ABOVE)
+    return reply({ type: "decode-failed", id: request.id, message: "the fake model could not decode" })
   reply({ type: "decoded", id: request.id, text: heard })
 })
 process.on("disconnect", () => process.exit(0))

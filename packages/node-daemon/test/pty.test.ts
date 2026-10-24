@@ -35,7 +35,8 @@ const brainEnd = (socket: Socket.Socket) =>
       Effect.gen(function* () {
         const end = Date.now() + ms
         while (!pred()) {
-          if (Date.now() > end) return yield* Effect.die(new Error(`timed out; output so far: ${JSON.stringify(state.output.slice(-400))}`))
+          if (Date.now() > end)
+            return yield* Effect.die(new Error(`timed out; output so far: ${JSON.stringify(state.output.slice(-400))}`))
           yield* Effect.sleep(20)
         }
       })
@@ -87,7 +88,15 @@ describe("pty.open", () => {
     run(
       Effect.gen(function* () {
         const { client, brain } = yield* makeTestNode({ dataDir, roots: [root] })
-        const { pid } = yield* client["pty.open"]({ inv: inv(), cols: 80, rows: 24, cwd: root, shell: "/bin/sh", streamId: "s_pty2", streamToken: "tok" })
+        const { pid } = yield* client["pty.open"]({
+          inv: inv(),
+          cols: 80,
+          rows: 24,
+          cwd: root,
+          shell: "/bin/sh",
+          streamId: "s_pty2",
+          streamToken: "tok",
+        })
         const socket = brain.streams.get("s_pty2")!
         const writer = yield* socket.writer
         yield* Effect.sleep(100)

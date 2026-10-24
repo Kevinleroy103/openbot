@@ -12,7 +12,7 @@ interface PayloadRow {
 
 const NodeJson = jsonCodec(NodeRecord, "node")
 
-export const makeSqlNodeRepo = Effect.gen(function*() {
+export const makeSqlNodeRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   const first = (op: string, rows: ReadonlyArray<PayloadRow>) => {
     const row = rows[0]
@@ -27,7 +27,7 @@ export const makeSqlNodeRepo = Effect.gen(function*() {
         Effect.flatMap((rows) => first("NodeRepo.get", rows)),
         repoOp("NodeRepo.get"),
       ),
-    list: Effect.gen(function*() {
+    list: Effect.gen(function* () {
       const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM nodes ORDER BY created_at, rowid`
       return yield* Effect.forEach(rows, (row) => NodeJson.decode("NodeRepo.list", row.payload_json, row.id))
     }).pipe(repoOp("NodeRepo.list")),
@@ -37,7 +37,7 @@ export const makeSqlNodeRepo = Effect.gen(function*() {
         repoOp("NodeRepo.findByPublicKey"),
       ),
     upsert: (node) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const payload = yield* NodeJson.encode("NodeRepo.upsert", node)
         yield* sql`INSERT INTO nodes (id, public_key, created_at, payload_json)
           VALUES (${node.id}, ${node.publicKey ?? null}, ${node.createdAt}, ${payload})

@@ -10,8 +10,7 @@ import { heldModifiers, holdKeys, xdoKeySequence } from "./keys.ts"
 
 export type PlanStep =
   /** run `xdotool <args>` */
-  | { readonly _tag: "xdotool"; readonly args: ReadonlyArray<string> }
-  | { readonly _tag: "sleep"; readonly ms: number }
+  { readonly _tag: "xdotool"; readonly args: ReadonlyArray<string> } | { readonly _tag: "sleep"; readonly ms: number }
 
 export interface ActionPlan {
   /** keysyms pressed (`keydown`) before the steps and released (`keyup`, reverse order) after them, even on failure */
@@ -71,13 +70,23 @@ const SCROLL_BUTTONS = { up: 4, down: 5, left: 6, right: 7 } as const
  * Builds the plan for one action, or returns an error message for the model. `mac`: key names for a
  * Mac (Command stays Command; the steps are then replayed by `macSteps`).
  */
-export const planAction = (g: ScreenGeometry, a: ComputerAction, options?: { readonly mac?: boolean }): ActionPlan | string => {
+export const planAction = (
+  g: ScreenGeometry,
+  a: ComputerAction,
+  options?: { readonly mac?: boolean },
+): ActionPlan | string => {
   const mac = options?.mac ?? false
   const optionalPoint = (name: "coordinate"): Point | undefined | string =>
     a[name] === undefined ? undefined : apiPoint(g, a[name], name)
   switch (a.action) {
     case "screenshot":
-      return { hold: [], steps: [], image: "now", cursor: false, text: `Screenshot of the screen (${g.apiWidth}x${g.apiHeight}).` }
+      return {
+        hold: [],
+        steps: [],
+        image: "now",
+        cursor: false,
+        text: `Screenshot of the screen (${g.apiWidth}x${g.apiHeight}).`,
+      }
     case "zoom": {
       const z = zoomRect(g, a.region)
       if (typeof z === "string") return z
@@ -99,8 +108,10 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction, options?: { rea
       const p = optionalPoint("coordinate")
       if (typeof p === "string") return p
       const mods = heldModifiers(a.text, mac)
-      if (mods === undefined) return `text must name modifier keys to hold (e.g. "shift" or "ctrl+shift"), got ${JSON.stringify(a.text)}`
-      const click = c.count === 1 ? xdo("click", c.button) : xdo("click", "--repeat", c.count, "--delay", CLICK_DELAY_MS, c.button)
+      if (mods === undefined)
+        return `text must name modifier keys to hold (e.g. "shift" or "ctrl+shift"), got ${JSON.stringify(a.text)}`
+      const click =
+        c.count === 1 ? xdo("click", c.button) : xdo("click", "--repeat", c.count, "--delay", CLICK_DELAY_MS, c.button)
       return {
         hold: mods,
         steps: p ? [moveTo(g, p), click] : [click],
@@ -112,7 +123,13 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction, options?: { rea
     case "mouse_move": {
       const p = apiPoint(g, a.coordinate, "coordinate")
       if (typeof p === "string") return p
-      return { hold: [], steps: [moveTo(g, p)], image: "after", cursor: false, text: `Moved the mouse to (${p.x}, ${p.y}).` }
+      return {
+        hold: [],
+        steps: [moveTo(g, p)],
+        image: "after",
+        cursor: false,
+        text: `Moved the mouse to (${p.x}, ${p.y}).`,
+      }
     }
     case "left_click_drag": {
       const from = apiPoint(g, a.start_coordinate, "start_coordinate")
@@ -146,12 +163,17 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction, options?: { rea
       const direction = a.scroll_direction
       if (direction === undefined) return "scroll_direction (up, down, left or right) is required"
       const amount = Math.round(a.scroll_amount ?? 3)
-      if (!Number.isFinite(amount) || amount < 1 || amount > MAX_SCROLL) return `scroll_amount must be between 1 and ${MAX_SCROLL}`
+      if (!Number.isFinite(amount) || amount < 1 || amount > MAX_SCROLL)
+        return `scroll_amount must be between 1 and ${MAX_SCROLL}`
       const mods = heldModifiers(a.text, mac)
-      if (mods === undefined) return `text must name modifier keys to hold (e.g. "shift"), got ${JSON.stringify(a.text)}`
+      if (mods === undefined)
+        return `text must name modifier keys to hold (e.g. "shift"), got ${JSON.stringify(a.text)}`
       return {
         hold: mods,
-        steps: [...(p ? [moveTo(g, p)] : []), xdo("click", "--repeat", amount, "--delay", 30, SCROLL_BUTTONS[direction])],
+        steps: [
+          ...(p ? [moveTo(g, p)] : []),
+          xdo("click", "--repeat", amount, "--delay", 30, SCROLL_BUTTONS[direction]),
+        ],
         image: "after",
         cursor: false,
         text: `Scrolled ${direction} ${amount}${at(p)}${withMods(mods)}.`,
@@ -169,15 +191,28 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction, options?: { rea
     }
     case "key": {
       const keys = xdoKeySequence(a.text, mac)
-      if (keys === undefined) return `text must name a key or combination for key (e.g. "Return" or "ctrl+l"), got ${JSON.stringify(a.text)}`
-      return { hold: [], steps: [xdo("key", "--delay", 50, "--", ...keys)], image: "after", cursor: false, text: `Pressed ${keys.join(" ")}.` }
+      if (keys === undefined)
+        return `text must name a key or combination for key (e.g. "Return" or "ctrl+l"), got ${JSON.stringify(a.text)}`
+      return {
+        hold: [],
+        steps: [xdo("key", "--delay", 50, "--", ...keys)],
+        image: "after",
+        cursor: false,
+        text: `Pressed ${keys.join(" ")}.`,
+      }
     }
     case "hold_key": {
       const keys = holdKeys(a.text, mac)
       if (keys === undefined) return `text must name the key to hold (e.g. "shift"), got ${JSON.stringify(a.text)}`
       const d = seconds(a.duration, 1)
       if (typeof d === "string") return d
-      return { hold: keys, steps: [sleep(d * 1000)], image: "after", cursor: false, text: `Held ${keys.join("+")} for ${d} s.` }
+      return {
+        hold: keys,
+        steps: [sleep(d * 1000)],
+        image: "after",
+        cursor: false,
+        text: `Held ${keys.join("+")} for ${d} s.`,
+      }
     }
     case "wait": {
       const d = seconds(a.duration, 1)
@@ -191,7 +226,8 @@ export const planAction = (g: ScreenGeometry, a: ComputerAction, options?: { rea
 
 /** Short audit / approval target for an action (no typed text). */
 export const describeComputerAction = (a: ComputerAction): string => {
-  const c = a.coordinate && a.coordinate.length === 2 ? ` ${Math.round(a.coordinate[0]!)},${Math.round(a.coordinate[1]!)}` : ""
+  const c =
+    a.coordinate && a.coordinate.length === 2 ? ` ${Math.round(a.coordinate[0]!)},${Math.round(a.coordinate[1]!)}` : ""
   switch (a.action) {
     case "type":
       return `type ${Array.from(a.text ?? "").length} chars`
@@ -201,7 +237,10 @@ export const describeComputerAction = (a: ComputerAction): string => {
     case "scroll":
       return `scroll ${a.scroll_direction ?? ""} ${a.scroll_amount ?? 3}${c}`.replace(/\s+/g, " ").trim()
     case "left_click_drag": {
-      const s = a.start_coordinate && a.start_coordinate.length === 2 ? `${Math.round(a.start_coordinate[0]!)},${Math.round(a.start_coordinate[1]!)}` : "?"
+      const s =
+        a.start_coordinate && a.start_coordinate.length === 2
+          ? `${Math.round(a.start_coordinate[0]!)},${Math.round(a.start_coordinate[1]!)}`
+          : "?"
       return `left_click_drag ${s} →${c || " ?"}`
     }
     case "zoom":
@@ -225,7 +264,8 @@ export interface ScreenshotSpec {
   readonly height: number
   /** exact size (`WxH!`) for full screenshots; fit (`WxH`) for zoom crops */
   readonly exact: boolean
-  readonly crop?: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | undefined
+  readonly crop?:
+    { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | undefined
   readonly format: "jpeg" | "webp" | "png"
   readonly quality: number
 }

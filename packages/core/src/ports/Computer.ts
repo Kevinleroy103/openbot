@@ -18,21 +18,27 @@ export interface ComputerLeaseChange {
   readonly cause: "lease" | "reset"
 }
 
-export class ComputerPort extends Context.Service<ComputerPort, {
-  /** `computer.status`. */
-  readonly status: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound>
-  /**
-   * `computer.ensure`: starts the bot's screen on its host node (`desktop.ensure` on a `desktop@1`
-   * node, else `browser.ensure`).
-   */
-  readonly ensure: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable>
-  /** `computer.lease {take}`: the user takes (`true`) or releases (`false`) control. */
-  readonly lease: (botId: BotId, take: boolean) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable | Conflict>
-  /**
-   * `computer.reset`: stops the bot's desktop and everything on it (`desktop.stop`) and ends the
-   * owner's control; the next use starts a fresh one. Nothing to reset on a browser-only node.
-   */
-  readonly reset: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable>
-  /** Every change of who holds a bot's control lease (hot, no replay). */
-  readonly leaseChanges: Stream.Stream<ComputerLeaseChange>
-}>()("openbot/core/ComputerPort") {}
+export class ComputerPort extends Context.Service<
+  ComputerPort,
+  {
+    /** `computer.status`. */
+    readonly status: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound>
+    /**
+     * `computer.ensure`: starts the bot's screen on its host node (`desktop.ensure` on a `desktop@1`
+     * node, else `browser.ensure`).
+     */
+    readonly ensure: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable>
+    /** `computer.lease {take}`: the user takes (`true`) or releases (`false`) control. */
+    readonly lease: (
+      botId: BotId,
+      take: boolean,
+    ) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable | Conflict>
+    /**
+     * `computer.reset`: stops the bot's desktop and everything on it (`desktop.stop`) and ends the
+     * owner's control; the next use starts a fresh one. Nothing to reset on a browser-only node.
+     */
+    readonly reset: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable>
+    /** Every change of who holds a bot's control lease (hot, no replay). */
+    readonly leaseChanges: Stream.Stream<ComputerLeaseChange>
+  }
+>()("openbot/core/ComputerPort") {}

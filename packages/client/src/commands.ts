@@ -99,8 +99,14 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
 }
 
 /** Run one RPC as an Effect (for composing inside other `runtime.fn` atoms). */
-export const callRpc = <T extends CommandTag>(tag: T, payload: CommandPayload<T>): Effect.Effect<CommandSuccess<T>, CommandError<T>, OpenBotClient> =>
-  Effect.flatMap(OpenBotClient, (client) => (client as any)(tag, payload) as Effect.Effect<CommandSuccess<T>, CommandError<T>>)
+export const callRpc = <T extends CommandTag>(
+  tag: T,
+  payload: CommandPayload<T>,
+): Effect.Effect<CommandSuccess<T>, CommandError<T>, OpenBotClient> =>
+  Effect.flatMap(
+    OpenBotClient,
+    (client) => (client as any)(tag, payload) as Effect.Effect<CommandSuccess<T>, CommandError<T>>,
+  )
 
 const SEP = "\u0000"
 
@@ -146,7 +152,9 @@ export const commandAtom = <T extends CommandTag>(tag: T, instanceKey = ""): Com
 
 /** One shared command atom per unary RPC: `commands["settings.update"]`. */
 export const commands: { readonly [T in CommandTag]: CommandAtom<T> } = Object.fromEntries(
-  [...OpenBotRpcs.requests.keys()].filter((tag) => !STREAM_TAGS.has(tag)).map((tag) => [tag, commandAtom(tag as CommandTag)]),
+  [...OpenBotRpcs.requests.keys()]
+    .filter((tag) => !STREAM_TAGS.has(tag))
+    .map((tag) => [tag, commandAtom(tag as CommandTag)]),
 ) as { readonly [T in CommandTag]: CommandAtom<T> }
 
 // Named aliases for the most used commands.
@@ -162,4 +170,5 @@ export const retryTurnAtom = commands["turns.retry"]
 export const updateSettingsAtom = commands["settings.update"]
 export const createPairingCodeAtom = commands["nodes.createPairingCode"]
 /** Answer a runtime request; keyed per request so answering two cards never interrupts one. */
-export const respondRequestAtom = (requestId: string): CommandAtom<"requests.respond"> => commandAtom("requests.respond", requestId)
+export const respondRequestAtom = (requestId: string): CommandAtom<"requests.respond"> =>
+  commandAtom("requests.respond", requestId)

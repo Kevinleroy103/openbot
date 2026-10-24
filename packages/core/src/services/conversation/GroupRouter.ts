@@ -41,7 +41,9 @@ const inMemberOrder = (group: GroupConversation, ids: ReadonlySet<BotId>): Reado
 
 /** The default responder: the lead bot when it is a member, else the first member. */
 export const leadOf = (group: GroupConversation): BotId | undefined =>
-  group.leadBotId !== undefined && group.memberBotIds.includes(group.leadBotId) ? group.leadBotId : group.memberBotIds[0]
+  group.leadBotId !== undefined && group.memberBotIds.includes(group.leadBotId)
+    ? group.leadBotId
+    : group.memberBotIds[0]
 
 /** Routes an owner message in a group (D5.1). Empty only for a group without members. */
 export const routeOwnerMessage = (input: OwnerMessageRouting): GroupRoute => {

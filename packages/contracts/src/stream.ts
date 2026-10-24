@@ -3,7 +3,18 @@
 // with Grok's ordered replicas (`ordered: {replicaKey, epoch, sequence}`, snapshot/appended/updated/cleared).
 // Ported from vendor/scratch/contracts/src/stream.ts; the roster gains sections, notifications and settings.
 import { Schema } from "effect"
-import { BotId, ConversationId, EntryId, Millis, NodeId, NonEmptyString, NonNegativeInt, SectionId, TaskId, withUnknownFallback } from "./base.ts"
+import {
+  BotId,
+  ConversationId,
+  EntryId,
+  Millis,
+  NodeId,
+  NonEmptyString,
+  NonNegativeInt,
+  SectionId,
+  TaskId,
+  withUnknownFallback,
+} from "./base.ts"
 import { Bot, BotActivity, Conversation, ConversationSummary, NodeSummary, Notification, Section } from "./domain.ts"
 import { RuntimeRequest } from "./runtime-request.ts"
 import { Settings } from "./settings.ts"
@@ -20,7 +31,11 @@ export type StreamCursor = typeof StreamCursor.Type
 // ---------------------------------------------------------------------------- conversation replica
 export const ConversationChangeMembers = [
   Schema.Struct({ type: Schema.Literal("entry.upserted"), entry: TranscriptEntry }),
-  Schema.Struct({ type: Schema.Literal("entry.removed"), entryId: EntryId, reason: Schema.Literals(["retracted", "rolled-back", "deleted"]) }),
+  Schema.Struct({
+    type: Schema.Literal("entry.removed"),
+    entryId: EntryId,
+    reason: Schema.Literals(["retracted", "rolled-back", "deleted"]),
+  }),
   Schema.Struct({ type: Schema.Literal("request.upserted"), request: RuntimeRequest }),
   Schema.Struct({ type: Schema.Literal("turn.upserted"), turn: Turn }),
   Schema.Struct({ type: Schema.Literal("conversation.updated"), conversation: Conversation }),
@@ -53,7 +68,11 @@ export const ConversationStreamMembers = [
   /** Catch-up finished; everything after this is live. */
   Schema.Struct({ kind: Schema.Literal("synchronized"), cursor: StreamCursor }),
   /** Replica was rebuilt: drop local state; a snapshot follows (Grok `cleared`). */
-  Schema.Struct({ kind: Schema.Literal("reset"), epoch: NonEmptyString, reason: Schema.Literals(["new-session", "rollback", "rebuild"]) }),
+  Schema.Struct({
+    kind: Schema.Literal("reset"),
+    epoch: NonEmptyString,
+    reason: Schema.Literals(["new-session", "rollback", "rebuild"]),
+  }),
 ] as const
 const conversationStreamFallback = withUnknownFallback({
   members: ConversationStreamMembers,
@@ -147,7 +166,11 @@ export const RosterStreamMembers = [
   Schema.Struct({ kind: Schema.Literal("change"), cursor: StreamCursor, change: RosterChange }),
   Schema.Struct({ kind: Schema.Literal("synchronized"), cursor: StreamCursor }),
 ] as const
-const rosterStreamFallback = withUnknownFallback({ members: RosterStreamMembers, tag: "kind", keep: { cursor: Schema.optionalKey(StreamCursor) } })
+const rosterStreamFallback = withUnknownFallback({
+  members: RosterStreamMembers,
+  tag: "kind",
+  keep: { cursor: Schema.optionalKey(StreamCursor) },
+})
 export const RosterStreamItem = rosterStreamFallback.schema
 export type RosterStreamItem = typeof RosterStreamItem.Type
 export const KnownRosterStreamItem = Schema.Union(RosterStreamMembers)

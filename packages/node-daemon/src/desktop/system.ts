@@ -37,7 +37,10 @@ export interface DesktopSystem {
   /** Start a long-lived child in its own process group (detached). Throws when it cannot start. */
   readonly spawn: (argv: ReadonlyArray<string>, options: SpawnOptions) => ChildHandle
   /** Run a short command to completion (killed after `timeoutMs`). */
-  readonly exec: (argv: ReadonlyArray<string>, options: { readonly env: Readonly<Record<string, string>>; readonly timeoutMs: number }) => Promise<ExecResult>
+  readonly exec: (
+    argv: ReadonlyArray<string>,
+    options: { readonly env: Readonly<Record<string, string>>; readonly timeoutMs: number },
+  ) => Promise<ExecResult>
   readonly exists: (path: string) => boolean
   readonly readText: (path: string) => string | undefined
   readonly writeFile: (path: string, data: string | Uint8Array, mode?: number) => void

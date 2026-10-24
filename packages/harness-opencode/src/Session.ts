@@ -23,7 +23,13 @@ import { HarnessError, type HarnessSession, type OpenSessionInput, type TurnInpu
 import { Cause, Deferred, Effect, FiberMap, FiberSet, Option, Queue, Schedule, Scope, Semaphore, Stream } from "effect"
 import { mkdir, realpath } from "node:fs/promises"
 import { pathToFileURL } from "node:url"
-import { describeClientError, isNotFoundError, type OpenCodeApi, type OpenCodeEvent, type PermissionRule } from "./client.ts"
+import {
+  describeClientError,
+  isNotFoundError,
+  type OpenCodeApi,
+  type OpenCodeEvent,
+  type PermissionRule,
+} from "./client.ts"
 import {
   INSTRUCTION_KEY_PREFIX,
   instructionEntries,
@@ -77,8 +83,7 @@ const rec = (u: unknown): Rec => (typeof u === "object" && u !== null && !Array.
 const str = (u: unknown): string | undefined => (typeof u === "string" ? u : undefined)
 
 type Inbound =
-  | { readonly _tag: "event"; readonly event: OpenCodeEvent }
-  | { readonly _tag: "disconnect"; readonly reason: string }
+  { readonly _tag: "event"; readonly event: OpenCodeEvent } | { readonly _tag: "disconnect"; readonly reason: string }
 
 const harnessError = (code: HarnessError["code"], message: string, cause?: unknown, retryable?: boolean) =>
   new HarnessError({
@@ -99,18 +104,24 @@ const call = <A>(
     catch: (cause) => harnessError(code, `OpenCode ${what} failed: ${describeClientError(cause)}`, cause),
   })
 
-const isNotFound = (error: HarnessError): boolean => isNotFoundError(error.cause) || /\b404\b|not.?found/i.test(error.message)
+const isNotFound = (error: HarnessError): boolean =>
+  isNotFoundError(error.cause) || /\b404\b|not.?found/i.test(error.message)
 
 export const openOpenCodeSession = (
   host: OpenCodeHost,
   input: OpenSessionInput,
   options: SessionOptions = {},
 ): Effect.Effect<HarnessSession, HarnessError, Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const directory = input.placement.harnessCwd
     yield* Effect.tryPromise({
       try: () => mkdir(directory, { recursive: true }),
-      catch: (cause) => harnessError("open-failed", `Cannot create the bot workspace ${directory}: ${describeClientError(cause)}`, cause),
+      catch: (cause) =>
+        harnessError(
+          "open-failed",
+          `Cannot create the bot workspace ${directory}: ${describeClientError(cause)}`,
+          cause,
+        ),
     })
 
     let conn = yield* host.connection
@@ -130,57 +141,79 @@ export const openOpenCodeSession = (
 
     // ------------------------------------------------------------------ native session (resume or create)
     const create = call("session.create", "open-failed", (signal) =>
-      conn.client.session.create({
-        title: `OpenBot · ${input.bot.name}`,
-        location: { directory },
-        metadata,
-        permissions: rules(),
-        ...(model ? { model } : {}),
-      }, { signal }))
-    const found = input.nativeSessionId === undefined
-      ? undefined
-      : yield* call("session.get", "open-failed", (signal) => conn.client.session.get({ sessionID: input.nativeSessionId! }, { signal })).pipe(
-        Effect.map((info) => info as { readonly id: string; readonly location?: { readonly directory?: string } } | undefined),
-        Effect.catch((error) =>
-          isNotFound(error)
-            ? Effect.logWarning(`OpenCode session ${input.nativeSessionId} is gone; starting a new one.`).pipe(Effect.as(undefined))
-            : Effect.fail(error)
-        ),
-      )
+      conn.client.session.create(
+        {
+          title: `OpenBot · ${input.bot.name}`,
+          location: { directory },
+          metadata,
+          permissions: rules(),
+          ...(model ? { model } : {}),
+        },
+        { signal },
+      ),
+    )
+    const found =
+      input.nativeSessionId === undefined
+        ? undefined
+        : yield* call("session.get", "open-failed", (signal) =>
+            conn.client.session.get({ sessionID: input.nativeSessionId! }, { signal }),
+          ).pipe(
+            Effect.map(
+              (info) =>
+                info as { readonly id: string; readonly location?: { readonly directory?: string } } | undefined,
+            ),
+            Effect.catch((error) =>
+              isNotFound(error)
+                ? Effect.logWarning(`OpenCode session ${input.nativeSessionId} is gone; starting a new one.`).pipe(
+                    Effect.as(undefined),
+                  )
+                : Effect.fail(error),
+            ),
+          )
     // MCP servers are registered per directory: a session bound elsewhere (placement or workspace
     // changed) would never see this session's OpenBot tools, so it is not resumed.
     const foundDirectory = found?.location?.directory
     const canonical = yield* Effect.promise(() => realpath(directory).catch(() => directory))
-    const resumed = found !== undefined && (foundDirectory === undefined || foundDirectory === directory || foundDirectory === canonical)
-      ? found
-      : undefined
+    const resumed =
+      found !== undefined &&
+      (foundDirectory === undefined || foundDirectory === directory || foundDirectory === canonical)
+        ? found
+        : undefined
     if (found !== undefined && resumed === undefined) {
-      yield* Effect.logWarning(`OpenCode session ${found.id} is bound to ${foundDirectory}, not ${directory}; starting a new one.`)
+      yield* Effect.logWarning(
+        `OpenCode session ${found.id} is bound to ${foundDirectory}, not ${directory}; starting a new one.`,
+      )
     }
     const sessionID = resumed?.id ?? (yield* create).id
     if (resumed) {
       // Placement and MCP names may have changed since the session was created.
       yield* call("session.update", "open-failed", (signal) =>
-        conn.client.session.update({ sessionID, metadata, permissions: rules() }, { signal }))
+        conn.client.session.update({ sessionID, metadata, permissions: rules() }, { signal }),
+      )
       if (model) {
-        yield* call("session.switchModel", "open-failed", (signal) => conn.client.session.switchModel({ sessionID, model }, { signal }))
+        yield* call("session.switchModel", "open-failed", (signal) =>
+          conn.client.session.switchModel({ sessionID, model }, { signal }),
+        )
       }
     }
 
     // ------------------------------------------------------------------ persona (instruction entries)
     const wanted = instructionEntries(input.instructions)
     const existing = yield* call("instructions.entry.list", "open-failed", (signal) =>
-      conn.client.session.instructions.entry.list({ sessionID }, { signal }))
+      conn.client.session.instructions.entry.list({ sessionID }, { signal }),
+    )
     for (const entry of existing) {
       if (entry.key.startsWith(INSTRUCTION_KEY_PREFIX) && !wanted.some((w) => w.key === entry.key)) {
         yield* call("instructions.entry.remove", "open-failed", (signal) =>
-          conn.client.session.instructions.entry.remove({ sessionID, key: entry.key }, { signal }))
+          conn.client.session.instructions.entry.remove({ sessionID, key: entry.key }, { signal }),
+        )
       }
     }
     for (const entry of wanted) {
       if (existing.some((e) => e.key === entry.key && e.value === entry.value)) continue
       yield* call("instructions.entry.put", "open-failed", (signal) =>
-        conn.client.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }, { signal }))
+        conn.client.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }, { signal }),
+      )
     }
 
     // ------------------------------------------------------------------ MCP registration (per server generation)
@@ -189,42 +222,66 @@ export const openOpenCodeSession = (
     const mcpConnectTimeoutMs = options.mcpConnectTimeoutMs ?? 10_000
     const mcpSettleMs = options.mcpSettleMs ?? 500
     const registerMcp = (connection: HostConnection) =>
-      registerLock.withPermits(1)(Effect.gen(function*() {
-        if (registeredGeneration === connection.generation || servers.length === 0) {
+      registerLock.withPermits(1)(
+        Effect.gen(function* () {
+          if (registeredGeneration === connection.generation || servers.length === 0) {
+            registeredGeneration = connection.generation
+            return
+          }
+          for (const { binding, name } of servers) {
+            yield* call("mcp.add", "open-failed", (signal) =>
+              connection.client.mcp.add(
+                {
+                  server: name,
+                  location: { directory },
+                  config: {
+                    type: "remote",
+                    url: binding.url,
+                    headers: { ...binding.headers },
+                    oauth: false,
+                    codemode: false,
+                  },
+                },
+                { signal },
+              ),
+            )
+          }
+          // A prompt sent while a server is still `pending` does not see its tools (sdk-opencode.md §8.3).
+          const names = new Set(servers.map((s) => s.name))
+          yield* call("mcp.list", "open-failed", (signal) =>
+            connection.client.mcp.list({ location: { directory } }, { signal }),
+          ).pipe(
+            Effect.flatMap((out) => {
+              const ours = out.data.filter((s) => names.has(s.name))
+              const failed = ours.find((s) => s.status.status === "failed" || s.status.status === "needs_auth")
+              if (failed)
+                return Effect.fail(
+                  harnessError(
+                    "open-failed",
+                    `OpenBot tools failed to connect: ${failed.status.error ?? failed.status.status}`,
+                  ),
+                )
+              return ours.length === names.size && ours.every((s) => s.status.status === "connected")
+                ? Effect.void
+                : Effect.fail(harnessError("open-failed", "OpenBot tools are still connecting."))
+            }),
+            Effect.retry({
+              while: (e) => e.message === "OpenBot tools are still connecting.",
+              schedule: Schedule.spaced(150),
+            }),
+            Effect.timeoutOrElse({
+              duration: mcpConnectTimeoutMs,
+              orElse: () =>
+                Effect.fail(harnessError("open-failed", "Timed out waiting for the OpenBot tools to connect.")),
+            }),
+            // Let the tool registry pick the new tools up before anything is prompted (G5).
+            Effect.andThen(mcpSettleMs > 0 ? Effect.sleep(mcpSettleMs) : Effect.void),
+            // OpenBot tools are an addition: the bot can still answer without them.
+            Effect.catch((error) => Effect.logWarning(`OpenCode MCP registration incomplete: ${error.message}`)),
+          )
           registeredGeneration = connection.generation
-          return
-        }
-        for (const { binding, name } of servers) {
-          yield* call("mcp.add", "open-failed", (signal) =>
-            connection.client.mcp.add({
-              server: name,
-              location: { directory },
-              config: { type: "remote", url: binding.url, headers: { ...binding.headers }, oauth: false, codemode: false },
-            }, { signal }))
-        }
-        // A prompt sent while a server is still `pending` does not see its tools (sdk-opencode.md §8.3).
-        const names = new Set(servers.map((s) => s.name))
-        yield* call("mcp.list", "open-failed", (signal) => connection.client.mcp.list({ location: { directory } }, { signal })).pipe(
-          Effect.flatMap((out) => {
-            const ours = out.data.filter((s) => names.has(s.name))
-            const failed = ours.find((s) => s.status.status === "failed" || s.status.status === "needs_auth")
-            if (failed) return Effect.fail(harnessError("open-failed", `OpenBot tools failed to connect: ${failed.status.error ?? failed.status.status}`))
-            return ours.length === names.size && ours.every((s) => s.status.status === "connected")
-              ? Effect.void
-              : Effect.fail(harnessError("open-failed", "OpenBot tools are still connecting."))
-          }),
-          Effect.retry({ while: (e) => e.message === "OpenBot tools are still connecting.", schedule: Schedule.spaced(150) }),
-          Effect.timeoutOrElse({
-            duration: mcpConnectTimeoutMs,
-            orElse: () => Effect.fail(harnessError("open-failed", "Timed out waiting for the OpenBot tools to connect.")),
-          }),
-          // Let the tool registry pick the new tools up before anything is prompted (G5).
-          Effect.andThen(mcpSettleMs > 0 ? Effect.sleep(mcpSettleMs) : Effect.void),
-          // OpenBot tools are an addition: the bot can still answer without them.
-          Effect.catch((error) => Effect.logWarning(`OpenCode MCP registration incomplete: ${error.message}`)),
-        )
-        registeredGeneration = connection.generation
-      }))
+        }),
+      )
     yield* registerMcp(conn)
 
     // ------------------------------------------------------------------ events
@@ -238,9 +295,10 @@ export const openOpenCodeSession = (
     const processing = yield* Semaphore.make(1)
     const requests = yield* FiberMap.make<string>()
     const background = yield* FiberSet.make()
-    const emit = (events: ReadonlyArray<HarnessEvent>) => Effect.sync(() => {
-      for (const event of events) Queue.offerUnsafe(out, event)
-    })
+    const emit = (events: ReadonlyArray<HarnessEvent>) =>
+      Effect.sync(() => {
+        for (const event of events) Queue.offerUnsafe(out, event)
+      })
 
     // ------------------------------------------------------------------ native busy periods & compaction
     let nativeBusy = false
@@ -299,9 +357,17 @@ export const openOpenCodeSession = (
       if (!c || !c.progressed) return
       const data = rec(event.data)
       if (c.failure !== undefined) {
-        settleCompaction(c, Effect.fail(harnessError("other", `OpenCode could not compact the conversation: ${c.failure}`, undefined, true)))
+        settleCompaction(
+          c,
+          Effect.fail(
+            harnessError("other", `OpenCode could not compact the conversation: ${c.failure}`, undefined, true),
+          ),
+        )
       } else if (event.type === "session.execution.failed") {
-        settleCompaction(c, Effect.fail(harnessError("other", `Compaction failed: ${turnErrorOf(data.error).message}`, undefined, true)))
+        settleCompaction(
+          c,
+          Effect.fail(harnessError("other", `Compaction failed: ${turnErrorOf(data.error).message}`, undefined, true)),
+        )
       } else if (event.type === "session.execution.interrupted") {
         settleCompaction(c, Effect.fail(harnessError("other", "Compaction was interrupted.", undefined, true)))
       } else {
@@ -321,56 +387,78 @@ export const openOpenCodeSession = (
     yield* Effect.forkScoped(host.models(directory).pipe(Effect.ignore))
 
     const liveClient: Effect.Effect<OpenCodeApi, HarnessError> = Effect.flatMap(host.current, (c) =>
-      c ? Effect.succeed(c.client) : Effect.fail(harnessError("closed", "The OpenCode server is gone.")))
+      c ? Effect.succeed(c.client) : Effect.fail(harnessError("closed", "The OpenCode server is gone.")),
+    )
 
     // ------------------------------------------------------------------ approvals & questions
     const answerPermission = (permission: NativePermission) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const key = permission.tool ? normalizer.toolKey(permission.tool.messageID, permission.tool.id) : undefined
         const info = key ? normalizer.toolInfo(key) : undefined
-        const request = permissionToRequest(permission, { name: info?.name, input: info?.input, key }, { cwd: directory })
+        const request = permissionToRequest(
+          permission,
+          { name: info?.name, input: info?.input, key },
+          { cwd: directory },
+        )
         const resolution: HarnessRequestResolution = yield* input.onRequest(request)
         const plan = permissionReply(resolution)
         const client = yield* liveClient
         if (plan.grant) {
           grants = [...grants, ...sessionGrants(permission.action, permission.save)]
-          yield* call("session.update", "other", (signal) => client.session.update({ sessionID, permissions: rules() }, { signal }))
+          yield* call("session.update", "other", (signal) =>
+            client.session.update({ sessionID, permissions: rules() }, { signal }),
+          )
         }
         yield* call("permission.reply", "other", (signal) =>
-          client.permission.reply({
-            sessionID: permission.sessionID,
-            requestID: permission.id,
-            decision: plan.decision,
-            ...(plan.message !== undefined ? { message: plan.message } : {}),
-          }, { signal }))
+          client.permission.reply(
+            {
+              sessionID: permission.sessionID,
+              requestID: permission.id,
+              decision: plan.decision,
+              ...(plan.message !== undefined ? { message: plan.message } : {}),
+            },
+            { signal },
+          ),
+        )
       }).pipe(Effect.catch((error) => Effect.logWarning(`OpenCode permission ${permission.id}: ${error.message}`)))
 
     const answerForm = (form: NativeForm) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const key = form.tool ? normalizer.toolKey(form.tool.messageID, form.tool.id) : undefined
         const resolution = yield* input.onRequest(formToRequest(form, key))
         const client = yield* liveClient
         if (isAnswersResolution(resolution)) {
           yield* call("form.reply", "other", (signal) =>
-            client.session.form.reply({ sessionID: form.sessionID, formID: form.id, answer: formAnswer(form, resolution.answers) }, { signal }))
+            client.session.form.reply(
+              { sessionID: form.sessionID, formID: form.id, answer: formAnswer(form, resolution.answers) },
+              { signal },
+            ),
+          )
         } else {
-          const message = resolution.decision === "cancel"
-            ? undefined
-            : (resolution.message?.trim() || "The user declined to answer. Continue without the answer or ask in a chat message.")
+          const message =
+            resolution.decision === "cancel"
+              ? undefined
+              : resolution.message?.trim() ||
+                "The user declined to answer. Continue without the answer or ask in a chat message."
           yield* call("form.cancel", "other", (signal) =>
-            client.session.form.cancel({ sessionID: form.sessionID, formID: form.id, ...(message ? { message } : {}) }, { signal }))
+            client.session.form.cancel(
+              { sessionID: form.sessionID, formID: form.id, ...(message ? { message } : {}) },
+              { signal },
+            ),
+          )
         }
       }).pipe(Effect.catch((error) => Effect.logWarning(`OpenCode form ${form.id}: ${error.message}`)))
 
     // ------------------------------------------------------------------ the single event consumer
     const handle = (item: Inbound): Effect.Effect<void> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (item._tag === "disconnect") {
           yield* FiberMap.clear(requests)
           yield* emit(normalizer.failTurn({ code: "closed", message: item.reason, retryable: true }))
           // A stdio server takes its executions with it.
           setIdle()
-          if (compacting) settleCompaction(compacting, Effect.fail(harnessError("closed", item.reason, undefined, true)))
+          if (compacting)
+            settleCompaction(compacting, Effect.fail(harnessError("closed", item.reason, undefined, true)))
           return
         }
         const event = item.event
@@ -415,7 +503,7 @@ export const openOpenCodeSession = (
     )
 
     // ------------------------------------------------------------------ turns
-    const ensureReady = Effect.gen(function*() {
+    const ensureReady = Effect.gen(function* () {
       conn = yield* host.connection
       yield* registerMcp(conn)
       return conn
@@ -424,45 +512,63 @@ export const openOpenCodeSession = (
     const prompt = (connection: HostConnection, turn: TurnInput, delivery: "queue" | "steer") =>
       Effect.tryPromise({
         try: (signal) =>
-          connection.client.session.prompt({
-            sessionID,
-            text: turn.text,
-            delivery,
-            ...(turn.attachments.length > 0
-              ? { files: turn.attachments.map((a) => ({ uri: pathToFileURL(a.path).href, name: a.name })) }
-              : {}),
-          }, { signal }),
+          connection.client.session.prompt(
+            {
+              sessionID,
+              text: turn.text,
+              delivery,
+              ...(turn.attachments.length > 0
+                ? { files: turn.attachments.map((a) => ({ uri: pathToFileURL(a.path).href, name: a.name })) }
+                : {}),
+            },
+            { signal },
+          ),
         catch: (cause) => {
           const message = describeClientError(cause)
           const transport = /Transport|ECONNREFUSED|fetch failed|socket/i.test(message)
-          return harnessError(transport ? "closed" : "turn-rejected", `OpenCode rejected the prompt: ${message}`, cause, transport)
+          return harnessError(
+            transport ? "closed" : "turn-rejected",
+            `OpenCode rejected the prompt: ${message}`,
+            cause,
+            transport,
+          )
         },
       })
 
     const startTurn = (turn: TurnInput): Effect.Effect<void, HarnessError> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (normalizer.activeTurn() !== undefined) {
-          return yield* Effect.fail(harnessError("turn-rejected", "A turn is already running in this OpenCode session."))
+          return yield* Effect.fail(
+            harnessError("turn-rejected", "A turn is already running in this OpenCode session."),
+          )
         }
         const connection = yield* ensureReady
         // Never prompt into a busy period OpenBot does not track (its terminal would end this turn).
         yield* awaitNativeIdle
         // Hold the consumer while prompting so `TurnStarted` precedes the turn's own events.
-        yield* processing.withPermits(1)(Effect.gen(function*() {
-          if (normalizer.activeTurn() !== undefined) {
-            return yield* Effect.fail(harnessError("turn-rejected", "A turn is already running in this OpenCode session."))
-          }
-          if (compacting !== undefined) {
-            return yield* Effect.fail(harnessError("turn-rejected", "OpenCode is compacting this conversation; try again when it is done."))
-          }
-          normalizer.beginTurn(turn.turnId)
-          yield* prompt(connection, turn, "queue").pipe(Effect.tapError(() => Effect.sync(() => normalizer.abandonTurn())))
-          yield* emit([{ _tag: "TurnStarted", turnId: turn.turnId }])
-        }))
+        yield* processing.withPermits(1)(
+          Effect.gen(function* () {
+            if (normalizer.activeTurn() !== undefined) {
+              return yield* Effect.fail(
+                harnessError("turn-rejected", "A turn is already running in this OpenCode session."),
+              )
+            }
+            if (compacting !== undefined) {
+              return yield* Effect.fail(
+                harnessError("turn-rejected", "OpenCode is compacting this conversation; try again when it is done."),
+              )
+            }
+            normalizer.beginTurn(turn.turnId)
+            yield* prompt(connection, turn, "queue").pipe(
+              Effect.tapError(() => Effect.sync(() => normalizer.abandonTurn())),
+            )
+            yield* emit([{ _tag: "TurnStarted", turnId: turn.turnId }])
+          }),
+        )
       })
 
     const steer = (turn: TurnInput): Effect.Effect<void, HarnessError> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (normalizer.activeTurn() === undefined) {
           return yield* Effect.fail(harnessError("turn-rejected", "No running turn to steer."))
         }
@@ -471,18 +577,25 @@ export const openOpenCodeSession = (
       })
 
     const endLocally = (turnId: TurnId) =>
-      processing.withPermits(1)(Effect.suspend(() => (normalizer.activeTurn() === turnId ? emit(normalizer.interruptTurn()) : Effect.void)))
+      processing.withPermits(1)(
+        Effect.suspend(() => (normalizer.activeTurn() === turnId ? emit(normalizer.interruptTurn()) : Effect.void)),
+      )
 
     const interruptGraceMs = options.interruptGraceMs ?? 5_000
-    const interrupt: Effect.Effect<void> = Effect.gen(function*() {
+    const interrupt: Effect.Effect<void> = Effect.gen(function* () {
       const turnId = normalizer.activeTurn()
       if (turnId === undefined) return
       const current = yield* host.current
       const result = current
-        ? yield* call("session.interrupt", "other", (signal) => current.client.session.interrupt({ sessionID }, { signal })).pipe(
-          Effect.timeoutOrElse({ duration: 5_000, orElse: () => Effect.fail(harnessError("other", "session.interrupt timed out")) }),
-          Effect.option,
-        )
+        ? yield* call("session.interrupt", "other", (signal) =>
+            current.client.session.interrupt({ sessionID }, { signal }),
+          ).pipe(
+            Effect.timeoutOrElse({
+              duration: 5_000,
+              orElse: () => Effect.fail(harnessError("other", "session.interrupt timed out")),
+            }),
+            Effect.option,
+          )
         : Option.none()
       if (Option.isSome(result) && result.value.interrupted) {
         // The terminal `execution.interrupted` normally follows; never leave the turn hanging.
@@ -496,48 +609,59 @@ export const openOpenCodeSession = (
     })
 
     const compactTimeoutMs = options.compactTimeoutMs ?? 300_000
-    const compact: Effect.Effect<void, HarnessError> = Effect.gen(function*() {
+    const compact: Effect.Effect<void, HarnessError> = Effect.gen(function* () {
       if (normalizer.activeTurn() !== undefined || compacting !== undefined) {
-        return yield* Effect.fail(harnessError("turn-rejected", "The bot is busy in this OpenCode session; compact after the turn ends."))
+        return yield* Effect.fail(
+          harnessError("turn-rejected", "The bot is busy in this OpenCode session; compact after the turn ends."),
+        )
       }
       const connection = yield* ensureReady
       yield* awaitNativeIdle
       // Registered before the call: the compaction's events can beat the HTTP reply.
-      const state: Compacting = { done: Deferred.makeUnsafe(), progressed: false, failure: undefined, summaryChars: 0, model: undefined }
+      const state: Compacting = {
+        done: Deferred.makeUnsafe(),
+        progressed: false,
+        failure: undefined,
+        summaryChars: 0,
+        model: undefined,
+      }
       compacting = state
-      yield* call("session.compact", "other", (signal) => connection.client.session.compact({ sessionID }, { signal })).pipe(
+      yield* call("session.compact", "other", (signal) =>
+        connection.client.session.compact({ sessionID }, { signal }),
+      ).pipe(
         Effect.andThen(Deferred.await(state.done)),
         Effect.timeoutOrElse({
           duration: compactTimeoutMs,
-          orElse: () => Effect.fail(harnessError("other", "Timed out waiting for OpenCode to finish compacting.", undefined, true)),
+          orElse: () =>
+            Effect.fail(harnessError("other", "Timed out waiting for OpenCode to finish compacting.", undefined, true)),
         }),
-        Effect.ensuring(Effect.sync(() => {
-          if (compacting === state) compacting = undefined
-        })),
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (compacting === state) compacting = undefined
+          }),
+        ),
       )
     })
 
     // ------------------------------------------------------------------ close
     yield* Effect.addFinalizer(() =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const current = yield* host.current
         if (current && normalizer.activeTurn() !== undefined) {
           // Dropping the subscription does not stop OpenCode; interrupt explicitly.
-          yield* call("session.interrupt", "other", (signal) => current.client.session.interrupt({ sessionID }, { signal })).pipe(
-            Effect.timeout(5_000),
-            Effect.ignore,
-          )
+          yield* call("session.interrupt", "other", (signal) =>
+            current.client.session.interrupt({ sessionID }, { signal }),
+          ).pipe(Effect.timeout(5_000), Effect.ignore)
         }
         if (current && current.generation === registeredGeneration) {
           for (const { name } of servers) {
-            yield* call("mcp.remove", "other", (signal) => current.client.mcp.remove({ server: name, location: { directory } }, { signal })).pipe(
-              Effect.timeout(5_000),
-              Effect.ignore,
-            )
+            yield* call("mcp.remove", "other", (signal) =>
+              current.client.mcp.remove({ server: name, location: { directory } }, { signal }),
+            ).pipe(Effect.timeout(5_000), Effect.ignore)
           }
         }
         yield* Queue.end(out)
-      })
+      }),
     )
 
     yield* emit([{ _tag: "SessionBound", nativeSessionId: sessionID }])

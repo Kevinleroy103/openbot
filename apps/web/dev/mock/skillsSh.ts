@@ -7,7 +7,8 @@ export interface CannedSkill {
   readonly files: ReadonlyArray<{ readonly path: string; readonly contents: string }>
 }
 
-const skillMd = (name: string, description: string, body: string) => `---\nname: ${name}\ndescription: ${description}\n---\n${body}`
+const skillMd = (name: string, description: string, body: string) =>
+  `---\nname: ${name}\ndescription: ${description}\n---\n${body}`
 const pad = (text: string, bytes: number) => text + "\n" + "#".repeat(Math.max(0, bytes - text.length - 1))
 
 export const SKILLS_SH: ReadonlyArray<CannedSkill> = [
@@ -52,8 +53,14 @@ export const SKILLS_SH: ReadonlyArray<CannedSkill> = [
       { path: "reference.md", contents: pad("# PDF reference\n\nAdvanced pypdf, pdfplumber and qpdf usage.", 16_340) },
       { path: "forms.md", contents: pad("# Filling PDF forms\n\nStep by step.", 9_120) },
       { path: "scripts/check_fillable_fields.py", contents: pad("import sys\nfrom pypdf import PdfReader", 1_204) },
-      { path: "scripts/fill_fillable_fields.py", contents: pad("import json, sys\nfrom pypdf import PdfReader, PdfWriter", 4_811) },
-      { path: "scripts/convert_pdf_to_images.py", contents: pad("import sys\nfrom pdf2image import convert_from_path", 902) },
+      {
+        path: "scripts/fill_fillable_fields.py",
+        contents: pad("import json, sys\nfrom pypdf import PdfReader, PdfWriter", 4_811),
+      },
+      {
+        path: "scripts/convert_pdf_to_images.py",
+        contents: pad("import sys\nfrom pdf2image import convert_from_path", 902),
+      },
       { path: "LICENSE.txt", contents: pad("Apache License 2.0", 11_357) },
     ],
   },
@@ -85,7 +92,12 @@ export const SKILLS_SH: ReadonlyArray<CannedSkill> = [
     ],
   },
   {
-    result: { id: "anthropics/skills/skill-creator", name: "skill-creator", repo: "anthropics/skills", installs: 12_655 },
+    result: {
+      id: "anthropics/skills/skill-creator",
+      name: "skill-creator",
+      repo: "anthropics/skills",
+      installs: 12_655,
+    },
     files: [
       {
         path: "SKILL.md",
@@ -99,7 +111,12 @@ export const SKILLS_SH: ReadonlyArray<CannedSkill> = [
     ],
   },
   {
-    result: { id: "vercel-labs/agent-skills/web-design-guidelines", name: "web-design-guidelines", repo: "vercel-labs/agent-skills", installs: 21_048 },
+    result: {
+      id: "vercel-labs/agent-skills/web-design-guidelines",
+      name: "web-design-guidelines",
+      repo: "vercel-labs/agent-skills",
+      installs: 21_048,
+    },
     files: [
       {
         path: "SKILL.md",
@@ -127,7 +144,9 @@ export const SKILLS_SH: ReadonlyArray<CannedSkill> = [
 ]
 
 /** `name` / `description` from a SKILL.md's frontmatter, and its body. */
-export const parseSkillMd = (contents: string): { readonly name?: string; readonly description?: string; readonly body: string } => {
+export const parseSkillMd = (
+  contents: string,
+): { readonly name?: string; readonly description?: string; readonly body: string } => {
   const m = /^---\n([\s\S]*?)\n---\n?/.exec(contents)
   if (!m) return { body: contents }
   const field = (key: string) => new RegExp(`^${key}:\\s*(.+)$`, "m").exec(m[1]!)?.[1]?.trim()

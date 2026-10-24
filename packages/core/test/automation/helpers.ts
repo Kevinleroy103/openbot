@@ -26,7 +26,7 @@ export const baseLayer = (options?: { readonly autoComplete?: DeliveryResult }) 
   )
 
 /** Seeds two bots, their DMs and a group. */
-export const seed = Effect.gen(function*() {
+export const seed = Effect.gen(function* () {
   const bots = yield* BotRepo
   const conversations = yield* ConversationRepo
   for (const bot of [BOT_A, BOT_B] satisfies ReadonlyArray<Bot>) yield* bots.upsert(bot)
@@ -35,7 +35,7 @@ export const seed = Effect.gen(function*() {
 
 /** Yields until `check` holds (fibers forked by the services get to run); fails after `tries`. */
 export const eventually = <E, R>(check: Effect.Effect<boolean, E, R>, tries = 200): Effect.Effect<void, E | Error, R> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     for (let i = 0; i < tries; i++) {
       if (yield* check) return
       yield* Effect.yieldNow

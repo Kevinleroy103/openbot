@@ -8,9 +8,21 @@ import type { Bot, BotId } from "@openbot/contracts"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import type { Browser } from "playwright-core"
-import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, shotsDir, startBrain } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  shotsDir,
+  startBrain,
+} from "./brain.ts"
 
-const SKILL_MD = "---\nname: release-notes\ndescription: Use when writing release notes for a version.\n---\n# Release notes\n\n1. List merged PRs since the last tag\n2. Group them: Features, Fixes\n"
+const SKILL_MD =
+  "---\nname: release-notes\ndescription: Use when writing release notes for a version.\n---\n# Release notes\n\n1. List merged PRs since the last tag\n2. Group them: Features, Fixes\n"
 
 /** A tiny skills.sh: `/api/search` and `/api/download/<owner>/<repo>/<skill>`; "offline" queries fail. */
 const startFakeSkillsSh = () =>
@@ -29,7 +41,13 @@ const startFakeSkillsSh = () =>
         return Response.json({ skills: all.filter((s) => s.id.includes(q)) })
       }
       if (decodeURIComponent(url.pathname) === "/api/download/acme/skills/release-notes") {
-        return Response.json({ hash: "abc123", files: [{ path: "SKILL.md", contents: SKILL_MD }, { path: "scripts/changelog.sh", contents: "git log --oneline\n" }] })
+        return Response.json({
+          hash: "abc123",
+          files: [
+            { path: "SKILL.md", contents: SKILL_MD },
+            { path: "scripts/changelog.sh", contents: "git log --oneline\n" },
+          ],
+        })
       }
       return new Response("not found", { status: 404 })
     },
@@ -43,15 +61,20 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
   let app: AppPage
   let mira: Bot
   let otto: Bot
-  const skillsOf = async (botId: BotId) => [...(await rpc.call((c) => c["bots.get"]({ botId }))).skills].map(String).sort()
+  const skillsOf = async (botId: BotId) =>
+    [...(await rpc.call((c) => c["bots.get"]({ botId }))).skills].map(String).sort()
 
   beforeAll(async () => {
     skillsSh = startFakeSkillsSh()
     brain = await startBrain({ env: { OPENBOT_SKILLS_SH_URL: `http://127.0.0.1:${skillsSh.port}` } })
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
-    otto = await rpc.call((c) => c["bots.create"]({ name: "Otto", harness: { kind: "fake" }, clientNonce: "e2e-skills-otto", introduce: false }))
-    mira = await rpc.call((c) => c["bots.create"]({ name: "Mira", harness: { kind: "fake" }, clientNonce: "e2e-skills-mira", introduce: false }))
+    otto = await rpc.call((c) =>
+      c["bots.create"]({ name: "Otto", harness: { kind: "fake" }, clientNonce: "e2e-skills-otto", introduce: false }),
+    )
+    mira = await rpc.call((c) =>
+      c["bots.create"]({ name: "Mira", harness: { kind: "fake" }, clientNonce: "e2e-skills-mira", introduce: false }),
+    )
     app = await openApp(browser, brain, { theme: "dark", route: `#/c/${mira.directConversationId}` })
     await app.page.getByRole("textbox", { name: "Message Mira" }).waitFor()
   }, 60_000)
@@ -83,9 +106,17 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
     await dialog.waitFor({ state: "detached" })
     const row = library.getByTestId("skill-row").filter({ hasText: "standup-notes" })
     await row.waitFor()
-    await eventually(() => row.getByTestId("skill-bots").getAttribute("title"), (t) => t === "Mira", { label: "Mira on the row" })
+    await eventually(
+      () => row.getByTestId("skill-bots").getAttribute("title"),
+      (t) => t === "Mira",
+      { label: "Mira on the row" },
+    )
     const [skill] = await rpc.call((c) => c["skills.list"]())
-    expect(skill).toMatchObject({ name: "standup-notes", description: "Use when asked for standup notes", body: "1. Yesterday\n2. Today\n3. Blockers" })
+    expect(skill).toMatchObject({
+      name: "standup-notes",
+      description: "Use when asked for standup notes",
+      body: "1. Yesterday\n2. Today\n3. Blockers",
+    })
     expect(await skillsOf(mira.id)).toEqual(["standup-notes"])
     expect(await skillsOf(otto.id)).toEqual([])
     // a second skill with the same name is refused before saving
@@ -112,7 +143,11 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
     await row.getByTestId("remove-skill").click()
     await row.waitFor({ state: "detached" })
     await tab.getByText("Mira has no skills yet. Add one from the library, or ask Mira to save one.").waitFor()
-    await eventually(() => skillsOf(mira.id), (s) => s.length === 0, { label: "standup-notes taken from Mira" })
+    await eventually(
+      () => skillsOf(mira.id),
+      (s) => s.length === 0,
+      { label: "standup-notes taken from Mira" },
+    )
     // the library keeps it
     expect((await rpc.call((c) => c["skills.list"]())).map((s) => String(s.name))).toEqual(["standup-notes"])
 
@@ -140,18 +175,30 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
     await result.click()
     await dialog.getByTestId("skill-preview-body").getByText("List merged PRs since the last tag").waitFor()
     await dialog.getByTestId("skill-preview-files").getByText("scripts/changelog.sh").waitFor()
-    expect(await dialog.getByRole("link", { name: /View on skills.sh/ }).getAttribute("href")).toBe("https://skills.sh/acme/skills/release-notes")
+    expect(await dialog.getByRole("link", { name: /View on skills.sh/ }).getAttribute("href")).toBe(
+      "https://skills.sh/acme/skills/release-notes",
+    )
     expect(await dialog.getByRole("link", { name: /View on skills.sh/ }).getAttribute("target")).toBe("_blank")
     expect(await dialog.getByRole("checkbox", { name: /Mira/ }).getAttribute("aria-checked")).toBe("true")
     expect(await dialog.getByTestId("skill-replaces").count()).toBe(0)
     await app.shot("e2e-63-skills-preview")
     await dialog.getByTestId("install-skill").click()
     await dialog.waitFor({ state: "detached" })
-    await tab.getByTestId("skill-row").filter({ hasText: "release-notes" }).getByText("skills.sh", { exact: true }).waitFor()
+    await tab
+      .getByTestId("skill-row")
+      .filter({ hasText: "release-notes" })
+      .getByText("skills.sh", { exact: true })
+      .waitFor()
     const installed = (await rpc.call((c) => c["skills.list"]())).find((s) => s.name === "release-notes")
-    expect(installed).toMatchObject({ description: "Use when writing release notes for a version.", source: { kind: "skills.sh", id: "acme/skills/release-notes" }, files: ["scripts/changelog.sh"] })
+    expect(installed).toMatchObject({
+      description: "Use when writing release notes for a version.",
+      source: { kind: "skills.sh", id: "acme/skills/release-notes" },
+      files: ["scripts/changelog.sh"],
+    })
     expect(await skillsOf(mira.id)).toEqual(["release-notes", "standup-notes"])
-    expect(existsSync(join(brain.dataDir, "skills-lib", "skills", "release-notes", "scripts", "changelog.sh"))).toBe(true)
+    expect(existsSync(join(brain.dataDir, "skills-lib", "skills", "release-notes", "scripts", "changelog.sh"))).toBe(
+      true,
+    )
     await app.shot("e2e-64-library-imported")
     expect(app.errors).toEqual([])
   }, 60_000)
@@ -176,7 +223,11 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
     await confirm.getByRole("button", { name: "Delete" }).click()
     await editor.waitFor({ state: "detached" })
     await library.getByTestId("skill-row").filter({ hasText: "standup-notes" }).waitFor({ state: "detached" })
-    await eventually(() => skillsOf(mira.id), (s) => s.join() === "release-notes", { label: "standup-notes gone from Mira" })
+    await eventually(
+      () => skillsOf(mira.id),
+      (s) => s.join() === "release-notes",
+      { label: "standup-notes gone from Mira" },
+    )
     await page.getByRole("button", { name: "Close settings" }).click()
     expect(app.errors).toEqual([])
   }, 60_000)
@@ -194,15 +245,28 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
     await result.click()
     await dialog.getByTestId("skill-replaces").waitFor()
     const miraBox = dialog.getByRole("checkbox", { name: /Mira/ })
-    await eventually(() => miraBox.getAttribute("aria-checked"), (v) => v === "true", { label: "Mira checked" })
+    await eventually(
+      () => miraBox.getAttribute("aria-checked"),
+      (v) => v === "true",
+      { label: "Mira checked" },
+    )
     expect(await dialog.getByRole("checkbox", { name: /Otto/ }).getAttribute("aria-checked")).toBe("false")
     await miraBox.click()
     await dialog.getByTestId("install-skill").getByText("Replace").waitFor()
     await dialog.getByTestId("install-skill").click()
     await dialog.waitFor({ state: "detached" })
-    await eventually(() => skillsOf(mira.id), (s) => s.length === 0, { label: "release-notes taken from Mira" })
+    await eventually(
+      () => skillsOf(mira.id),
+      (s) => s.length === 0,
+      { label: "release-notes taken from Mira" },
+    )
     expect((await rpc.call((c) => c["skills.list"]())).map((s) => String(s.name))).toEqual(["release-notes"])
-    await page.getByTestId("skills-library").getByTestId("skill-row").filter({ hasText: "release-notes" }).getByText("No Bots").waitFor()
+    await page
+      .getByTestId("skills-library")
+      .getByTestId("skill-row")
+      .filter({ hasText: "release-notes" })
+      .getByText("No Bots")
+      .waitFor()
     await page.getByRole("button", { name: "Close settings" }).click()
     expect(app.errors).toEqual([])
   }, 60_000)
@@ -214,7 +278,8 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
       isMobile: true,
       hasTouch: true,
       colorScheme: "dark",
-      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
     })
     try {
       const page = await context.newPage()

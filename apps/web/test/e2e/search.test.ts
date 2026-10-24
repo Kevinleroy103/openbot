@@ -9,9 +9,32 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import type { Browser, Page } from "playwright-core"
 import type { Bot, ConversationId, EntryId } from "@openbot/contracts"
-import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, startBrain } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  startBrain,
+} from "./brain.ts"
 
-const CITIES = ["Berlin", "Tokyo", "Austin", "Zürich", "Nairobi", "Montréal", "Seoul", "Porto", "Reykjavík", "Lima", "Oslo", "Kraków"]
+const CITIES = [
+  "Berlin",
+  "Tokyo",
+  "Austin",
+  "Zürich",
+  "Nairobi",
+  "Montréal",
+  "Seoul",
+  "Porto",
+  "Reykjavík",
+  "Lima",
+  "Oslo",
+  "Kraków",
+]
 /** Trips written to Nova's chat; every tenth (from the fourth) mentions a visa. */
 const TRIPS = 140
 const VISA_TRIPS = Array.from({ length: TRIPS }, (_, i) => i).filter((i) => i % 10 === 3).length
@@ -27,17 +50,26 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
   const idle = (conversationId: ConversationId) =>
     eventually(
       () => rpc.conversation(conversationId),
-      (s) => [...s.turns.values()].every((t) => t.status === "completed" || t.status === "failed" || t.status === "interrupted"),
+      (s) =>
+        [...s.turns.values()].every(
+          (t) => t.status === "completed" || t.status === "failed" || t.status === "interrupted",
+        ),
       { timeout: 60_000, label: "the chat to be idle" },
     )
   let nonce = 0
-  const say = (conversationId: ConversationId, text: string) => rpc.call((c) => c["messages.send"]({ conversationId, text, clientNonce: `e2e-search-${++nonce}` }))
+  const say = (conversationId: ConversationId, text: string) =>
+    rpc.call((c) => c["messages.send"]({ conversationId, text, clientNonce: `e2e-search-${++nonce}` }))
 
-  const open = async (route: string, options: { readonly theme?: "light" | "dark"; readonly phone?: boolean } = {}): Promise<AppPage> => {
+  const open = async (
+    route: string,
+    options: { readonly theme?: "light" | "dark"; readonly phone?: boolean } = {},
+  ): Promise<AppPage> => {
     const app = await openApp(browser, brain, {
       theme: options.theme ?? "light",
       route,
-      ...(options.phone ? { context: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } } : {}),
+      ...(options.phone
+        ? { context: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } }
+        : {}),
     })
     apps.push(app)
     return app
@@ -49,18 +81,31 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     brain = await startBrain()
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
-    nova = await rpc.call((c) => c["bots.create"]({ name: "Nova", harness: { kind: "fake" }, clientNonce: "e2e-search-nova" }))
-    scout = await rpc.call((c) => c["bots.create"]({ name: "Scout", harness: { kind: "fake" }, clientNonce: "e2e-search-scout" }))
+    nova = await rpc.call((c) =>
+      c["bots.create"]({ name: "Nova", harness: { kind: "fake" }, clientNonce: "e2e-search-nova" }),
+    )
+    scout = await rpc.call((c) =>
+      c["bots.create"]({ name: "Scout", harness: { kind: "fake" }, clientNonce: "e2e-search-scout" }),
+    )
     const dm = nova.directConversationId
     // an old tool step (its own turn) and an old bot-to-bot message
-    await say(dm, `tool: remember ${JSON.stringify({ title: "Passport scan", body: "Passport valid until 2031-04-02" })}`)
+    await say(
+      dm,
+      `tool: remember ${JSON.stringify({ title: "Passport scan", body: "Passport valid until 2031-04-02" })}`,
+    )
     await idle(dm)
-    await say(dm, `tool: message_bot ${JSON.stringify({ to: "Scout", text: "Wonka hook: a new factory tour app in beta" })}`)
+    await say(
+      dm,
+      `tool: message_bot ${JSON.stringify({ to: "Scout", text: "Wonka hook: a new factory tour app in beta" })}`,
+    )
     await idle(dm)
     for (let i = 0; i < TRIPS; i++) {
       const city = CITIES[i % CITIES.length]!
       const visa = i % 10 === 3
-      await say(dm, `echo: Trip ${i + 1}: book ${city} for the ${visa ? "partner summit; check the visa rules" : "quarterly review"}, back by Friday.`)
+      await say(
+        dm,
+        `echo: Trip ${i + 1}: book ${city} for the ${visa ? "partner summit; check the visa rules" : "quarterly review"}, back by Friday.`,
+      )
     }
     await idle(dm)
   }, 240_000)
@@ -82,9 +127,15 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     await app.shot("e2e-search-palette")
     await page.getByRole("option", { name: /See all results for “visa”/ }).click()
     await page.getByTestId("search-view").waitFor()
-    await eventually(() => page.evaluate(() => location.hash), (h) => h === "#/search?q=visa")
+    await eventually(
+      () => page.evaluate(() => location.hash),
+      (h) => h === "#/search?q=visa",
+    )
     // the owner's messages and Nova's echoes of them
-    await eventually(() => text(page, "search-count"), (t) => t === `${VISA_TRIPS * 2} results`)
+    await eventually(
+      () => text(page, "search-count"),
+      (t) => t === `${VISA_TRIPS * 2} results`,
+    )
     await app.shot("e2e-search-view")
     expect(app.errors).toEqual([])
   }, 60_000)
@@ -100,11 +151,20 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     await page.keyboard.press("Escape")
     // Esc closed the menu only
     await page.getByTestId("search-view").waitFor()
-    await eventually(() => page.evaluate(() => location.hash), (h) => h === "#/search?q=passport&type=messages,cards,events,tasks,steps")
-    await eventually(() => page.getByTestId("search-hit").allTextContents(), (all) => all.some((t) => t.includes("Step")))
+    await eventually(
+      () => page.evaluate(() => location.hash),
+      (h) => h === "#/search?q=passport&type=messages,cards,events,tasks,steps",
+    )
+    await eventually(
+      () => page.getByTestId("search-hit").allTextContents(),
+      (all) => all.some((t) => t.includes("Step")),
+    )
     await app.shot("e2e-search-view-steps")
     await page.getByTestId("sort-newest").click()
-    await eventually(() => page.evaluate(() => location.hash), (h) => h.endsWith("&sort=newest"))
+    await eventually(
+      () => page.evaluate(() => location.hash),
+      (h) => h.endsWith("&sort=newest"),
+    )
     await page.reload()
     await page.getByTestId("search-hit").first().waitFor()
     expect(await page.getByTestId("filter-type").getAttribute("data-active")).toBe("true")
@@ -119,7 +179,10 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     const oldest = page.getByTestId("search-hit").filter({ hasText: "Trip 4:" }).first()
     await oldest.waitFor()
     await oldest.click()
-    await eventually(() => transcript(page).getAttribute("data-window"), (w) => w === "open")
+    await eventually(
+      () => transcript(page).getAttribute("data-window"),
+      (w) => w === "open",
+    )
     const hash = await page.evaluate(() => location.hash)
     expect(hash).toStartWith(`#/c/${nova.directConversationId}/e/`)
     const entryId = hash.split("/e/")[1]!
@@ -130,16 +193,31 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     expect(box!.y).toBeGreaterThan(60)
     expect(box!.y + box!.height).toBeLessThan(840)
     expect(await page.locator("[data-flash]").count()).toBe(1)
-    expect(await page.evaluate(() => (CSS as unknown as { highlights: Map<string, unknown> }).highlights.has("ob-find-current"))).toBe(true)
+    expect(
+      await page.evaluate(() =>
+        (CSS as unknown as { highlights: Map<string, unknown> }).highlights.has("ob-find-current"),
+      ),
+    ).toBe(true)
     await page.getByTestId("jump-to-latest").waitFor()
     await app.shot("e2e-search-deep-link")
 
     // a reaction to it shows in place; the unloaded part up to the newest stays a gap
-    await rpc.call((c) => c["messages.react"]({ conversationId: nova.directConversationId, entryId: entryId as EntryId, emoji: "👍" }))
-    await eventually(() => target.textContent(), (t) => t?.includes("👍") === true, { label: "the reaction" })
+    await rpc.call((c) =>
+      c["messages.react"]({ conversationId: nova.directConversationId, entryId: entryId as EntryId, emoji: "👍" }),
+    )
+    await eventually(
+      () => target.textContent(),
+      (t) => t?.includes("👍") === true,
+      { label: "the reaction" },
+    )
     expect(await transcript(page).getAttribute("data-window")).toBe("open")
     expect(await page.getByTestId("jump-to-latest").count()).toBe(1)
-    expect(await transcript(page).locator(".ob-msg").filter({ hasText: `Trip ${TRIPS}:` }).count()).toBe(0)
+    expect(
+      await transcript(page)
+        .locator(".ob-msg")
+        .filter({ hasText: `Trip ${TRIPS}:` })
+        .count(),
+    ).toBe(0)
 
     // scrolling pages in older and newer parts of the window
     const count = () => transcript(page).locator(".ob-msg").count()
@@ -148,13 +226,26 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     await eventually(count, (n) => n > loaded, { label: "a newer page" })
 
     await page.reload()
-    await eventually(() => transcript(page).getAttribute("data-window"), (w) => w === "open", { label: "the window after a reload" })
+    await eventually(
+      () => transcript(page).getAttribute("data-window"),
+      (w) => w === "open",
+      { label: "the window after a reload" },
+    )
     await transcript(page).locator(`[data-entry="${entryId}"]`).waitFor()
 
     await page.getByTestId("jump-to-latest").click()
-    await eventually(() => transcript(page).getAttribute("data-window"), (w) => w === null)
-    await eventually(() => page.evaluate(() => location.hash), (h) => h === `#/c/${nova.directConversationId}`)
-    await eventually(() => transcript(page).evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight), (d) => d < 80)
+    await eventually(
+      () => transcript(page).getAttribute("data-window"),
+      (w) => w === null,
+    )
+    await eventually(
+      () => page.evaluate(() => location.hash),
+      (h) => h === `#/c/${nova.directConversationId}`,
+    )
+    await eventually(
+      () => transcript(page).evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight),
+      (d) => d < 80,
+    )
     expect(app.errors).toEqual([])
   }, 60_000)
 
@@ -168,20 +259,42 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     expect(await input.evaluate((el) => el === document.activeElement)).toBe(true)
     await input.fill("visa")
     const total = VISA_TRIPS * 2
-    await eventually(() => text(page, "find-count"), (t) => t === `${total} of ${total}`)
-    await eventually(() => page.evaluate(() => (CSS as unknown as { highlights: Map<string, { size: number }> }).highlights.get("ob-find")?.size ?? 0), (n) => n > 0)
+    await eventually(
+      () => text(page, "find-count"),
+      (t) => t === `${total} of ${total}`,
+    )
+    await eventually(
+      () =>
+        page.evaluate(
+          () => (CSS as unknown as { highlights: Map<string, { size: number }> }).highlights.get("ob-find")?.size ?? 0,
+        ),
+      (n) => n > 0,
+    )
     await app.shot("e2e-search-find")
     await page.keyboard.press("Enter")
-    await eventually(() => text(page, "find-count"), (t) => t === `${total - 1} of ${total}`)
+    await eventually(
+      () => text(page, "find-count"),
+      (t) => t === `${total - 1} of ${total}`,
+    )
     await page.getByTestId("find-newer").click()
     await page.getByTestId("find-newer").click()
     // wrapped to the oldest: a window of the chat around it
-    await eventually(() => text(page, "find-count"), (t) => t === `1 of ${total}`)
-    await eventually(() => transcript(page).getAttribute("data-window"), (w) => w === "open")
+    await eventually(
+      () => text(page, "find-count"),
+      (t) => t === `1 of ${total}`,
+    )
+    await eventually(
+      () => transcript(page).getAttribute("data-window"),
+      (w) => w === "open",
+    )
     await transcript(page).locator("[data-flash]").filter({ hasText: "Trip 4:" }).waitFor()
     await page.keyboard.press("Escape")
     await page.getByTestId("find-bar").waitFor({ state: "detached" })
-    await eventually(() => page.evaluate(() => (CSS as unknown as { highlights: Map<string, unknown> }).highlights.size), (n) => n === 0, { label: "the highlights to go" })
+    await eventually(
+      () => page.evaluate(() => (CSS as unknown as { highlights: Map<string, unknown> }).highlights.size),
+      (n) => n === 0,
+      { label: "the highlights to go" },
+    )
 
     // a menu on top: Cmd/Ctrl+F is the browser's
     await transcript(page).locator(".ob-msg").last().hover()
@@ -210,11 +323,21 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
     expect(await hit.textContent()).not.toMatch(/Scout\s*·/)
     await hit.click()
     await page.getByTestId("exchange-title").waitFor()
-    await eventually(() => page.locator("[data-exchange-item][data-target]").count(), (n) => n === 1)
+    await eventually(
+      () => page.locator("[data-exchange-item][data-target]").count(),
+      (n) => n === 1,
+    )
     expect(await page.locator("[data-exchange-item][data-target]").textContent()).toContain("Wonka")
     // its words marked as in the chat
     const marked = await eventually(
-      () => page.evaluate(() => [...((CSS as unknown as { highlights: Map<string, Iterable<Range>> }).highlights.get("ob-find-exchange-current") ?? [])].map((r) => r.toString())),
+      () =>
+        page.evaluate(() =>
+          [
+            ...((CSS as unknown as { highlights: Map<string, Iterable<Range>> }).highlights.get(
+              "ob-find-exchange-current",
+            ) ?? []),
+          ].map((r) => r.toString()),
+        ),
       (all) => all.length > 0,
     )
     expect(marked).toEqual(["Wonka"])
@@ -247,7 +370,10 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
       await transcript(page).locator("[data-flash]").first().waitFor()
       await page.keyboard.press("Control+f")
       await page.getByTestId("find-input").fill("visa")
-      await eventually(() => text(page, "find-count"), (t) => / of /.test(t ?? ""))
+      await eventually(
+        () => text(page, "find-count"),
+        (t) => / of /.test(t ?? ""),
+      )
       const bar = await page.getByTestId("find-bar").boundingBox()
       expect(bar!.width).toBeGreaterThan(390 - 2 * 12 - 2)
       await app.shot(`e2e-search-phone-find-${theme}`)

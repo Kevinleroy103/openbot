@@ -22,11 +22,7 @@ export const formatPairingCode = (code: string): string => {
 
 /** Canonical form of user input, or `undefined` when it cannot be a pairing code. */
 export const normalizePairingCode = (input: string): string | undefined => {
-  const s = input
-    .toUpperCase()
-    .replace(/[\s-]/g, "")
-    .replace(/[IL]/g, "1")
-    .replace(/O/g, "0")
+  const s = input.toUpperCase().replace(/[\s-]/g, "").replace(/[IL]/g, "1").replace(/O/g, "0")
   if (s.length !== PAIRING_CODE_LENGTH) return undefined
   for (const ch of s) if (!PAIRING_CODE_ALPHABET.includes(ch)) return undefined
   return s

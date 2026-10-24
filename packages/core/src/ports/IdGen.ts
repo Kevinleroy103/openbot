@@ -90,7 +90,7 @@ export const makeIdGenShape = (next: (prefix: string) => Effect.Effect<string>):
 export const makeUlidGenerator = Effect.sync(() => {
   let lastTime = -1
   let lastRandom: Array<number> = []
-  const nextUlid: Effect.Effect<string> = Effect.gen(function*() {
+  const nextUlid: Effect.Effect<string> = Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis
     if (now <= lastTime && lastRandom.length === 16) {
       // Increment the random part (base 32, big-endian) to stay monotonic.
@@ -119,7 +119,7 @@ export class IdGen extends Context.Service<IdGen, IdGenShape>()("openbot/core/Id
   /** Live layer: monotonic ULIDs from `Clock` + `Random`. */
   static readonly layer: Layer.Layer<IdGen> = Layer.effect(
     IdGen,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const ulid = yield* makeUlidGenerator
       // Serialize so concurrent fibers never observe the same (time, random) pair.
       const lock = yield* Semaphore.make(1)

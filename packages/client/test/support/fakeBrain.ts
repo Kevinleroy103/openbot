@@ -87,7 +87,10 @@ export const messageFixture = (
   revision: options.revision ?? 0,
   createdAt,
   updatedAt: createdAt,
-  author: options.role === "user" ? { kind: "user", userId: "usr_owner" as UserId } : { kind: "bot", botId: "bot_1" as BotId },
+  author:
+    options.role === "user"
+      ? { kind: "user", userId: "usr_owner" as UserId }
+      : { kind: "bot", botId: "bot_1" as BotId },
   kind: "message",
   role: options.role ?? "bot",
   text,
@@ -153,7 +156,12 @@ class ConversationReplica extends Replica<ConversationState, KnownConversationCh
 
 class RosterReplica extends Replica<RosterState, KnownRosterChange, RosterChangeItem> {
   constructor() {
-    super("r1", { ...emptyRosterState, settings: DEFAULT_SETTINGS }, applyRosterChange, (cursor, change): RosterChangeItem => ({ kind: "change", cursor, change }))
+    super(
+      "r1",
+      { ...emptyRosterState, settings: DEFAULT_SETTINGS },
+      applyRosterChange,
+      (cursor, change): RosterChangeItem => ({ kind: "change", cursor, change }),
+    )
   }
   snapshot(): Extract<KnownRosterStreamItem, { kind: "snapshot" }> {
     const s = this.state
@@ -188,7 +196,9 @@ const subscribeTo = <Item extends { readonly kind: string; readonly cursor?: Str
           ? (replica.log.filter((i: { cursor: StreamCursor }) => i.cursor.sequence > after!.sequence) as Item[])
           : [snapshot()]
       const synchronized = { kind: "synchronized", cursor: head } as unknown as Item
-      const live = Stream.fromSubscription(sub).pipe(Stream.filter((i: Item) => (i.cursor?.sequence ?? 0) > head.sequence))
+      const live = Stream.fromSubscription(sub).pipe(
+        Stream.filter((i: Item) => (i.cursor?.sequence ?? 0) > head.sequence),
+      )
       return Stream.concat(Stream.fromIterable([...backlog, synchronized]), live as Stream.Stream<Item>)
     }),
   )
@@ -241,7 +251,10 @@ export class FakeBrain {
       const entryId = this.id("ent") as EntryId
       replica.apply({
         type: "entry.upserted",
-        entry: messageFixture(input.conversationId, entryId, 1_000_000 + this.nextId, input.text, { role: "user", clientNonce: input.clientNonce }),
+        entry: messageFixture(input.conversationId, entryId, 1_000_000 + this.nextId, input.text, {
+          role: "user",
+          clientNonce: input.clientNonce,
+        }),
       })
       const result: SendResult = { entryId, turnIds: [this.id("trn") as TurnId], disposition: "started" }
       this.sends.set(input.clientNonce, result)
@@ -254,16 +267,22 @@ export class FakeBrain {
     const handlers: Record<string, (payload: any) => unknown> = {
       "roster.subscribe": ({ after }: { after?: StreamCursor }) => {
         record("roster.subscribe", { after })
-        return subscribeTo<KnownRosterStreamItem>(this.roster, after, () => this.roster.snapshot(), (plan) =>
-          this.subscribes.push({ rpc: "roster.subscribe", after, plan }),
+        return subscribeTo<KnownRosterStreamItem>(
+          this.roster,
+          after,
+          () => this.roster.snapshot(),
+          (plan) => this.subscribes.push({ rpc: "roster.subscribe", after, plan }),
         )
       },
       "conversations.subscribe": ({ conversationId, after }: { conversationId: string; after?: StreamCursor }) => {
         record("conversations.subscribe", { conversationId, after })
         const replica = this.conversations.get(conversationId)
         if (!replica) return Stream.fail(new NotFound({ entity: "conversation", id: conversationId }))
-        return subscribeTo<KnownConversationStreamItem>(replica, after, () => replica.snapshot(), (plan) =>
-          this.subscribes.push({ rpc: "conversations.subscribe", after, plan }),
+        return subscribeTo<KnownConversationStreamItem>(
+          replica,
+          after,
+          () => replica.snapshot(),
+          (plan) => this.subscribes.push({ rpc: "conversations.subscribe", after, plan }),
         )
       },
       "messages.send": (input: SendInput) => {
@@ -313,10 +332,12 @@ export interface RunningBrain {
 
 export const startBrain = async (brain: FakeBrain): Promise<RunningBrain> => {
   const Handlers = OpenBotRpcs.toLayer(brain.handlers() as any)
-  const RpcLive = RpcServer.layerHttp({ group: OpenBotRpcs, path: "/rpc", protocol: "websocket", disableFatalDefects: true }).pipe(
-    Layer.provide(Handlers),
-    Layer.provide(RpcSerialization.layerJson),
-  )
+  const RpcLive = RpcServer.layerHttp({
+    group: OpenBotRpcs,
+    path: "/rpc",
+    protocol: "websocket",
+    disableFatalDefects: true,
+  }).pipe(Layer.provide(Handlers), Layer.provide(RpcSerialization.layerJson))
   const ServerLive = HttpRouter.serve(RpcLive, { disableLogger: true, disableListenLog: true }).pipe(
     Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1", idleTimeout: 0 })),
   )
@@ -365,7 +386,8 @@ export class FlakyProxy {
             ws.data.pending = []
           }
           upstream.onmessage = (e) => {
-            if (ws.readyState === 1) ws.send(typeof e.data === "string" ? e.data : new Uint8Array(e.data as ArrayBuffer))
+            if (ws.readyState === 1)
+              ws.send(typeof e.data === "string" ? e.data : new Uint8Array(e.data as ArrayBuffer))
           }
           upstream.onclose = () => {
             if (ws.readyState === 1) ws.close(4001, "upstream closed")

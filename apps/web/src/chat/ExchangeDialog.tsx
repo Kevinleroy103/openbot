@@ -48,9 +48,15 @@ export function ExchangeDialog({ a, b, target, terms, onClose, onOpenConversatio
   const rb = useAtomValue(conversationAtom(b.directConversationId))
   const sa = valueOr(ra, emptyConversationState)
   const sb = valueOr(rb, emptyConversationState)
-  const live = useMemo(() => exchangeBetween(a.id, b.id, [[...sa.entries.values()], [...sb.entries.values()]]), [a.id, b.id, sa.entries, sb.entries])
+  const live = useMemo(
+    () => exchangeBetween(a.id, b.id, [[...sa.entries.values()], [...sb.entries.values()]]),
+    [a.id, b.id, sa.entries, sb.entries],
+  )
   const fetchPage = useAtomSet(commandAtom("conversations.exchange", "exchange-dialog"), { mode: "promiseExit" })
-  const bots = new Map([[a.id as string, a], [b.id as string, b]])
+  const bots = new Map([
+    [a.id as string, a],
+    [b.id as string, b],
+  ])
 
   // ------------------------------------------------------------------------------- paging
   const [win, setWin] = useState<ExchangeWindow | undefined>(undefined)
@@ -82,7 +88,12 @@ export function ExchangeDialog({ a, b, target, terms, onClose, onOpenConversatio
     (side: "older" | "newer", cursor: string) => {
       if (busy.current) return
       busy.current = true
-      void fetchPage({ botId: a.id, peerBotId: b.id, limit: PAGE, ...(side === "older" ? { before: cursor } : { after: cursor }) }).then((exit) => {
+      void fetchPage({
+        botId: a.id,
+        peerBotId: b.id,
+        limit: PAGE,
+        ...(side === "older" ? { before: cursor } : { after: cursor }),
+      }).then((exit) => {
         busy.current = false
         if (!Exit.isSuccess(exit)) return
         if (side === "older" && scrollRef.current) prepended.current = scrollRef.current.scrollHeight
@@ -94,7 +105,13 @@ export function ExchangeDialog({ a, b, target, terms, onClose, onOpenConversatio
 
   const items = useMemo(() => (win === undefined ? [] : withLive(win, live)), [win, live])
   const targetIds = useMemo(() => new Set(target ? targetIdsIn(items, target) : []), [items, target])
-  const highlighted = useMemo(() => (terms && terms.length > 0 && targetIds.size > 0 ? { ids: [...targetIds], current: [...targetIds][0], terms } : undefined), [terms, targetIds])
+  const highlighted = useMemo(
+    () =>
+      terms && terms.length > 0 && targetIds.size > 0
+        ? { ids: [...targetIds], current: [...targetIds][0], terms }
+        : undefined,
+    [terms, targetIds],
+  )
   useTermHighlights(scrollRef, highlighted, items, EXCHANGE_HIGHLIGHTS)
 
   // ------------------------------------------------------------------------------ scroll
@@ -106,7 +123,9 @@ export function ExchangeDialog({ a, b, target, terms, onClose, onOpenConversatio
       placed.current = true
       const marked = [...el.querySelectorAll<HTMLElement>("[data-exchange-item][data-target]")]
       const id = target ? anchorIdIn(items, target) : undefined
-      const first = marked[0] ?? (id === undefined ? null : el.querySelector<HTMLElement>(`[data-exchange-item="${CSS.escape(id)}"]`))
+      const first =
+        marked[0] ??
+        (id === undefined ? null : el.querySelector<HTMLElement>(`[data-exchange-item="${CSS.escape(id)}"]`))
       if (first) {
         const box = el.getBoundingClientRect().top
         const top = first.getBoundingClientRect().top - box
@@ -139,7 +158,13 @@ export function ExchangeDialog({ a, b, target, terms, onClose, onOpenConversatio
   )
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} width={560} label={`${a.name} and ${b.name}`} className="ob-phone-full">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      width={560}
+      label={`${a.name} and ${b.name}`}
+      className="ob-phone-full"
+    >
       <DialogHeader
         title={
           <span className="flex min-w-0 items-center gap-2" data-testid="exchange-title">
@@ -155,51 +180,58 @@ export function ExchangeDialog({ a, b, target, terms, onClose, onOpenConversatio
       />
       <DialogBody ref={scrollRef} onScroll={onScroll} className="max-h-[60vh] [overflow-anchor:none] max-md:max-h-none">
         <div className="flex flex-col gap-3" data-testid="exchange">
-        {win?.beforeCursor != null && edgeSpinner}
-        {win === undefined && !failed ? (
-          <div className="flex justify-center py-8 text-fg-tertiary">
-            <Spinner size={16} label="Loading" />
-          </div>
-        ) : failed ? (
-          <p className="py-6 text-center text-sm text-fg-secondary">These messages couldn't be loaded. Try again in a moment.</p>
-        ) : items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-fg-secondary">No messages between them yet.</p>
-        ) : (
-          items.map((e) => {
-            const from = bots.get(e.author.kind === "bot" ? e.author.botId : "")
-            const to = bots.get(e.toBotId ?? "")
-            return (
-              <div key={e.id} className="flex items-end gap-2" data-exchange-item={e.id} data-target={targetIds.has(e.id) || undefined}>
-                <Avatar shape={from?.avatar.shape} color={from?.avatar.color} size={24} className="mb-1.5" />
-                <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-                  <span className="flex flex-wrap items-center gap-x-1.5 ps-3 text-xs whitespace-nowrap text-fg-secondary">
-                    <span className="text-fg">{from?.name ?? "Bot"}</span>
-                    <span>to {to?.name ?? "Bot"}</span>
-                    <span aria-hidden>·</span>
-                    <button
-                      type="button"
-                      className="hover:text-fg hover:underline"
-                      title={`Open ${to?.name ?? "the"} chat at this message`}
-                      onClick={() => {
-                        if (to) onOpenConversation(to.directConversationId)
-                        onClose()
-                      }}
-                    >
-                      {formatTimestamp(e.createdAt)}
-                    </button>
-                  </span>
-                  {e.attachments.length > 0 && <Attachments items={e.attachments} side="bot" />}
-                  {e.text.trim() !== "" && (
-                    <Bubble side="bot" className="max-w-full">
-                      <Markdown text={e.text} />
-                    </Bubble>
-                  )}
+          {win?.beforeCursor != null && edgeSpinner}
+          {win === undefined && !failed ? (
+            <div className="flex justify-center py-8 text-fg-tertiary">
+              <Spinner size={16} label="Loading" />
+            </div>
+          ) : failed ? (
+            <p className="py-6 text-center text-sm text-fg-secondary">
+              These messages couldn't be loaded. Try again in a moment.
+            </p>
+          ) : items.length === 0 ? (
+            <p className="py-6 text-center text-sm text-fg-secondary">No messages between them yet.</p>
+          ) : (
+            items.map((e) => {
+              const from = bots.get(e.author.kind === "bot" ? e.author.botId : "")
+              const to = bots.get(e.toBotId ?? "")
+              return (
+                <div
+                  key={e.id}
+                  className="flex items-end gap-2"
+                  data-exchange-item={e.id}
+                  data-target={targetIds.has(e.id) || undefined}
+                >
+                  <Avatar shape={from?.avatar.shape} color={from?.avatar.color} size={24} className="mb-1.5" />
+                  <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+                    <span className="flex flex-wrap items-center gap-x-1.5 ps-3 text-xs whitespace-nowrap text-fg-secondary">
+                      <span className="text-fg">{from?.name ?? "Bot"}</span>
+                      <span>to {to?.name ?? "Bot"}</span>
+                      <span aria-hidden>·</span>
+                      <button
+                        type="button"
+                        className="hover:text-fg hover:underline"
+                        title={`Open ${to?.name ?? "the"} chat at this message`}
+                        onClick={() => {
+                          if (to) onOpenConversation(to.directConversationId)
+                          onClose()
+                        }}
+                      >
+                        {formatTimestamp(e.createdAt)}
+                      </button>
+                    </span>
+                    {e.attachments.length > 0 && <Attachments items={e.attachments} side="bot" />}
+                    {e.text.trim() !== "" && (
+                      <Bubble side="bot" className="max-w-full">
+                        <Markdown text={e.text} />
+                      </Bubble>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })
-        )}
-        {win?.afterCursor != null && edgeSpinner}
+              )
+            })
+          )}
+          {win?.afterCursor != null && edgeSpinner}
         </div>
       </DialogBody>
       <DialogFooter>

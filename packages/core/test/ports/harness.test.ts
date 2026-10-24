@@ -49,7 +49,7 @@ describe("HarnessRegistry", () => {
       HarnessRegistry.registerLayer(Effect.succeed(driver("codex", "Codex"))),
     ).pipe(Layer.provideMerge(HarnessRegistry.layer))
     const names = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const registry = yield* HarnessRegistry
         const fake = yield* registry.get("fake")
         const all = yield* registry.list
@@ -61,7 +61,7 @@ describe("HarnessRegistry", () => {
 
   test("a registration is removed when its scope closes", async () => {
     const kinds = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const registry = yield* HarnessRegistry
         const scope = yield* Scope.make()
         yield* registry.register(driver("opencode")).pipe(Scope.provide(scope))
@@ -74,9 +74,9 @@ describe("HarnessRegistry", () => {
     expect(kinds).toEqual({ before: ["opencode"], after: [] })
   })
 
-  test("drivers are keyed by (kind, profile); the default profile is absent or \"default\"", async () => {
+  test('drivers are keyed by (kind, profile); the default profile is absent or "default"', async () => {
     const out = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const registry = yield* HarnessRegistry
         const scope = yield* Scope.make()
         yield* registry.register(driver("claude", "Claude")).pipe(Scope.provide(scope))
@@ -110,7 +110,7 @@ describe("HarnessRegistry", () => {
 
   test("removing one profile's driver keeps the others", async () => {
     const out = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const registry = yield* HarnessRegistry
         const keep = yield* Scope.make()
         const drop = yield* Scope.make()

@@ -16,11 +16,23 @@ export type MacOp =
   | { readonly op: "requestScreenRecording" }
   | { readonly op: "move"; readonly x: number; readonly y: number; readonly flags?: number | undefined }
   /** press or release one button (`clicks`: the click count it belongs to, for double clicks) */
-  | { readonly op: "button"; readonly button: MacButton; readonly down: boolean; readonly clicks?: number | undefined; readonly flags?: number | undefined }
+  | {
+      readonly op: "button"
+      readonly button: MacButton
+      readonly down: boolean
+      readonly clicks?: number | undefined
+      readonly flags?: number | undefined
+    }
   /** `count` full clicks at the current position */
   | { readonly op: "click"; readonly button: MacButton; readonly count: number; readonly flags?: number | undefined }
   /** wheel ticks: lines (bot) or pixels (the owner's trackpad); positive dy scrolls up, positive dx left */
-  | { readonly op: "scroll"; readonly dx: number; readonly dy: number; readonly unit: "line" | "pixel"; readonly flags?: number | undefined }
+  | {
+      readonly op: "scroll"
+      readonly dx: number
+      readonly dy: number
+      readonly unit: "line" | "pixel"
+      readonly flags?: number | undefined
+    }
   | { readonly op: "type"; readonly text: string }
   /** press and release a key with modifier flags */
   | { readonly op: "key"; readonly keyCode: number; readonly flags: number }
@@ -100,7 +112,10 @@ export const typingPieces = (text: string): ReadonlyArray<{ readonly text: strin
   return out
 }
 
-export const makeHelperHandler = (cg: CoreGraphics, clock: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> }) => {
+export const makeHelperHandler = (
+  cg: CoreGraphics,
+  clock: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> },
+) => {
   let pos = { x: 0, y: 0 }
   let held = 0
   let lastPost = Number.NEGATIVE_INFINITY
@@ -110,7 +125,8 @@ export const makeHelperHandler = (cg: CoreGraphics, clock: { readonly now: () =>
     lastPost = clock.now()
   }
   const moveType = () => {
-    for (const b of ["left", "right", "middle"] as const) if (buttons.has(b)) return { type: MOUSE[b].drag, button: MOUSE[b].button }
+    for (const b of ["left", "right", "middle"] as const)
+      if (buttons.has(b)) return { type: MOUSE[b].drag, button: MOUSE[b].button }
     return { type: MOUSE_MOVED, button: 0 }
   }
   const press = (button: MacButton, down: boolean, clicks: number, flags: number) => {
@@ -125,7 +141,12 @@ export const makeHelperHandler = (cg: CoreGraphics, clock: { readonly now: () =>
     switch (req.op) {
       case "info": {
         const size = cg.displaySize()
-        return { width: size.width, height: size.height, screenRecording: cg.screenRecordingAllowed(), accessibility: cg.accessibilityAllowed() } satisfies MacInfo
+        return {
+          width: size.width,
+          height: size.height,
+          screenRecording: cg.screenRecordingAllowed(),
+          accessibility: cg.accessibilityAllowed(),
+        } satisfies MacInfo
       }
       case "idle":
         return { idle: cg.secondsSinceInput(), sincePost: (clock.now() - lastPost) / 1000 } satisfies MacIdle

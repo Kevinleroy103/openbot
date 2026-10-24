@@ -50,41 +50,48 @@ describe("auth.json", () => {
   test("login → session (hashed at rest) survives a reload; logout revokes; tickets are single use", async () => {
     const path = join(dir, "sessions", "auth.json")
     const options = { path, allowedOrigins: ["http://127.0.0.1:1"], publicOrigins: [] }
-    await Effect.runPromise(Effect.gen(function*() {
-      const { service: auth } = yield* makeWebAuth(options)
-      expect(yield* auth.login("wrong")).toBeUndefined()
-      const signedIn = (yield* auth.login(auth.ownerToken))!
-      expect(signedIn.sessionToken).not.toBe(auth.ownerToken)
-      const onDisk = yield* Effect.promise(() => Bun.file(path).text())
-      expect(onDisk).not.toContain(signedIn.sessionToken)
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const { service: auth } = yield* makeWebAuth(options)
+        expect(yield* auth.login("wrong")).toBeUndefined()
+        const signedIn = (yield* auth.login(auth.ownerToken))!
+        expect(signedIn.sessionToken).not.toBe(auth.ownerToken)
+        const onDisk = yield* Effect.promise(() => Bun.file(path).text())
+        expect(onDisk).not.toContain(signedIn.sessionToken)
 
-      // a second instance (brain restart) still knows the session
-      const { service: reloaded } = yield* makeWebAuth(options)
-      expect(yield* reloaded.session(signedIn.sessionToken)).toMatchObject({ id: signedIn.session.id })
+        // a second instance (brain restart) still knows the session
+        const { service: reloaded } = yield* makeWebAuth(options)
+        expect(yield* reloaded.session(signedIn.sessionToken)).toMatchObject({ id: signedIn.session.id })
 
-      const { ticket } = yield* reloaded.mintTicket(signedIn.session)
-      expect(yield* reloaded.redeemTicket(ticket)).toBeDefined()
-      expect(yield* reloaded.redeemTicket(ticket)).toBeUndefined()
+        const { ticket } = yield* reloaded.mintTicket(signedIn.session)
+        expect(yield* reloaded.redeemTicket(ticket)).toBeDefined()
+        expect(yield* reloaded.redeemTicket(ticket)).toBeUndefined()
 
-      yield* reloaded.logout(signedIn.sessionToken)
-      expect(yield* reloaded.session(signedIn.sessionToken)).toBeUndefined()
-    }))
+        yield* reloaded.logout(signedIn.sessionToken)
+        expect(yield* reloaded.session(signedIn.sessionToken)).toBeUndefined()
+      }),
+    )
   })
 
   test("logins and logouts at the same moment keep every session that should be kept, on disk too", async () => {
     const options = { path: join(dir, "concurrent", "auth.json"), allowedOrigins: [], publicOrigins: [] }
-    await Effect.runPromise(Effect.gen(function*() {
-      const { service: auth } = yield* makeWebAuth(options)
-      const leaving = (yield* auth.login(auth.ownerToken))!
-      const [first, , ...rest] = yield* Effect.all([
-        auth.login(auth.ownerToken),
-        auth.logout(leaving.sessionToken),
-        auth.login(auth.ownerToken),
-        auth.login(auth.ownerToken),
-      ], { concurrency: "unbounded" })
-      const { service: reloaded } = yield* makeWebAuth(options)
-      expect(yield* reloaded.session(leaving.sessionToken)).toBeUndefined()
-      for (const signedIn of [first, ...rest]) expect(yield* reloaded.session(signedIn!.sessionToken)).toBeDefined()
-    }))
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const { service: auth } = yield* makeWebAuth(options)
+        const leaving = (yield* auth.login(auth.ownerToken))!
+        const [first, , ...rest] = yield* Effect.all(
+          [
+            auth.login(auth.ownerToken),
+            auth.logout(leaving.sessionToken),
+            auth.login(auth.ownerToken),
+            auth.login(auth.ownerToken),
+          ],
+          { concurrency: "unbounded" },
+        )
+        const { service: reloaded } = yield* makeWebAuth(options)
+        expect(yield* reloaded.session(leaving.sessionToken)).toBeUndefined()
+        for (const signedIn of [first, ...rest]) expect(yield* reloaded.session(signedIn!.sessionToken)).toBeDefined()
+      }),
+    )
   })
 })

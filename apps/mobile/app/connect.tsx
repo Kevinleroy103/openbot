@@ -4,7 +4,16 @@ import { CameraView, useCameraPermissions } from "expo-camera"
 import * as Clipboard from "expo-clipboard"
 import { Image } from "expo-image"
 import { type ReactNode, useRef, useState } from "react"
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useSession } from "../src/runtime.tsx"
 import { connect, parseConnectInput } from "../src/session.ts"
@@ -61,22 +70,38 @@ export default function Connect(): ReactNode {
           }}
         />
         <View style={[styles.scanFrame, { borderColor: "rgba(255,255,255,0.9)" }]} pointerEvents="none" />
-        <Text style={[styles.scanHint, { bottom: insets.bottom + 110 }]}>Scan the code under Settings › iPhone app in OpenBot</Text>
-        <GlassCircle icon="close" label="Cancel" onPress={() => setScanning(false)} style={{ position: "absolute", top: insets.top + 8, left: 16 }} />
+        <Text style={[styles.scanHint, { bottom: insets.bottom + 110 }]}>
+          Scan the code under Settings › iPhone app in OpenBot
+        </Text>
+        <GlassCircle
+          icon="close"
+          label="Cancel"
+          onPress={() => setScanning(false)}
+          style={{ position: "absolute", top: insets.top + 8, left: 16 }}
+        />
       </View>
     )
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: theme.bg }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={{ flex: 1, backgroundColor: theme.bg }}
+    >
       <View style={[styles.body, { paddingTop: insets.top + 64, paddingBottom: insets.bottom + 24 }]}>
         <Image source={require("../assets/icon.png")} style={styles.logo} />
         <Text style={[styles.title, { color: theme.fg }]}>Connect to your OpenBot</Text>
         <Text style={[styles.lead, { color: theme.fgSecondary }]}>
-          In OpenBot on your computer, open Settings › iPhone app and scan the code. You can also paste the login link OpenBot printed when it started.
+          In OpenBot on your computer, open Settings › iPhone app and scan the code. You can also paste the login link
+          OpenBot printed when it started.
         </Text>
 
-        <Pressable onPress={() => void scan()} disabled={busy} accessibilityRole="button" style={{ alignSelf: "stretch" }}>
+        <Pressable
+          onPress={() => void scan()}
+          disabled={busy}
+          accessibilityRole="button"
+          style={{ alignSelf: "stretch" }}
+        >
           <View style={[styles.primary, { backgroundColor: theme.primary }]}>
             <Icon name="scan" size={18} color={theme.onPrimary} />
             <Text style={[styles.primaryText, { color: theme.onPrimary }]}>Scan code</Text>
@@ -109,7 +134,13 @@ export default function Connect(): ReactNode {
               <Text style={{ color: theme.accentFg, fontSize: 15, fontWeight: "600" }}>Paste</Text>
             </Pressable>
           ) : (
-            <Pressable onPress={() => void submit(text)} disabled={busy} accessibilityRole="button" accessibilityLabel="Connect" style={styles.paste}>
+            <Pressable
+              onPress={() => void submit(text)}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Connect"
+              style={styles.paste}
+            >
               {busy ? <ActivityIndicator color={theme.fg} /> : <Icon name="send" size={18} color={theme.fg} />}
             </Pressable>
           )}
@@ -126,13 +157,44 @@ const styles = StyleSheet.create({
   logo: { width: 72, height: 72, borderRadius: 18, marginBottom: 24 },
   title: { fontSize: 26, fontWeight: "700", textAlign: "center", letterSpacing: -0.4 },
   lead: { fontSize: 16, lineHeight: 22, textAlign: "center", marginTop: 10, marginBottom: 32 },
-  primary: { height: 52, borderRadius: 26, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  primary: {
+    height: 52,
+    borderRadius: 26,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   primaryText: { fontSize: 17, fontWeight: "600" },
   or: { marginTop: 28, marginBottom: 10, fontSize: 14 },
-  field: { alignSelf: "stretch", height: 52, borderRadius: 26, flexDirection: "row", alignItems: "center", paddingLeft: 18, paddingRight: 6 },
+  field: {
+    alignSelf: "stretch",
+    height: 52,
+    borderRadius: 26,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 18,
+    paddingRight: 6,
+  },
   input: { flex: 1, fontSize: 16, height: 52 },
   paste: { height: 40, minWidth: 56, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
   error: { marginTop: 14, fontSize: 14, lineHeight: 19, textAlign: "center" },
-  scanFrame: { position: "absolute", alignSelf: "center", top: "28%", width: 240, height: 240, borderWidth: 3, borderRadius: 28 },
-  scanHint: { position: "absolute", left: 32, right: 32, textAlign: "center", color: "#fff", fontSize: 16, fontWeight: "500" },
+  scanFrame: {
+    position: "absolute",
+    alignSelf: "center",
+    top: "28%",
+    width: 240,
+    height: 240,
+    borderWidth: 3,
+    borderRadius: 28,
+  },
+  scanHint: {
+    position: "absolute",
+    left: 32,
+    right: 32,
+    textAlign: "center",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+  },
 })

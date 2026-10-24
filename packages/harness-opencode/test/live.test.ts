@@ -34,13 +34,18 @@ const startMcp = () => {
       const body = (await req.json()) as { id?: number | string; method: string; params?: any }
       seen.push(body.method)
       if (body.id === undefined) return new Response(null, { status: 202 })
-      const result = body.method === "initialize"
-        ? { protocolVersion: body.params?.protocolVersion ?? "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "openbot", version: "0.0.0" } }
-        : body.method === "tools/list"
-        ? { tools: [{ name: "whoami", description: "Who am I?", inputSchema: { type: "object", properties: {} } }] }
-        : body.method === "tools/call"
-        ? { content: [{ type: "text", text: "You are the live test bot." }] }
-        : {}
+      const result =
+        body.method === "initialize"
+          ? {
+              protocolVersion: body.params?.protocolVersion ?? "2025-06-18",
+              capabilities: { tools: {} },
+              serverInfo: { name: "openbot", version: "0.0.0" },
+            }
+          : body.method === "tools/list"
+            ? { tools: [{ name: "whoami", description: "Who am I?", inputSchema: { type: "object", properties: {} } }] }
+            : body.method === "tools/call"
+              ? { content: [{ type: "text", text: "You are the live test bot." }] }
+              : {}
       return Response.json({ jsonrpc: "2.0", id: body.id, result }, { headers: { "mcp-session-id": "live-session" } })
     },
   })
@@ -65,7 +70,7 @@ describe.skipIf(!LIVE)("OpenCode live (OPENBOT_LIVE_OPENCODE=1)", () => {
     try {
       const result = await Effect.runPromise(
         Effect.scoped(
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const driver = yield* (yield* HarnessRegistry).get("opencode")
             const status = yield* driver.probe
             const models = yield* driver.listModels
@@ -74,35 +79,43 @@ describe.skipIf(!LIVE)("OpenCode live (OPENBOT_LIVE_OPENCODE=1)", () => {
             const dir = join(root, "ws")
             const open = (nativeSessionId: string | undefined, b1 = false) =>
               driver.openSession({
-              bot,
-              conversationId: conv,
-              sessionKey: sessionKeyOf(bot.id, conv),
-              nativeSessionId,
-              placement: {
-                mode: b1 ? "brain-mcp-hands" : "native-local",
-                hostNodeId: LOCAL_NODE_ID,
-                workspacePath: dir,
-                harnessCwd: dir,
-                env: {},
-                disableBuiltinTools: b1,
-                toolsets: b1 ? ["bot", "node"] : ["bot"],
-                promptAppend: "",
-                release: Effect.void,
-              },
-              instructions: {
-                text: "You are Live, an OpenBot test bot. Answer in one short sentence.",
-                sections: { base: "You are Live, an OpenBot test bot.", persona: "Answer in one short sentence.", team: "", memoryIndex: "", placement: "" },
-                hash: "live",
-              },
-              mcp: [{ name: "openbot", url: mcp.url, headers: { authorization: "Bearer live-token" } }],
-              model: TURN ? process.env.OPENBOT_LIVE_OPENCODE_MODEL : undefined,
-              effort: undefined,
-              onRequest: () => Effect.succeed({ decision: "deny" }),
-            })
+                bot,
+                conversationId: conv,
+                sessionKey: sessionKeyOf(bot.id, conv),
+                nativeSessionId,
+                placement: {
+                  mode: b1 ? "brain-mcp-hands" : "native-local",
+                  hostNodeId: LOCAL_NODE_ID,
+                  workspacePath: dir,
+                  harnessCwd: dir,
+                  env: {},
+                  disableBuiltinTools: b1,
+                  toolsets: b1 ? ["bot", "node"] : ["bot"],
+                  promptAppend: "",
+                  release: Effect.void,
+                },
+                instructions: {
+                  text: "You are Live, an OpenBot test bot. Answer in one short sentence.",
+                  sections: {
+                    base: "You are Live, an OpenBot test bot.",
+                    persona: "Answer in one short sentence.",
+                    team: "",
+                    memoryIndex: "",
+                    placement: "",
+                  },
+                  hash: "live",
+                },
+                mcp: [{ name: "openbot", url: mcp.url, headers: { authorization: "Bearer live-token" } }],
+                model: TURN ? process.env.OPENBOT_LIVE_OPENCODE_MODEL : undefined,
+                effort: undefined,
+                onRequest: () => Effect.succeed({ decision: "deny" }),
+              })
             // No model calls: resume by native id (same server), B1 rules accepted, a missing id recreated.
             const first = yield* Effect.scoped(Effect.flatMap(open(undefined), (s) => s.nativeSessionId))
             const resumedId = yield* Effect.scoped(Effect.flatMap(open(first, true), (s) => s.nativeSessionId))
-            const recreatedId = yield* Effect.scoped(Effect.flatMap(open("ses_openbotlivemissing0000000"), (s) => s.nativeSessionId))
+            const recreatedId = yield* Effect.scoped(
+              Effect.flatMap(open("ses_openbotlivemissing0000000"), (s) => s.nativeSessionId),
+            )
             const session = yield* open(first)
             const events: Array<HarnessEvent> = []
             yield* Effect.forkScoped(Stream.runForEach(session.events, (e) => Effect.sync(() => events.push(e))))
@@ -116,12 +129,24 @@ describe.skipIf(!LIVE)("OpenCode live (OPENBOT_LIVE_OPENCODE=1)", () => {
                 }
               })
             }
-            return { status, models, nativeSessionId: yield* session.nativeSessionId, first, resumedId, recreatedId, events }
+            return {
+              status,
+              models,
+              nativeSessionId: yield* session.nativeSessionId,
+              first,
+              resumedId,
+              recreatedId,
+              events,
+            }
           }),
         ).pipe(Effect.provide(layer)),
       )
       console.log("[live] status", JSON.stringify(result.status))
-      console.log("[live] models", result.models.length, result.models.slice(0, 3).map((m) => m.id))
+      console.log(
+        "[live] models",
+        result.models.length,
+        result.models.slice(0, 3).map((m) => m.id),
+      )
       console.log("[live] mcp methods", mcp.seen)
       expect(result.status).toMatchObject({ kind: "opencode", installed: true, problems: [] })
       expect(result.status.version).toMatch(/^2\./)

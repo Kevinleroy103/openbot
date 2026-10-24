@@ -11,7 +11,16 @@ import {
   TurnRepo,
   writeSettings,
 } from "@openbot/core"
-import { botId, conversationId, entryId, makeBot, makeMessageEntry, makeTurn, SequentialIdGen, turnId } from "@openbot/core/testing"
+import {
+  botId,
+  conversationId,
+  entryId,
+  makeBot,
+  makeMessageEntry,
+  makeTurn,
+  SequentialIdGen,
+  turnId,
+} from "@openbot/core/testing"
 import { afterAll, describe, expect, test } from "bun:test"
 import { Cause, Effect, Exit, Layer, Option } from "effect"
 import { SqlClient } from "effect/sql"
@@ -26,7 +35,7 @@ describe("database setup", () => {
   test("creates the database in the data dir with WAL, busy_timeout, synchronous=NORMAL and foreign keys", async () => {
     const dir = await tempDataDir()
     const pragmas = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         const [journal] = yield* sql<{ journal_mode: string }>`PRAGMA journal_mode`
         const [busy] = yield* sql<{ timeout: number }>`PRAGMA busy_timeout`
@@ -45,13 +54,19 @@ describe("database setup", () => {
   test("migrations are idempotent and data survives reopening", async () => {
     const dir = await tempDataDir()
     const bot = makeBot({ id: botId("bot_keep"), name: "Keeper", createdAt: 1 })
-    await run(Effect.flatMap(BotRepo, (repo) => repo.upsert(bot)), testPersistence(dir))
+    await run(
+      Effect.flatMap(BotRepo, (repo) => repo.upsert(bot)),
+      testPersistence(dir),
+    )
     // Reopen the same data dir twice: migrations must not re-run, data must still be there.
     for (let i = 0; i < 2; i++) {
       const [applied, stored] = await run(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient
-          const rows = yield* sql<{ migration_id: number; name: string }>`SELECT migration_id, name FROM effect_sql_migrations`
+          const rows = yield* sql<{
+            migration_id: number
+            name: string
+          }>`SELECT migration_id, name FROM effect_sql_migrations`
           const keeper = yield* (yield* BotRepo).get(botId("bot_keep"))
           return [rows.map((r) => `${r.migration_id}_${r.name}`), keeper] as const
         }),
@@ -64,7 +79,9 @@ describe("database setup", () => {
 
   test("PersistenceLive builds with only IdGen and exposes Persistence.boot", async () => {
     const dir = await tempDataDir()
-    const layer = PersistenceLive(dir, { killProcessGroup: () => Effect.succeed(false) }).pipe(Layer.provide(SequentialIdGen()))
+    const layer = PersistenceLive(dir, { killProcessGroup: () => Effect.succeed(false) }).pipe(
+      Layer.provide(SequentialIdGen()),
+    )
     const report = await Effect.runPromise(Effect.provide(Persistence.boot, layer))
     expect(report.interruptedTurns).toEqual([])
   })
@@ -81,7 +98,7 @@ describe("payload decoding", () => {
   test("corrupt rows fail loudly with RepoError", async () => {
     const dir = await tempDataDir()
     const exit = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         yield* sql`INSERT INTO bots (id, created_at, payload_json) VALUES ('bot_bad', 1, '{"id":"bot_bad"}')`
         return yield* Effect.exit((yield* BotRepo).list)
@@ -99,7 +116,7 @@ describe("payload decoding", () => {
   test("entries of unknown kinds (written by a newer build) decode as unknown", async () => {
     const dir = await tempDataDir()
     const entry = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         const payload = JSON.stringify({
           id: "ent_future",
@@ -125,7 +142,7 @@ describe("payload decoding", () => {
   test("settings round-trip through the typed helpers", async () => {
     const dir = await tempDataDir()
     const settings = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* writeSettings({ ...DEFAULT_SETTINGS, theme: "dark", showSteps: false, ownerName: "Ada" })
         yield* (yield* SettingsRepo).set("brain.ownerTokenHash", { hash: "abc" })
         return yield* readSettings
@@ -138,7 +155,11 @@ describe("payload decoding", () => {
   test("entry paging rejects an invalid cursor", async () => {
     const dir = await tempDataDir()
     const exit = await run(
-      Effect.exit(Effect.flatMap(EntryRepo, (repo) => repo.page({ conversationId: conversationId("cnv_a"), before: "nope", limit: 5 }))),
+      Effect.exit(
+        Effect.flatMap(EntryRepo, (repo) =>
+          repo.page({ conversationId: conversationId("cnv_a"), before: "nope", limit: 5 }),
+        ),
+      ),
       testPersistence(dir),
     )
     expect(Exit.isFailure(exit)).toBe(true)
@@ -147,11 +168,12 @@ describe("payload decoding", () => {
   test("concurrent revision-guarded upserts keep the highest revision", async () => {
     const dir = await tempDataDir()
     const stored = await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const repo = yield* EntryRepo
         yield* Effect.forEach(
           [3, 1, 5, 2, 4],
-          (revision) => repo.upsert(makeMessageEntry({ id: entryId("ent_c"), revision, text: `r${revision}`, createdAt: 1 })),
+          (revision) =>
+            repo.upsert(makeMessageEntry({ id: entryId("ent_c"), revision, text: `r${revision}`, createdAt: 1 })),
           { concurrency: "unbounded" },
         )
         return yield* repo.get(entryId("ent_c"))
@@ -171,8 +193,14 @@ describe("boot recovery", () => {
     try {
       const layer = testPersistence(dir, killProcessGroup)
       const result = await run(
-        Effect.gen(function*() {
-          yield* (yield* ProcessLedger).record({ pid: child.pid, pgid: child.pid, kind: "other", label: "sleep", startedAt })
+        Effect.gen(function* () {
+          yield* (yield* ProcessLedger).record({
+            pid: child.pid,
+            pgid: child.pid,
+            kind: "other",
+            label: "sleep",
+            startedAt,
+          })
           yield* (yield* TurnRepo).upsert(makeTurn({ id: turnId("trn_live"), status: "running" }))
           const report = yield* (yield* BootRecovery).run
           const turn = yield* (yield* TurnRepo).get(turnId("trn_live"))
@@ -195,7 +223,7 @@ describe("boot recovery", () => {
     const dir = await tempDataDir()
     const killer = recordingKiller()
     await run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* (yield* TurnRepo).upsert(makeTurn({ id: turnId("trn_a"), status: "waiting" }))
         yield* (yield* EntryRepo).upsert(
           makeMessageEntry({
@@ -214,8 +242,13 @@ describe("boot recovery", () => {
       }),
       testPersistence(dir, killer.killProcessGroup),
     )
-    const second = await run(Effect.flatMap(BootRecovery, (r) => r.run), testPersistence(dir, killer.killProcessGroup))
-    expect([second.interruptedTurns.length, second.updatedEntries.length, second.expiredRequests.length]).toEqual([0, 0, 0])
+    const second = await run(
+      Effect.flatMap(BootRecovery, (r) => r.run),
+      testPersistence(dir, killer.killProcessGroup),
+    )
+    expect([second.interruptedTurns.length, second.updatedEntries.length, second.expiredRequests.length]).toEqual([
+      0, 0, 0,
+    ])
   })
 })
 

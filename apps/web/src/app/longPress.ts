@@ -77,7 +77,10 @@ export function useLongPress(onLongPress: (point: LongPressPoint) => void) {
  * Delegated long-press for a container (the transcript): `match` picks the pressed item from the
  * event target (return undefined to ignore the press), `onLongPress` gets it.
  */
-export function useLongPressWithin<T>(match: (target: Element) => T | undefined, onLongPress: (item: T, point: LongPressPoint) => void) {
+export function useLongPressWithin<T>(
+  match: (target: Element) => T | undefined,
+  onLongPress: (item: T, point: LongPressPoint) => void,
+) {
   const matchRef = useRef(match)
   matchRef.current = match
   const cb = useRef(onLongPress)
@@ -93,7 +96,8 @@ export function useLongPressWithin<T>(match: (target: Element) => T | undefined,
   useEffect(() => () => t.dispose(), [t])
   return {
     onPointerDown: (e: ReactPointerEvent) => {
-      if (e.target instanceof Element && matchRef.current(e.target) !== undefined) t.down(e.pointerType, e.target, e.clientX, e.clientY)
+      if (e.target instanceof Element && matchRef.current(e.target) !== undefined)
+        t.down(e.pointerType, e.target, e.clientX, e.clientY)
     },
     onPointerMove: (e: ReactPointerEvent) => t.move(e.clientX, e.clientY),
     onPointerUp: () => t.cancel(),

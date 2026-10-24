@@ -67,7 +67,16 @@ describe("activity phrases of tools", () => {
   test("no activity phrase carries a tool name or a plumbing word", () => {
     const names = [
       ...BOOKKEEPING.map((t) => `mcp__openbot__${t}`),
-      ...["message_bot", "handoff_task", "post_to_group", "send_file", "ask_user", "request_approval", "browser", "computer"].map((t) => `mcp__openbot__${t}`),
+      ...[
+        "message_bot",
+        "handoff_task",
+        "post_to_group",
+        "send_file",
+        "ask_user",
+        "request_approval",
+        "browser",
+        "computer",
+      ].map((t) => `mcp__openbot__${t}`),
       ...["shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep"].map((t) => `mcp__openbot__${t}`),
       "mcp__github__create_issue",
       "Agent",
@@ -86,18 +95,31 @@ describe("activity phrases of tools", () => {
       "ExitPlanMode",
       "Skill",
     ]
-    for (const name of names) expect({ name, activity: classifyTool(name, {}).activity }).not.toMatchObject({ activity: expect.stringMatching(PLUMBING) })
+    for (const name of names)
+      expect({ name, activity: classifyTool(name, {}).activity }).not.toMatchObject({
+        activity: expect.stringMatching(PLUMBING),
+      })
   })
 
   test("the activity row says Thinking… while the bot starts parallel work (streamed tool call)", () => {
     const pipeline = new ClaudeEventPipeline({ sessionId: "s" })
     const events: Array<HarnessEvent> = [...pipeline.send(turnId(1), "u1")]
-    events.push(...pipeline.message({ type: "stream_event", parent_tool_use_id: null, event: { type: "message_start", message: { id: "m1" } } }).events)
     events.push(
       ...pipeline.message({
         type: "stream_event",
         parent_tool_use_id: null,
-        event: { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "t1", name: "mcp__openbot__start_task", input: {} } },
+        event: { type: "message_start", message: { id: "m1" } },
+      }).events,
+    )
+    events.push(
+      ...pipeline.message({
+        type: "stream_event",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "tool_use", id: "t1", name: "mcp__openbot__start_task", input: {} },
+        },
       }).events,
     )
     const labels = events.flatMap((e) => (e._tag === "Activity" ? [e.label] : []))

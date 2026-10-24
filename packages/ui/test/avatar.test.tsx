@@ -2,13 +2,46 @@ import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 import { Avatar, AvatarStack } from "../src/avatar/Avatar.tsx"
 import { AvatarPicker } from "../src/avatar/AvatarPicker.tsx"
-import { AvatarColors, AvatarShapes, botTintStyle, defaultBotAvatar, fnv1a32, normalizeAvatar } from "../src/avatar/palette.ts"
+import {
+  AvatarColors,
+  AvatarShapes,
+  botTintStyle,
+  defaultBotAvatar,
+  fnv1a32,
+  normalizeAvatar,
+} from "../src/avatar/palette.ts"
 import { avatarBodies } from "../src/avatar/shapes.ts"
 
 describe("avatar palette mirrors @openbot/contracts", () => {
   test("arrays keep the contract order", () => {
-    expect([...AvatarColors]).toEqual(["black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray"])
-    expect([...AvatarShapes]).toEqual(["blob", "cloud", "square", "sparkle", "clover", "heart", "flower", "teardrop", "tablet", "wedge", "house", "star", "hex"])
+    expect([...AvatarColors]).toEqual([
+      "black",
+      "brown",
+      "red",
+      "orange",
+      "yellow",
+      "green",
+      "cyan",
+      "blue",
+      "violet",
+      "magenta",
+      "gray",
+    ])
+    expect([...AvatarShapes]).toEqual([
+      "blob",
+      "cloud",
+      "square",
+      "sparkle",
+      "clover",
+      "heart",
+      "flower",
+      "teardrop",
+      "tablet",
+      "wedge",
+      "house",
+      "star",
+      "hex",
+    ])
   })
 
   // Vectors computed with packages/contracts/src/domain.ts (fnv1a32 + defaultBotAvatar).
@@ -66,7 +99,9 @@ describe("avatar bodies", () => {
 
 describe("<Avatar>", () => {
   test("renders an svg body with two eyes and data attributes", () => {
-    const html = renderToStaticMarkup(<Avatar shape="hex" color="blue" size={36} label="Research Scout" working status="unread" />)
+    const html = renderToStaticMarkup(
+      <Avatar shape="hex" color="blue" size={36} label="Research Scout" working status="unread" />,
+    )
     expect(html).toContain('role="img"')
     expect(html).toContain('aria-label="Research Scout"')
     expect(html).toContain('data-working=""')
@@ -78,7 +113,10 @@ describe("<Avatar>", () => {
 
   test("expressions change the eyes", () => {
     const shapes = ["neutral", "happy", "surprised", "sleepy", "inspecting"].map((e) =>
-      renderToStaticMarkup(<Avatar shape="blob" color="cyan" expression={e as never} />).replace(/data-expression="[a-z]+"/, ""),
+      renderToStaticMarkup(<Avatar shape="blob" color="cyan" expression={e as never} />).replace(
+        /data-expression="[a-z]+"/,
+        "",
+      ),
     )
     expect(new Set(shapes).size).toBe(5)
     expect(renderToStaticMarkup(<Avatar expression="happy" />)).toContain("stroke-linecap")

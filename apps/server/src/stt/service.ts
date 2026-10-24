@@ -27,15 +27,24 @@ import {
 import { PARAKEET_MANIFEST, type SttManifest, sttPlatformOf } from "./manifest.ts"
 import { DictationSession } from "./session.ts"
 
-export class SpeechToText extends Context.Service<SpeechToText, {
-  readonly status: Effect.Effect<SttStatus>
-  readonly install: Effect.Effect<SttStatus, Conflict>
-  readonly remove: Effect.Effect<SttStatus, Conflict>
-  readonly open: Effect.Effect<{ readonly sessionId: string }, Unavailable | Conflict>
-  readonly append: (sessionId: string, pcm: Uint8Array) => Effect.Effect<SttTranscription, NotFound | InvalidInput | Unavailable | Conflict>
-  readonly finish: (sessionId: string, pcm: Uint8Array) => Effect.Effect<SttTranscription, NotFound | InvalidInput | Unavailable | Conflict>
-  readonly discard: (sessionId: string) => Effect.Effect<void>
-}>()("openbot/server/SpeechToText") {}
+export class SpeechToText extends Context.Service<
+  SpeechToText,
+  {
+    readonly status: Effect.Effect<SttStatus>
+    readonly install: Effect.Effect<SttStatus, Conflict>
+    readonly remove: Effect.Effect<SttStatus, Conflict>
+    readonly open: Effect.Effect<{ readonly sessionId: string }, Unavailable | Conflict>
+    readonly append: (
+      sessionId: string,
+      pcm: Uint8Array,
+    ) => Effect.Effect<SttTranscription, NotFound | InvalidInput | Unavailable | Conflict>
+    readonly finish: (
+      sessionId: string,
+      pcm: Uint8Array,
+    ) => Effect.Effect<SttTranscription, NotFound | InvalidInput | Unavailable | Conflict>
+    readonly discard: (sessionId: string) => Effect.Effect<void>
+  }
+>()("openbot/server/SpeechToText") {}
 
 export interface SpeechToTextOptions {
   readonly dir: string
@@ -65,7 +74,7 @@ interface OpenSession {
 export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<SpeechToText> =>
   Layer.effect(
     SpeechToText,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const manifest = options.manifest ?? PARAKEET_MANIFEST
       const model = manifest.model
       const layout = sttLayout(options.dir)
@@ -80,7 +89,8 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
         runtime === undefined
           ? { state: "unsupported", model: model.label }
           : { state: "absent", model: model.label, downloadBytes: runtime.bytes + model.archive.bytes }
-      const installedAlready = runtime !== undefined && (yield* Effect.promise(() => isInstalled(layout, runtime, model)))
+      const installedAlready =
+        runtime !== undefined && (yield* Effect.promise(() => isInstalled(layout, runtime, model)))
       let status: SttStatus = installedAlready ? { state: "ready", model: model.label } : restingStatus()
       let removing = false
       const removalConflict = () => new Conflict({ reason: "Voice input is being removed." })
@@ -96,16 +106,17 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
           onSome: (processes) =>
             Effect.runPromise(
               Effect.flatMap(Clock.currentTimeMillis, (startedAt) =>
-                processes.record({ pid, pgid: pid, kind: "other", label: "speech recognizer", startedAt })).pipe(
-                  Effect.ignoreCause({ log: "Warn", message: "ProcessLedger.record failed" }),
-                ),
+                processes.record({ pid, pgid: pid, kind: "other", label: "speech recognizer", startedAt }),
+              ).pipe(Effect.ignoreCause({ log: "Warn", message: "ProcessLedger.record failed" })),
             ),
         })
       const removeFromLedger = (pid: number) =>
         Option.match(ledger, {
           onNone: () => Promise.resolve(),
           onSome: (processes) =>
-            Effect.runPromise(processes.remove(pid).pipe(Effect.ignoreCause({ log: "Warn", message: "ProcessLedger.remove failed" }))),
+            Effect.runPromise(
+              processes.remove(pid).pipe(Effect.ignoreCause({ log: "Warn", message: "ProcessLedger.remove failed" })),
+            ),
         })
 
       const launch = async (sampleRate: number): Promise<Recognizer> => {
@@ -159,7 +170,8 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
       }
 
       const forgetIdleSessions = (now: number) => {
-        for (const [sessionId, active] of sessions) if (now - active.lastUsedAt > sessionIdleMs) sessions.delete(sessionId)
+        for (const [sessionId, active] of sessions)
+          if (now - active.lastUsedAt > sessionIdleMs) sessions.delete(sessionId)
       }
 
       const scheduleIdleStop = () => {
@@ -180,9 +192,11 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
       yield* Effect.addFinalizer(() => Effect.promise(stopRecognizer))
 
       const recognizerFailure = (error: unknown): Effect.Effect<never, Conflict | Unavailable> =>
-        error instanceof Conflict || error instanceof Unavailable ? Effect.fail(error) : Effect.logWarning("Voice input could not transcribe", { error: describeError(error) }).pipe(
-          Effect.andThen(Effect.fail(new Unavailable({ message: RECOGNIZER_FAILED }))),
-        )
+        error instanceof Conflict || error instanceof Unavailable
+          ? Effect.fail(error)
+          : Effect.logWarning("Voice input could not transcribe", { error: describeError(error) }).pipe(
+              Effect.andThen(Effect.fail(new Unavailable({ message: RECOGNIZER_FAILED }))),
+            )
 
       const whenReady = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E | Unavailable | Conflict> =>
         Effect.suspend((): Effect.Effect<A, E | Unavailable | Conflict> => {
@@ -191,27 +205,37 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
         })
 
       const open = whenReady(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           forgetIdleSessions(Date.now())
-          yield* Effect.tryPromise({ try: runningRecognizer, catch: (error) => error }).pipe(Effect.catch(recognizerFailure))
+          yield* Effect.tryPromise({ try: runningRecognizer, catch: (error) => error }).pipe(
+            Effect.catch(recognizerFailure),
+          )
           if (removing) return yield* removalConflict()
           if (status.state !== "ready") return yield* new Unavailable({ message: NOT_SET_UP })
           scheduleIdleStop()
           const sessionId = randomUUID()
-          sessions.set(sessionId, { session: new DictationSession(decode, DICTATION_SAMPLE_RATE), lastUsedAt: Date.now() })
+          sessions.set(sessionId, {
+            session: new DictationSession(decode, DICTATION_SAMPLE_RATE),
+            lastUsedAt: Date.now(),
+          })
           return { sessionId }
         }),
       )
 
       const transcribe = (sessionId: string, pcm: Uint8Array, final: boolean) =>
         whenReady(
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const active = sessions.get(sessionId)
             if (active === undefined) return yield* new NotFound({ entity: "dictation", id: sessionId })
-            const remainingSamples = Math.max(0, Math.round((MAX_DICTATION_SECONDS - active.session.receivedSeconds) * DICTATION_SAMPLE_RATE))
+            const remainingSamples = Math.max(
+              0,
+              Math.round((MAX_DICTATION_SECONDS - active.session.receivedSeconds) * DICTATION_SAMPLE_RATE),
+            )
             const received = pcm16Samples(pcm)
             if (!final && received.length > 0 && remainingSamples === 0) {
-              return yield* new InvalidInput({ message: `Dictation stops after ${MAX_DICTATION_SECONDS / 60} minutes.` })
+              return yield* new InvalidInput({
+                message: `Dictation stops after ${MAX_DICTATION_SECONDS / 60} minutes.`,
+              })
             }
             const samples = received.subarray(0, remainingSamples)
             active.lastUsedAt = Date.now()
@@ -232,15 +256,22 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
         const sample = pcm16WavSamples(new Uint8Array(await readFile(path.join(layout.model, model.sampleWav))))
         const checker = await launch(sample.sampleRate)
         const heard = await checker.decode(sample.samples, sample.sampleRate).finally(() => retire(checker))
-        if (!heard.toLowerCase().includes(model.sampleExpectedWord)) throw new Error(`The speech model misheard its own sample recording ("${heard}").`)
+        if (!heard.toLowerCase().includes(model.sampleExpectedWord))
+          throw new Error(`The speech model misheard its own sample recording ("${heard}").`)
       }
 
       const runInstall = (archive: NonNullable<typeof runtime>) =>
         Effect.tryPromise({
           try: async (signal) => {
-            await downloadStt(layout, archive, model, (downloadedBytes, downloadBytes) => {
-              status = { state: "installing", model: model.label, downloadBytes, downloadedBytes }
-            }, signal)
+            await downloadStt(
+              layout,
+              archive,
+              model,
+              (downloadedBytes, downloadBytes) => {
+                status = { state: "installing", model: model.label, downloadBytes, downloadedBytes }
+              },
+              signal,
+            )
             await checkSample()
             await markInstalled(layout, archive, model)
           },
@@ -253,23 +284,32 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
               }),
             onFailure: (problem) =>
               Effect.logWarning("Voice input could not be installed", { problem }).pipe(
-                Effect.andThen(Effect.sync(() => {
-                  status = { state: "failed", model: model.label, problem }
-                })),
+                Effect.andThen(
+                  Effect.sync(() => {
+                    status = { state: "failed", model: model.label, problem }
+                  }),
+                ),
               ),
           }),
         )
 
       const install = Effect.suspend(() => {
         if (removing) return Effect.fail(removalConflict())
-        if (runtime === undefined || status.state === "installing" || status.state === "ready") return Effect.succeed(status)
-        status = { state: "installing", model: model.label, downloadBytes: runtime.bytes + model.archive.bytes, downloadedBytes: 0 }
+        if (runtime === undefined || status.state === "installing" || status.state === "ready")
+          return Effect.succeed(status)
+        status = {
+          state: "installing",
+          model: model.label,
+          downloadBytes: runtime.bytes + model.archive.bytes,
+          downloadedBytes: 0,
+        }
         return Effect.as(Effect.forkIn(runInstall(runtime), layerScope), status)
       })
 
       const remove = Effect.suspend(() => {
         if (removing) return Effect.fail(removalConflict())
-        if (status.state === "installing") return Effect.fail(new Conflict({ reason: "Voice input is still installing." }))
+        if (status.state === "installing")
+          return Effect.fail(new Conflict({ reason: "Voice input is still installing." }))
         removing = true
         sessions.clear()
         return Effect.promise(async () => {

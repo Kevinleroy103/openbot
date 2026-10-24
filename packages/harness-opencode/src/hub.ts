@@ -86,7 +86,7 @@ interface Live {
 }
 
 export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, never, Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const hostScope = yield* Effect.scope
     const background = yield* FiberSet.make()
     const lock = yield* Semaphore.make(1)
@@ -99,7 +99,8 @@ export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, neve
     const readyTimeoutMs = options.readyTimeoutMs ?? 15_000
     const silentTimeoutMs = options.silentTimeoutMs ?? 60_000
 
-    const rootOf = (sessionID: string): string | undefined => (routes.has(sessionID) ? sessionID : children.get(sessionID))
+    const rootOf = (sessionID: string): string | undefined =>
+      routes.has(sessionID) ? sessionID : children.get(sessionID)
 
     const dispatch = (event: OpenCodeEvent) => {
       if (event.type === "session.created") {
@@ -131,16 +132,23 @@ export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, neve
         return Effect.asVoid(FiberSet.run(background, Scope.close(live.scope, Exit.void)))
       })
 
-    const start: Effect.Effect<HostConnection, HarnessError> = Effect.gen(function*() {
+    const start: Effect.Effect<HostConnection, HarnessError> = Effect.gen(function* () {
       const scope = yield* Scope.fork(hostScope)
       const transport = yield* Scope.provide(scope)(options.start).pipe(
         Effect.onError(() => Scope.close(scope, Exit.void)),
       )
       generation += 1
-      const live: Live = { connection: { client: transport.client, version: transport.version, generation }, scope, dead: false }
+      const live: Live = {
+        connection: { client: transport.client, version: transport.version, generation },
+        scope,
+        dead: false,
+      }
       const ready = yield* Deferred.make<void, HarnessError>()
       const abort = new AbortController()
-      yield* Scope.addFinalizer(scope, Effect.sync(() => abort.abort()))
+      yield* Scope.addFinalizer(
+        scope,
+        Effect.sync(() => abort.abort()),
+      )
       let lastActivity = Date.now()
       const touch = () => {
         lastActivity = Date.now()
@@ -155,23 +163,29 @@ export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, neve
             touch()
             if (event.type === "server.connected") Deferred.doneUnsafe(ready, Effect.void)
             else dispatch(event)
-          })
+          }),
         ),
         Effect.matchEffect({
           onFailure: (cause) => {
             const reason = `The OpenCode event stream failed: ${describeClientError(cause)}`
-            return Deferred.fail(ready, harnessError("open-failed", reason, cause)).pipe(Effect.andThen(markDead(live, reason)))
+            return Deferred.fail(ready, harnessError("open-failed", reason, cause)).pipe(
+              Effect.andThen(markDead(live, reason)),
+            )
           },
           onSuccess: () => {
             const reason = "The OpenCode event stream ended."
-            return Deferred.fail(ready, harnessError("open-failed", reason)).pipe(Effect.andThen(markDead(live, reason)))
+            return Deferred.fail(ready, harnessError("open-failed", reason)).pipe(
+              Effect.andThen(markDead(live, reason)),
+            )
           },
         }),
       )
       yield* Effect.forkIn(consume, scope)
       yield* Effect.forkIn(
         transport.exited.pipe(
-          Effect.flatMap((reason) => Deferred.fail(ready, harnessError("closed", reason)).pipe(Effect.andThen(markDead(live, reason)))),
+          Effect.flatMap((reason) =>
+            Deferred.fail(ready, harnessError("closed", reason)).pipe(Effect.andThen(markDead(live, reason))),
+          ),
         ),
         scope,
       )
@@ -179,8 +193,10 @@ export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, neve
         yield* Effect.forkIn(
           Effect.suspend(() =>
             Date.now() - lastActivity > silentTimeoutMs
-              ? markDead(live, "The OpenCode event stream went silent.").pipe(Effect.andThen(Effect.fail("dead" as const)))
-              : Effect.void
+              ? markDead(live, "The OpenCode event stream went silent.").pipe(
+                  Effect.andThen(Effect.fail("dead" as const)),
+                )
+              : Effect.void,
           ).pipe(Effect.repeat(Schedule.spaced(Math.max(250, Math.floor(silentTimeoutMs / 4)))), Effect.ignore),
           scope,
         )
@@ -189,11 +205,17 @@ export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, neve
       yield* Deferred.await(ready).pipe(
         Effect.timeoutOrElse({
           duration: readyTimeoutMs,
-          orElse: () => Effect.fail(harnessError("open-failed", "Timed out waiting for the OpenCode event stream (server.connected).")),
+          orElse: () =>
+            Effect.fail(
+              harnessError("open-failed", "Timed out waiting for the OpenCode event stream (server.connected)."),
+            ),
         }),
         Effect.onError((cause) => {
           const error = Cause.findErrorOption(cause)
-          return markDead(live, Option.isSome(error) ? error.value.message : "Starting the OpenCode server was interrupted.")
+          return markDead(
+            live,
+            Option.isSome(error) ? error.value.message : "Starting the OpenCode server was interrupted.",
+          )
         }),
       )
       current = live
@@ -205,7 +227,7 @@ export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, neve
     )
 
     const models = (directory: string): Effect.Effect<ReadonlyArray<NativeModel>, HarnessError> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const { client } = yield* connection
         const list = Effect.tryPromise({
           try: (signal) => client.model.list({ location: { directory } }, { signal }),

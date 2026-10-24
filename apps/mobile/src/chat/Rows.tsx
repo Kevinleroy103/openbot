@@ -47,7 +47,14 @@ export function RowView({ row, ctx }: { readonly row: Row; readonly ctx: RowCont
       return (
         <View style={styles.block}>
           {ctx.group && author && <Text style={[styles.speaker, { color: theme.fgSecondary }]}>{author.name}</Text>}
-          <CardView card={row.entry.card} state={row.entry.state} request={ctx.requestFor(row.entry)} bot={author ?? ctx.primary} entryId={row.entry.id} theme={theme} />
+          <CardView
+            card={row.entry.card}
+            state={row.entry.state}
+            request={ctx.requestFor(row.entry)}
+            bot={author ?? ctx.primary}
+            entryId={row.entry.id}
+            theme={theme}
+          />
         </View>
       )
     }
@@ -61,7 +68,13 @@ export function RowView({ row, ctx }: { readonly row: Row; readonly ctx: RowCont
     case "event":
       return <EventLine theme={theme} text={describeEvent(row.entry, ctx)} />
     case "notice":
-      return <EventLine theme={theme} text={row.entry.text} tone={row.entry.level === "error" ? theme.dangerFg : row.entry.level === "warning" ? theme.warn : undefined} />
+      return (
+        <EventLine
+          theme={theme}
+          text={row.entry.text}
+          tone={row.entry.level === "error" ? theme.dangerFg : row.entry.level === "warning" ? theme.warn : undefined}
+        />
+      )
     case "unknown":
       return <EventLine theme={theme} text="This message can't be shown in this version of the app." />
   }
@@ -82,22 +95,40 @@ function Group({ row, ctx }: { readonly row: Extract<Row, { type: "group" }>; re
       )}
       {!user && addressee && <Text style={[styles.speaker, { color: theme.fgTertiary }]}>to @{addressee.name}</Text>}
       {row.items.map((item) => (
-        <Bubble key={item.kind === "entry" ? item.entry.id : item.pending.clientNonce} item={item} user={user} ctx={ctx} />
+        <Bubble
+          key={item.kind === "entry" ? item.entry.id : item.pending.clientNonce}
+          item={item}
+          user={user}
+          ctx={ctx}
+        />
       ))}
     </View>
   )
 }
 
-function Bubble({ item, user, ctx }: { readonly item: BubbleItem; readonly user: boolean; readonly ctx: RowContext }): ReactNode {
+function Bubble({
+  item,
+  user,
+  ctx,
+}: {
+  readonly item: BubbleItem
+  readonly user: boolean
+  readonly ctx: RowContext
+}): ReactNode {
   const { theme } = ctx
   if (item.kind === "pending") {
     const p = item.pending
     return (
-      <Pressable onPress={() => p.status === "failed" && ctx.retry(p.clientNonce)} style={{ alignItems: "flex-end", maxWidth: "82%" }}>
+      <Pressable
+        onPress={() => p.status === "failed" && ctx.retry(p.clientNonce)}
+        style={{ alignItems: "flex-end", maxWidth: "82%" }}
+      >
         <View style={[styles.bubble, { backgroundColor: theme.bubbleUser, opacity: p.status === "sending" ? 0.7 : 1 }]}>
           <Text style={{ color: theme.bubbleUserFg, fontSize: 17, lineHeight: 23 }}>{p.text}</Text>
         </View>
-        {p.status === "failed" && <Text style={{ color: theme.dangerFg, fontSize: 13, marginTop: 3 }}>Not sent · Tap to retry</Text>}
+        {p.status === "failed" && (
+          <Text style={{ color: theme.dangerFg, fontSize: 13, marginTop: 3 }}>Not sent · Tap to retry</Text>
+        )}
       </Pressable>
     )
   }
@@ -113,7 +144,10 @@ function Bubble({ item, user, ctx }: { readonly item: BubbleItem; readonly user:
             <Image
               key={a.id}
               source={{ uri: `${ctx.connection.origin}/api/attachments/${a.id}`, headers }}
-              style={[styles.image, { aspectRatio: a.width && a.height ? a.width / a.height : 1, backgroundColor: theme.elevated }]}
+              style={[
+                styles.image,
+                { aspectRatio: a.width && a.height ? a.width / a.height : 1, backgroundColor: theme.elevated },
+              ]}
               contentFit="cover"
               transition={150}
             />
@@ -123,13 +157,17 @@ function Bubble({ item, user, ctx }: { readonly item: BubbleItem; readonly user:
       {files.map((a) => (
         <View key={a.id} style={[styles.file, { backgroundColor: theme.elevated, borderColor: theme.lineTertiary }]}>
           <Icon name="file" size={18} color={theme.iconSecondary} />
-          <Text numberOfLines={1} style={{ color: theme.fg, fontSize: 15, flexShrink: 1 }}>{a.name}</Text>
+          <Text numberOfLines={1} style={{ color: theme.fg, fontSize: 15, flexShrink: 1 }}>
+            {a.name}
+          </Text>
         </View>
       ))}
       {e.text.trim() !== "" &&
         (user ? (
           <View style={[styles.bubble, { backgroundColor: theme.bubbleUser }]}>
-            <Text selectable style={{ color: theme.bubbleUserFg, fontSize: 17, lineHeight: 23 }}>{e.text}</Text>
+            <Text selectable style={{ color: theme.bubbleUserFg, fontSize: 17, lineHeight: 23 }}>
+              {e.text}
+            </Text>
           </View>
         ) : (
           <View style={[styles.bubble, styles.botBubble, { backgroundColor: theme.bubbleBot }]}>
@@ -140,11 +178,27 @@ function Bubble({ item, user, ctx }: { readonly item: BubbleItem; readonly user:
   )
 }
 
-function EventLine({ theme, text, tone }: { readonly theme: Theme; readonly text: string; readonly tone?: string | undefined }): ReactNode {
+function EventLine({
+  theme,
+  text,
+  tone,
+}: {
+  readonly theme: Theme
+  readonly text: string
+  readonly tone?: string | undefined
+}): ReactNode {
   return <Text style={[styles.event, { color: tone ?? theme.fgTertiary }]}>{text}</Text>
 }
 
-function Steps({ steps, failed, theme }: { readonly steps: Extract<Row, { type: "steps" }>["steps"]; readonly failed: boolean; readonly theme: Theme }): ReactNode {
+function Steps({
+  steps,
+  failed,
+  theme,
+}: {
+  readonly steps: Extract<Row, { type: "steps" }>["steps"]
+  readonly failed: boolean
+  readonly theme: Theme
+}): ReactNode {
   const [open, setOpen] = useState(false)
   const tools = steps.filter((s) => s.kind === "tool-call")
   const label = `${tools.length > 0 ? `${tools.length} ${tools.length === 1 ? "step" : "steps"}` : "Thought it through"}${failed ? " · stopped" : ""}`
@@ -156,15 +210,27 @@ function Steps({ steps, failed, theme }: { readonly steps: Extract<Row, { type: 
       </Pressable>
       {open &&
         steps.map((s) => (
-          <Text key={s.id} numberOfLines={2} style={{ color: theme.fgSecondary, fontSize: 14, marginLeft: 10, marginTop: 4 }}>
-            {s.kind === "tool-call" ? `${s.title ?? s.name}${s.inputSummary ? ` · ${s.inputSummary}` : ""}` : "Thinking"}
+          <Text
+            key={s.id}
+            numberOfLines={2}
+            style={{ color: theme.fgSecondary, fontSize: 14, marginLeft: 10, marginTop: 4 }}
+          >
+            {s.kind === "tool-call"
+              ? `${s.title ?? s.name}${s.inputSummary ? ` · ${s.inputSummary}` : ""}`
+              : "Thinking"}
           </Text>
         ))}
     </View>
   )
 }
 
-const ROUTINE_VERB = { created: "Created routine", updated: "Updated routine", deleted: "Removed routine", paused: "Paused routine", resumed: "Resumed routine" } as const
+const ROUTINE_VERB = {
+  created: "Created routine",
+  updated: "Updated routine",
+  deleted: "Removed routine",
+  paused: "Paused routine",
+  resumed: "Resumed routine",
+} as const
 const RUN_VERB = { started: "Running", succeeded: "Ran", failed: "Routine failed:", skipped: "Skipped" } as const
 
 /** One line for an event (the web's chat/Events.tsx, as text). */
@@ -214,7 +280,15 @@ const describeEvent = (entry: EventEntry, ctx: RowContext): string => {
 }
 
 /** A working Bot's line under the transcript ("Thinking it through…"), pulsing. */
-export function StatusLine({ bot, text, theme }: { readonly bot: Bot | undefined; readonly text: string; readonly theme: Theme }): ReactNode {
+export function StatusLine({
+  bot,
+  text,
+  theme,
+}: {
+  readonly bot: Bot | undefined
+  readonly text: string
+  readonly theme: Theme
+}): ReactNode {
   const [pulse] = useState(() => new Animated.Value(0.45))
   useEffect(() => {
     const loop = Animated.loop(
@@ -246,7 +320,16 @@ const styles = StyleSheet.create({
   botBubble: { paddingVertical: 12 },
   images: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   image: { width: 220, maxHeight: 320, borderRadius: 18 },
-  file: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: StyleSheet.hairlineWidth, maxWidth: 280 },
+  file: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: 280,
+  },
   event: { textAlign: "center", fontSize: 13, marginVertical: 6, paddingHorizontal: 24 },
   stepsHead: { flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 4 },
   status: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, paddingLeft: 2 },

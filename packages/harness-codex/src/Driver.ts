@@ -11,14 +11,7 @@ import { mkdir } from "node:fs/promises"
 import { resolve } from "node:path"
 import { BunServices } from "@effect/platform-bun"
 import type { HarnessCapabilities, HarnessStatus, ModelInfo } from "@openbot/contracts"
-import {
-  DataDir,
-  type DataDirShape,
-  type HarnessDriver,
-  HarnessRegistry,
-  joinPath,
-  ProcessLedger,
-} from "@openbot/core"
+import { DataDir, type DataDirShape, type HarnessDriver, HarnessRegistry, joinPath, ProcessLedger } from "@openbot/core"
 import { Clock, Duration, Effect, Layer, Option, Ref } from "effect"
 import {
   type AppServerLauncher,
@@ -99,14 +92,16 @@ export interface CodexDriverDeps {
  * Builds the driver. The app-server runtime lives in the current scope (the layer's): nothing is
  * spawned until `probe`, `listModels` or `openSession`.
  */
-export const makeCodexDriver = Effect.fnUntraced(function*(config: CodexHarnessConfig, deps: CodexDriverDeps) {
+export const makeCodexDriver = Effect.fnUntraced(function* (config: CodexHarnessConfig, deps: CodexDriverDeps) {
   const launcher = config.launcher ?? deps.launcher
   if (!launcher) return yield* Effect.die(new Error("harness-codex: no app-server launcher"))
   const codexHome = config.codexHome ?? deps.dataDir.codexHome
   const resolveBinary = () => resolveCodexBinary(config)
-  const ensureDirectory = config.ensureDirectory ?? (async (path: string) => {
-    await mkdir(path, { recursive: true })
-  })
+  const ensureDirectory =
+    config.ensureDirectory ??
+    (async (path: string) => {
+      await mkdir(path, { recursive: true })
+    })
   let authLink: CodexAuthLink | undefined
 
   const runtime = yield* makeCodexRuntime({
@@ -126,14 +121,16 @@ export const makeCodexDriver = Effect.fnUntraced(function*(config: CodexHarnessC
       Effect.tap((report) =>
         Effect.sync(() => {
           authLink = report.auth
-        })
+        }),
       ),
       Effect.asVoid,
     ),
   })
 
   const modelsTtl = Duration.toMillis(Duration.fromInputUnsafe(config.modelsTtl ?? Duration.minutes(10)))
-  const models = yield* Ref.make<{ readonly at: number; readonly list: ReadonlyArray<ModelInfo> } | undefined>(undefined)
+  const models = yield* Ref.make<{ readonly at: number; readonly list: ReadonlyArray<ModelInfo> } | undefined>(
+    undefined,
+  )
   const remember = (list: ReadonlyArray<ModelInfo>) =>
     Effect.flatMap(Clock.currentTimeMillis, (at) => Ref.set(models, { at, list }))
   const timeouts = {
@@ -152,12 +149,14 @@ export const makeCodexDriver = Effect.fnUntraced(function*(config: CodexHarnessC
   const userCodexHome = resolve(config.userCodexHome ?? defaultUserCodexHome())
   /** Stamps the profile on the probe's status (the server overlays the owner's label too). */
   const stamp = (status: HarnessStatus): HarnessStatus =>
-    profile === undefined ? status : {
-      ...status,
-      profileId: profile.id,
-      ...(profile.label !== undefined ? { profileLabel: profile.label } : {}),
-      configDir: userCodexHome,
-    }
+    profile === undefined
+      ? status
+      : {
+          ...status,
+          profileId: profile.id,
+          ...(profile.label !== undefined ? { profileLabel: profile.label } : {}),
+          configDir: userCodexHome,
+        }
 
   const driver: HarnessDriver = {
     kind: HARNESS,
@@ -172,7 +171,7 @@ export const makeCodexDriver = Effect.fnUntraced(function*(config: CodexHarnessC
       authLink: () => authLink,
       onModels: remember,
     }).pipe(Effect.map(stamp)),
-    listModels: Effect.gen(function*() {
+    listModels: Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const cached = yield* Ref.get(models)
       if (cached && now - cached.at < modelsTtl) return cached.list
@@ -180,7 +179,7 @@ export const makeCodexDriver = Effect.fnUntraced(function*(config: CodexHarnessC
       const list = yield* runtime.withConnection((connection) =>
         listModelsOn(connection, timeouts.requestTimeout).pipe(
           Effect.mapError((error) => toHarnessError("other", error, "Codex could not list its models")),
-        )
+        ),
       )
       yield* remember(list)
       return list
@@ -210,13 +209,15 @@ export const ledgerOf = (ledger: ProcessLedger["Service"]): ProcessLedgerLike =>
 
 /** The driver with its dependencies from the context (`DataDir`, optional `ProcessLedger`). */
 export const codexDriver = (config: CodexHarnessConfig = {}) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const dataDir = yield* DataDir
     const ledger = yield* Effect.serviceOption(ProcessLedger)
     // Built in the layer's scope: the spawner's services live as long as the driver.
-    const launcher = config.launcher ??
+    const launcher =
+      config.launcher ??
       (yield* Effect.flatMap(Layer.build(BunServices.layer), (services) =>
-        makeChildProcessLauncher.pipe(Effect.provideContext(services))))
+        makeChildProcessLauncher.pipe(Effect.provideContext(services)),
+      ))
     return yield* makeCodexDriver(config, {
       dataDir,
       launcher,

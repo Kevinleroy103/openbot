@@ -20,7 +20,10 @@ export interface ShotResult {
 /** Scenes rendered by the gallery (`?scene=`); "all" is the full story page. */
 export const scenes = ["all", "chat", "details", "editor", "overlays", "settings", "avatars"] as const
 
-export const takeScreenshots = async (options?: { readonly only?: ReadonlyArray<string>; readonly outDir?: string }): Promise<ShotResult> => {
+export const takeScreenshots = async (options?: {
+  readonly only?: ReadonlyArray<string>
+  readonly outDir?: string
+}): Promise<ShotResult> => {
   const work = await mkdtemp(join(tmpdir(), "openbot-ui-gallery-"))
   const outDir = options?.outDir ?? screenshotDir
   const files: string[] = []
@@ -42,7 +45,10 @@ export const takeScreenshots = async (options?: { readonly only?: ReadonlyArray<
       for (const scene of scenes) {
         if (options?.only && !options.only.includes(scene)) continue
         for (const theme of ["dark", "light"] as const) {
-          const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: scene === "avatars" ? 2 : 1 })
+          const page = await browser.newPage({
+            viewport: { width: 1440, height: 900 },
+            deviceScaleFactor: scene === "avatars" ? 2 : 1,
+          })
           page.on("pageerror", (e) => errors.push(`${scene}/${theme}: ${e.message}`))
           page.on("console", (m) => {
             if (m.type() === "error") errors.push(`${scene}/${theme}: ${m.text()}`)

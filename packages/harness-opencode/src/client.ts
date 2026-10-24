@@ -76,51 +76,72 @@ export interface OpenCodeApi {
     }) => AsyncIterable<OpenCodeEvent>
   }
   readonly session: {
-    readonly create: Call<{
-      readonly title?: string
-      readonly location?: { readonly directory: string }
-      readonly metadata?: SessionMetadata
-      readonly permissions?: ReadonlyArray<PermissionRule>
-      readonly model?: ModelRef
-    }, { readonly id: string }>
-    readonly get: Call<{ readonly sessionID: string }, { readonly id: string; readonly location?: { readonly directory: string } }>
-    readonly update: Call<{
-      readonly sessionID: string
-      readonly metadata?: SessionMetadata
-      readonly permissions?: ReadonlyArray<PermissionRule>
-    }, unknown>
+    readonly create: Call<
+      {
+        readonly title?: string
+        readonly location?: { readonly directory: string }
+        readonly metadata?: SessionMetadata
+        readonly permissions?: ReadonlyArray<PermissionRule>
+        readonly model?: ModelRef
+      },
+      { readonly id: string }
+    >
+    readonly get: Call<
+      { readonly sessionID: string },
+      { readonly id: string; readonly location?: { readonly directory: string } }
+    >
+    readonly update: Call<
+      {
+        readonly sessionID: string
+        readonly metadata?: SessionMetadata
+        readonly permissions?: ReadonlyArray<PermissionRule>
+      },
+      unknown
+    >
     readonly switchModel: Call<{ readonly sessionID: string; readonly model: ModelRef }, unknown>
-    readonly prompt: Call<{
-      readonly sessionID: string
-      readonly text: string
-      readonly delivery?: "steer" | "queue"
-      readonly files?: ReadonlyArray<{ readonly uri: string; readonly name?: string }>
-    }, unknown>
+    readonly prompt: Call<
+      {
+        readonly sessionID: string
+        readonly text: string
+        readonly delivery?: "steer" | "queue"
+        readonly files?: ReadonlyArray<{ readonly uri: string; readonly name?: string }>
+      },
+      unknown
+    >
     readonly interrupt: Call<{ readonly sessionID: string }, { readonly interrupted: boolean }>
     readonly compact: Call<{ readonly sessionID: string }, unknown>
     readonly instructions: {
       readonly entry: {
-        readonly list: Call<{ readonly sessionID: string }, ReadonlyArray<{ readonly key: string; readonly value: unknown }>>
+        readonly list: Call<
+          { readonly sessionID: string },
+          ReadonlyArray<{ readonly key: string; readonly value: unknown }>
+        >
         readonly put: Call<{ readonly sessionID: string; readonly key: string; readonly value: string }, unknown>
         readonly remove: Call<{ readonly sessionID: string; readonly key: string }, unknown>
       }
     }
     readonly form: {
-      readonly reply: Call<{
-        readonly sessionID: string
-        readonly formID: string
-        readonly answer: Readonly<Record<string, string | number | boolean | ReadonlyArray<string>>>
-      }, unknown>
+      readonly reply: Call<
+        {
+          readonly sessionID: string
+          readonly formID: string
+          readonly answer: Readonly<Record<string, string | number | boolean | ReadonlyArray<string>>>
+        },
+        unknown
+      >
       readonly cancel: Call<{ readonly sessionID: string; readonly formID: string; readonly message?: string }, unknown>
     }
   }
   readonly permission: {
-    readonly reply: Call<{
-      readonly sessionID: string
-      readonly requestID: string
-      readonly decision: "once" | "always" | "reject"
-      readonly message?: string
-    }, unknown>
+    readonly reply: Call<
+      {
+        readonly sessionID: string
+        readonly requestID: string
+        readonly decision: "once" | "always" | "reject"
+        readonly message?: string
+      },
+      unknown
+    >
   }
   readonly mcp: {
     readonly add: Call<LocationRef & { readonly server: string; readonly config: RemoteMcpConfig }, unknown>
@@ -132,7 +153,10 @@ export interface OpenCodeApi {
     readonly default: Call<LocationRef, { readonly data: { readonly providerID: string; readonly id: string } | null }>
   }
   readonly integration: {
-    readonly list: Call<LocationRef, { readonly data: ReadonlyArray<{ readonly name: string; readonly connections: ReadonlyArray<unknown> }> }>
+    readonly list: Call<
+      LocationRef,
+      { readonly data: ReadonlyArray<{ readonly name: string; readonly connections: ReadonlyArray<unknown> }> }
+    >
   }
 }
 
@@ -164,7 +188,11 @@ export const makeOpenCodeClient = (options: { readonly baseUrl: string; readonly
  */
 export const isNotFoundError = (cause: unknown): boolean => {
   if (typeof cause !== "object" || cause === null) return false
-  const e = cause as { readonly name?: unknown; readonly _tag?: unknown; readonly cause?: { readonly status?: unknown } }
+  const e = cause as {
+    readonly name?: unknown
+    readonly _tag?: unknown
+    readonly cause?: { readonly status?: unknown }
+  }
   const tag = typeof e._tag === "string" ? e._tag : typeof e.name === "string" ? e.name : ""
   return /NotFound/.test(tag) || e.cause?.status === 404
 }

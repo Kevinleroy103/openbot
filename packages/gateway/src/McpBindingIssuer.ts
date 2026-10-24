@@ -38,25 +38,27 @@ export interface McpBindingIssuerOptions {
 export const makeMcpBindingIssuer = (
   options?: McpBindingIssuerOptions,
 ): Effect.Effect<McpBindingIssuer["Service"], never, McpTokenRepo | InternalAddress> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const repo = yield* McpTokenRepo
     const address = yield* InternalAddress
-    const issue = Effect.fn("McpBindingIssuer.issue")(function*(claims: McpClaims) {
+    const issue = Effect.fn("McpBindingIssuer.issue")(function* (claims: McpClaims) {
       const token = randomToken(MCP_TOKEN_BYTES)
       const hash = yield* hashMcpToken(token)
       const now = yield* Clock.currentTimeMillis
       yield* Effect.acquireRelease(
-        repo.put({
-          hash,
-          claims,
-          createdAt: now,
-          expiresAt: options?.ttlMs === undefined ? undefined : now + options.ttlMs,
-          revoked: false,
-        }).pipe(Effect.orDie),
+        repo
+          .put({
+            hash,
+            claims,
+            createdAt: now,
+            expiresAt: options?.ttlMs === undefined ? undefined : now + options.ttlMs,
+            revoked: false,
+          })
+          .pipe(Effect.orDie),
         () =>
-          repo.revoke(hash).pipe(
-            Effect.catchCause((cause) => Effect.logWarning("McpBindingIssuer: revoking a token failed", cause)),
-          ),
+          repo
+            .revoke(hash)
+            .pipe(Effect.catchCause((cause) => Effect.logWarning("McpBindingIssuer: revoking a token failed", cause))),
       )
       const baseUrl = yield* address.baseUrl
       const binding: McpBinding = {

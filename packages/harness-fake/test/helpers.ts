@@ -1,4 +1,11 @@
-import type { HarnessSession, McpBinding, OpenSessionInput, RenderedInstructions, ResolvedPlacement, TurnInput } from "@openbot/core"
+import type {
+  HarnessSession,
+  McpBinding,
+  OpenSessionInput,
+  RenderedInstructions,
+  ResolvedPlacement,
+  TurnInput,
+} from "@openbot/core"
 import { sessionKeyOf } from "@openbot/core"
 import { botId, conversationId, makeBot, turnId } from "@openbot/core/testing"
 import type { HarnessEvent, HarnessRequest, HarnessRequestResolution } from "@openbot/contracts"
@@ -26,9 +33,11 @@ export const instructions: RenderedInstructions = {
   hash: "hash-1",
 }
 
-export const openInput = (overrides?: Partial<OpenSessionInput> & {
-  readonly mcp?: ReadonlyArray<McpBinding>
-}): OpenSessionInput => ({
+export const openInput = (
+  overrides?: Partial<OpenSessionInput> & {
+    readonly mcp?: ReadonlyArray<McpBinding>
+  },
+): OpenSessionInput => ({
   bot: BOT,
   conversationId: CONVERSATION,
   sessionKey: sessionKeyOf(BOT.id, CONVERSATION),
@@ -56,18 +65,20 @@ export const isTerminal = (event: HarnessEvent): boolean =>
  * test wait for conditions on the collected list.
  */
 export const collect = (session: HarnessSession) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const events: Array<HarnessEvent> = []
     let ended = false
     const fiber = yield* session.events.pipe(
       Stream.runForEach((event) => Effect.sync(() => events.push(event))),
-      Effect.ensuring(Effect.sync(() => {
-        ended = true
-      })),
+      Effect.ensuring(
+        Effect.sync(() => {
+          ended = true
+        }),
+      ),
       Effect.forkScoped({ startImmediately: true }),
     )
     const waitUntil = (predicate: (events: ReadonlyArray<HarnessEvent>) => boolean, timeoutMs = 5_000) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const deadline = Date.now() + timeoutMs
         while (!predicate(events)) {
           if (Date.now() > deadline) {
@@ -140,7 +151,7 @@ export const shape = (events: ReadonlyArray<HarnessEvent>): ReadonlyArray<string
 
 export const finalMessages = (events: ReadonlyArray<HarnessEvent>): ReadonlyArray<string> =>
   events.flatMap((e) =>
-    e._tag === "ItemUpserted" && e.item._tag === "Message" && !e.item.streaming ? [e.item.text] : []
+    e._tag === "ItemUpserted" && e.item._tag === "Message" && !e.item.streaming ? [e.item.text] : [],
   )
 
 export const toolCalls = (events: ReadonlyArray<HarnessEvent>) =>

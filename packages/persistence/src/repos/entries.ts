@@ -4,8 +4,18 @@
  * fallback-aware `TranscriptEntry` (unknown kinds written by a newer build survive as `unknown`).
  */
 import type { KnownTranscriptEntry, Millis, TranscriptEntry } from "@openbot/contracts"
-import { KnownTranscriptEntry as KnownTranscriptEntrySchema, TranscriptEntry as TranscriptEntrySchema } from "@openbot/contracts"
-import { type EntryPage, type EntryPageAfter, EntryRepo, type ExchangeSlice, RepoError, type UpsertOutcome } from "@openbot/core"
+import {
+  KnownTranscriptEntry as KnownTranscriptEntrySchema,
+  TranscriptEntry as TranscriptEntrySchema,
+} from "@openbot/contracts"
+import {
+  type EntryPage,
+  type EntryPageAfter,
+  EntryRepo,
+  type ExchangeSlice,
+  RepoError,
+  type UpsertOutcome,
+} from "@openbot/core"
 import { Effect, Option } from "effect"
 import { SqlClient } from "effect/sql"
 import { jsonCodec, repoOp } from "../codec.ts"
@@ -32,14 +42,16 @@ export const decodeEntryCursor = (cursor: string): { readonly createdAt: number;
   return Number.isFinite(createdAt) && id.length > 0 ? { createdAt, id } : undefined
 }
 
-export const makeSqlEntryRepo = Effect.gen(function*() {
+export const makeSqlEntryRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
 
   const decodeRow = (op: string) => (row: EntryRow) => EntryJson.decode(op, row.payload_json, row.id)
   const decodeRows = (op: string, rows: ReadonlyArray<EntryRow>) => Effect.forEach(rows, decodeRow(op))
   const first = (op: string, rows: ReadonlyArray<EntryRow>) => {
     const row = rows[0]
-    return row === undefined ? Effect.succeed(Option.none<TranscriptEntry>()) : Effect.map(decodeRow(op)(row), Option.some)
+    return row === undefined
+      ? Effect.succeed(Option.none<TranscriptEntry>())
+      : Effect.map(decodeRow(op)(row), Option.some)
   }
 
   const nativeIdOf = (entry: KnownTranscriptEntry) => entry.harnessRef?.nativeId ?? null
@@ -54,7 +66,7 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
       ),
 
     upsert: (entry) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const rows = yield* sql<EntryRow & { readonly revision: number }>`SELECT id, created_at, revision, payload_json
           FROM entries WHERE id = ${entry.id}`
         const currentRow = rows[0]
@@ -63,9 +75,10 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
           return { applied: false, current } satisfies UpsertOutcome<TranscriptEntry>
         }
         // createdAt is immutable once written.
-        const value: KnownTranscriptEntry = currentRow !== undefined && currentRow.created_at !== entry.createdAt
-          ? { ...entry, createdAt: currentRow.created_at as Millis }
-          : entry
+        const value: KnownTranscriptEntry =
+          currentRow !== undefined && currentRow.created_at !== entry.createdAt
+            ? { ...entry, createdAt: currentRow.created_at as Millis }
+            : entry
         const payload = yield* KnownEntryJson.encode("EntryRepo.upsert", value)
         // search_rev: the search doc is written below, in this transaction
         yield* sql`INSERT INTO entries (id, conversation_id, revision, created_at, kind, turn_id, client_nonce, native_id, payload_json,
@@ -86,7 +99,7 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
       ),
 
     page: ({ conversationId, before, limit }) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const size = Math.max(0, Math.floor(limit))
         let rows: ReadonlyArray<EntryRow>
         if (before === undefined) {
@@ -111,14 +124,15 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
         const page: EntryPage = {
           entries,
           hasMoreBefore,
-          beforeCursor: hasMoreBefore && head !== undefined ? encodeEntryCursor({ createdAt: head.created_at, id: head.id }) : null,
+          beforeCursor:
+            hasMoreBefore && head !== undefined ? encodeEntryCursor({ createdAt: head.created_at, id: head.id }) : null,
           precedingTimestamp: preceding === undefined ? undefined : (preceding.created_at as Millis),
         }
         return page
       }).pipe(repoOp("EntryRepo.page")),
 
     pageAfter: ({ conversationId, after, limit }) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const size = Math.max(0, Math.floor(limit))
         const cursor = decodeEntryCursor(after)
         if (cursor === undefined) {
@@ -135,13 +149,14 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
         const page: EntryPageAfter = {
           entries,
           hasMoreAfter,
-          afterCursor: hasMoreAfter && last !== undefined ? encodeEntryCursor({ createdAt: last.created_at, id: last.id }) : null,
+          afterCursor:
+            hasMoreAfter && last !== undefined ? encodeEntryCursor({ createdAt: last.created_at, id: last.id }) : null,
         }
         return page
       }).pipe(repoOp("EntryRepo.pageAfter")),
 
     listExchange: ({ botIds: [a, b], conversationIds, direction, from, limit }) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const size = Math.max(0, Math.floor(limit))
         if (conversationIds.length === 0) return { entries: [], more: false } satisfies ExchangeSlice
         const older = direction === "older"
@@ -150,11 +165,13 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
           sql`kind = 'message'`,
           sql`((json_extract(payload_json, '$.author.botId') = ${a} AND json_extract(payload_json, '$.toBotId') = ${b})
             OR (json_extract(payload_json, '$.author.botId') = ${b} AND json_extract(payload_json, '$.toBotId') = ${a}))`,
-          ...(from === undefined ? [] : [
-            older
-              ? sql`(created_at < ${from.createdAt} OR (created_at = ${from.createdAt} AND id < ${from.id}))`
-              : sql`(created_at > ${from.createdAt} OR (created_at = ${from.createdAt} AND id > ${from.id}))`,
-          ]),
+          ...(from === undefined
+            ? []
+            : [
+                older
+                  ? sql`(created_at < ${from.createdAt} OR (created_at = ${from.createdAt} AND id < ${from.id}))`
+                  : sql`(created_at > ${from.createdAt} OR (created_at = ${from.createdAt} AND id > ${from.id}))`,
+              ]),
         ]
         const rows = older
           ? yield* sql<EntryRow>`SELECT id, created_at, payload_json FROM entries WHERE ${sql.and(clauses)}
@@ -167,18 +184,20 @@ export const makeSqlEntryRepo = Effect.gen(function*() {
       }).pipe(repoOp("EntryRepo.listExchange")),
 
     listAfter: (conversationId, afterEntryId, limit) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const size = Math.max(0, Math.floor(limit))
-        const anchors = afterEntryId === undefined
-          ? []
-          : yield* sql<{ id: string; created_at: number }>`SELECT id, created_at FROM entries
+        const anchors =
+          afterEntryId === undefined
+            ? []
+            : yield* sql<{ id: string; created_at: number }>`SELECT id, created_at FROM entries
               WHERE id = ${afterEntryId} AND conversation_id = ${conversationId}`
         const anchor = anchors[0]
-        const rows = anchor === undefined
-          ? yield* sql<EntryRow>`SELECT id, created_at, payload_json FROM entries
+        const rows =
+          anchor === undefined
+            ? yield* sql<EntryRow>`SELECT id, created_at, payload_json FROM entries
               WHERE conversation_id = ${conversationId}
               ORDER BY created_at, id LIMIT ${size}`
-          : yield* sql<EntryRow>`SELECT id, created_at, payload_json FROM entries
+            : yield* sql<EntryRow>`SELECT id, created_at, payload_json FROM entries
               WHERE conversation_id = ${conversationId}
                 AND (created_at > ${anchor.created_at} OR (created_at = ${anchor.created_at} AND id > ${anchor.id}))
               ORDER BY created_at, id LIMIT ${size}`

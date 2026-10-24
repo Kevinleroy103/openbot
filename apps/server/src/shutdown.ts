@@ -88,7 +88,9 @@ export const makeShutdownWatchdog = (options?: WatchdogOptions): ShutdownWatchdo
     forced = true
     if (timer !== undefined) clearTimeout(timer)
     const killed = kill()
-    log(`openbot: ${why}; forcing exit (stuck at: ${phase}${killed.length > 0 ? `; killed ${killed.length} child process group(s)` : ""})`)
+    log(
+      `openbot: ${why}; forcing exit (stuck at: ${phase}${killed.length > 0 ? `; killed ${killed.length} child process group(s)` : ""})`,
+    )
     exit(1)
   }
 

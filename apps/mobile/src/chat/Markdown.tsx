@@ -47,7 +47,11 @@ function MdImage(props: {
 }): ReactNode {
   const [failed, setFailed] = useState(false)
   if (failed) {
-    return <Text style={bodyText(props.theme.fgSecondary, props.size)} selectable>{props.alt || props.href}</Text>
+    return (
+      <Text style={bodyText(props.theme.fgSecondary, props.size)} selectable>
+        {props.alt || props.href}
+      </Text>
+    )
   }
   return (
     <Image
@@ -66,24 +70,35 @@ function MdImage(props: {
 /** A website link's site icon in a small tile on the text line; a globe when the site has none. The
  * brain redraws a one-colour icon to show on this screen (`&theme=`), since its pixels are not ours
  * to look at here. */
-function SiteIcon({ href, site, theme }: { readonly href: string; readonly site: MarkdownImage; readonly theme: Theme }): ReactNode {
+function SiteIcon({
+  href,
+  site,
+  theme,
+}: {
+  readonly href: string
+  readonly site: MarkdownImage
+  readonly theme: Theme
+}): ReactNode {
   const host = /^https?:\/\/([^/?#:@]+)/i.exec(href)?.[1]?.toLowerCase()
   const [failed, setFailed] = useState(false)
   return (
     <View style={[styles.siteIcon, { backgroundColor: theme.secondary }]}>
-      {host === undefined || failed
-        ? <Icon name="globe" size={11} color={theme.fgSecondary} />
-        : (
-          <Image
-            source={{ uri: `${site.origin}/api/favicon?host=${encodeURIComponent(host)}&theme=${theme.dark ? "dark" : "light"}`, headers: site.headers }}
-            style={{ width: 13, height: 13 }}
-            contentFit="contain"
-            cachePolicy="disk"
-            // a 1-pixel image is the brain's "no icon"
-            onLoad={(e) => void (e.source.width <= 1 && setFailed(true))}
-            onError={() => setFailed(true)}
-          />
-        )}
+      {host === undefined || failed ? (
+        <Icon name="globe" size={11} color={theme.fgSecondary} />
+      ) : (
+        <Image
+          source={{
+            uri: `${site.origin}/api/favicon?host=${encodeURIComponent(host)}&theme=${theme.dark ? "dark" : "light"}`,
+            headers: site.headers,
+          }}
+          style={{ width: 13, height: 13 }}
+          contentFit="contain"
+          cachePolicy="disk"
+          // a 1-pixel image is the brain's "no icon"
+          onLoad={(e) => void (e.source.width <= 1 && setFailed(true))}
+          onError={() => setFailed(true)}
+        />
+      )}
     </View>
   )
 }
@@ -99,9 +114,13 @@ function inlineRows(
   keyBase: string,
   image: MarkdownImage | undefined,
 ): ReactNode[] {
-  const textRow = (run: ReadonlyArray<Token>, key: string): ReactNode =>
-    <Text key={key} style={bodyText(ctx.color, ctx.size)} selectable>{inline(run, ctx, key)}</Text>
-  const src = (t: Token): string | undefined => (t.type === "image" && image !== undefined ? imageSrc((t as Tokens.Image).href, image.origin) : undefined)
+  const textRow = (run: ReadonlyArray<Token>, key: string): ReactNode => (
+    <Text key={key} style={bodyText(ctx.color, ctx.size)} selectable>
+      {inline(run, ctx, key)}
+    </Text>
+  )
+  const src = (t: Token): string | undefined =>
+    t.type === "image" && image !== undefined ? imageSrc((t as Tokens.Image).href, image.origin) : undefined
   const split = tokens.some((t) => src(t) !== undefined)
   if (!split) return [textRow(tokens, `${keyBase}.t`)]
   const rows: ReactNode[] = []
@@ -141,11 +160,23 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
     const key = `${keyBase}.${i}`
     switch (t.type) {
       case "strong":
-        return <Text key={key} style={{ fontWeight: "700" }}>{inline((t as Tokens.Strong).tokens, ctx, key)}</Text>
+        return (
+          <Text key={key} style={{ fontWeight: "700" }}>
+            {inline((t as Tokens.Strong).tokens, ctx, key)}
+          </Text>
+        )
       case "em":
-        return <Text key={key} style={{ fontStyle: "italic" }}>{inline((t as Tokens.Em).tokens, ctx, key)}</Text>
+        return (
+          <Text key={key} style={{ fontStyle: "italic" }}>
+            {inline((t as Tokens.Em).tokens, ctx, key)}
+          </Text>
+        )
       case "del":
-        return <Text key={key} style={{ textDecorationLine: "line-through" }}>{inline((t as Tokens.Del).tokens, ctx, key)}</Text>
+        return (
+          <Text key={key} style={{ textDecorationLine: "line-through" }}>
+            {inline((t as Tokens.Del).tokens, ctx, key)}
+          </Text>
+        )
       case "codespan":
         return (
           <Text key={key} style={{ fontFamily: MONO, fontSize: ctx.size - 2, backgroundColor: ctx.theme.codeBg }}>
@@ -159,8 +190,15 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
         // the web renderer); an allowed one stays tappable exactly as before.
         if (href === undefined) return <Text key={key}>{inline(link.tokens, ctx, key)}</Text>
         return (
-          <Text key={key} style={{ color: ctx.theme.accentFg }} onPress={() => void Linking.openURL(href)} suppressHighlighting>
-            {ctx.site !== undefined && /^https?:/i.test(href) && <SiteIcon key={`${key}.icon`} href={href} site={ctx.site} theme={ctx.theme} />}
+          <Text
+            key={key}
+            style={{ color: ctx.theme.accentFg }}
+            onPress={() => void Linking.openURL(href)}
+            suppressHighlighting
+          >
+            {ctx.site !== undefined && /^https?:/i.test(href) && (
+              <SiteIcon key={`${key}.icon`} href={href} site={ctx.site} theme={ctx.theme} />
+            )}
             {ctx.site !== undefined && /^https?:/i.test(href) ? "\u00a0" : null}
             {inline(link.tokens, ctx, key)}
           </Text>
@@ -170,7 +208,11 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
         return <Text key={key}>{"\n"}</Text>
       case "text": {
         const tt = t as Tokens.Text
-        return tt.tokens ? <Text key={key}>{inline(tt.tokens, ctx, key)}</Text> : <Text key={key}>{decode(tt.text)}</Text>
+        return tt.tokens ? (
+          <Text key={key}>{inline(tt.tokens, ctx, key)}</Text>
+        ) : (
+          <Text key={key}>{decode(tt.text)}</Text>
+        )
       }
       case "escape":
         return <Text key={key}>{(t as Tokens.Escape).text}</Text>
@@ -189,32 +231,65 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
 
 /** HTML entities marked leaves in text (`&amp;`, `&#39;`, …). */
 const decode = (s: string): string =>
-  s.replace(/&(amp|lt|gt|quot|#39|#x27);/g, (_, e: string) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'" })[e] ?? _)
+  s.replace(
+    /&(amp|lt|gt|quot|#39|#x27);/g,
+    (_, e: string) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'" })[e] ?? _,
+  )
 
 const block = (t: Token, ctx: Ctx, key: string, depth = 0, image?: MarkdownImage): ReactNode => {
   const text = bodyText(ctx.color, ctx.size)
   switch (t.type) {
     case "paragraph": {
       const rows = inlineRows((t as Tokens.Paragraph).tokens, ctx, key, image)
-      return rows.length === 1 ? rows[0] : <View key={key} style={{ gap: 4 }}>{rows}</View>
+      return rows.length === 1 ? (
+        rows[0]
+      ) : (
+        <View key={key} style={{ gap: 4 }}>
+          {rows}
+        </View>
+      )
     }
     case "heading": {
       const h = t as Tokens.Heading
       const size = h.depth <= 1 ? ctx.size + 5 : h.depth === 2 ? ctx.size + 3 : ctx.size + 1
-      return <Text key={key} style={[text, { fontSize: size, lineHeight: Math.round(size * 1.3), fontWeight: "700", marginTop: 4 }]}>{inline(h.tokens, ctx, key)}</Text>
+      return (
+        <Text
+          key={key}
+          style={[text, { fontSize: size, lineHeight: Math.round(size * 1.3), fontWeight: "700", marginTop: 4 }]}
+        >
+          {inline(h.tokens, ctx, key)}
+        </Text>
+      )
     }
     case "code": {
       const code = t as Tokens.Code
       return (
-        <ScrollView key={key} horizontal showsHorizontalScrollIndicator={false} style={[styles.code, { backgroundColor: ctx.theme.codeBg, borderColor: ctx.theme.lineTertiary }]}>
-          <Text selectable style={{ fontFamily: MONO, fontSize: ctx.size - 3, lineHeight: Math.round((ctx.size - 3) * 1.45), color: ctx.color }}>{code.text}</Text>
+        <ScrollView
+          key={key}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.code, { backgroundColor: ctx.theme.codeBg, borderColor: ctx.theme.lineTertiary }]}
+        >
+          <Text
+            selectable
+            style={{
+              fontFamily: MONO,
+              fontSize: ctx.size - 3,
+              lineHeight: Math.round((ctx.size - 3) * 1.45),
+              color: ctx.color,
+            }}
+          >
+            {code.text}
+          </Text>
         </ScrollView>
       )
     }
     case "blockquote":
       return (
         <View key={key} style={[styles.quote, { borderColor: ctx.theme.line }]}>
-          {(t as Tokens.Blockquote).tokens.map((c, i) => block(c, { ...ctx, color: ctx.theme.fgSecondary }, `${key}.${i}`, depth, image))}
+          {(t as Tokens.Blockquote).tokens.map((c, i) =>
+            block(c, { ...ctx, color: ctx.theme.fgSecondary }, `${key}.${i}`, depth, image),
+          )}
         </View>
       )
     case "list": {
@@ -229,11 +304,9 @@ const block = (t: Token, ctx: Ctx, key: string, depth = 0, image?: MarkdownImage
               </Text>
               <View style={{ flex: 1, gap: 4, opacity: item.task && item.checked ? 0.65 : 1 }}>
                 {item.tokens.map((c, j) =>
-                  c.type === "text" ? (
-                    inlineRows((c as Tokens.Text).tokens ?? [c], ctx, `${key}.${i}.${j}`, image)
-                  ) : (
-                    block(c, ctx, `${key}.${i}.${j}`, depth + 1, image)
-                  ),
+                  c.type === "text"
+                    ? inlineRows((c as Tokens.Text).tokens ?? [c], ctx, `${key}.${i}.${j}`, image)
+                    : block(c, ctx, `${key}.${i}.${j}`, depth + 1, image),
                 )}
               </View>
             </View>
@@ -245,7 +318,9 @@ const block = (t: Token, ctx: Ctx, key: string, depth = 0, image?: MarkdownImage
       const table = t as Tokens.Table
       const cell = (c: Tokens.TableCell, i: number, head: boolean) => (
         <View key={i} style={[styles.cell, { borderColor: ctx.theme.lineSecondary }]}>
-          <Text style={[text, { fontSize: ctx.size - 2, fontWeight: head ? "600" : "400" }]}>{inline(c.tokens, ctx, `${key}.c${i}`)}</Text>
+          <Text style={[text, { fontSize: ctx.size - 2, fontWeight: head ? "600" : "400" }]}>
+            {inline(c.tokens, ctx, `${key}.c${i}`)}
+          </Text>
         </View>
       )
       return (
@@ -253,22 +328,45 @@ const block = (t: Token, ctx: Ctx, key: string, depth = 0, image?: MarkdownImage
           <View style={[styles.table, { borderColor: ctx.theme.lineSecondary }]}>
             <View style={{ flexDirection: "row" }}>{table.header.map((c, i) => cell(c, i, true))}</View>
             {table.rows.map((row, r) => (
-              <View key={r} style={{ flexDirection: "row" }}>{row.map((c, i) => cell(c, i, false))}</View>
+              <View key={r} style={{ flexDirection: "row" }}>
+                {row.map((c, i) => cell(c, i, false))}
+              </View>
             ))}
           </View>
         </ScrollView>
       )
     }
     case "hr":
-      return <View key={key} style={{ height: StyleSheet.hairlineWidth, backgroundColor: ctx.theme.line, marginVertical: 6 }} />
+      return (
+        <View
+          key={key}
+          style={{ height: StyleSheet.hairlineWidth, backgroundColor: ctx.theme.line, marginVertical: 6 }}
+        />
+      )
     case "space":
       return null
     default:
-      return "text" in t && typeof t.text === "string" && t.text.trim() !== "" ? <Text key={key} style={text}>{decode(t.text)}</Text> : null
+      return "text" in t && typeof t.text === "string" && t.text.trim() !== "" ? (
+        <Text key={key} style={text}>
+          {decode(t.text)}
+        </Text>
+      ) : null
   }
 }
 
-export function Markdown({ text, theme, color, size = 17, image }: { readonly text: string; readonly theme: Theme; readonly color?: string; readonly size?: number; readonly image?: MarkdownImage }): ReactNode {
+export function Markdown({
+  text,
+  theme,
+  color,
+  size = 17,
+  image,
+}: {
+  readonly text: string
+  readonly theme: Theme
+  readonly color?: string
+  readonly size?: number
+  readonly image?: MarkdownImage
+}): ReactNode {
   const tokens = useMemo(() => {
     try {
       return marked.lexer(text, { gfm: true, breaks: true })
@@ -282,9 +380,23 @@ export function Markdown({ text, theme, color, size = 17, image }: { readonly te
 
 const styles = StyleSheet.create({
   // sits on the text line like the web's (its bottom a little under the baseline)
-  siteIcon: { width: 17, height: 17, borderRadius: 5, alignItems: "center", justifyContent: "center", overflow: "hidden", transform: [{ translateY: 3 }] },
+  siteIcon: {
+    width: 17,
+    height: 17,
+    borderRadius: 5,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    transform: [{ translateY: 3 }],
+  },
   code: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
   quote: { borderLeftWidth: 3, paddingLeft: 10, gap: 6 },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
-  cell: { minWidth: 90, maxWidth: 240, paddingHorizontal: 8, paddingVertical: 6, borderWidth: StyleSheet.hairlineWidth },
+  cell: {
+    minWidth: 90,
+    maxWidth: 240,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 })

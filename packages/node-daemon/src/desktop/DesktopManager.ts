@@ -43,7 +43,15 @@ import {
   type DesktopApp,
   type SessionLayout,
 } from "./session.ts"
-import { displayLockPath, displaySocketPath, liveDesktopSystem, pickDisplay, xauthFile, type ChildHandle, type DesktopSystem } from "./system.ts"
+import {
+  displayLockPath,
+  displaySocketPath,
+  liveDesktopSystem,
+  pickDisplay,
+  xauthFile,
+  type ChildHandle,
+  type DesktopSystem,
+} from "./system.ts"
 
 /** What the bot's browser needs to run on the bot's screen. */
 export interface DesktopScreen {
@@ -94,7 +102,9 @@ export interface DesktopManagerShape {
   readonly shutdown: Effect.Effect<void>
 }
 
-export class DesktopManager extends Context.Service<DesktopManager, DesktopManagerShape>()("openbot/node-daemon/DesktopManager") {}
+export class DesktopManager extends Context.Service<DesktopManager, DesktopManagerShape>()(
+  "openbot/node-daemon/DesktopManager",
+) {}
 
 export interface DesktopTimeouts {
   /** Xvfb socket + first client */
@@ -109,7 +119,13 @@ export interface DesktopTimeouts {
   readonly exec: number
 }
 
-export const DEFAULT_DESKTOP_TIMEOUTS: DesktopTimeouts = { display: 10_000, vnc: 10_000, windowManager: 800, bus: 3_000, exec: 15_000 }
+export const DEFAULT_DESKTOP_TIMEOUTS: DesktopTimeouts = {
+  display: 10_000,
+  vnc: 10_000,
+  windowManager: 800,
+  bus: 3_000,
+  exec: 15_000,
+}
 
 export interface DesktopManagerOptions {
   readonly system?: DesktopSystem | undefined
@@ -144,7 +160,17 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/
 
 /** Every modifier a viewer or a bot can hold (`releaseKeys`). */
 const MODIFIER_KEYS = [
-  "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R", "Super_L", "Super_R", "Meta_L", "Meta_R", "ISO_Level3_Shift",
+  "Shift_L",
+  "Shift_R",
+  "Control_L",
+  "Control_R",
+  "Alt_L",
+  "Alt_R",
+  "Super_L",
+  "Super_R",
+  "Meta_L",
+  "Meta_R",
+  "ISO_Level3_Shift",
 ] as const
 
 const unavailable = (message: string, missing?: ReadonlyArray<string>) =>
@@ -164,7 +190,8 @@ const logTail = (sys: DesktopSystem, file: string, lines = 4): string => {
 }
 
 /** A stable id for this node's data dir: orphans of a previous run of the same node carry it in their marker. */
-export const desktopNodeKey = (dataDir: string): string => createHash("sha256").update(path.resolve(dataDir)).digest("hex").slice(0, 12)
+export const desktopNodeKey = (dataDir: string): string =>
+  createHash("sha256").update(path.resolve(dataDir)).digest("hex").slice(0, 12)
 
 /** Where a bot's desktop programs start: its workspace root when the node has one, else HOME. */
 const workspaceFor = (config: NodeConfigShape, sys: DesktopSystem, botId: string): string => {
@@ -189,10 +216,19 @@ export const desktopApps = (input: {
   const apps: Array<DesktopApp> = []
   const exe = config.browser.enabled ? config.browser.executable : undefined
   if (exe) {
-    const bc = onScreenBrowserConfig(config.browser, { profileDir: input.profileDir, width: config.desktop.width, height: config.desktop.height })
+    const bc = onScreenBrowserConfig(config.browser, {
+      profileDir: input.profileDir,
+      width: config.desktop.width,
+      height: config.desktop.height,
+    })
     // without the trailing about:blank: a dock click opens a normal new window
     const args = browserArgs({ ...bc, debugPort: input.debugPort }, false).filter((a) => a !== "about:blank")
-    apps.push({ id: "browser", name: "Web Browser", icon: path.basename(exe).includes("chrome") ? "google-chrome" : "chromium", argv: [exe, ...args] })
+    apps.push({
+      id: "browser",
+      name: "Web Browser",
+      icon: path.basename(exe).includes("chrome") ? "google-chrome" : "chromium",
+      argv: [exe, ...args],
+    })
   }
   if (programs.terminal) {
     apps.push({
@@ -205,13 +241,19 @@ export const desktopApps = (input: {
           : [programs.terminal.path, "-maximized", "-fa", "Monospace", "-fs", "11"],
     })
   }
-  if (programs.fileManager) apps.push({ id: "files", name: "Files", icon: "system-file-manager", argv: [programs.fileManager, input.cwd] })
-  if (programs.editor) apps.push({ id: "editor", name: "Text Editor", icon: "accessories-text-editor", argv: [programs.editor] })
+  if (programs.fileManager)
+    apps.push({ id: "files", name: "Files", icon: "system-file-manager", argv: [programs.fileManager, input.cwd] })
+  if (programs.editor)
+    apps.push({ id: "editor", name: "Text Editor", icon: "accessories-text-editor", argv: [programs.editor] })
   return apps
 }
 
 /** The system's default openbox rc.xml (next to a rootless install, or in XDG_CONFIG_DIRS). */
-const openboxTemplate = (sys: DesktopSystem, openboxPath: string | undefined, env: Readonly<Record<string, string>>): string | undefined => {
+const openboxTemplate = (
+  sys: DesktopSystem,
+  openboxPath: string | undefined,
+  env: Readonly<Record<string, string>>,
+): string | undefined => {
   const candidates = [
     ...(openboxPath ? [path.join(path.dirname(openboxPath), "..", "..", "etc", "xdg", "openbox", "rc.xml")] : []),
     ...(env.XDG_CONFIG_DIRS ?? "/etc/xdg").split(":").map((d) => path.join(d, "openbox", "rc.xml")),
@@ -232,10 +274,16 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
     const searchPath = [...dc.path, process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"].join(":")
     const detected =
       options?.detected ??
-      (dc.enabled ? detectDesktopPrograms((name) => Bun.which(name, { PATH: searchPath }) ?? undefined) : { programs: { windowManagers: [] }, missing: [] })
+      (dc.enabled
+        ? detectDesktopPrograms((name) => Bun.which(name, { PATH: searchPath }) ?? undefined)
+        : { programs: { windowManagers: [] }, missing: [] })
     const programs = detected.programs
     const offered = dc.enabled && detected.missing.length === 0
-    const support: DesktopSupport = { missing: dc.enabled ? [...detected.missing] : [], width: dc.width, height: dc.height }
+    const support: DesktopSupport = {
+      missing: dc.enabled ? [...detected.missing] : [],
+      width: dc.width,
+      height: dc.height,
+    }
     const geometry = makeGeometry(dc.width, dc.height, dc.apiWidth)
     const leases = options?.leases ?? makeLeaseBook()
     const nodeKey = desktopNodeKey(config.dataDir)
@@ -278,9 +326,12 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
           if (probe()) return
           if (child && !running(child)) {
             const tail = log ? logTail(sys, log) : ""
-            return yield* unavailable(`${what} exited (code ${child.exitCode ?? child.signalCode})${tail ? `: ${tail}` : ""}`)
+            return yield* unavailable(
+              `${what} exited (code ${child.exitCode ?? child.signalCode})${tail ? `: ${tail}` : ""}`,
+            )
           }
-          if (Date.now() > end) return yield* unavailable(`${what} did not start within ${Math.round(timeoutMs / 1000)} s`)
+          if (Date.now() > end)
+            return yield* unavailable(`${what} did not start within ${Math.round(timeoutMs / 1000)} s`)
           yield* Effect.sleep(25)
         }
       })
@@ -288,7 +339,8 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
     const exec = (env: Readonly<Record<string, string>>, argv: ReadonlyArray<string>, timeoutMs = timeouts.exec) =>
       Effect.tryPromise({
         try: () => sys.exec(argv, { env, timeoutMs }),
-        catch: (e) => unavailable(`could not run ${path.basename(argv[0] ?? "")}: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+          unavailable(`could not run ${path.basename(argv[0] ?? "")}: ${e instanceof Error ? e.message : String(e)}`),
       }).pipe(
         Effect.flatMap((r) =>
           r.code === 0 && !r.timedOut
@@ -301,14 +353,22 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
         ),
       )
 
-    const spawn = (d: { readonly children: Array<Child> }, role: string, argv: ReadonlyArray<string>, opts: Parameters<DesktopSystem["spawn"]>[1]) =>
+    const spawn = (
+      d: { readonly children: Array<Child> },
+      role: string,
+      argv: ReadonlyArray<string>,
+      opts: Parameters<DesktopSystem["spawn"]>[1],
+    ) =>
       Effect.try({
         try: () => {
           const handle = sys.spawn(argv, opts)
           d.children.push({ role, handle })
           return handle
         },
-        catch: (e) => unavailable(`could not start ${path.basename(argv[0] ?? role)}: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+          unavailable(
+            `could not start ${path.basename(argv[0] ?? role)}: ${e instanceof Error ? e.message : String(e)}`,
+          ),
       })
 
     const terminate = (c: ChildHandle, graceMs: number) =>
@@ -322,9 +382,17 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
       })
 
     /** Kill a (possibly partial) desktop: its children (reverse start order), then anything marked, then its runtime files. */
-    const killAll = (d: { readonly children: Array<Child>; readonly marker: string; readonly display?: number | undefined; readonly run?: string | undefined }) =>
+    const killAll = (d: {
+      readonly children: Array<Child>
+      readonly marker: string
+      readonly display?: number | undefined
+      readonly run?: string | undefined
+    }) =>
       Effect.gen(function* () {
-        yield* Effect.forEach([...d.children].reverse(), (c) => terminate(c.handle, 1000), { concurrency: "unbounded", discard: true })
+        yield* Effect.forEach([...d.children].reverse(), (c) => terminate(c.handle, 1000), {
+          concurrency: "unbounded",
+          discard: true,
+        })
         yield* sweep(d.marker)
         if (d.display !== undefined) {
           // a KILLed Xvfb leaves its lock file and socket behind
@@ -339,7 +407,12 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
       })
 
     // ------------------------------------------------------------ start
-    const baseEnvFor = (d: { readonly display: number; readonly layout: SessionLayout; readonly marker: string }, botId: string, wm?: WindowManagerKind, bus?: string) =>
+    const baseEnvFor = (
+      d: { readonly display: number; readonly layout: SessionLayout; readonly marker: string },
+      botId: string,
+      wm?: WindowManagerKind,
+      bus?: string,
+    ) =>
       sessionEnv({
         display: d.display,
         layout: d.layout,
@@ -353,7 +426,11 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
       })
 
     /** Xvfb on the first free display (serialized; a lost race moves on to the next number). */
-    const startX = (botId: string, partial: { children: Array<Child>; display?: number; run?: string }, marker: string) =>
+    const startX = (
+      botId: string,
+      partial: { children: Array<Child>; display?: number; run?: string },
+      marker: string,
+    ) =>
       allocLock.withPermits(1)(
         Effect.gen(function* () {
           const reserved = new Set<number>([...desktops.values()].map((d) => d.display))
@@ -367,20 +444,46 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
                 sys.mkdir(path.dirname(layout.run), 0o700)
                 sys.remove(layout.run)
                 sys.mkdir(layout.run, 0o700)
-                for (const dir of [layout.logs, layout.config, layout.data, layout.cache, layout.state, layout.browserProfile]) sys.mkdir(dir, 0o700)
+                for (const dir of [
+                  layout.logs,
+                  layout.config,
+                  layout.data,
+                  layout.cache,
+                  layout.state,
+                  layout.browserProfile,
+                ])
+                  sys.mkdir(dir, 0o700)
                 sys.writeFile(layout.xauthority, xauthFile(new Uint8Array(randomBytes(16))), 0o600)
               },
-              catch: (e) => unavailable(`cannot prepare the desktop's files: ${e instanceof Error ? e.message : String(e)}`),
+              catch: (e) =>
+                unavailable(`cannot prepare the desktop's files: ${e instanceof Error ? e.message : String(e)}`),
             })
             partial.display = display
             partial.run = layout.run
             const env = baseEnvFor({ display, layout, marker }, botId)
             const log = path.join(layout.logs, "xvfb.log")
-            const xvfb = yield* spawn(partial, "xvfb", xvfbArgs({ xvfb: programs.xvfb!, display, width: dc.width, height: dc.height, xauthority: layout.xauthority }), {
-              env,
-              logFile: log,
-            })
-            const started = yield* waitUntil("Xvfb", timeouts.display, () => sys.exists(displaySocketPath(display)), xvfb, log).pipe(Effect.result)
+            const xvfb = yield* spawn(
+              partial,
+              "xvfb",
+              xvfbArgs({
+                xvfb: programs.xvfb!,
+                display,
+                width: dc.width,
+                height: dc.height,
+                xauthority: layout.xauthority,
+              }),
+              {
+                env,
+                logFile: log,
+              },
+            )
+            const started = yield* waitUntil(
+              "Xvfb",
+              timeouts.display,
+              () => sys.exists(displaySocketPath(display)),
+              xvfb,
+              log,
+            ).pipe(Effect.result)
             if (started._tag === "Failure") {
               const already = /already active|server is already/i.test(sys.readText(log) ?? "")
               yield* terminate(xvfb, 500)
@@ -412,17 +515,30 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
       Effect.gen(function* () {
         let last: DesktopUnavailable | undefined
         for (let attempt = 0; attempt < 3; attempt++) {
-          const port = yield* Effect.tryPromise({ try: () => sys.freePort(), catch: () => unavailable("no free loopback port") })
+          const port = yield* Effect.tryPromise({
+            try: () => sys.freePort(),
+            catch: () => unavailable("no free loopback port"),
+          })
           const log = path.join(d.layout.logs, `x11vnc-${mode}.log`)
           const handle = yield* spawn(
             d,
             `vnc-${mode}`,
-            x11vncArgs({ x11vnc: programs.x11vnc!, display: d.display, xauthority: d.layout.xauthority, port, viewOnly: mode === "view" }),
+            x11vncArgs({
+              x11vnc: programs.x11vnc!,
+              display: d.display,
+              xauthority: d.layout.xauthority,
+              port,
+              viewOnly: mode === "view",
+            }),
             { env: d.env, logFile: log, captureStdout: true, cwd: d.cwd },
           )
-          const ok = yield* waitUntil(`x11vnc (${mode})`, timeouts.vnc, () => new RegExp(`PORT=${port}\\b`).test(handle.output()), handle, log).pipe(
-            Effect.result,
-          )
+          const ok = yield* waitUntil(
+            `x11vnc (${mode})`,
+            timeouts.vnc,
+            () => new RegExp(`PORT=${port}\\b`).test(handle.output()),
+            handle,
+            log,
+          ).pipe(Effect.result)
           if (ok._tag === "Success") {
             d.vnc[mode] = { port, handle }
             return port
@@ -433,13 +549,19 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
         return yield* last ?? unavailable(`x11vnc (${mode}) did not start`)
       })
 
-    const startWindowManager = (d: Desktop, candidates: ReadonlyArray<{ readonly kind: WindowManagerKind; readonly path: string }>) =>
+    const startWindowManager = (
+      d: Desktop,
+      candidates: ReadonlyArray<{ readonly kind: WindowManagerKind; readonly path: string }>,
+    ) =>
       Effect.gen(function* () {
         const failures: Array<string> = []
         for (const wm of candidates) {
           const env = { ...d.env, XDG_CURRENT_DESKTOP: wm.kind === "openbox" ? "OPENBOX" : "XFCE" }
           const log = path.join(d.layout.logs, `${wm.kind}.log`)
-          const argv = wm.kind === "xfwm4" ? [wm.path, "--compositor=off", "--sm-client-disable"] : [wm.path, "--config-file", d.openboxRc]
+          const argv =
+            wm.kind === "xfwm4"
+              ? [wm.path, "--compositor=off", "--sm-client-disable"]
+              : [wm.path, "--config-file", d.openboxRc]
           const handle = yield* spawn(d, `wm-${wm.kind}`, argv, { env, logFile: log, cwd: d.cwd })
           yield* Effect.sleep(timeouts.windowManager)
           if (running(handle)) {
@@ -457,7 +579,11 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
       Effect.gen(function* () {
         if (!programs.xdotool) return
         for (let i = 0; i < 40; i++) {
-          const found = yield* exec(d.env, [programs.xdotool, "search", "--onlyvisible", "--classname", "plank"], 2_000).pipe(Effect.result)
+          const found = yield* exec(
+            d.env,
+            [programs.xdotool, "search", "--onlyvisible", "--classname", "plank"],
+            2_000,
+          ).pipe(Effect.result)
           if (found._tag === "Success") return
           yield* Effect.sleep(100)
         }
@@ -466,7 +592,11 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
     // the bot's first screenshot must already show the dock (it is how it opens apps)
     const startDock = (d: Desktop) =>
       programs.dock
-        ? spawn(d, "dock", [programs.dock], { env: d.env, logFile: path.join(d.layout.logs, "plank.log"), cwd: d.cwd }).pipe(
+        ? spawn(d, "dock", [programs.dock], {
+            env: d.env,
+            logFile: path.join(d.layout.logs, "plank.log"),
+            cwd: d.cwd,
+          }).pipe(
             Effect.tap((h) => Effect.sync(() => void (d.dock = h))),
             Effect.andThen(dockShown(d)),
             Effect.ignore,
@@ -475,7 +605,10 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
 
     const start = (botId: string): Effect.Effect<Desktop, DesktopUnavailable> => {
       const marker = `${nodeKey}/${botId}/`
-      const partial: { children: Array<Child>; marker: string; display?: number; run?: string } = { children: [], marker }
+      const partial: { children: Array<Child>; marker: string; display?: number; run?: string } = {
+        children: [],
+        marker,
+      }
       return Effect.gen(function* () {
         const { display, layout, xvfb } = yield* startX(botId, partial, marker)
         const cwd = workspaceFor(config, sys, botId)
@@ -484,18 +617,31 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
         let bus: string | undefined
         if (programs.dbus) {
           const log = path.join(layout.logs, "dbus.log")
-          const h = yield* spawn(partial, "dbus", [programs.dbus, "--session", "--nofork", "--nopidfile", `--address=unix:path=${layout.bus}`], {
-            env: baseEnvFor({ display, layout, marker }, botId),
-            logFile: log,
-          })
-          const up = yield* waitUntil("dbus-daemon", timeouts.bus, () => sys.exists(layout.bus), h, log).pipe(Effect.result)
+          const h = yield* spawn(
+            partial,
+            "dbus",
+            [programs.dbus, "--session", "--nofork", "--nopidfile", `--address=unix:path=${layout.bus}`],
+            {
+              env: baseEnvFor({ display, layout, marker }, botId),
+              logFile: log,
+            },
+          )
+          const up = yield* waitUntil("dbus-daemon", timeouts.bus, () => sys.exists(layout.bus), h, log).pipe(
+            Effect.result,
+          )
           if (up._tag === "Success") bus = `unix:path=${layout.bus}`
         }
         const order = windowManagerOrder(programs)
         const env = baseEnvFor({ display, layout, marker }, botId, order[0]?.kind, bus)
         const files = desktopFiles({
           layout,
-          apps: desktopApps({ config, programs, profileDir: layout.browserProfile, cwd, debugPort: reserveDockPort(botId) }),
+          apps: desktopApps({
+            config,
+            programs,
+            profileDir: layout.browserProfile,
+            cwd,
+            debugPort: reserveDockPort(botId),
+          }),
           openboxTemplate: openboxTemplate(sys, programs.windowManagers.find((w) => w.kind === "openbox")?.path, env),
         })
         yield* Effect.try({
@@ -505,7 +651,8 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
               sys.writeFile(f.path, f.content, 0o600)
             }
           },
-          catch: (e) => unavailable(`cannot write the desktop's settings: ${e instanceof Error ? e.message : String(e)}`),
+          catch: (e) =>
+            unavailable(`cannot write the desktop's settings: ${e instanceof Error ? e.message : String(e)}`),
         })
         const d: Desktop = {
           botId,
@@ -523,7 +670,9 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
           actLock: Semaphore.makeUnsafe(1),
         }
         if (programs.background) {
-          yield* exec(env, backgroundArgs(programs.background, display, dc.width, dc.height), 10_000).pipe(Effect.ignore)
+          yield* exec(env, backgroundArgs(programs.background, display, dc.width, dc.height), 10_000).pipe(
+            Effect.ignore,
+          )
         }
         yield* startWindowManager(d, order)
         yield* startDock(d)
@@ -544,7 +693,12 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
         }
         if (!d.wm || !running(d.wm.handle)) {
           const order = windowManagerOrder(programs)
-          yield* startWindowManager(d, d.wm ? [...order.filter((w) => w.kind === d.wm!.kind), ...order.filter((w) => w.kind !== d.wm!.kind)] : order)
+          yield* startWindowManager(
+            d,
+            d.wm
+              ? [...order.filter((w) => w.kind === d.wm!.kind), ...order.filter((w) => w.kind !== d.wm!.kind)]
+              : order,
+          )
         }
         if (programs.dock && (!d.dock || !running(d.dock))) yield* startDock(d)
       })
@@ -561,7 +715,9 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
      * outside the bot's lock: a hook may wait for the browser, which may be waiting for the desktop.
      */
     const runStopHooks = (botId: string) =>
-      Effect.forEach(stopHooks, (hook) => hook(botId).pipe(Effect.timeoutOption(10_000), Effect.ignore), { discard: true })
+      Effect.forEach(stopHooks, (hook) => hook(botId).pipe(Effect.timeoutOption(10_000), Effect.ignore), {
+        discard: true,
+      })
 
     /** The bot's running desktop, started or repaired as needed. */
     const desktopFor = (botId: string): Effect.Effect<Desktop, DesktopUnavailable> =>
@@ -569,7 +725,10 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
         if (!SAFE_ID.test(botId)) return yield* unavailable("invalid bot id")
         if (!offered) {
           return yield* dc.enabled
-            ? unavailable(`This computer cannot run desktops: ${detected.missing.join(", ")} not installed.`, detected.missing)
+            ? unavailable(
+                `This computer cannot run desktops: ${detected.missing.join(", ")} not installed.`,
+                detected.missing,
+              )
             : unavailable("Desktops are turned off on this computer.")
         }
         const result = yield* botLock(botId).withPermits(1)(
@@ -590,18 +749,33 @@ export const makeDesktopManager = (config: NodeConfigShape, options?: DesktopMan
           }),
         )
         if (result.fresh) {
-          yield* Effect.forEach(startHooks, (hook) => hook(info(result.d)).pipe(Effect.timeoutOption(5_000), Effect.ignore), { discard: true })
+          yield* Effect.forEach(
+            startHooks,
+            (hook) => hook(info(result.d)).pipe(Effect.timeoutOption(5_000), Effect.ignore),
+            { discard: true },
+          )
         }
         return result.d
       })
 
-    const info = (d: Desktop): DesktopInfo => ({ botId: d.botId, display: `:${d.display}`, width: dc.width, height: dc.height })
+    const info = (d: Desktop): DesktopInfo => ({
+      botId: d.botId,
+      display: `:${d.display}`,
+      width: dc.width,
+      height: dc.height,
+    })
 
     // ------------------------------------------------------------ computer actions
     const leaseHeld = (botId: string) =>
-      new LeaseHeld({ botId, holder: "user", reason: "The user is controlling this screen. Wait until they hand it back." })
+      new LeaseHeld({
+        botId,
+        holder: "user",
+        reason: "The user is controlling this screen. Wait until they hand it back.",
+      })
     const checkLease = (botId: string) =>
-      Effect.suspend(() => (leases && leases.get(botId).holder === "user" ? Effect.fail(leaseHeld(botId)) : Effect.void))
+      Effect.suspend(() =>
+        leases && leases.get(botId).holder === "user" ? Effect.fail(leaseHeld(botId)) : Effect.void,
+      )
 
     const screenshot = (d: Desktop, zoom?: ZoomRect): Effect.Effect<BrowserImage, DesktopUnavailable> =>
       Effect.gen(function* () {

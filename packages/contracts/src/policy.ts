@@ -8,7 +8,17 @@ import { ApprovalRuleId, BotId, Millis } from "./base.ts"
  * What a request touches (rule surfaces). `skills`: a Bot changing which skills a Bot has; its
  * autonomy never decides that (only a rule or the owner).
  */
-export const ApprovalSurface = Schema.Literals(["shell", "file-edit", "file-read", "mcp", "browser", "computer", "network", "skills", "other"])
+export const ApprovalSurface = Schema.Literals([
+  "shell",
+  "file-edit",
+  "file-read",
+  "mcp",
+  "browser",
+  "computer",
+  "network",
+  "skills",
+  "other",
+])
 export type ApprovalSurface = typeof ApprovalSurface.Type
 
 export const ApprovalAction = Schema.Literals(["ask", "allow", "deny"])
@@ -123,7 +133,9 @@ export const projectFolderProblem = (raw: string): string | undefined => {
   if (!folder.startsWith("/")) return "Use an absolute path (/…) or ~/…."
   if (segments.length < 1) return "Pick a folder, not the whole computer."
   if (segments.length < 3 && (segments[0] === "home" || segments[0] === "Users")) {
-    return segments.length === 2 ? "Pick a folder inside a home folder, not all of it." : "Pick a folder, not every home folder."
+    return segments.length === 2
+      ? "Pick a folder inside a home folder, not all of it."
+      : "Pick a folder, not every home folder."
   }
   return undefined
 }

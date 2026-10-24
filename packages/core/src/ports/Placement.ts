@@ -52,24 +52,30 @@ export interface ResolvedPlacement {
 }
 
 /** The side-effect-free part of a placement (what `InstructionRenderer` and previews need). */
-export type PlacementSummary = Pick<ResolvedPlacement, "mode" | "hostNodeId" | "workspacePath" | "toolsets" | "sharedScreen" | "promptAppend">
+export type PlacementSummary = Pick<
+  ResolvedPlacement,
+  "mode" | "hostNodeId" | "workspacePath" | "toolsets" | "sharedScreen" | "promptAppend"
+>
 
 export interface PlacementInput {
   readonly bot: Bot
   readonly driver: HarnessDriver
 }
 
-export class PlacementService extends Context.Service<PlacementService, {
-  /**
-   * Rules (§3.3, `planPlacement`):
-   * - host = node_local (or unset) → `native-local`;
-   * - remote host: Codex + node advertises `codex.exec-server` → `codex-environment`;
-   *   otherwise `brain-mcp-hands` with `disableBuiltinTools: true` and toolsets including "node";
-   * - "browser"/"computer" toolsets when the host node advertises those capabilities.
-   * Fails with `PlacementError` (offline host, unsupported mode, relay setup failure).
-   */
-  readonly resolve: (input: PlacementInput) => Effect.Effect<ResolvedPlacement, PlacementError, Scope.Scope>
-}>()("openbot/core/PlacementService") {}
+export class PlacementService extends Context.Service<
+  PlacementService,
+  {
+    /**
+     * Rules (§3.3, `planPlacement`):
+     * - host = node_local (or unset) → `native-local`;
+     * - remote host: Codex + node advertises `codex.exec-server` → `codex-environment`;
+     *   otherwise `brain-mcp-hands` with `disableBuiltinTools: true` and toolsets including "node";
+     * - "browser"/"computer" toolsets when the host node advertises those capabilities.
+     * Fails with `PlacementError` (offline host, unsupported mode, relay setup failure).
+     */
+    readonly resolve: (input: PlacementInput) => Effect.Effect<ResolvedPlacement, PlacementError, Scope.Scope>
+  }
+>()("openbot/core/PlacementService") {}
 
 // ============================================================================ pure rules (§3.3 / D1.5)
 
@@ -141,7 +147,8 @@ export const planPlacement = (input: {
     })
   }
   if (
-    driverKind === "codex" && capabilities.remotePlacements.includes("codex-environment") &&
+    driverKind === "codex" &&
+    capabilities.remotePlacements.includes("codex-environment") &&
     hasCapability(caps, "codex.exec-server")
   ) {
     return Result.succeed({

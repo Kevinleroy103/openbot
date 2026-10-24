@@ -24,11 +24,11 @@ export const conversationMembers = (conversation: Conversation): ReadonlyArray<B
   }
 }
 
-export const makeSqlConversationRepo = Effect.gen(function*() {
+export const makeSqlConversationRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
 
   const getConversation = (op: string, id: string) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM conversations WHERE id = ${id}`
       const row = rows[0]
       return row === undefined
@@ -40,7 +40,7 @@ export const makeSqlConversationRepo = Effect.gen(function*() {
     get: (id) => getConversation("ConversationRepo.get", id).pipe(repoOp("ConversationRepo.get")),
 
     list: (filter) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const clauses = [
           ...(filter?.kind === undefined ? [] : [sql`kind = ${filter.kind}`]),
           ...(filter?.botId === undefined
@@ -50,29 +50,31 @@ export const makeSqlConversationRepo = Effect.gen(function*() {
         ]
         const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM conversations
           WHERE ${sql.and(clauses)} ORDER BY last_activity_at DESC, id`
-        return yield* Effect.forEach(rows, (row) => ConversationJson.decode("ConversationRepo.list", row.payload_json, row.id))
+        return yield* Effect.forEach(rows, (row) =>
+          ConversationJson.decode("ConversationRepo.list", row.payload_json, row.id),
+        )
       }).pipe(repoOp("ConversationRepo.list")),
 
     upsert: (conversation) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const payload = yield* ConversationJson.encode("ConversationRepo.upsert", conversation)
         yield* sql`INSERT INTO conversations (id, kind, last_activity_at, hidden, payload_json)
-          VALUES (${conversation.id}, ${conversation.kind}, ${conversation.lastActivityAt}, ${
-          bool(conversation.hiddenFromSidebar)
-        }, ${payload})
+          VALUES (${conversation.id}, ${conversation.kind}, ${conversation.lastActivityAt}, ${bool(
+            conversation.hiddenFromSidebar,
+          )}, ${payload})
           ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, last_activity_at = excluded.last_activity_at,
             hidden = excluded.hidden, payload_json = excluded.payload_json`
         yield* sql`DELETE FROM conversation_members WHERE conversation_id = ${conversation.id}`
         const members = conversationMembers(conversation)
         if (members.length > 0) {
-          yield* sql`INSERT OR IGNORE INTO conversation_members ${
-            sql.insert(members.map((botId, position) => ({ conversation_id: conversation.id, bot_id: botId, position })))
-          }`
+          yield* sql`INSERT OR IGNORE INTO conversation_members ${sql.insert(
+            members.map((botId, position) => ({ conversation_id: conversation.id, bot_id: botId, position })),
+          )}`
         }
       }).pipe(sql.withTransaction, repoOp("ConversationRepo.upsert")),
 
     delete: (id) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* sql`DELETE FROM conversation_members WHERE conversation_id = ${id}`
         const rows = yield* sql<{ id: string }>`DELETE FROM conversations WHERE id = ${id} RETURNING id`
         return rows.length > 0

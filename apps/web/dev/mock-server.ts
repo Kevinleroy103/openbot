@@ -31,23 +31,29 @@ export interface MockServer {
   readonly stop: () => Promise<void>
 }
 
-export const startMockServer = async (options: { port?: number; hostname?: string; empty?: boolean; speed?: number; development?: boolean } = {}): Promise<MockServer> => {
+export const startMockServer = async (
+  options: { port?: number; hostname?: string; empty?: boolean; speed?: number; development?: boolean } = {},
+): Promise<MockServer> => {
   const brain = new MockBrain()
   if (options.speed !== undefined) brain.speed = options.speed
   if (options.empty) brain.firstRun = true
   else seed(brain)
 
-  const RpcLive = RpcServer.layerHttp({ group: OpenBotRpcs, path: "/rpc", protocol: "websocket", disableFatalDefects: true }).pipe(
-    Layer.provide(OpenBotRpcs.toLayer(brain.handlers() as never)),
-    Layer.provide(RpcSerialization.layerJson),
-  )
+  const RpcLive = RpcServer.layerHttp({
+    group: OpenBotRpcs,
+    path: "/rpc",
+    protocol: "websocket",
+    disableFatalDefects: true,
+  }).pipe(Layer.provide(OpenBotRpcs.toLayer(brain.handlers() as never)), Layer.provide(RpcSerialization.layerJson))
   const Attachments = HttpRouter.add(
     "GET",
     "/api/attachments/:id",
     Effect.gen(function* () {
       const { id } = yield* HttpRouter.params
       const a = id ? brain.attachments.get(id) : undefined
-      return a ? HttpServerResponse.uint8Array(a.bytes, { contentType: a.mime }) : HttpServerResponse.text("not found", { status: 404 })
+      return a
+        ? HttpServerResponse.uint8Array(a.bytes, { contentType: a.mime })
+        : HttpServerResponse.text("not found", { status: 404 })
     }),
   )
   // `/api/favicon?host=`: the brain's own favicon fetcher (real icons when online, the globe offline)
@@ -85,7 +91,9 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
     "/api/mock/desktop",
     Effect.sync(() => {
       const viewers = [...brain.desktopViewers.values()].reduce((n, set) => n + set.size, 0)
-      return HttpServerResponse.text(JSON.stringify({ ...brain.desktopInput, viewers }), { contentType: "application/json" })
+      return HttpServerResponse.text(JSON.stringify({ ...brain.desktopInput, viewers }), {
+        contentType: "application/json",
+      })
     }),
   )
   // dev helper: the Bot asks for a hand-off again (`request_takeover`) in its direct chat
@@ -96,7 +104,11 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
       const { botId = "" } = yield* HttpRouter.params
       const bot = brain.bot(botId)
       if (!bot) return HttpServerResponse.text("unknown bot", { status: 404 })
-      const request = brain.takeover(bot.directConversationId, bot.id, "Sign in to globex.io on my screen, then hand it back")
+      const request = brain.takeover(
+        bot.directConversationId,
+        bot.id,
+        "Sign in to globex.io on my screen, then hand it back",
+      )
       return HttpServerResponse.text(JSON.stringify({ requestId: request.id }), { contentType: "application/json" })
     }),
   )
@@ -107,7 +119,8 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
       Effect.sync(() =>
         HttpServerResponse.text(JSON.stringify({ status: brain.stt, discards: brain.sttDiscards }), {
           contentType: "application/json",
-        })),
+        }),
+      ),
     ),
     HttpRouter.add(
       "POST",
@@ -123,7 +136,10 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
     ),
   )
   const development = options.development ?? process.env.NODE_ENV !== "production"
-  const ServerLive = HttpRouter.serve(Layer.mergeAll(RpcLive, Attachments, Favicons, Desktop, DesktopInput, Takeover, SpeechToText), { disableLogger: true, disableListenLog: true }).pipe(
+  const ServerLive = HttpRouter.serve(
+    Layer.mergeAll(RpcLive, Attachments, Favicons, Desktop, DesktopInput, Takeover, SpeechToText),
+    { disableLogger: true, disableListenLog: true },
+  ).pipe(
     Layer.provideMerge(
       BunHttpServer.layer({
         port: options.port ?? 4321,
@@ -149,7 +165,13 @@ export const startMockServer = async (options: { port?: number; hostname?: strin
 }
 
 /** One viewer: RFB handshake + updates until either side closes (or the brain closes it: release / reset). */
-const runDesktop = (brain: MockBrain, socket: Socket.Socket, botId: string, mode: "view" | "control", look: { readonly accent: string; readonly page: "signin" | "dashboard" }) =>
+const runDesktop = (
+  brain: MockBrain,
+  socket: Socket.Socket,
+  botId: string,
+  mode: "view" | "control",
+  look: { readonly accent: string; readonly page: "signin" | "dashboard" },
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const reader = yield* socket.reader
@@ -171,7 +193,10 @@ const runDesktop = (brain: MockBrain, socket: Socket.Socket, botId: string, mode
         },
       })
       const closed = yield* Deferred.make<{ readonly code: number; readonly reason: string }>()
-      const leave = brain.joinDesktop(botId, { mode, close: (code, reason) => void Deferred.doneUnsafe(closed, Effect.succeed({ code, reason })) })
+      const leave = brain.joinDesktop(botId, {
+        mode,
+        close: (code, reason) => void Deferred.doneUnsafe(closed, Effect.succeed({ code, reason })),
+      })
       yield* Effect.addFinalizer(() => Effect.sync(leave))
       yield* writer.write(session.greeting())
       const pump = Effect.forever(
@@ -180,17 +205,20 @@ const runDesktop = (brain: MockBrain, socket: Socket.Socket, botId: string, mode
             frames,
             (frame) => {
               const out = session.receive(typeof frame === "string" ? new TextEncoder().encode(frame) : frame)
-              if (session.closed) return Effect.andThen(writer.write(new Socket.CloseEvent(1011, "unsupported RFB message")), Effect.fail("closed" as const))
-              return out.length > 0 ? writer.writeAll(out as unknown as readonly [Uint8Array, ...Uint8Array[]]) : Effect.void
+              if (session.closed)
+                return Effect.andThen(
+                  writer.write(new Socket.CloseEvent(1011, "unsupported RFB message")),
+                  Effect.fail("closed" as const),
+                )
+              return out.length > 0
+                ? writer.writeAll(out as unknown as readonly [Uint8Array, ...Uint8Array[]])
+                : Effect.void
             },
             { discard: true },
           ),
         ),
       )
-      const ended = yield* Effect.raceFirst(
-        Effect.as(Effect.exit(pump), undefined),
-        Deferred.await(closed),
-      )
+      const ended = yield* Effect.raceFirst(Effect.as(Effect.exit(pump), undefined), Deferred.await(closed))
       if (ended) yield* Effect.ignore(writer.write(new Socket.CloseEvent(ended.code, ended.reason)))
     }),
   ).pipe(Effect.catchCause(() => Effect.void))

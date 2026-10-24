@@ -11,10 +11,16 @@ export const CATCH_UP_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /** Parses a 5-field cron expression in an IANA timezone. */
 export const parseCron = (schedule: string, timezone: string): Result.Result<Cron.Cron, string> => {
-  const fields = schedule.trim().split(/\s+/).filter((s) => s.length > 0)
-  if (fields.length !== 5) return Result.fail(`"${schedule}" is not a 5-field cron expression (minute hour day month weekday).`)
+  const fields = schedule
+    .trim()
+    .split(/\s+/)
+    .filter((s) => s.length > 0)
+  if (fields.length !== 5)
+    return Result.fail(`"${schedule}" is not a 5-field cron expression (minute hour day month weekday).`)
   const parsed = Cron.parse(schedule, timezone)
-  return Result.isSuccess(parsed) ? Result.succeed(parsed.success) : Result.fail(`Invalid schedule "${schedule}" (${timezone}): ${parsed.failure.message}.`)
+  return Result.isSuccess(parsed)
+    ? Result.succeed(parsed.success)
+    : Result.fail(`Invalid schedule "${schedule}" (${timezone}): ${parsed.failure.message}.`)
 }
 
 /** Validation for create/update (returns a model-readable problem or undefined). */
@@ -40,7 +46,8 @@ export const validateTrigger = (trigger: RoutineTrigger, now: number): string | 
 }
 
 const validateSlackTrigger = (trigger: Extract<RoutineTrigger, { type: "slack" }>): string | undefined => {
-  if (trigger.on === "phrase" && (trigger.phrase ?? "").trim().length === 0) return "A Slack phrase trigger needs the phrase to look for."
+  if (trigger.on === "phrase" && (trigger.phrase ?? "").trim().length === 0)
+    return "A Slack phrase trigger needs the phrase to look for."
   if (trigger.on === "message" && (trigger.channel ?? "").trim().length === 0) {
     return "A trigger on every Slack message needs a channel."
   }
@@ -159,8 +166,12 @@ export const sameTrigger = (a: RoutineTrigger, b: RoutineTrigger): boolean => {
     case "once":
       return b.type === "once" && a.at === b.at
     case "slack":
-      return b.type === "slack" && a.on === b.on && (a.phrase ?? "").trim() === (b.phrase ?? "").trim() &&
+      return (
+        b.type === "slack" &&
+        a.on === b.on &&
+        (a.phrase ?? "").trim() === (b.phrase ?? "").trim() &&
         (a.channel ?? "").trim() === (b.channel ?? "").trim()
+      )
     case "manual":
     case "webhook":
       return a.type === b.type

@@ -90,12 +90,24 @@ export function GeneralPage(): ReactNode {
         <SettingsRow
           title="Show steps"
           description="Show a collapsed “N steps” row under finished replies, with every tool call the Bot made."
-          control={<Switch checked={settings.showSteps} onCheckedChange={(showSteps) => void patch({ showSteps })} label="Show steps" />}
+          control={
+            <Switch
+              checked={settings.showSteps}
+              onCheckedChange={(showSteps) => void patch({ showSteps })}
+              label="Show steps"
+            />
+          }
         />
         <SettingsRow
           title="Show compactions"
           description="A line in the chat each time a Bot compacts its context to keep going."
-          control={<Switch checked={settings.showCompactions} onCheckedChange={(showCompactions) => void patch({ showCompactions })} label="Show compactions" />}
+          control={
+            <Switch
+              checked={settings.showCompactions}
+              onCheckedChange={(showCompactions) => void patch({ showCompactions })}
+              label="Show compactions"
+            />
+          }
         />
       </SettingsCard>
 
@@ -104,17 +116,35 @@ export function GeneralPage(): ReactNode {
         <SettingsRow
           title="Bot messaging"
           description="Let Bots message each other, post to groups and hand off work. Turn off to stop all Bot-to-Bot messages at once."
-          control={<Switch checked={settings.botMessaging} onCheckedChange={(botMessaging) => void patch({ botMessaging })} label="Bot messaging" />}
+          control={
+            <Switch
+              checked={settings.botMessaging}
+              onCheckedChange={(botMessaging) => void patch({ botMessaging })}
+              label="Bot messaging"
+            />
+          }
         />
         <SettingsRow
           title="Compact idle Bots"
           description="When a Bot with a long conversation has been idle for 10 minutes, compact its context so its next reply starts faster and uses less of your plan."
-          control={<Switch checked={settings.compactIdleBots} onCheckedChange={(compactIdleBots) => void patch({ compactIdleBots })} label="Compact idle Bots" />}
+          control={
+            <Switch
+              checked={settings.compactIdleBots}
+              onCheckedChange={(compactIdleBots) => void patch({ compactIdleBots })}
+              label="Compact idle Bots"
+            />
+          }
         />
         <SettingsRow
           title="Bots can search their chats"
           description="Let Bots look back through the chats they are in, so they can find details from earlier conversations. They never see your chats with other Bots."
-          control={<Switch checked={settings.botSearch} onCheckedChange={(botSearch) => void patch({ botSearch })} label="Bots can search their chats" />}
+          control={
+            <Switch
+              checked={settings.botSearch}
+              onCheckedChange={(botSearch) => void patch({ botSearch })}
+              label="Bots can search their chats"
+            />
+          }
         />
         <SettingsRow
           title="Default harness"
@@ -147,7 +177,10 @@ export function GeneralPage(): ReactNode {
                 .concat([settings.approvalExpiryMinutes])
                 .filter((v, i, a) => a.indexOf(v) === i)
                 .sort((a, b) => a - b)
-                .map((m) => ({ value: String(m), label: m < 60 ? `${m} minutes` : `${m / 60} hour${m === 60 ? "" : "s"}` }))}
+                .map((m) => ({
+                  value: String(m),
+                  label: m < 60 ? `${m} minutes` : `${m / 60} hour${m === 60 ? "" : "s"}`,
+                }))}
             />
           }
         />
@@ -165,7 +198,10 @@ export function GeneralPage(): ReactNode {
               value={name}
               placeholder="Owner"
               onChange={(e) => setName(e.target.value)}
-              onBlur={() => name.trim() !== (settings.ownerName ?? "") && void patch({ ownerName: name.trim() ? name.trim() : null })}
+              onBlur={() =>
+                name.trim() !== (settings.ownerName ?? "") &&
+                void patch({ ownerName: name.trim() ? name.trim() : null })
+              }
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
               wrapperClassName="w-[220px] max-sm:w-full"
             />

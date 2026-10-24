@@ -19,7 +19,19 @@ import {
   SCOPES_WITHOUT_FILES,
   startFakeSlack,
 } from "../../../server/test/fixtures/fakeSlack.ts"
-import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, send, startBrain, waitIdle } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  send,
+  startBrain,
+  waitIdle,
+} from "./brain.ts"
 
 describe.skipIf(!hasChromium)("e2e: Slack", () => {
   let slack: FakeSlack
@@ -34,7 +46,9 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
     brain = await startBrain({ env: { OPENBOT_SLACK_API_URL: slack.url } })
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
-    otto = await rpc.call((c) => c["bots.create"]({ name: "Otto", harness: { kind: "fake" }, clientNonce: "e2e-slack-otto", introduce: false }))
+    otto = await rpc.call((c) =>
+      c["bots.create"]({ name: "Otto", harness: { kind: "fake" }, clientNonce: "e2e-slack-otto", introduce: false }),
+    )
     app = await openApp(browser, brain, { theme: "dark", route: `#/c/${otto.directConversationId}` })
     await app.page.getByRole("textbox", { name: "Message Otto" }).waitFor()
   }, 60_000)
@@ -73,9 +87,17 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
     const mentions = page.getByRole("switch", { name: "Send my @OpenBot mentions" })
     expect(await mentions.getAttribute("aria-checked")).toBe("true")
     await mentions.click()
-    await eventually(() => rpc.call((c) => c["settings.get"]()), (s) => s.slackMentions === false, { label: "mentions off" })
+    await eventually(
+      () => rpc.call((c) => c["settings.get"]()),
+      (s) => s.slackMentions === false,
+      { label: "mentions off" },
+    )
     await mentions.click()
-    await eventually(() => rpc.call((c) => c["settings.get"]()), (s) => s.slackMentions === true, { label: "mentions on" })
+    await eventually(
+      () => rpc.call((c) => c["settings.get"]()),
+      (s) => s.slackMentions === true,
+      { label: "mentions on" },
+    )
     // back in the catalog Slack is connected; "1 connected ›" lists it
     await page.getByTestId("connect-apps-back").click()
     await window.getByTestId("app-slack").getByText("Connected").waitFor()
@@ -94,7 +116,11 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
 
   test("a Bot's draft: edit it and send it as yourself", async () => {
     const { page } = app
-    await send(page, "Otto", 'tool: slack_draft {"to":"#general","text":"The deploy is fixed.","thread":"1729340000.000100"}')
+    await send(
+      page,
+      "Otto",
+      'tool: slack_draft {"to":"#general","text":"The deploy is fixed.","thread":"1729340000.000100"}',
+    )
     const card = page.locator('[data-card="slack-draft"]')
     await card.waitFor()
     await waitIdle(page)
@@ -108,7 +134,9 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
     await card.getByRole("button", { name: "Send message" }).click()
     await card.getByText("Sent", { exact: true }).waitFor()
     await card.getByRole("link", { name: "Open in Slack" }).waitFor()
-    expect(slack.posted).toEqual([{ channel: "C_GENERAL", text: "The deploy is fixed, thanks <@U_ALICE>!", thread_ts: "1729340000.000100" }])
+    expect(slack.posted).toEqual([
+      { channel: "C_GENERAL", text: "The deploy is fixed, thanks <@U_ALICE>!", thread_ts: "1729340000.000100" },
+    ])
     await app.shot("e2e-83-slack-sent")
     expect(app.errors).toEqual([])
   }, 60_000)

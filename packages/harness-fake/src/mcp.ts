@@ -64,7 +64,7 @@ export const makeMcpToolClient = (
   binding: McpBinding,
   options: McpToolClientOptions,
 ): Effect.Effect<McpToolClient, never, Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const lock = yield* Semaphore.make(1)
     let current: Connection | undefined
     const timeoutMs = Duration.toMillis(options.timeout)
@@ -74,12 +74,15 @@ export const makeMcpToolClient = (
         const connection = current
         current = undefined
         return connection ? closeConnection(connection) : Effect.void
-      })
+      }),
     )
 
     const connect = Effect.tryPromise({
       try: async (signal) => {
-        const client = new Client({ name: options.clientName ?? "openbot-fake-harness", version: options.clientVersion ?? "0.0.0" })
+        const client = new Client({
+          name: options.clientName ?? "openbot-fake-harness",
+          version: options.clientVersion ?? "0.0.0",
+        })
         const transport = new StreamableHTTPClientTransport(new URL(binding.url), {
           requestInit: { headers: { ...binding.headers } },
         })
@@ -92,7 +95,8 @@ export const makeMcpToolClient = (
         }
         return { client, transport } satisfies Connection
       },
-      catch: (cause) => new McpCallError({ message: `Could not connect to the OpenBot MCP server: ${describe(cause)}`, cause }),
+      catch: (cause) =>
+        new McpCallError({ message: `Could not connect to the OpenBot MCP server: ${describe(cause)}`, cause }),
     })
 
     const connection = lock.withPermit(
@@ -101,7 +105,8 @@ export const makeMcpToolClient = (
         return Effect.tap(connect, (connection) =>
           Effect.sync(() => {
             current = connection
-          }))
+          }),
+        )
       }),
     )
 
@@ -113,7 +118,7 @@ export const makeMcpToolClient = (
       })
 
     const call = (name: string, args: Record<string, unknown>) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conn = yield* connection
         return yield* Effect.tryPromise({
           try: (signal) =>

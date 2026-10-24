@@ -26,7 +26,8 @@ import { parseOpenBotMcpTool } from "./config.ts"
 type Rec = Readonly<Record<string, unknown>>
 const rec = (u: unknown): Rec => (typeof u === "object" && u !== null && !Array.isArray(u) ? (u as Rec) : {})
 const str = (u: unknown): string | undefined => (typeof u === "string" ? u : undefined)
-const strings = (u: unknown): ReadonlyArray<string> => (Array.isArray(u) ? u.filter((x): x is string => typeof x === "string") : [])
+const strings = (u: unknown): ReadonlyArray<string> =>
+  Array.isArray(u) ? u.filter((x): x is string => typeof x === "string") : []
 
 /** A native permission request (`permission.asked.data`), decoded tolerantly. */
 export interface NativePermission {
@@ -119,20 +120,28 @@ export const permissionToRequest = (
   const mcp = parseOpenBotMcpTool(action)
   const input = rec(tool.input)
   const files = Array.isArray(permission.metadata.files) ? permission.metadata.files.map(rec) : []
-  const diff = files.map((f) => str(f.patch)).filter((p): p is string => p !== undefined && p.length > 0).join("\n")
-  const command = shape.kind === "command-approval"
-    ? (str(input.command) ?? (resources.length > 0 ? resources.join(" && ") : undefined))
-    : undefined
-  const paths = shape.kind === "file-approval"
-    ? (files.length > 0 ? files.map((f) => str(f.file)).filter((p): p is string => p !== undefined) : resources)
-    : undefined
+  const diff = files
+    .map((f) => str(f.patch))
+    .filter((p): p is string => p !== undefined && p.length > 0)
+    .join("\n")
+  const command =
+    shape.kind === "command-approval"
+      ? (str(input.command) ?? (resources.length > 0 ? resources.join(" && ") : undefined))
+      : undefined
+  const paths =
+    shape.kind === "file-approval"
+      ? files.length > 0
+        ? files.map((f) => str(f.file)).filter((p): p is string => p !== undefined)
+        : resources
+      : undefined
   const toolName = mcp ? `openbot.${mcp.tool}` : (tool.name ?? action)
-  const title = permission.message ??
-    (mcp ? `Allow the ${mcp.tool} tool?` : TITLES[action] ?? `Allow ${action}?`)
+  const title = permission.message ?? (mcp ? `Allow the ${mcp.tool} tool?` : (TITLES[action] ?? `Allow ${action}?`))
   const detail = [
     command ?? (paths && paths.length > 0 ? paths.join("\n") : resources.join("\n")),
     str(input.description),
-  ].filter((part): part is string => part !== undefined && part.length > 0).join("\n\n")
+  ]
+    .filter((part): part is string => part !== undefined && part.length > 0)
+    .join("\n\n")
   const nodeId = mcp ? str(input.node) : undefined
   // "Always allow" is OpenBot's own option (ApprovalService adds it when a rule can be saved).
   const suggestions: Array<HarnessDecisionSuggestion> = [
@@ -147,7 +156,9 @@ export const permissionToRequest = (
     nativeRequestId: permission.id,
     ...(tool.key ? { toolKey: tool.key } : {}),
     ...(command !== undefined ? { command } : {}),
-    ...(command !== undefined && (str(input.workdir) ?? options.cwd) ? { cwd: (str(input.workdir) ?? options.cwd)! } : {}),
+    ...(command !== undefined && (str(input.workdir) ?? options.cwd)
+      ? { cwd: (str(input.workdir) ?? options.cwd)! }
+      : {}),
     ...(paths && paths.length > 0 ? { paths } : {}),
     ...(diff.length > 0 ? { diff } : {}),
     ...(mcp ? { server: mcp.server } : {}),
@@ -157,7 +168,8 @@ export const permissionToRequest = (
   }
 }
 
-export const DECLINED_MESSAGE = "The user declined this request. Do not retry it; continue without it or ask the user how to proceed."
+export const DECLINED_MESSAGE =
+  "The user declined this request. Do not retry it; continue without it or ask the user how to proceed."
 
 /**
  * The native reply for a resolution. `grant` = add session allow rules first ("allow for this
@@ -192,7 +204,11 @@ export interface NativeFormField {
   readonly type: string
   readonly title: string | undefined
   readonly description: string | undefined
-  readonly options: ReadonlyArray<{ readonly value: string; readonly label: string; readonly description: string | undefined }>
+  readonly options: ReadonlyArray<{
+    readonly value: string
+    readonly label: string
+    readonly description: string | undefined
+  }>
   readonly custom: boolean
 }
 
@@ -212,7 +228,8 @@ export const decodeForm = (data: unknown): NativeForm | undefined => {
   if (!id || !sessionID) return undefined
   const metadata = rec(form.metadata)
   const tool = rec(metadata.tool)
-  const fields: Array<NativeFormField> = (Array.isArray(form.fields) ? form.fields : []).map(rec)
+  const fields: Array<NativeFormField> = (Array.isArray(form.fields) ? form.fields : [])
+    .map(rec)
     .filter((f) => str(f.key) !== undefined && f.type !== "external" && f.hidden !== true)
     .map((f) => ({
       key: str(f.key)!,
@@ -246,12 +263,13 @@ export const formToRequest = (form: NativeForm, toolKey: string | undefined): Ha
     id: field.key,
     ...(field.title ? { header: field.title } : {}),
     prompt: field.description ?? field.title ?? field.key,
-    options: field.type === "boolean" && field.options.length === 0
-      ? [{ label: "Yes" }, { label: "No" }]
-      : field.options.map((o) => ({ label: o.label, ...(o.description ? { description: o.description } : {}) })),
+    options:
+      field.type === "boolean" && field.options.length === 0
+        ? [{ label: "Yes" }, { label: "No" }]
+        : field.options.map((o) => ({ label: o.label, ...(o.description ? { description: o.description } : {}) })),
     multiSelect: field.type === "multiselect",
     // Text/number fields and `custom: true` choice fields accept free text.
-    allowFreeText: field.custom || field.options.length === 0 && field.type !== "boolean",
+    allowFreeText: field.custom || (field.options.length === 0 && field.type !== "boolean"),
   })),
 })
 
@@ -267,7 +285,8 @@ export const formAnswer = (
     const raw = answers[field.key]
     if (raw === undefined) continue
     const list = typeof raw === "string" ? [raw] : [...raw]
-    const toValue = (answer: string) => field.options.find((o) => o.label === answer || o.value === answer)?.value ?? answer
+    const toValue = (answer: string) =>
+      field.options.find((o) => o.label === answer || o.value === answer)?.value ?? answer
     switch (field.type) {
       case "multiselect":
         out[field.key] = list.map(toValue)

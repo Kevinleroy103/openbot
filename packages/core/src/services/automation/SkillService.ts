@@ -35,7 +35,12 @@ const SKILLS_SH_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.:-]+$/
 export const importedSkillName = (frontmatterName: string | undefined, skillId: string): SkillName | undefined => {
   for (const raw of [frontmatterName, skillId]) {
     if (raw === undefined) continue
-    const slug = raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^[-_]+|-+$/g, "").slice(0, 64)
+    const slug = raw
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^[-_]+|-+$/g, "")
+      .slice(0, 64)
     if (isSkillName(slug)) return slug
   }
   return undefined
@@ -49,7 +54,7 @@ export const safeSkillPath = (path: string): string | undefined => {
   return parts.join("/")
 }
 
-export const makeSkillService = Effect.gen(function*() {
+export const makeSkillService = Effect.gen(function* () {
   const store = yield* SkillStore
   const conversations = yield* ConversationService
   const botService = yield* BotService
@@ -58,18 +63,27 @@ export const makeSkillService = Effect.gen(function*() {
 
   const validate = (input: SkillInput) => {
     if (!isSkillName(input.name)) {
-      return Effect.fail(new InvalidInput({ message: `Invalid skill name "${input.name}" (use a lower-case slug like "weekly-report").` }))
+      return Effect.fail(
+        new InvalidInput({
+          message: `Invalid skill name "${input.name}" (use a lower-case slug like "weekly-report").`,
+        }),
+      )
     }
     const description = input.description.trim()
     if (description.length === 0) {
       return Effect.fail(new InvalidInput({ message: "A skill needs a description of when to use it." }))
     }
     if ([...description].length > SKILL_LIMITS.descriptionChars) {
-      return Effect.fail(new InvalidInput({ message: `The description is too long (max ${SKILL_LIMITS.descriptionChars} characters).` }))
+      return Effect.fail(
+        new InvalidInput({ message: `The description is too long (max ${SKILL_LIMITS.descriptionChars} characters).` }),
+      )
     }
-    if (input.body.trim().length === 0) return Effect.fail(new InvalidInput({ message: "A skill needs instructions (body)." }))
+    if (input.body.trim().length === 0)
+      return Effect.fail(new InvalidInput({ message: "A skill needs instructions (body)." }))
     if (utf8Length(input.body) > SKILL_LIMITS.bodyBytes) {
-      return Effect.fail(new InvalidInput({ message: `The skill is too long (max ${SKILL_LIMITS.bodyBytes / 1024} KB).` }))
+      return Effect.fail(
+        new InvalidInput({ message: `The skill is too long (max ${SKILL_LIMITS.bodyBytes / 1024} KB).` }),
+      )
     }
     return Effect.succeed(description)
   }
@@ -77,10 +91,12 @@ export const makeSkillService = Effect.gen(function*() {
   const get = (name: SkillName) =>
     store.get(name).pipe(
       Effect.orDie,
-      Effect.flatMap(Option.match({
-        onNone: () => Effect.fail(new NotFound({ entity: "skill", id: name })),
-        onSome: Effect.succeed,
-      })),
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new NotFound({ entity: "skill", id: name })),
+          onSome: Effect.succeed,
+        }),
+      ),
     )
 
   /** Replaces a Bot's skills (BotService publishes it; the Bot's next turn reopens its session). */
@@ -93,7 +109,7 @@ export const makeSkillService = Effect.gen(function*() {
   const allBots = Effect.orDie(bots.list)
 
   const upsert = (actor: Actor, input: SkillInput) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const description = yield* validate(input)
       const existing = yield* store.get(input.name).pipe(Effect.orDie)
       let author: Bot | undefined
@@ -101,38 +117,46 @@ export const makeSkillService = Effect.gen(function*() {
         author = Option.getOrUndefined(yield* Effect.orDie(bots.get(actor.tool.claims.botId)))
         if (Option.isSome(existing) && author?.skills.includes(input.name) !== true) {
           return yield* new InvalidInput({
-            message:
-              `A skill named "${input.name}" already exists and is not one of yours. Save yours under another name, or ask for that one with enable_skill.`,
+            message: `A skill named "${input.name}" already exists and is not one of yours. Save yours under another name, or ask for that one with enable_skill.`,
           })
         }
       }
       // the store keeps an imported skill's source (frontmatter metadata) and its other files
-      yield* store.put({ name: input.name, description, body: input.body, updatedAt: yield* Clock.currentTimeMillis }).pipe(Effect.orDie)
+      yield* store
+        .put({ name: input.name, description, body: input.body, updatedAt: yield* Clock.currentTimeMillis })
+        .pipe(Effect.orDie)
       if (author !== undefined && actor.kind === "bot") {
-        if (!author.skills.includes(input.name)) yield* setSkills(author, [...author.skills, input.name]).pipe(Effect.orDie)
-        yield* conversations.appendEvent({
-          conversationId: actor.tool.claims.conversationId,
-          author: { kind: "bot", botId: actor.tool.claims.botId },
-          event: { type: "skill-saved", name: input.name },
-        }).pipe(
-          Effect.asVoid,
-          Effect.catch((error) => Effect.logWarning("SkillService: skill-saved event not written", error)),
-        )
+        if (!author.skills.includes(input.name))
+          yield* setSkills(author, [...author.skills, input.name]).pipe(Effect.orDie)
+        yield* conversations
+          .appendEvent({
+            conversationId: actor.tool.claims.conversationId,
+            author: { kind: "bot", botId: actor.tool.claims.botId },
+            event: { type: "skill-saved", name: input.name },
+          })
+          .pipe(
+            Effect.asVoid,
+            Effect.catch((error) => Effect.logWarning("SkillService: skill-saved event not written", error)),
+          )
       }
       return yield* get(input.name).pipe(Effect.orDie)
     })
 
   const remove = (name: SkillName) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const deleted = yield* store.delete(name).pipe(Effect.orDie)
       if (!deleted) return yield* new NotFound({ entity: "skill", id: name })
       for (const bot of yield* allBots) {
-        if (bot.skills.includes(name)) yield* setSkills(bot, bot.skills.filter((n) => n !== name)).pipe(Effect.orDie)
+        if (bot.skills.includes(name))
+          yield* setSkills(
+            bot,
+            bot.skills.filter((n) => n !== name),
+          ).pipe(Effect.orDie)
       }
     })
 
   const assign = (name: SkillName, botIds: ReadonlyArray<BotId>) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       yield* get(name)
       const all = yield* allBots
       const wanted = new Set(botIds)
@@ -142,13 +166,17 @@ export const makeSkillService = Effect.gen(function*() {
       for (const bot of all) {
         const has = bot.skills.includes(name)
         if (wanted.has(bot.id) && !has) yield* setSkills(bot, [...bot.skills, name])
-        else if (!wanted.has(bot.id) && has) yield* setSkills(bot, bot.skills.filter((n) => n !== name))
+        else if (!wanted.has(bot.id) && has)
+          yield* setSkills(
+            bot,
+            bot.skills.filter((n) => n !== name),
+          )
       }
     })
 
   /** Downloads a skills.sh skill and checks it: safe paths, limits, a SKILL.md with a description. */
   const fetchSkill = (rawId: string) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const id = rawId.trim()
       if (!SKILLS_SH_ID.test(id)) {
         return yield* new InvalidInput({ message: `"${rawId}" is not a skills.sh skill (expected owner/repo/skill).` })
@@ -161,24 +189,28 @@ export const makeSkillService = Effect.gen(function*() {
       let bytes = 0
       for (const file of download.files) {
         const path = safeSkillPath(file.path)
-        if (path === undefined) return yield* new InvalidInput({ message: `This skill has a file outside its folder: ${file.path}` })
+        if (path === undefined)
+          return yield* new InvalidInput({ message: `This skill has a file outside its folder: ${file.path}` })
         bytes += utf8Length(file.contents)
         files.push({ path, contents: file.contents })
       }
       if (bytes > SKILL_LIMITS.importBytes) {
-        return yield* new InvalidInput({ message: `This skill is too big (max ${SKILL_LIMITS.importBytes / 1024 / 1024} MB).` })
+        return yield* new InvalidInput({
+          message: `This skill is too big (max ${SKILL_LIMITS.importBytes / 1024 / 1024} MB).`,
+        })
       }
       const skillFile = files.find((file) => file.path === "SKILL.md")
       if (skillFile === undefined) return yield* new InvalidInput({ message: "This skill has no SKILL.md." })
       const parsed = store.parse(skillFile.contents)
       const name = importedSkillName(parsed.name, id.split("/")[2] ?? "")
-      if (name === undefined) return yield* new InvalidInput({ message: `This skill's name cannot be used here: ${parsed.name ?? id}` })
+      if (name === undefined)
+        return yield* new InvalidInput({ message: `This skill's name cannot be used here: ${parsed.name ?? id}` })
       const description = yield* validate({ name, description: parsed.description ?? "", body: parsed.body })
       return { id, name, description, body: parsed.body, files, hash: download.hash }
     })
 
   const preview = (id: string) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const fetched = yield* fetchSkill(id)
       const existing = yield* store.get(fetched.name).pipe(Effect.orDie)
       const result: SkillPreview = {
@@ -193,7 +225,7 @@ export const makeSkillService = Effect.gen(function*() {
     })
 
   const install = (id: string, botIds: ReadonlyArray<BotId>) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const all = yield* allBots
       for (const botId of botIds) {
         if (!all.some((bot) => bot.id === botId)) return yield* new NotFound({ entity: "bot", id: botId })
@@ -208,7 +240,8 @@ export const makeSkillService = Effect.gen(function*() {
       }
       yield* store.install(skill, fetched.files).pipe(Effect.orDie)
       for (const bot of all) {
-        if (botIds.includes(bot.id) && !bot.skills.includes(skill.name)) yield* setSkills(bot, [...bot.skills, skill.name])
+        if (botIds.includes(bot.id) && !bot.skills.includes(skill.name))
+          yield* setSkills(bot, [...bot.skills, skill.name])
       }
       return yield* get(skill.name).pipe(Effect.orDie)
     })
@@ -222,8 +255,8 @@ export const makeSkillService = Effect.gen(function*() {
     search: (query) =>
       query.trim() === ""
         ? Effect.fail(new InvalidInput({ message: "Type something to search for." }))
-        // skills hosted outside GitHub (`site/skill`) cannot be downloaded through skills.sh
-        : directory.search(query.trim()).pipe(Effect.map((found) => found.filter((hit) => SKILLS_SH_ID.test(hit.id)))),
+        : // skills hosted outside GitHub (`site/skill`) cannot be downloaded through skills.sh
+          directory.search(query.trim()).pipe(Effect.map((found) => found.filter((hit) => SKILLS_SH_ID.test(hit.id)))),
     preview,
     install,
   })
@@ -233,7 +266,4 @@ export const SkillServiceLive: Layer.Layer<
   SkillService,
   never,
   SkillStore | ConversationService | BotService | BotRepo | SkillDirectory
-> = Layer.effect(
-  SkillService,
-  makeSkillService,
-)
+> = Layer.effect(SkillService, makeSkillService)

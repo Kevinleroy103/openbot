@@ -8,7 +8,16 @@ import { ApprovalServiceFake } from "@openbot/core/testing"
 import { CloseCodes, generateKeyPair, makeUpgradeAuth, Routes } from "@openbot/node-protocol"
 import { Effect, Layer, Option, Stream } from "effect"
 import { BrainIdentity, NodeRegistry } from "../src/index.ts"
-import { BRAIN_ORIGIN, brainStack, connectTestNode, nodeKeys, pairOverHttp, run, startServer, tempDir } from "./helpers.ts"
+import {
+  BRAIN_ORIGIN,
+  brainStack,
+  connectTestNode,
+  nodeKeys,
+  pairOverHttp,
+  run,
+  startServer,
+  tempDir,
+} from "./helpers.ts"
 
 const dir = tempDir()
 afterAll(() => dir.cleanup())
@@ -32,7 +41,7 @@ const withBrain = <A, E>(effect: Effect.Effect<A, E, any>) =>
 describe("pairing", () => {
   test("a pairing code is single use and yields the brain key and origin", () =>
     withBrain(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const admin = yield* NodeAdmin
         const identity = yield* BrainIdentity
@@ -50,7 +59,10 @@ describe("pairing", () => {
         const reused = yield* pairOverHttp(server.http, code.code, yield* nodeKeys)
         expect(reused.status).toBe(401)
 
-        const badKey = yield* pairOverHttp(server.http, (yield* admin.createPairingCode).code, { publicKey: "nope", privateKey: "" })
+        const badKey = yield* pairOverHttp(server.http, (yield* admin.createPairingCode).code, {
+          publicKey: "nope",
+          privateKey: "",
+        })
         expect(badKey.status).toBe(400)
 
         // the paired node is listed (offline until it connects) with no approved capabilities yet
@@ -63,7 +75,7 @@ describe("pairing", () => {
 describe("node control socket", () => {
   test("signed connect → node.hello → NodeDirectory.client round trip → revoke closes with 4401", () =>
     withBrain(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const admin = yield* NodeAdmin
         const directory = yield* NodeDirectory
@@ -77,11 +89,18 @@ describe("node control socket", () => {
 
         const changes: Array<string> = []
         yield* directory.changes.pipe(
-          Stream.runForEach((c) => Effect.sync(() => changes.push(c.type === "node.upserted" ? `${c.type}:${c.node.status}` : c.type))),
+          Stream.runForEach((c) =>
+            Effect.sync(() => changes.push(c.type === "node.upserted" ? `${c.type}:${c.node.status}` : c.type)),
+          ),
           Effect.forkScoped({ startImmediately: true }),
         )
 
-        const node = yield* connectTestNode({ wsBase: server.ws, nodeId, keys, brainPublicKey: paired.body.brainPublicKey })
+        const node = yield* connectTestNode({
+          wsBase: server.ws,
+          nodeId,
+          keys,
+          brainPublicKey: paired.body.brainPublicKey,
+        })
         const conn = yield* registry.awaitConnection(nodeId).pipe(Effect.timeout("5 seconds"))
         expect(node.state.verified).toBe(true)
         expect(conn.hello.brainVerified).toBe(true)
@@ -98,13 +117,21 @@ describe("node control socket", () => {
 
         // brain → node RPC through the port
         const client = yield* directory.client(nodeId)
-        const read = yield* client["fs.read"]({ inv: { invocationId: "i1", botId: "bot_1", runId: "r" }, path: "/home/u/openbot/a.txt" })
+        const read = yield* client["fs.read"]({
+          inv: { invocationId: "i1", botId: "bot_1", runId: "r" },
+          path: "/home/u/openbot/a.txt",
+        })
         expect(read.content).toBe("remote:/home/u/openbot/a.txt")
-        const denied = yield* Effect.flip(client["fs.read"]({ inv: { invocationId: "i2", botId: "bot_1", runId: "r" }, path: "/etc/passwd" }))
-        expect(denied._tag).toBe("PathDenied")
-        const exec = yield* client["shell.exec"]({ inv: { invocationId: "i3", botId: "bot_1", runId: "r" }, command: "ls", cwd: "/", timeoutMs: 1000 }).pipe(
-          Stream.runCollect,
+        const denied = yield* Effect.flip(
+          client["fs.read"]({ inv: { invocationId: "i2", botId: "bot_1", runId: "r" }, path: "/etc/passwd" }),
         )
+        expect(denied._tag).toBe("PathDenied")
+        const exec = yield* client["shell.exec"]({
+          inv: { invocationId: "i3", botId: "bot_1", runId: "r" },
+          command: "ls",
+          cwd: "/",
+          timeoutMs: 1000,
+        }).pipe(Stream.runCollect)
         expect(exec.map((e) => e._tag)).toEqual(["Started", "Output", "Exit"])
 
         // node → brain: approval with the STAMPED node id (never from the payload)
@@ -146,7 +173,9 @@ describe("node control socket", () => {
         expect(changes).toContain("node.removed")
 
         // a revoked node that redials is told 4401 again (its signature still verifies)
-        const again = yield* Effect.result(connectTestNode({ wsBase: server.ws, nodeId, keys, brainPublicKey: paired.body.brainPublicKey }))
+        const again = yield* Effect.result(
+          connectTestNode({ wsBase: server.ws, nodeId, keys, brainPublicKey: paired.body.brainPublicKey }),
+        )
         if (again._tag === "Success") {
           expect(yield* again.success.closeCode.pipe(Effect.timeout("5 seconds"))).toBe(CloseCodes.revoked)
         } else {
@@ -158,7 +187,7 @@ describe("node control socket", () => {
 
   test("a newer connection replaces the old one (4000) and closing detaches the node", () =>
     withBrain(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const admin = yield* NodeAdmin
         const directory = yield* NodeDirectory
@@ -167,9 +196,19 @@ describe("node control socket", () => {
         const paired = yield* pairOverHttp(server.http, (yield* admin.createPairingCode).code, keys)
         const nodeId = paired.body.nodeId as NodeId
 
-        const first = yield* connectTestNode({ wsBase: server.ws, nodeId, keys, brainPublicKey: paired.body.brainPublicKey })
+        const first = yield* connectTestNode({
+          wsBase: server.ws,
+          nodeId,
+          keys,
+          brainPublicKey: paired.body.brainPublicKey,
+        })
         const c1 = yield* registry.awaitConnection(nodeId).pipe(Effect.timeout("5 seconds"))
-        const second = yield* connectTestNode({ wsBase: server.ws, nodeId, keys, brainPublicKey: paired.body.brainPublicKey })
+        const second = yield* connectTestNode({
+          wsBase: server.ws,
+          nodeId,
+          keys,
+          brainPublicKey: paired.body.brainPublicKey,
+        })
         const c2 = yield* registry.awaitConnection(nodeId, c1.connId).pipe(Effect.timeout("5 seconds"))
         expect(c2.connId).toBeGreaterThan(c1.connId)
         expect(yield* first.closeCode.pipe(Effect.timeout("5 seconds"))).toBe(CloseCodes.replaced)
@@ -185,39 +224,50 @@ describe("node control socket", () => {
       }),
     ))
 
-  test("a half-open node (silent, no close frame) goes offline after livenessTimeoutMs", () =>
-    run(
-      Effect.gen(function*() {
-        const server = yield* startServer
-        const admin = yield* NodeAdmin
-        const directory = yield* NodeDirectory
-        const registry = yield* NodeRegistry
-        const keys = yield* nodeKeys
-        const paired = yield* pairOverHttp(server.http, (yield* admin.createPairingCode).code, keys)
-        const nodeId = paired.body.nodeId as NodeId
-        const silenced = { on: false }
-        yield* connectTestNode({ wsBase: server.ws, nodeId, keys, brainPublicKey: paired.body.brainPublicKey, silenced, pingInterval: 100 })
-        yield* registry.awaitConnection(nodeId).pipe(Effect.timeout("5 seconds"))
-        // a live node (pinging) stays online well past the timeout
-        yield* Effect.sleep("3 seconds")
-        expect((yield* directory.get(nodeId)).status).toBe("online")
-        // the node vanishes without closing (sleep, Wi-Fi drop): the brain notices
-        silenced.on = true
-        const offline = yield* Effect.gen(function*() {
-          for (let i = 0; i < 800; i++) {
-            const n = yield* directory.get(nodeId)
-            if (n.status !== "online") return n
-            yield* Effect.sleep("10 millis")
-          }
-          return yield* directory.get(nodeId)
-        })
-        expect(offline.status).toBe("offline")
-      }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path, livenessTimeoutMs: 1_500 })))),
-    ), 20_000)
+  test(
+    "a half-open node (silent, no close frame) goes offline after livenessTimeoutMs",
+    () =>
+      run(
+        Effect.gen(function* () {
+          const server = yield* startServer
+          const admin = yield* NodeAdmin
+          const directory = yield* NodeDirectory
+          const registry = yield* NodeRegistry
+          const keys = yield* nodeKeys
+          const paired = yield* pairOverHttp(server.http, (yield* admin.createPairingCode).code, keys)
+          const nodeId = paired.body.nodeId as NodeId
+          const silenced = { on: false }
+          yield* connectTestNode({
+            wsBase: server.ws,
+            nodeId,
+            keys,
+            brainPublicKey: paired.body.brainPublicKey,
+            silenced,
+            pingInterval: 100,
+          })
+          yield* registry.awaitConnection(nodeId).pipe(Effect.timeout("5 seconds"))
+          // a live node (pinging) stays online well past the timeout
+          yield* Effect.sleep("3 seconds")
+          expect((yield* directory.get(nodeId)).status).toBe("online")
+          // the node vanishes without closing (sleep, Wi-Fi drop): the brain notices
+          silenced.on = true
+          const offline = yield* Effect.gen(function* () {
+            for (let i = 0; i < 800; i++) {
+              const n = yield* directory.get(nodeId)
+              if (n.status !== "online") return n
+              yield* Effect.sleep("10 millis")
+            }
+            return yield* directory.get(nodeId)
+          })
+          expect(offline.status).toBe("offline")
+        }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path, livenessTimeoutMs: 1_500 })))),
+      ),
+    20_000,
+  )
 
   test("signed-upgrade negatives answer 401 without upgrading", () =>
     withBrain(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const admin = yield* NodeAdmin
         const keys = yield* nodeKeys
@@ -229,19 +279,27 @@ describe("node control socket", () => {
 
         // wrong key (another node's key signing for this id)
         const other = yield* Effect.orDie(generateKeyPair)
-        const forged = yield* Effect.orDie(makeUpgradeAuth({ nodeId, privateKey: other.privateKey, brainOrigin: BRAIN_ORIGIN }))
+        const forged = yield* Effect.orDie(
+          makeUpgradeAuth({ nodeId, privateKey: other.privateKey, brainOrigin: BRAIN_ORIGIN }),
+        )
         expect(yield* upgradeStatus(server.http, forged.header)).toBe(401)
 
         // wrong origin (signed for another brain)
-        const elsewhere = yield* Effect.orDie(makeUpgradeAuth({ nodeId, privateKey: keys.privateKey, brainOrigin: "https://evil.test" }))
+        const elsewhere = yield* Effect.orDie(
+          makeUpgradeAuth({ nodeId, privateKey: keys.privateKey, brainOrigin: "https://evil.test" }),
+        )
         expect(yield* upgradeStatus(server.http, elsewhere.header)).toBe(401)
 
         // unknown node id
-        const unknown = yield* Effect.orDie(makeUpgradeAuth({ nodeId: "nod_unknown", privateKey: keys.privateKey, brainOrigin: BRAIN_ORIGIN }))
+        const unknown = yield* Effect.orDie(
+          makeUpgradeAuth({ nodeId: "nod_unknown", privateKey: keys.privateKey, brainOrigin: BRAIN_ORIGIN }),
+        )
         expect(yield* upgradeStatus(server.http, unknown.header)).toBe(401)
 
         // replay: the same signed header works once
-        const once = yield* Effect.orDie(makeUpgradeAuth({ nodeId, privateKey: keys.privateKey, brainOrigin: BRAIN_ORIGIN }))
+        const once = yield* Effect.orDie(
+          makeUpgradeAuth({ nodeId, privateKey: keys.privateKey, brainOrigin: BRAIN_ORIGIN }),
+        )
         const node = yield* connectTestNode({
           wsBase: server.ws,
           nodeId,
@@ -260,7 +318,7 @@ describe("node control socket", () => {
   // after `awaitConnection`, possibly before `attach` has returned; the node must still go offline
   test("closeAll (brain shutdown) disconnects remote nodes with 1001", () =>
     withBrain(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const admin = yield* NodeAdmin
         const directory = yield* NodeDirectory
@@ -268,7 +326,12 @@ describe("node control socket", () => {
         const keys = yield* nodeKeys
         const paired = yield* pairOverHttp(server.http, (yield* admin.createPairingCode).code, keys)
         const nodeId = paired.body.nodeId as NodeId
-        const node = yield* connectTestNode({ wsBase: server.ws, nodeId, keys, brainPublicKey: paired.body.brainPublicKey })
+        const node = yield* connectTestNode({
+          wsBase: server.ws,
+          nodeId,
+          keys,
+          brainPublicKey: paired.body.brainPublicKey,
+        })
         yield* registry.awaitConnection(nodeId).pipe(Effect.timeout("5 seconds"))
         yield* registry.closeAll()
         expect(yield* node.closeCode.pipe(Effect.timeout("5 seconds"))).toBe(1001)
@@ -279,7 +342,7 @@ describe("node control socket", () => {
 
   test("a node whose hello does not verify is closed with 4403", () =>
     withBrain(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const admin = yield* NodeAdmin
         const registry = yield* NodeRegistry

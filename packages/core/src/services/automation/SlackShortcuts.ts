@@ -17,9 +17,20 @@ import { truncate } from "./text.ts"
 export const slackShortcutText = (shortcut: Pick<SlackShortcut, "conversation" | "message">): string => {
   const { conversation, message } = shortcut
   const text = message.text.trim()
-  const quote = text === "" ? [] : truncate(text, 600).split("\n").map((line) => `> ${line}`)
-  const files = message.files === undefined || message.files.length === 0 ? [] : [`> [files: ${message.files.join(", ")}]`]
-  return [`From Slack, ${describeSlackPlace(conversation)} (${message.author}):`, ...quote, ...files, message.permalink].join("\n")
+  const quote =
+    text === ""
+      ? []
+      : truncate(text, 600)
+          .split("\n")
+          .map((line) => `> ${line}`)
+  const files =
+    message.files === undefined || message.files.length === 0 ? [] : [`> [files: ${message.files.join(", ")}]`]
+  return [
+    `From Slack, ${describeSlackPlace(conversation)} (${message.author}):`,
+    ...quote,
+    ...files,
+    message.permalink,
+  ].join("\n")
 }
 
 const whyNot = (error: { readonly _tag: string }): string => {
@@ -27,8 +38,12 @@ const whyNot = (error: { readonly _tag: string }): string => {
   return typeof message === "string" && message !== "" ? message : error._tag
 }
 
-export const SlackShortcutsLive: Layer.Layer<never, never, Orchestrator | SettingsService | BotRepo | ConversationService> = Layer.effectDiscard(
-  Effect.gen(function*() {
+export const SlackShortcutsLive: Layer.Layer<
+  never,
+  never,
+  Orchestrator | SettingsService | BotRepo | ConversationService
+> = Layer.effectDiscard(
+  Effect.gen(function* () {
     const slack = Option.getOrUndefined(yield* Effect.serviceOption(SlackConnector))
     if (slack === undefined) return
     const orchestrator = yield* Orchestrator
@@ -37,7 +52,7 @@ export const SlackShortcutsLive: Layer.Layer<never, never, Orchestrator | Settin
     const conversations = yield* ConversationService
 
     /** The chosen Bot, else the one whose chat with the owner moved last. */
-    const recipient = Effect.gen(function*() {
+    const recipient = Effect.gen(function* () {
       const { slackSendTo } = yield* settings.get
       if (slackSendTo !== undefined) {
         const chosen = yield* bots.get(slackSendTo).pipe(Effect.orDie)
@@ -54,7 +69,7 @@ export const SlackShortcutsLive: Layer.Layer<never, never, Orchestrator | Settin
     })
 
     const forward = (shortcut: SlackShortcut) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (shortcut.via === "mention" && !(yield* settings.get).slackMentions) return
         const bot = yield* recipient
         if (bot === undefined) return yield* shortcut.reply("There's no Bot in OpenBot yet: create one first.")
@@ -68,7 +83,9 @@ export const SlackShortcutsLive: Layer.Layer<never, never, Orchestrator | Settin
       }).pipe(
         Effect.catch((error) => shortcut.reply(`Couldn't send it to OpenBot (${whyNot(error)}).`)),
         Effect.catchDefect((defect) =>
-          Effect.logError("SlackShortcuts: not forwarded", defect).pipe(Effect.andThen(shortcut.reply("Couldn't send it to OpenBot.")))
+          Effect.logError("SlackShortcuts: not forwarded", defect).pipe(
+            Effect.andThen(shortcut.reply("Couldn't send it to OpenBot.")),
+          ),
         ),
       )
 

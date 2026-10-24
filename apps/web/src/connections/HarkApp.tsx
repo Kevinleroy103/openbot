@@ -41,7 +41,12 @@ function Connect(): ReactNode {
           title="1. Get Hark on your iPhone"
           description="Install it, sign in and allow notifications."
           control={
-            <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(HARK_APP_STORE, "_blank", "noopener")}>
+            <PillButton
+              variant="secondary"
+              size="md"
+              trailingIcon={ExternalLink}
+              onClick={() => window.open(HARK_APP_STORE, "_blank", "noopener")}
+            >
               App Store
             </PillButton>
           }
@@ -52,7 +57,12 @@ function Connect(): ReactNode {
           description="In Hark's web dashboard (signed in with the same account), create a service called OpenBot and copy the webhook URL it shows (…/hooks/whk_…)."
           wide
           control={
-            <PillButton variant="secondary" size="md" trailingIcon={ExternalLink} onClick={() => window.open(HARK_SITE, "_blank", "noopener")}>
+            <PillButton
+              variant="secondary"
+              size="md"
+              trailingIcon={ExternalLink}
+              onClick={() => window.open(HARK_SITE, "_blank", "noopener")}
+            >
               Hark dashboard
             </PillButton>
           }
@@ -106,9 +116,11 @@ function Connected({ status }: { readonly status: HarkStatus }): ReactNode {
       <SettingsCard testId="hark-connected">
         <SettingsRow
           title="Send to your iPhone"
-          description={status.sends === "all"
-            ? "Every notification: a Bot finished, wrote, needs you, a routine ran, something failed."
-            : "Only when a Bot is waiting for you (a question, an approval, your screen) or something failed."}
+          description={
+            status.sends === "all"
+              ? "Every notification: a Bot finished, wrote, needs you, a routine ran, something failed."
+              : "Only when a Bot is waiting for you (a question, an approval, your screen) or something failed."
+          }
           control={
             <Select<HarkSends>
               label="Send"
@@ -123,9 +135,19 @@ function Connected({ status }: { readonly status: HarkStatus }): ReactNode {
         <RowDivider />
         <SettingsRow
           title="Test"
-          description={status.problem ?? (status.lastSentAt === undefined ? "Nothing sent yet." : `Last notification sent ${formatWhen(status.lastSentAt)}.`)}
+          description={
+            status.problem ??
+            (status.lastSentAt === undefined
+              ? "Nothing sent yet."
+              : `Last notification sent ${formatWhen(status.lastSentAt)}.`)
+          }
           control={
-            <PillButton variant="secondary" size="md" loading={test.pending} onClick={() => void test.run(undefined as never)}>
+            <PillButton
+              variant="secondary"
+              size="md"
+              loading={test.pending}
+              onClick={() => void test.run(undefined as never)}
+            >
               Send a test
             </PillButton>
           }

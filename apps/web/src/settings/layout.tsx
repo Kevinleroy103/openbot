@@ -4,7 +4,15 @@
 import { cn } from "@openbot/ui"
 import type { ReactNode } from "react"
 
-export function PageHeader({ title, description, actions }: { readonly title: ReactNode; readonly description?: ReactNode; readonly actions?: ReactNode }): ReactNode {
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  readonly title: ReactNode
+  readonly description?: ReactNode
+  readonly actions?: ReactNode
+}): ReactNode {
   return (
     <div className="flex flex-col gap-1.5 pe-8">
       <div className="flex min-h-8 items-center gap-3">
@@ -16,7 +24,15 @@ export function PageHeader({ title, description, actions }: { readonly title: Re
   )
 }
 
-export function GroupLabel({ children, trailing, className }: { readonly children: ReactNode; readonly trailing?: ReactNode; readonly className?: string }): ReactNode {
+export function GroupLabel({
+  children,
+  trailing,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly trailing?: ReactNode
+  readonly className?: string
+}): ReactNode {
   return (
     <div className={cn("mt-8 mb-2 flex items-center gap-2 px-1", className)}>
       <span className="min-w-0 flex-1 text-sm text-fg-secondary">{children}</span>
@@ -25,9 +41,20 @@ export function GroupLabel({ children, trailing, className }: { readonly childre
   )
 }
 
-export function SettingsCard({ children, className, testId }: { readonly children: ReactNode; readonly className?: string; readonly testId?: string }): ReactNode {
+export function SettingsCard({
+  children,
+  className,
+  testId,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+  readonly testId?: string
+}): ReactNode {
   return (
-    <div data-testid={testId} className={cn("flex flex-col rounded-3xl bg-elevated py-1 hairline border-line-tertiary", className)}>
+    <div
+      data-testid={testId}
+      className={cn("flex flex-col rounded-3xl bg-elevated py-1 hairline border-line-tertiary", className)}
+    >
       {children}
     </div>
   )

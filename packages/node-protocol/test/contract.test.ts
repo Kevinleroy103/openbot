@@ -81,19 +81,32 @@ describe("contract", () => {
         "screen.input",
       ].sort(),
     )
-    expect([...BrainRpcs.requests.keys()].sort()).toEqual(["node.event", "node.heartbeat", "node.openStream", "node.requestApproval"])
+    expect([...BrainRpcs.requests.keys()].sort()).toEqual([
+      "node.event",
+      "node.heartbeat",
+      "node.openStream",
+      "node.requestApproval",
+    ])
     expect([...NodeRpcs.requests.keys()].filter((k) => /^(computer|desktop)\./.test(k)).sort()).toEqual([
       "computer.act",
       "computer.stream",
       "desktop.ensure",
       "desktop.stop",
     ])
-    expect([...NodeRpcs.requests.keys()].filter((k) => k.startsWith("screen.")).sort()).toEqual(["screen.ensure", "screen.input", "screen.stream"])
+    expect([...NodeRpcs.requests.keys()].filter((k) => k.startsWith("screen.")).sort()).toEqual([
+      "screen.ensure",
+      "screen.input",
+      "screen.stream",
+    ])
     expect(PROTOCOL_VERSION).toBe(1)
   })
 
   test("transfer framing: done / error / ack text frames; fs.download result", () => {
-    expect(decodeControlFrame(TransferControl, '{"done":true,"sha256":"ab","size":3}')).toEqual({ done: true, sha256: "ab", size: 3 })
+    expect(decodeControlFrame(TransferControl, '{"done":true,"sha256":"ab","size":3}')).toEqual({
+      done: true,
+      sha256: "ab",
+      size: 3,
+    })
     expect(decodeControlFrame(TransferControl, '{"error":"disk read failed"}')).toEqual({ error: "disk read failed" })
     expect(decodeControlFrame(TransferControl, '{"ack":1048576}')).toEqual({ ack: 1048576 })
     expect(decodeControlFrame(TransferControl, '{"done":false}')).toBeUndefined()
@@ -124,7 +137,15 @@ describe("contract", () => {
     const exec: Array<ExecEvent> = [
       { _tag: "Started", pid: 1, pgid: 1 },
       { _tag: "Output", stream: "stderr", data: "x", seq: 0 },
-      { _tag: "Exit", code: null, signal: "SIGKILL", timedOut: true, durationMs: 5, outputTruncated: true, spillPath: "/w/.openbot/out/1.log" },
+      {
+        _tag: "Exit",
+        code: null,
+        signal: "SIGKILL",
+        timedOut: true,
+        durationMs: 5,
+        outputTruncated: true,
+        spillPath: "/w/.openbot/out/1.log",
+      },
     ]
     for (const e of exec) expect(roundTrip(ExecEvent, e)).toEqual(e)
     expect(() => Schema.decodeUnknownSync(BrowserAction)({ _tag: "teleport" })).toThrow()
@@ -142,16 +163,30 @@ describe("contract", () => {
       brainVerified: true,
     }
     expect(roundTrip(NodeHello, hello)).toEqual(hello)
-    const approval = { invocationId: "inv_1", botId: "bot_1", runId: "bot_1:cnv_1", toolCallId: "call_1", action: "run-command", target: "ls", reason: "ask" }
+    const approval = {
+      invocationId: "inv_1",
+      botId: "bot_1",
+      runId: "bot_1:cnv_1",
+      toolCallId: "call_1",
+      action: "run-command",
+      target: "ls",
+      reason: "ask",
+    }
     expect(roundTrip(NodeApprovalRequest, approval)).toEqual(approval)
     const legacy = { invocationId: "inv_1", botId: "bot_1", action: "run-command", target: "ls", reason: "ask" }
     expect(roundTrip(NodeApprovalRequest, legacy)).toEqual(legacy)
   })
 
   test("errors are model-readable", () => {
-    expect(describeNodeError(new LeaseHeld({ botId: "b", holder: "user", reason: "takeover" }))).toBe("The user is controlling the browser")
-    expect(describeNodeError(new PolicyRefused({ action: "run-command", reason: "ceiling is never.", retry: false }))).toContain("Do not retry.")
-    expect(describeNodeError(new PathDenied({ path: "/etc", reason: "outside roots" }))).toBe("Access to /etc is denied: outside roots")
+    expect(describeNodeError(new LeaseHeld({ botId: "b", holder: "user", reason: "takeover" }))).toBe(
+      "The user is controlling the browser",
+    )
+    expect(
+      describeNodeError(new PolicyRefused({ action: "run-command", reason: "ceiling is never.", retry: false })),
+    ).toContain("Do not retry.")
+    expect(describeNodeError(new PathDenied({ path: "/etc", reason: "outside roots" }))).toBe(
+      "Access to /etc is denied: outside roots",
+    )
   })
 })
 
@@ -189,7 +224,15 @@ describe("capabilities and versions", () => {
 
 describe("streams and encoding", () => {
   test("screencast frame codec", () => {
-    const meta = { seq: 3, mime: "image/jpeg", width: 1280, height: 800, viewportWidth: 1280, viewportHeight: 800, timestamp: 1 }
+    const meta = {
+      seq: 3,
+      mime: "image/jpeg",
+      width: 1280,
+      height: 800,
+      viewportWidth: 1280,
+      viewportHeight: 800,
+      timestamp: 1,
+    }
     const img = new Uint8Array([0xff, 0xd8, 0xff, 0x00, 0x01])
     const frame = encodeScreencastFrame(meta, img)
     const decoded = decodeScreencastFrame(frame)!
@@ -205,7 +248,9 @@ describe("streams and encoding", () => {
   })
 
   test("control frames", () => {
-    expect(decodeControlFrame(PtyControl, '{"resize":{"cols":80,"rows":24}}')).toEqual({ resize: { cols: 80, rows: 24 } })
+    expect(decodeControlFrame(PtyControl, '{"resize":{"cols":80,"rows":24}}')).toEqual({
+      resize: { cols: 80, rows: 24 },
+    })
     expect(decodeControlFrame(PtyControl, '{"exit":0}')).toEqual({ exit: 0 })
     expect(decodeControlFrame(PtyControl, "nope")).toBeUndefined()
     expect(decodeControlFrame(CliControl, '{"eof":true}')).toEqual({ eof: true })
@@ -253,17 +298,36 @@ describe("node-side seams (BrainLink, StreamDialer)", () => {
   test("can be provided in-process (local node) and used by handlers", async () => {
     const { Effect: E, Layer: L } = await import("effect")
     const { BrainLink, StreamDialer, StreamRefused } = await import("../src/index.ts")
-    const link = L.succeed(BrainLink, BrainLink.of({
-      requestApproval: (req) => E.succeed({ decision: req.action === "run-command" ? "allow-once" as const : "deny" as const, by: "rule" }),
-      openStream: ({ kind }) => E.fail(new StreamRefused({ kind, reason: "not in this test" })),
-      event: () => E.void,
-    }))
-    const dialer = L.succeed(StreamDialer, StreamDialer.of({ dial: ({ kind }) => E.fail(new StreamRefused({ kind, reason: "offline" })) }))
+    const link = L.succeed(
+      BrainLink,
+      BrainLink.of({
+        requestApproval: (req) =>
+          E.succeed({
+            decision: req.action === "run-command" ? ("allow-once" as const) : ("deny" as const),
+            by: "rule",
+          }),
+        openStream: ({ kind }) => E.fail(new StreamRefused({ kind, reason: "not in this test" })),
+        event: () => E.void,
+      }),
+    )
+    const dialer = L.succeed(
+      StreamDialer,
+      StreamDialer.of({ dial: ({ kind }) => E.fail(new StreamRefused({ kind, reason: "offline" })) }),
+    )
     const out = await E.runPromise(
-      E.gen(function*() {
+      E.gen(function* () {
         const brain = yield* BrainLink
-        const answer = yield* brain.requestApproval({ invocationId: "i", botId: "b", runId: "b:c", action: "run-command", target: "ls", reason: "ask" })
-        const dial = yield* E.exit(E.scoped((yield* StreamDialer).dial({ ticket: { streamId: "s", streamToken: "t" }, kind: "pty" })))
+        const answer = yield* brain.requestApproval({
+          invocationId: "i",
+          botId: "b",
+          runId: "b:c",
+          action: "run-command",
+          target: "ls",
+          reason: "ask",
+        })
+        const dial = yield* E.exit(
+          E.scoped((yield* StreamDialer).dial({ ticket: { streamId: "s", streamToken: "t" }, kind: "pty" })),
+        )
         return { answer, dialFailed: dial._tag === "Failure" }
       }).pipe(E.provide(L.merge(link, dialer))),
     )

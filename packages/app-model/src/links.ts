@@ -32,7 +32,9 @@ export const imageSrc = (raw: string, origin?: string): string | undefined => {
   try {
     const parsed = new URL(url)
     if (parsed.origin !== new URL(origin).origin) return url
-    return ATTACHMENT_PATH.test(parsed.pathname) && parsed.search === "" && parsed.hash === "" ? parsed.pathname : undefined
+    return ATTACHMENT_PATH.test(parsed.pathname) && parsed.search === "" && parsed.hash === ""
+      ? parsed.pathname
+      : undefined
   } catch {
     return undefined
   }

@@ -68,23 +68,43 @@ describe("plans on a Mac", () => {
   }
   test("clicks move first (API → screen points); double clicks count", () => {
     expect(steps({ action: "left_click", coordinate: [640, 400] })).toEqual({
-      steps: [{ op: "move", x: 720, y: 450 }, { op: "click", button: "left", count: 1 }],
+      steps: [
+        { op: "move", x: 720, y: 450 },
+        { op: "click", button: "left", count: 1 },
+      ],
       needsPointer: false,
       held: [],
     })
-    expect(steps({ action: "double_click", coordinate: [0, 0] })).toMatchObject({ steps: [{ op: "move" }, { op: "click", count: 2 }] })
-    expect(steps({ action: "right_click" })).toMatchObject({ steps: [{ op: "click", button: "right" }], needsPointer: true })
+    expect(steps({ action: "double_click", coordinate: [0, 0] })).toMatchObject({
+      steps: [{ op: "move" }, { op: "click", count: 2 }],
+    })
+    expect(steps({ action: "right_click" })).toMatchObject({
+      steps: [{ op: "click", button: "right" }],
+      needsPointer: true,
+    })
   })
   test("scroll, drag, type, keys", () => {
-    expect(steps({ action: "scroll", coordinate: [10, 10], scroll_direction: "down", scroll_amount: 3 }).valueOf()).toMatchObject({
+    expect(
+      steps({ action: "scroll", coordinate: [10, 10], scroll_direction: "down", scroll_amount: 3 }).valueOf(),
+    ).toMatchObject({
       steps: [{ op: "move" }, { op: "scroll", dx: 0, dy: -3, unit: "line" }],
     })
     expect(steps({ action: "left_click_drag", start_coordinate: [0, 0], coordinate: [100, 100] })).toMatchObject({
-      steps: [{ op: "move" }, { op: "button", down: true }, { op: "sleep" }, { op: "move" }, { op: "sleep" }, { op: "button", down: false }],
+      steps: [
+        { op: "move" },
+        { op: "button", down: true },
+        { op: "sleep" },
+        { op: "move" },
+        { op: "sleep" },
+        { op: "button", down: false },
+      ],
     })
     expect(steps({ action: "type", text: "hello" })).toMatchObject({ steps: [{ op: "type", text: "hello" }] })
     expect(steps({ action: "key", text: "cmd+a Delete" })).toMatchObject({
-      steps: [{ op: "key", keyCode: 0, flags: MAC_FLAGS.super }, { op: "key", keyCode: 117, flags: 0 }],
+      steps: [
+        { op: "key", keyCode: 0, flags: MAC_FLAGS.super },
+        { op: "key", keyCode: 117, flags: 0 },
+      ],
     })
   })
   test("held modifiers wrap the steps and are released", () => {
@@ -112,7 +132,8 @@ describe("the helper", () => {
     const events: Array<string> = []
     let idle = 50
     const cg: CoreGraphics = {
-      mouse: (type, x, y, button, clicks, flags) => void events.push(`mouse ${type} ${x},${y} b${button} c${clicks} f${flags}`),
+      mouse: (type, x, y, button, clicks, flags) =>
+        void events.push(`mouse ${type} ${x},${y} b${button} c${clicks} f${flags}`),
       key: (code, down, flags) => void events.push(`key ${code} ${down ? "down" : "up"} f${flags}`),
       unicode: (text, down) => void events.push(`text ${JSON.stringify(text)} ${down ? "down" : "up"}`),
       scroll: (unit, dy, dx) => void events.push(`scroll u${unit} ${dy},${dx}`),
@@ -127,7 +148,12 @@ describe("the helper", () => {
   test("moves, clicks with click counts, drags, scrolls, releases what is held", async () => {
     const { cg, events } = fakeCg()
     const handle = makeHelperHandler(cg, { now: () => 0, sleep: async () => undefined })
-    expect(await handle({ op: "info" })).toEqual({ width: 1440, height: 900, screenRecording: true, accessibility: false })
+    expect(await handle({ op: "info" })).toEqual({
+      width: 1440,
+      height: 900,
+      screenRecording: true,
+      accessibility: false,
+    })
     await handle({ op: "move", x: 10, y: 20 })
     await handle({ op: "click", button: "left", count: 2 })
     await handle({ op: "button", button: "left", down: true })
@@ -152,7 +178,13 @@ describe("the helper", () => {
   })
   test("typing: text in 20-unit pieces, Return and Tab as keys", async () => {
     expect(typingPieces("a".repeat(25))).toEqual([{ text: "a".repeat(20) }, { text: "aaaaa" }])
-    expect(typingPieces("hi\r\nthere\tok")).toEqual([{ text: "hi" }, { keyCode: 36 }, { text: "there" }, { keyCode: 48 }, { text: "ok" }])
+    expect(typingPieces("hi\r\nthere\tok")).toEqual([
+      { text: "hi" },
+      { keyCode: 36 },
+      { text: "there" },
+      { keyCode: 48 },
+      { text: "ok" },
+    ])
     const { cg, events } = fakeCg()
     const handle = makeHelperHandler(cg, { now: () => 0, sleep: async () => undefined })
     await handle({ op: "type", text: "é\n" })
@@ -195,7 +227,8 @@ describe("MacScreen", () => {
     const system: ScreenSystem = {
       exec: async (argv) => {
         runs.push(argv)
-        if (argv[0] === "/usr/bin/osascript" && argv.some((a) => a.includes("mouseLocation"))) return { code: 0, stdout: '{"x":720,"y":450}', stderr: "" }
+        if (argv[0] === "/usr/bin/osascript" && argv.some((a) => a.includes("mouseLocation")))
+          return { code: 0, stdout: '{"x":720,"y":450}', stderr: "" }
         return { code: 0, stdout: "", stderr: "" }
       },
       readFile: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
@@ -210,11 +243,18 @@ describe("MacScreen", () => {
   test("only on macOS (and when enabled)", () =>
     run(
       Effect.gen(function* () {
-        const linux = yield* makeMacScreen({ config: makeNodeConfig({ nodeId: "x", dataDir: "/tmp/ob-x", detectBinaries: false }), helper: fakeHelper(allowed).client })
+        const linux = yield* makeMacScreen({
+          config: makeNodeConfig({ nodeId: "x", dataDir: "/tmp/ob-x", detectBinaries: false }),
+          helper: fakeHelper(allowed).client,
+        })
         expect(linux.offered).toBe(false)
         const off = yield* makeMacScreen({ config: darwin(false), helper: fakeHelper(allowed).client })
         expect(off.offered).toBe(false)
-        const on = yield* makeMacScreen({ config: darwin(), helper: fakeHelper(allowed).client, system: fakeSystem().system })
+        const on = yield* makeMacScreen({
+          config: darwin(),
+          helper: fakeHelper(allowed).client,
+          system: fakeSystem().system,
+        })
         expect(on.offered).toBe(true)
         expect(on.support).toEqual({ missing: [], width: 1440, height: 900 })
       }),
@@ -229,15 +269,26 @@ describe("MacScreen", () => {
         const result = yield* screen.act("bot_a", { action: "left_click", coordinate: [640, 400] })
         expect(result.text).toBe("Clicked at (640, 400).")
         expect(result.image).toMatchObject({ mimeType: "image/jpeg", width: 1280, height: 800 })
-        expect(helper.acted()).toEqual([{ op: "move", x: 720, y: 450 }, { op: "click", button: "left", count: 1 }])
+        expect(helper.acted()).toEqual([
+          { op: "move", x: 720, y: 450 },
+          { op: "click", button: "left", count: 1 },
+        ])
         expect(sys.runs[0]!.slice(0, 5)).toEqual(["/usr/sbin/screencapture", "-x", "-t", "jpg", "-m"])
         expect(sys.runs[1]).toContain("-z")
-        expect(sys.runs[1]!.slice(sys.runs[1]!.indexOf("-z") + 1, sys.runs[1]!.indexOf("-z") + 3)).toEqual(["800", "1280"])
+        expect(sys.runs[1]!.slice(sys.runs[1]!.indexOf("-z") + 1, sys.runs[1]!.indexOf("-z") + 3)).toEqual([
+          "800",
+          "1280",
+        ])
         // a click at the mouse position starts from the real pointer
         yield* screen.act("bot_a", { action: "right_click" })
-        expect(helper.acted().slice(-2)).toEqual([{ op: "move", x: 720, y: 450 }, { op: "click", button: "right", count: 1 }])
+        expect(helper.acted().slice(-2)).toEqual([
+          { op: "move", x: 720, y: 450 },
+          { op: "click", button: "right", count: 1 },
+        ])
         expect((yield* screen.act("bot_a", { action: "cursor_position" })).text).toBe("X=640, Y=400")
-        expect((yield* screen.act("bot_a", { action: "key", text: "XF86AudioPlay" })).text).toBe("ERROR: the key XF86AudioPlay does not exist on a Mac")
+        expect((yield* screen.act("bot_a", { action: "key", text: "XF86AudioPlay" })).text).toBe(
+          "ERROR: the key XF86AudioPlay does not exist on a Mac",
+        )
       }),
     ))
 
@@ -247,7 +298,12 @@ describe("MacScreen", () => {
         const helper = fakeHelper({ ...allowed, screenRecording: false, accessibility: false })
         const sys = fakeSystem()
         let now = 1_000_000
-        const screen = yield* makeMacScreen({ config: darwin(), helper: helper.client, system: sys.system, now: () => now })
+        const screen = yield* makeMacScreen({
+          config: darwin(),
+          helper: helper.client,
+          system: sys.system,
+          now: () => now,
+        })
         expect(screen.support?.missing).toEqual(["Screen Recording", "Accessibility"])
         const asks = () => ({
           screenRecording: helper.ops.filter((o) => o.op === "requestScreenRecording").length,
@@ -276,7 +332,13 @@ describe("MacScreen", () => {
         const helper = fakeHelper(allowed)
         const leases = makeLeaseBook()
         let now = 1_000_000
-        const screen = yield* makeMacScreen({ config: darwin(), helper: helper.client, system: fakeSystem().system, leases, now: () => now })
+        const screen = yield* makeMacScreen({
+          config: darwin(),
+          helper: helper.client,
+          system: fakeSystem().system,
+          leases,
+          now: () => now,
+        })
         // someone typed 3 s ago, after the helper's last event (100 s ago)
         helper.client.idle = { idle: 3, sincePost: 100 }
         const owner = yield* Effect.flip(screen.act("bot_a", { action: "screenshot" }))
@@ -292,7 +354,9 @@ describe("MacScreen", () => {
         yield* screen.act("bot_b", { action: "screenshot" })
         // the owner took control (of any bot's view): every bot waits
         leases.set("bot_b", "user")
-        expect(((yield* Effect.flip(screen.act("bot_a", { action: "screenshot" }))) as { reason: string }).reason).toContain("controlling this screen")
+        expect(
+          ((yield* Effect.flip(screen.act("bot_a", { action: "screenshot" }))) as { reason: string }).reason,
+        ).toContain("controlling this screen")
         leases.set("bot_b", "bot")
         expect(helper.ops.filter((o) => o.op === "release").length).toBeGreaterThanOrEqual(2)
       }),
@@ -330,7 +394,12 @@ describe("MacScreen", () => {
       Effect.gen(function* () {
         const helper = fakeHelper(allowed)
         const leases = makeLeaseBook()
-        const screen = yield* makeMacScreen({ config: darwin(), helper: helper.client, system: fakeSystem().system, leases })
+        const screen = yield* makeMacScreen({
+          config: darwin(),
+          helper: helper.client,
+          system: fakeSystem().system,
+          leases,
+        })
         const click = { _tag: "mouse", type: "down", x: 640, y: 400, button: "left", clickCount: 1 } as const
         expect(yield* Effect.flip(screen.input("bot_a", click))).toMatchObject({ _tag: "LeaseHeld" })
         leases.set("bot_a", "user")
@@ -351,11 +420,19 @@ describe("MacScreen", () => {
   test("the live view: screenshot frames until the viewer goes", () =>
     run(
       Effect.gen(function* () {
-        const screen = yield* makeMacScreen({ config: darwin(), helper: fakeHelper(allowed).client, system: fakeSystem().system })
+        const screen = yield* makeMacScreen({
+          config: darwin(),
+          helper: fakeHelper(allowed).client,
+          system: fakeSystem().system,
+        })
         const written: Array<Uint8Array | string> = []
         let open = true
         const io = {
-          pull: Effect.suspend(() => (open ? Effect.sleep("20 millis").pipe(Effect.as([] as Array<Uint8Array>)) : Effect.fail(new Error("closed") as never))),
+          pull: Effect.suspend(() =>
+            open
+              ? Effect.sleep("20 millis").pipe(Effect.as([] as Array<Uint8Array>))
+              : Effect.fail(new Error("closed") as never),
+          ),
           writer: { write: (chunk: unknown) => Effect.sync(() => void written.push(chunk as Uint8Array)) },
         }
         const fiber = yield* Effect.forkChild(screen.stream({ botId: "bot_a", io: io as never }) as Effect.Effect<void>)
@@ -364,7 +441,13 @@ describe("MacScreen", () => {
         const exit = yield* Effect.exit(Fiber.join(fiber).pipe(Effect.timeout("3 seconds")))
         expect(Exit.isSuccess(exit)).toBe(true)
         const frame = decodeScreencastFrame(written[0] as Uint8Array)
-        expect(frame?.meta).toMatchObject({ mime: "image/jpeg", width: 1280, height: 800, viewportWidth: 1280, viewportHeight: 800 })
+        expect(frame?.meta).toMatchObject({
+          mime: "image/jpeg",
+          width: 1280,
+          height: 800,
+          viewportWidth: 1280,
+          viewportHeight: 800,
+        })
       }),
     ))
 })

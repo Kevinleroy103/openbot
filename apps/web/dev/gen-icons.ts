@@ -37,7 +37,9 @@ await Bun.write(`${out}icon.svg`, iconSvg(112))
 const browser = await chromium.launch({ executablePath: process.env.OPENBOT_CHROMIUM ?? "/usr/bin/chromium" })
 const png = async (size: number): Promise<Buffer> => {
   const page = await browser.newPage({ viewport: { width: size, height: size }, deviceScaleFactor: 1 })
-  await page.setContent(`<html><body style="margin:0"><img width="${size}" height="${size}" src="data:image/svg+xml;base64,${Buffer.from(fullBleed).toString("base64")}"></body></html>`)
+  await page.setContent(
+    `<html><body style="margin:0"><img width="${size}" height="${size}" src="data:image/svg+xml;base64,${Buffer.from(fullBleed).toString("base64")}"></body></html>`,
+  )
   await page.waitForFunction(() => document.images[0]?.complete)
   const shot = await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: size, height: size } })
   await page.close()

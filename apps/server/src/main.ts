@@ -92,14 +92,16 @@ const main = async () => {
       Cause.hasInterruptsOnly(cause)
         ? Effect.failCause(cause)
         : Effect.sync(() => {
-          console.error(`openbot: failed to start: ${describeFailure(cause)}`)
-          process.exitCode = 1
-        })
+            console.error(`openbot: failed to start: ${describeFailure(cause)}`)
+            process.exitCode = 1
+          }),
     ),
-    Effect.ensuring(Effect.sync(() => {
-      watchdog.done()
-      markStopped()
-    })),
+    Effect.ensuring(
+      Effect.sync(() => {
+        watchdog.done()
+        markStopped()
+      }),
+    ),
   )
   BunRuntime.runMain(program, { disableErrorReporting: true })
 }

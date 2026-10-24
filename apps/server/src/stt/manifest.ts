@@ -34,10 +34,26 @@ const sherpaOnnxRuntime = (platformSuffix: string, sha256: string, bytes: number
 
 export const PARAKEET_MANIFEST: SttManifest = {
   runtimes: {
-    "darwin-arm64": sherpaOnnxRuntime("osx-arm64-shared-lib", "ae77050cdae565496059d96f5ab33d77b397a0864282a4e4a26e3b3b3effb948", 8_773_198),
-    "darwin-x64": sherpaOnnxRuntime("osx-x64-shared-lib", "0f88371565a06372889c76266e253abd1b415fcc6f98232cabd968933efb0711", 10_014_197),
-    "linux-x64": sherpaOnnxRuntime("linux-x64-shared-lib", "3892d184be41027e18165e67f549cd4e4cdd8dcd73ac5579e97afd55e14e30b6", 9_816_899),
-    "linux-arm64": sherpaOnnxRuntime("linux-aarch64-shared-cpu-lib", "fb98b80628a383909bf83626daca2e0d0ffc93bf1f7d222eaaa4282b388f072f", 12_595_068),
+    "darwin-arm64": sherpaOnnxRuntime(
+      "osx-arm64-shared-lib",
+      "ae77050cdae565496059d96f5ab33d77b397a0864282a4e4a26e3b3b3effb948",
+      8_773_198,
+    ),
+    "darwin-x64": sherpaOnnxRuntime(
+      "osx-x64-shared-lib",
+      "0f88371565a06372889c76266e253abd1b415fcc6f98232cabd968933efb0711",
+      10_014_197,
+    ),
+    "linux-x64": sherpaOnnxRuntime(
+      "linux-x64-shared-lib",
+      "3892d184be41027e18165e67f549cd4e4cdd8dcd73ac5579e97afd55e14e30b6",
+      9_816_899,
+    ),
+    "linux-arm64": sherpaOnnxRuntime(
+      "linux-aarch64-shared-cpu-lib",
+      "fb98b80628a383909bf83626daca2e0d0ffc93bf1f7d222eaaa4282b388f072f",
+      12_595_068,
+    ),
   },
   model: {
     label: "Parakeet TDT 0.6B v3",

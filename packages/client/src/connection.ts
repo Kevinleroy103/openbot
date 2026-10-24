@@ -43,20 +43,25 @@ export const initialConnectionState: ConnectionState = {
 }
 
 /** Internal, writable. Read `connectionAtom` (supervisor.ts) from UI code instead: it also keeps the socket open. */
-export const connectionStateAtom: Atom.Writable<ConnectionState> = Atom.make<ConnectionState>(initialConnectionState).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("openbot/connectionState"),
-)
+export const connectionStateAtom: Atom.Writable<ConnectionState> = Atom.make<ConnectionState>(
+  initialConnectionState,
+).pipe(Atom.keepAlive, Atom.withLabel("openbot/connectionState"))
 
 /** Bumped by `reconnectAtom` to rebuild the protocol layer (new socket, immediate attempt). */
-export const reconnectSignalAtom: Atom.Writable<number> = Atom.make(0).pipe(Atom.keepAlive, Atom.withLabel("openbot/reconnectSignal"))
+export const reconnectSignalAtom: Atom.Writable<number> = Atom.make(0).pipe(
+  Atom.keepAlive,
+  Atom.withLabel("openbot/reconnectSignal"),
+)
 
 let protocolInstances = 0
 /** A fresh owner id for each protocol layer built (internal). */
 export const nextProtocolOwner = (): number => ++protocolInstances
 
 /** `RpcClient.ConnectionHooks` that publish transitions into `connectionStateAtom`. */
-export const connectionHooksLayer = (registry: AtomRegistry.AtomRegistry, owner: number): Layer.Layer<RpcClient.ConnectionHooks> =>
+export const connectionHooksLayer = (
+  registry: AtomRegistry.AtomRegistry,
+  owner: number,
+): Layer.Layer<RpcClient.ConnectionHooks> =>
   Layer.succeed(RpcClient.ConnectionHooks, {
     onConnect: Effect.flatMap(Clock.currentTimeMillis, (now) =>
       Effect.sync(() =>
@@ -75,7 +80,13 @@ export const connectionHooksLayer = (registry: AtomRegistry.AtomRegistry, owner:
         registry.update(connectionStateAtom, (s): ConnectionState => {
           // A replaced socket's late disconnect must not mark the new one offline.
           if (s.owner !== owner && s.owner !== 0 && s.status === "online") return s
-          return { ...s, status: "offline", attempt: s.attempt + 1, since: s.status === "offline" ? s.since : now, owner }
+          return {
+            ...s,
+            status: "offline",
+            attempt: s.attempt + 1,
+            since: s.status === "offline" ? s.since : now,
+            owner,
+          }
         }),
       ),
     ),
@@ -85,7 +96,11 @@ export const connectionHooksLayer = (registry: AtomRegistry.AtomRegistry, owner:
  * The socket protocol's retry schedule: retries forever; the delay comes from `backoff` and the
  * supervisor's attempt counter (reset by every successful connect), and is published as `nextRetryAt`.
  */
-export const reconnectSchedule = (registry: AtomRegistry.AtomRegistry, backoff: Backoff, owner: number): Schedule.Schedule<number, unknown> =>
+export const reconnectSchedule = (
+  registry: AtomRegistry.AtomRegistry,
+  backoff: Backoff,
+  owner: number,
+): Schedule.Schedule<number, unknown> =>
   Schedule.forever.pipe(
     Schedule.modifyDelay(() =>
       Effect.flatMap(Clock.currentTimeMillis, (now) =>

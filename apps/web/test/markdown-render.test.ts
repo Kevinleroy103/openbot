@@ -5,7 +5,8 @@ import { isValidElement, type ReactNode } from "react"
 import { parseBlocks, renderInline } from "../src/chat/Markdown.tsx"
 
 const kinds = (source: string) => parseBlocks(source).map((b) => b.kind)
-const list = (source: string) => parseBlocks(source)[0] as Extract<ReturnType<typeof parseBlocks>[number], { kind: "list" }>
+const list = (source: string) =>
+  parseBlocks(source)[0] as Extract<ReturnType<typeof parseBlocks>[number], { kind: "list" }>
 
 /** What each inline node is: the tag/component name for elements, or "text" / "fragment". */
 const nodeKinds = (out: ReactNode[]): string[] =>
@@ -63,7 +64,19 @@ test("task list: an empty box stays a plain item on web, as `marked` renders it 
   // `marked` strips trailing whitespace while tokenising, so `- [ ]` and `- [ ] ` reach mobile as
   // the same text and both render as a plain bullet. The web parser must agree, or one source line
   // shows ☐ on web and a literal `[ ]` on mobile.
-  for (const src of ["- [ ]", "- [ ] ", "- [ ]   ", "- [ ]\t", "- [x]", "- [x] ", "1. [ ]", "1. [ ] ", "+ [ ]", "* [ ]", "- [X]  "]) {
+  for (const src of [
+    "- [ ]",
+    "- [ ] ",
+    "- [ ]   ",
+    "- [ ]\t",
+    "- [x]",
+    "- [x] ",
+    "1. [ ]",
+    "1. [ ] ",
+    "+ [ ]",
+    "* [ ]",
+    "- [X]  ",
+  ]) {
     const b = list(src)
     // No task item anywhere in the list, so no `checked` array at all (the same shape the existing
     // "plain list produces no `checked`" case pins).
@@ -161,7 +174,14 @@ test("image: an attachment and absolute https both render", () => {
 })
 
 test("image: http and brain paths other than attachments render as alt text", () => {
-  for (const src of ["http://x/y.png", "HTTP://x/y.png", "/api/conversations", "/api/attachments/att_1/../../logout", "/logout", "/\\evil.example/x.png"]) {
+  for (const src of [
+    "http://x/y.png",
+    "HTTP://x/y.png",
+    "/api/conversations",
+    "/api/attachments/att_1/../../logout",
+    "/logout",
+    "/\\evil.example/x.png",
+  ]) {
     const out = imageOf(`![a](${src})`)
     expect(nodeKinds(out)).not.toContain("MdImage")
     expect(textOf(out[0]!)).toBe("a")

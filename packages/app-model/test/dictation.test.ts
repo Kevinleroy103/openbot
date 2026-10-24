@@ -16,7 +16,9 @@ describe("dictation audio", () => {
   })
 
   test("joins recorded chunks in order", () => {
-    expect([...joinChunks([Float32Array.from([1, 2]), Float32Array.from([]), Float32Array.from([3])])]).toEqual([1, 2, 3])
+    expect([...joinChunks([Float32Array.from([1, 2]), Float32Array.from([]), Float32Array.from([3])])]).toEqual([
+      1, 2, 3,
+    ])
   })
 
   test("base64 matches Node's encoder across chunk boundaries", () => {

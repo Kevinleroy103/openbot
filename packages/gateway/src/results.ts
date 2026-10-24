@@ -87,11 +87,7 @@ export interface CappedText {
  * Caps `text` at `maxBytes`, keeping the head and the tail (the tail of command output usually
  * matters most) with a marker in between. `note` is appended after the marker (e.g. the spill path).
  */
-export const capText = (
-  text: string,
-  maxBytes: number = MAX_RESULT_TEXT_BYTES,
-  note?: string,
-): CappedText => {
+export const capText = (text: string, maxBytes: number = MAX_RESULT_TEXT_BYTES, note?: string): CappedText => {
   const originalBytes = utf8Length(text)
   if (originalBytes <= maxBytes) return { text, truncated: false, originalBytes }
   const marker = `\n\n[… output truncated: ${originalBytes} bytes in total${note === undefined ? "" : `; ${note}`} …]\n\n`
@@ -115,8 +111,14 @@ export const errorResult = (message: string): ToolResult => ({
 })
 
 /** R3: a caption followed by the image. */
-export const imageResult = (caption: string, image: { readonly data: string; readonly mimeType: string }): ToolResult => ({
-  content: [{ type: "text", text: caption }, { type: "image", data: image.data, mimeType: image.mimeType }],
+export const imageResult = (
+  caption: string,
+  image: { readonly data: string; readonly mimeType: string },
+): ToolResult => ({
+  content: [
+    { type: "text", text: caption },
+    { type: "image", data: image.data, mimeType: image.mimeType },
+  ],
 })
 
 /** Renders lines as a bullet-free list; `empty` when there is nothing to show. */

@@ -58,7 +58,8 @@ type Json = Record<string, unknown>
 
 const isRecord = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value)
 const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined)
-const num = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) ? value : undefined)
+const num = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined
 const int = (value: unknown): number => Math.max(0, Math.round(num(value) ?? 0))
 
 /** Prefixes of usage-limit error texts (mirrors the SDK's `USAGE_LIMIT_ERROR_PREFIXES`). */
@@ -99,7 +100,17 @@ export interface PipelineOptions {
 }
 
 /** Gateway tools that execute on a node (`node` argument, default: the host node). */
-const NODE_TOOLS = new Set(["shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "browser", "computer"])
+const NODE_TOOLS = new Set([
+  "shell",
+  "read_file",
+  "write_file",
+  "edit_file",
+  "list_dir",
+  "glob",
+  "grep",
+  "browser",
+  "computer",
+])
 
 interface TurnEntry {
   readonly kind: "turn"
@@ -493,15 +504,22 @@ export class ClaudeEventPipeline {
     if (entry.uuids.size > 0 || (entry.kind === "turn" && entry.own === undefined)) return { events, settled }
     this.fifo.splice(index, 1)
     const interrupted = index === 0 && this.interruptRequested
-    const failure: HarnessTurnError = (index === 0 ? this.skippedFailure : undefined) ??
-      { code: "turn-rejected", message: "Claude Code dropped this message without answering it.", retryable: true }
+    const failure: HarnessTurnError = (index === 0 ? this.skippedFailure : undefined) ?? {
+      code: "turn-rejected",
+      message: "Claude Code dropped this message without answering it.",
+      retryable: true,
+    }
     this.skippedFailure = undefined
     if (entry.kind === "command") {
       settled.push({ id: entry.id, ok: false, error: failure.message })
     } else {
       if (index > 0) events.push({ _tag: "TurnStarted", turnId: entry.turnId })
       else events.push(...this.finalizeTurn(entry.turnId, interrupted ? "interrupted" : "failed"))
-      events.push(interrupted ? { _tag: "TurnInterrupted", turnId: entry.turnId } : { _tag: "TurnFailed", turnId: entry.turnId, error: failure })
+      events.push(
+        interrupted
+          ? { _tag: "TurnInterrupted", turnId: entry.turnId }
+          : { _tag: "TurnFailed", turnId: entry.turnId, error: failure },
+      )
     }
     if (index === 0) {
       this.resetTurnState()
@@ -515,9 +533,16 @@ export class ClaudeEventPipeline {
     const events: Array<HarnessEvent> = []
     for (const [key, open] of this.openTexts) {
       if (open.turnId !== turnId) continue
-      const item: HarnessItem = open.kind === "text"
-        ? { _tag: "Message", role: "bot", text: open.text, streaming: false, ...(outcome === "interrupted" ? { aborted: true } : {}) }
-        : { _tag: "Reasoning", text: open.text, streaming: false, source: "thinking" }
+      const item: HarnessItem =
+        open.kind === "text"
+          ? {
+              _tag: "Message",
+              role: "bot",
+              text: open.text,
+              streaming: false,
+              ...(outcome === "interrupted" ? { aborted: true } : {}),
+            }
+          : { _tag: "Reasoning", text: open.text, streaming: false, source: "thinking" }
       events.push({ _tag: "ItemUpserted", turnId, key, item })
     }
     this.openTexts.clear()
@@ -586,7 +611,11 @@ export class ClaudeEventPipeline {
     // Steered input the CLI did not fold in runs as its next turn: the OpenBot turn stays open
     // (unless the owner asked to stop it).
     if (
-      head.kind === "turn" && ended.length === 1 && (!interrupted || preempted) && !this.interruptRequested && known &&
+      head.kind === "turn" &&
+      ended.length === 1 &&
+      (!interrupted || preempted) &&
+      !this.interruptRequested &&
+      known &&
       pending.length > 0
     ) {
       head.uuids.clear()
@@ -678,19 +707,28 @@ export class ClaudeEventPipeline {
     const apiStatus = num(frame.api_error_status)
     const assistantError = this.assistantError
     if (
-      assistantError === "rate_limit" || assistantError === "billing_error" ||
+      assistantError === "rate_limit" ||
+      assistantError === "billing_error" ||
       USAGE_LIMIT_PREFIXES.some((prefix) => text.startsWith(prefix))
-    ) return { code: "usage-limit", message: text, retryable: false }
+    )
+      return { code: "usage-limit", message: text, retryable: false }
     if (
-      assistantError === "authentication_failed" || assistantError === "oauth_org_not_allowed" ||
-      assistantError === "cloud_credential_error" || apiStatus === 401 || apiStatus === 403
-    ) return { code: "auth", message: text, retryable: false }
+      assistantError === "authentication_failed" ||
+      assistantError === "oauth_org_not_allowed" ||
+      assistantError === "cloud_credential_error" ||
+      apiStatus === 401 ||
+      apiStatus === 403
+    )
+      return { code: "auth", message: text, retryable: false }
     if (subtype === "error_max_turns") return { code: "max-turns", message: text, retryable: false }
     if (subtype === "error_max_budget_usd") return { code: "budget", message: text, retryable: false }
     if (
-      assistantError === "overloaded" || assistantError === "server_error" ||
-      (apiStatus !== undefined && apiStatus >= 500) || apiStatus === 429
-    ) return { code: "api-error", message: text, retryable: true }
+      assistantError === "overloaded" ||
+      assistantError === "server_error" ||
+      (apiStatus !== undefined && apiStatus >= 500) ||
+      apiStatus === 429
+    )
+      return { code: "api-error", message: text, retryable: true }
     return { code: "turn-failed", message: text, retryable: true }
   }
 
@@ -715,10 +753,18 @@ export class ClaudeEventPipeline {
           events.push({ _tag: "ContextUsage", ...this.lastContext })
         }
         const pre = num(meta.pre_tokens)
-        const text = pre !== undefined && post !== undefined
-          ? `Context compacted (${int(pre).toLocaleString("en-US")} → ${int(post).toLocaleString("en-US")} tokens)`
-          : "Context compacted"
-        events.push(...this.item(`compact:${str(frame.uuid) ?? "boundary"}`, { _tag: "Notice", level: "info", code: "compacted", text }))
+        const text =
+          pre !== undefined && post !== undefined
+            ? `Context compacted (${int(pre).toLocaleString("en-US")} → ${int(post).toLocaleString("en-US")} tokens)`
+            : "Context compacted"
+        events.push(
+          ...this.item(`compact:${str(frame.uuid) ?? "boundary"}`, {
+            _tag: "Notice",
+            level: "info",
+            code: "compacted",
+            text,
+          }),
+        )
         return events
       }
       case "permission_denied": {
@@ -752,8 +798,8 @@ export class ClaudeEventPipeline {
       if (id) this.messageByParent.set(parent, id)
       if (parent === null) {
         const usage = isRecord(message.usage) ? message.usage : {}
-        this.callInputTokens = int(usage.input_tokens) + int(usage.cache_creation_input_tokens) +
-          int(usage.cache_read_input_tokens)
+        this.callInputTokens =
+          int(usage.input_tokens) + int(usage.cache_creation_input_tokens) + int(usage.cache_read_input_tokens)
         this.callOutputTokens = int(usage.output_tokens)
       }
       return []
@@ -810,12 +856,15 @@ export class ClaudeEventPipeline {
     const turnId = this.activeTurnId
     if (turnId === undefined) return opened
     this.openTexts.set(key, { turnId, kind, text })
-    return [...opened, ...this.item(
-      key,
-      kind === "text"
-        ? { _tag: "Message", role: "bot", text, streaming: true }
-        : { _tag: "Reasoning", text, streaming: true, source: "thinking" },
-    )]
+    return [
+      ...opened,
+      ...this.item(
+        key,
+        kind === "text"
+          ? { _tag: "Message", role: "bot", text, streaming: true }
+          : { _tag: "Reasoning", text, streaming: true, source: "thinking" },
+      ),
+    ]
   }
 
   // ------------------------------------------------------------------------ internals: assistant / user
@@ -865,7 +914,15 @@ export class ClaudeEventPipeline {
         this.openTexts.delete(key)
         if (cliError) return
         if (text.length === 0 && !aborted) return
-        events.push(...this.item(key, { _tag: "Message", role: "bot", text, streaming: false, ...(aborted ? { aborted: true } : {}) }))
+        events.push(
+          ...this.item(key, {
+            _tag: "Message",
+            role: "bot",
+            text,
+            streaming: false,
+            ...(aborted ? { aborted: true } : {}),
+          }),
+        )
       } else if (blockType === "thinking") {
         const text = str(rawBlock.thinking) || stream?.text || ""
         this.openTexts.delete(key)
@@ -894,7 +951,9 @@ export class ClaudeEventPipeline {
 
   private toolActivity(toolId: string): ReadonlyArray<HarnessEvent> {
     const tool = this.tools.get(toolId)
-    return tool && tool.parentKey === undefined ? this.activity(tool.classification.activity, tool.classification.kind) : []
+    return tool && tool.parentKey === undefined
+      ? this.activity(tool.classification.activity, tool.classification.kind)
+      : []
   }
 
   private upsertTool(
@@ -907,10 +966,14 @@ export class ClaudeEventPipeline {
     const existing = this.tools.get(toolId)
     if (existing && existing.status !== "pending" && existing.status !== "running") return []
     const classified = classifyTool(toolName, input)
-    const classification = classified.nodeId === undefined && this.hostNodeId !== undefined && classified.mcp !== undefined &&
-        classified.mcp.server === OPENBOT_MCP_SERVER && NODE_TOOLS.has(classified.mcp.tool)
-      ? { ...classified, nodeId: this.hostNodeId }
-      : classified
+    const classification =
+      classified.nodeId === undefined &&
+      this.hostNodeId !== undefined &&
+      classified.mcp !== undefined &&
+      classified.mcp.server === OPENBOT_MCP_SERVER &&
+      NODE_TOOLS.has(classified.mcp.tool)
+        ? { ...classified, nodeId: this.hostNodeId }
+        : classified
     const nextStatus = existing?.status === "running" ? "running" : status
     const item: ToolItem = {
       _tag: "ToolCall",
@@ -976,7 +1039,9 @@ export class ClaudeEventPipeline {
         ...(structuredOut !== undefined ? { structured: structuredOut } : {}),
         ...(full.truncated ? { truncated: true } : {}),
       },
-      ...(isError ? { error: text.length > 0 ? preview.text : status === "declined" ? deniedMessage : "Tool failed" } : {}),
+      ...(isError
+        ? { error: text.length > 0 ? preview.text : status === "declined" ? deniedMessage : "Tool failed" }
+        : {}),
       ...(created && tool.item.fileChanges
         ? { fileChanges: tool.item.fileChanges.map((change) => ({ ...change, kind: "add" as const })) }
         : {}),

@@ -15,9 +15,11 @@ export const TABLET_QUERY = "(max-width: 1023px)"
 /** Touch-first device: no hover, coarse pointer (phones, tablets). */
 export const TOUCH_QUERY = "(hover: none) and (pointer: coarse)"
 
-const media = (query: string): MediaQueryList | undefined => (typeof matchMedia === "undefined" ? undefined : matchMedia(query))
+const media = (query: string): MediaQueryList | undefined =>
+  typeof matchMedia === "undefined" ? undefined : matchMedia(query)
 
-export const layoutModeNow = (): LayoutMode => (media(PHONE_QUERY)?.matches ? "phone" : media(TABLET_QUERY)?.matches ? "tablet" : "desktop")
+export const layoutModeNow = (): LayoutMode =>
+  media(PHONE_QUERY)?.matches ? "phone" : media(TABLET_QUERY)?.matches ? "tablet" : "desktop"
 export const isPhoneNow = (): boolean => layoutModeNow() === "phone"
 export const isTouchNow = (): boolean => media(TOUCH_QUERY)?.matches ?? false
 

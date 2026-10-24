@@ -16,7 +16,10 @@
 import type { NodeId } from "@openbot/contracts"
 import { Context, type Effect } from "effect"
 
-export class HostPaths extends Context.Service<HostPaths, {
-  readonly home: (nodeId: NodeId) => string | undefined
-  readonly projectRoot: (nodeId: NodeId, dir: string) => Effect.Effect<string | undefined>
-}>()("openbot/core/HostPaths") {}
+export class HostPaths extends Context.Service<
+  HostPaths,
+  {
+    readonly home: (nodeId: NodeId) => string | undefined
+    readonly projectRoot: (nodeId: NodeId, dir: string) => Effect.Effect<string | undefined>
+  }
+>()("openbot/core/HostPaths") {}

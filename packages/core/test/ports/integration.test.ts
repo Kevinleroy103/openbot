@@ -50,7 +50,7 @@ describe("BootRecovery (shared rules over in-memory repositories)", () => {
       persistence,
     )
     const report = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ledger = yield* ProcessLedger
         yield* ledger.record({ pid: 1, pgid: 1, kind: "codex-app-server", startedAt: 0 })
         yield* ledger.record({ pid: 2, pgid: 2, kind: "opencode-serve", startedAt: 1 })
@@ -63,7 +63,7 @@ describe("BootRecovery (shared rules over in-memory repositories)", () => {
 
   test("TestPorts provides BootRecovery and InternalAddress", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const report = yield* (yield* BootRecovery).run
         const url = yield* (yield* InternalAddress).baseUrl
         return { report, url }
@@ -90,8 +90,13 @@ describe("session keys and workspace paths", () => {
     expect(workspacePathFor({ node: { id: LOCAL_NODE_ID, roots: ["/ignored"] }, botId: botId("bot_a"), dataDir })).toBe(
       "/data/bots/bot_a/workspace",
     )
-    expect(workspacePathFor({ node: remoteNodeSummary("nod_r", { roots: ["/home/me/openbot"] }), botId: botId("bot_a"), dataDir }))
-      .toBe("/home/me/openbot/workspaces/bot_a")
+    expect(
+      workspacePathFor({
+        node: remoteNodeSummary("nod_r", { roots: ["/home/me/openbot"] }),
+        botId: botId("bot_a"),
+        dataDir,
+      }),
+    ).toBe("/home/me/openbot/workspaces/bot_a")
     expect(workspacePathFor({ node: remoteNodeSummary("nod_r", { roots: [] }), botId: botId("bot_a"), dataDir })).toBe(
       "~/openbot/workspaces/bot_a",
     )
@@ -99,7 +104,9 @@ describe("session keys and workspace paths", () => {
 
   test("InternalAddress.layer strips trailing slashes", async () => {
     const url = await Effect.runPromise(
-      Effect.flatMap(InternalAddress, (a) => a.baseUrl).pipe(Effect.provide(InternalAddress.layer("http://127.0.0.1:9/"))),
+      Effect.flatMap(InternalAddress, (a) => a.baseUrl).pipe(
+        Effect.provide(InternalAddress.layer("http://127.0.0.1:9/")),
+      ),
     )
     expect(url).toBe("http://127.0.0.1:9")
   })
@@ -109,14 +116,19 @@ describe("settings key/value codec", () => {
   test("absent keys decode to defaults; invalid stored values fall back per key", () => {
     expect(settingsFromEntries(new Map())).toEqual(DEFAULT_SETTINGS)
     const settings = settingsFromEntries(
-      new Map<string, unknown>([["theme", "dark"], ["approvalExpiryMinutes", -5], ["unrelated", 1], ["ownerName", "Ada"]]),
+      new Map<string, unknown>([
+        ["theme", "dark"],
+        ["approvalExpiryMinutes", -5],
+        ["unrelated", 1],
+        ["ownerName", "Ada"],
+      ]),
     )
     expect(settings).toEqual({ ...DEFAULT_SETTINGS, theme: "dark", ownerName: "Ada" })
   })
 
   test("writeSettings / readSettings round trip through SettingsRepo, removing cleared keys", async () => {
     const out = await Effect.runPromise(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* writeSettings({ ...DEFAULT_SETTINGS, theme: "light", defaultHarness: "codex" })
         const first = yield* readSettings
         yield* writeSettings({ ...DEFAULT_SETTINGS, theme: "light" })
@@ -127,10 +139,39 @@ describe("settings key/value codec", () => {
     )
     expect(out.first).toEqual({ ...DEFAULT_SETTINGS, theme: "light", defaultHarness: "codex" })
     expect(out.second).toEqual({ ...DEFAULT_SETTINGS, theme: "light" })
-    expect(out.keys).toEqual(["accent", "approvalExpiryMinutes", "botMessaging", "botSearch", "compactIdleBots", "defaultAutonomy", "sharedProjectFolders", "showCompactions", "showSteps", "slackMentions", "theme"])
-    expect(settingsToEntries(DEFAULT_SETTINGS).map(([k]) => k).sort()).toEqual(
-      ["accent", "approvalExpiryMinutes", "botMessaging", "botSearch", "compactIdleBots", "defaultAutonomy", "defaultHarness", "ownerName", "sharedProjectFolders", "showCompactions", "showSteps", "slackMentions", "slackSendTo", "theme"],
-    )
+    expect(out.keys).toEqual([
+      "accent",
+      "approvalExpiryMinutes",
+      "botMessaging",
+      "botSearch",
+      "compactIdleBots",
+      "defaultAutonomy",
+      "sharedProjectFolders",
+      "showCompactions",
+      "showSteps",
+      "slackMentions",
+      "theme",
+    ])
+    expect(
+      settingsToEntries(DEFAULT_SETTINGS)
+        .map(([k]) => k)
+        .sort(),
+    ).toEqual([
+      "accent",
+      "approvalExpiryMinutes",
+      "botMessaging",
+      "botSearch",
+      "compactIdleBots",
+      "defaultAutonomy",
+      "defaultHarness",
+      "ownerName",
+      "sharedProjectFolders",
+      "showCompactions",
+      "showSteps",
+      "slackMentions",
+      "slackSendTo",
+      "theme",
+    ])
   })
 })
 

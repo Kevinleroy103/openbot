@@ -14,7 +14,10 @@ const alive = (pid: number) => {
 
 describe("shutdown watchdog", () => {
   test("forces the exit after the deadline, killing detached children, and says what was stuck", async () => {
-    const child = Bun.spawn([process.execPath, new URL("./fixtures/stuck-shutdown.ts", import.meta.url).pathname, "300"], { stdout: "pipe", stderr: "pipe" })
+    const child = Bun.spawn(
+      [process.execPath, new URL("./fixtures/stuck-shutdown.ts", import.meta.url).pathname, "300"],
+      { stdout: "pipe", stderr: "pipe" },
+    )
     const reader = child.stdout.getReader()
     let out = ""
     while (!/READY (\d+)/.test(out)) out += new TextDecoder().decode((await reader.read()).value)
@@ -36,7 +39,12 @@ describe("shutdown watchdog", () => {
   test("a second signal forces the exit at once; done() disarms", () => {
     const exits: Array<number> = []
     const lines: Array<string> = []
-    const dog = makeShutdownWatchdog({ timeoutMs: 60_000, exit: (c) => exits.push(c), log: (l) => lines.push(l), kill: () => [] })
+    const dog = makeShutdownWatchdog({
+      timeoutMs: 60_000,
+      exit: (c) => exits.push(c),
+      log: (l) => lines.push(l),
+      kill: () => [],
+    })
     dog.signal("SIGTERM")
     expect(exits).toEqual([])
     dog.signal("SIGINT")

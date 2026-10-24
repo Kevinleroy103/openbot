@@ -60,9 +60,12 @@ export const cleanEnv = (
     if (value === undefined) continue
     if (key === "CLAUDECODE") continue
     if (
-      key.startsWith("CLAUDE_CODE_") && key !== "CLAUDE_CODE_OAUTH_TOKEN" && !key.startsWith("CLAUDE_CODE_USE_") &&
+      key.startsWith("CLAUDE_CODE_") &&
+      key !== "CLAUDE_CODE_OAUTH_TOKEN" &&
+      !key.startsWith("CLAUDE_CODE_USE_") &&
       key !== "CLAUDE_CODE_GIT_BASH_PATH"
-    ) continue
+    )
+      continue
     if (key === "CLAUDE_AGENT_SDK_VERSION" || key === "CLAUDE_AGENT_SDK_CLIENT_APP") continue
     env[key] = value
   }

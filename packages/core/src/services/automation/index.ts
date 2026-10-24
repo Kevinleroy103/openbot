@@ -31,13 +31,7 @@ export {
   slackEventsText,
   slackTriggerMatches,
 } from "./SlackService.ts"
-export {
-  CATCH_UP_WINDOW_MS,
-  describeTrigger,
-  nextRunAfter,
-  parseCron,
-  validateTrigger,
-} from "./schedule.ts"
+export { CATCH_UP_WINDOW_MS, describeTrigger, nextRunAfter, parseCron, validateTrigger } from "./schedule.ts"
 export {
   AUTONOMY_LABELS,
   type AutonomyDecision,

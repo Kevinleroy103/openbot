@@ -73,8 +73,16 @@ describe("server requests from the recorded fixture", () => {
       suggestions: [{ decision: "allow-session", label: "Allow for this chat" }],
     })
     expect(mapped.reply({ decision: "allow-once" })).toMatchObject(elicitation!.recorded as object)
-    expect(mapped.reply({ decision: "allow-session" })).toEqual({ action: "accept", content: {}, _meta: { persist: "session" } })
-    expect(mapped.reply({ decision: "allow-always" })).toEqual({ action: "accept", content: {}, _meta: { persist: "session" } })
+    expect(mapped.reply({ decision: "allow-session" })).toEqual({
+      action: "accept",
+      content: {},
+      _meta: { persist: "session" },
+    })
+    expect(mapped.reply({ decision: "allow-always" })).toEqual({
+      action: "accept",
+      content: {},
+      _meta: { persist: "session" },
+    })
     expect(mapped.reply({ decision: "deny" })).toEqual({ action: "decline", content: null, _meta: null })
   })
 
@@ -86,14 +94,19 @@ describe("server requests from the recorded fixture", () => {
       title: "Color",
       nativeRequestId: "3",
       toolKey: `${input!.params.turnId}:call_8`,
-      questions: [{
-        id: "color",
-        header: "Color",
-        prompt: "Which avatar color?",
-        options: [{ label: "Blue (Recommended)", description: "Calm" }, { label: "Orange", description: "Warm" }],
-        multiSelect: false,
-        allowFreeText: true,
-      }],
+      questions: [
+        {
+          id: "color",
+          header: "Color",
+          prompt: "Which avatar color?",
+          options: [
+            { label: "Blue (Recommended)", description: "Calm" },
+            { label: "Orange", description: "Warm" },
+          ],
+          multiSelect: false,
+          allowFreeText: true,
+        },
+      ],
     })
     expect(mapped.reply({ answers: { color: "Blue (Recommended)" } })).toEqual(input!.recorded)
     // Declined question: empty answers.
@@ -107,9 +120,21 @@ describe("server request mapping", () => {
     normalizer.expectTurn(turnId(1))
     normalizer.handle("item/started", {
       turnId: "nat",
-      item: { type: "fileChange", id: "fc", status: "inProgress", changes: [{ path: "/w/a.ts", kind: { type: "update" }, diff: "-a\n+b" }] },
+      item: {
+        type: "fileChange",
+        id: "fc",
+        status: "inProgress",
+        changes: [{ path: "/w/a.ts", kind: { type: "update" }, diff: "-a\n+b" }],
+      },
     })
-    const mapped = ask(mapServerRequest(5, "item/fileChange/requestApproval", { threadId: "t", turnId: "nat", itemId: "fc" }, ctx(normalizer)))
+    const mapped = ask(
+      mapServerRequest(
+        5,
+        "item/fileChange/requestApproval",
+        { threadId: "t", turnId: "nat", itemId: "fc" },
+        ctx(normalizer),
+      ),
+    )
     expect(mapped.request).toMatchObject({
       kind: "file-approval",
       toolName: "apply_patch",
@@ -124,28 +149,42 @@ describe("server request mapping", () => {
   })
 
   test("network approvals are classified as network", () => {
-    const mapped = ask(mapServerRequest(1, "item/commandExecution/requestApproval", {
-      threadId: "t",
-      turnId: "nat",
-      itemId: "e",
-      command: "curl example.com",
-      networkApprovalContext: { host: "example.com" },
-      availableDecisions: ["accept", "acceptForSession", "decline"],
-    }, ctx()))
+    const mapped = ask(
+      mapServerRequest(
+        1,
+        "item/commandExecution/requestApproval",
+        {
+          threadId: "t",
+          turnId: "nat",
+          itemId: "e",
+          command: "curl example.com",
+          networkApprovalContext: { host: "example.com" },
+          availableDecisions: ["accept", "acceptForSession", "decline"],
+        },
+        ctx(),
+      ),
+    )
     expect(mapped.request).toMatchObject({ surface: "network", title: "Allow network access?" })
     expect(mapped.reply({ decision: "allow-always" })).toEqual({ decision: "acceptForSession" })
   })
 
   test("permissions: grants the requested profile for the turn or the session; deny grants nothing", () => {
     const permissions = { network: { enabled: true }, fileSystem: { read: null, write: ["/data"] } }
-    const mapped = ask(mapServerRequest(2, "item/permissions/requestApproval", {
-      threadId: "t",
-      turnId: "nat",
-      itemId: "p",
-      cwd: "/w",
-      reason: "Needs to download",
-      permissions,
-    }, ctx()))
+    const mapped = ask(
+      mapServerRequest(
+        2,
+        "item/permissions/requestApproval",
+        {
+          threadId: "t",
+          turnId: "nat",
+          itemId: "p",
+          cwd: "/w",
+          reason: "Needs to download",
+          permissions,
+        },
+        ctx(),
+      ),
+    )
     expect(mapped.request).toMatchObject({
       kind: "tool-approval",
       toolName: "request_permissions",
@@ -159,21 +198,28 @@ describe("server request mapping", () => {
   })
 
   test("MCP form elicitation becomes questions; answers are coerced to the schema types", () => {
-    const mapped = ask(mapServerRequest(3, "mcpServer/elicitation/request", {
-      threadId: "t",
-      serverName: "github",
-      mode: "form",
-      message: "Pick a repo",
-      requestedSchema: {
-        type: "object",
-        properties: {
-          repo: { type: "string", enum: ["a/b", "c/d"], enumNames: ["A B", "C D"], title: "Repository" },
-          count: { type: "integer", description: "How many" },
-          sure: { type: "boolean", title: "Sure?" },
+    const mapped = ask(
+      mapServerRequest(
+        3,
+        "mcpServer/elicitation/request",
+        {
+          threadId: "t",
+          serverName: "github",
+          mode: "form",
+          message: "Pick a repo",
+          requestedSchema: {
+            type: "object",
+            properties: {
+              repo: { type: "string", enum: ["a/b", "c/d"], enumNames: ["A B", "C D"], title: "Repository" },
+              count: { type: "integer", description: "How many" },
+              sure: { type: "boolean", title: "Sure?" },
+            },
+          },
+          _meta: null,
         },
-      },
-      _meta: null,
-    }, ctx()))
+        ctx(),
+      ),
+    )
     expect(mapped.request).toMatchObject({
       kind: "question",
       title: "Pick a repo",
@@ -200,7 +246,9 @@ describe("server request mapping", () => {
       _tag: "Answer",
       reply: { error: { code: -32601 } },
     })
-    expect(mapServerRequest(6, "mcpServer/elicitation/request", { serverName: "x", mode: "openai/form" }, ctx())).toEqual({
+    expect(
+      mapServerRequest(6, "mcpServer/elicitation/request", { serverName: "x", mode: "openai/form" }, ctx()),
+    ).toEqual({
       _tag: "Answer",
       reply: { result: { action: "decline", content: null, _meta: null } },
     })

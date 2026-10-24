@@ -51,7 +51,9 @@ const collect = (socket: Socket.Socket) =>
     const reader = yield* socket.reader
     const writer = yield* socket.writer
     const frames: Array<string | Uint8Array> = []
-    yield* Effect.forkScoped(Effect.ignore(Effect.forever(Effect.flatMap(reader.pull, (fs) => Effect.sync(() => void frames.push(...fs))))))
+    yield* Effect.forkScoped(
+      Effect.ignore(Effect.forever(Effect.flatMap(reader.pull, (fs) => Effect.sync(() => void frames.push(...fs))))),
+    )
     return { frames, writer }
   })
 
@@ -69,17 +71,45 @@ describe("tunnels, services and forwards", () => {
         })
         yield* Effect.addFinalizer(() => Effect.sync(() => echo.stop(true)))
         const { client, brain } = yield* makeTestNode({ dataDir, roots: [root] })
-        const res = yield* client["tunnel.open"]({ inv: inv(), kind: "tcp", args: [], env: {}, cwd: root, port: echo.port, streamId: "t_tcp", streamToken: "tok" })
+        const res = yield* client["tunnel.open"]({
+          inv: inv(),
+          kind: "tcp",
+          args: [],
+          env: {},
+          cwd: root,
+          port: echo.port,
+          streamId: "t_tcp",
+          streamToken: "tok",
+        })
         expect(res.pid).toBeNull()
         const end = yield* collect(brain.streams.get("t_tcp")!)
         yield* end.writer.write(new TextEncoder().encode("ping"))
         expect(yield* waitFor(() => bytesText(end.frames) === "echo:ping")).toBe(true)
 
         const closed = yield* Effect.flip(
-          client["tunnel.open"]({ inv: inv(), kind: "tcp", args: [], env: {}, cwd: root, port: 1, streamId: "t_tcp2", streamToken: "tok" }),
+          client["tunnel.open"]({
+            inv: inv(),
+            kind: "tcp",
+            args: [],
+            env: {},
+            cwd: root,
+            port: 1,
+            streamId: "t_tcp2",
+            streamToken: "tok",
+          }),
         )
         expect(closed._tag).toBe("TunnelFailed")
-        const noPort = yield* Effect.flip(client["tunnel.open"]({ inv: inv(), kind: "tcp", args: [], env: {}, cwd: root, streamId: "t3", streamToken: "tok" }))
+        const noPort = yield* Effect.flip(
+          client["tunnel.open"]({
+            inv: inv(),
+            kind: "tcp",
+            args: [],
+            env: {},
+            cwd: root,
+            streamId: "t3",
+            streamToken: "tok",
+          }),
+        )
         expect(noPort._tag).toBe("TunnelFailed")
       }),
     ))
@@ -97,7 +127,16 @@ describe("tunnels, services and forwards", () => {
         yield* Effect.addFinalizer(() => Effect.sync(() => target.stop(true)))
         const { client } = yield* makeTestNode({ dataDir, roots: [root] })
         const refused = yield* Effect.flip(
-          client["tunnel.open"]({ inv: inv(), kind: "tcp", args: [], env: {}, cwd: root, port: target.port, streamId: "t_exp", streamToken: "expired" }),
+          client["tunnel.open"]({
+            inv: inv(),
+            kind: "tcp",
+            args: [],
+            env: {},
+            cwd: root,
+            port: target.port,
+            streamId: "t_exp",
+            streamToken: "expired",
+          }),
         )
         expect(refused._tag).toBe("TunnelFailed")
         expect(yield* waitFor(() => opened === 1 && closed === 1)).toBe(true)
@@ -125,7 +164,9 @@ describe("tunnels, services and forwards", () => {
         expect(end.frames.every((f) => typeof f === "string")).toBe(true)
         expect(JSON.parse(end.frames[0] as string)).toEqual({ echo: { jsonrpc: "2.0", id: 1, method: "initialize" } })
         // the node's own argv and per-bot CODEX_HOME, never the brain's
-        expect(yield* Effect.promise(() => Bun.file(path.join(t.path, "codex-argv")).text())).toBe("exec-server --listen stdio\n")
+        expect(yield* Effect.promise(() => Bun.file(path.join(t.path, "codex-argv")).text())).toBe(
+          "exec-server --listen stdio\n",
+        )
         expect((yield* Effect.promise(() => Bun.file(path.join(t.path, "codex-home")).text())).trim()).toBe(
           path.join(dataDir, "bots", "bot_cx", "codex-exec"),
         )
@@ -140,10 +181,28 @@ describe("tunnels, services and forwards", () => {
         const { client, info } = yield* makeTestNode({ dataDir, roots: [root] })
         expect(info.capabilities).not.toContain("codex.exec-server@1")
         const e = yield* Effect.flip(
-          client["tunnel.open"]({ inv: inv(), kind: "codex.exec-server", args: [], env: {}, cwd: root, streamId: "x", streamToken: "t" }),
+          client["tunnel.open"]({
+            inv: inv(),
+            kind: "codex.exec-server",
+            args: [],
+            env: {},
+            cwd: root,
+            streamId: "x",
+            streamToken: "t",
+          }),
         )
         expect(e._tag).toBe("TunnelFailed")
-        const c = yield* Effect.flip(client["tunnel.open"]({ inv: inv(), kind: "claude.cli", args: [], env: {}, cwd: root, streamId: "y", streamToken: "t" }))
+        const c = yield* Effect.flip(
+          client["tunnel.open"]({
+            inv: inv(),
+            kind: "claude.cli",
+            args: [],
+            env: {},
+            cwd: root,
+            streamId: "y",
+            streamToken: "t",
+          }),
+        )
         expect(c._tag).toBe("TunnelFailed")
       }),
     ))
@@ -173,8 +232,7 @@ describe("tunnels, services and forwards", () => {
           // idempotent: a retried call gets the same listener
           expect(yield* client["forward.listen"]({ inv: inv("bot_fw"), kind: "mcp-http", transport })).toEqual(fwd)
           const received: Array<string> = []
-          const sock =
-            transport === "tcp" ? net.connect(fwd.port!, "127.0.0.1") : net.connect(fwd.path!)
+          const sock = transport === "tcp" ? net.connect(fwd.port!, "127.0.0.1") : net.connect(fwd.path!)
           sock.on("data", (d) => void received.push(d.toString()))
           yield* Effect.addFinalizer(() => Effect.sync(() => sock.destroy()))
           if (transport === "unix") {
@@ -182,7 +240,11 @@ describe("tunnels, services and forwards", () => {
             expect(statSync(fwd.path!).mode & 0o777).toBe(0o600)
           }
           const before = brain.opened.length
-          expect(yield* waitFor(() => brain.opened.length > before && brain.streams.has(brain.opened[brain.opened.length - 1]!.streamId))).toBe(true)
+          expect(
+            yield* waitFor(
+              () => brain.opened.length > before && brain.streams.has(brain.opened[brain.opened.length - 1]!.streamId),
+            ),
+          ).toBe(true)
           const opened = brain.opened[brain.opened.length - 1]!
           expect(opened).toMatchObject({ kind: "mcp-http", botId: "bot_fw" })
           const end = yield* collect(brain.streams.get(opened.streamId)!)

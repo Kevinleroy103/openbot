@@ -48,12 +48,15 @@ export const pairNode = (input: {
 }): Effect.Effect<NodeIdentity, PairingError> =>
   Effect.gen(function* () {
     const code = normalizePairingCode(input.code)
-    if (!code) return yield* new PairingError({ message: "that is not a valid pairing code (8 characters, e.g. ABCD-EFGH)" })
+    if (!code)
+      return yield* new PairingError({ message: "that is not a valid pairing code (8 characters, e.g. ABCD-EFGH)" })
     const brainUrl = yield* Effect.try({
       try: () => normalizeBrainUrl(input.brainUrl),
       catch: (e) => new PairingError({ message: e instanceof Error ? e.message : String(e) }),
     })
-    const keys = yield* generateKeyPair.pipe(Effect.mapError((e) => new PairingError({ message: `key generation failed: ${e.message}` })))
+    const keys = yield* generateKeyPair.pipe(
+      Effect.mapError((e) => new PairingError({ message: `key generation failed: ${e.message}` })),
+    )
     const body: PairRequest = {
       code,
       publicKey: keys.publicKey,
@@ -91,6 +94,8 @@ export const pairNode = (input: {
       brainUrl,
       pairedAt: now,
     }
-    yield* input.keyStore.save(identity).pipe(Effect.mapError((e) => new PairingError({ message: `could not store the identity: ${e.message}` })))
+    yield* input.keyStore
+      .save(identity)
+      .pipe(Effect.mapError((e) => new PairingError({ message: `could not store the identity: ${e.message}` })))
     return identity
   })

@@ -53,7 +53,8 @@ export interface Scene {
 /** A plausible Linux desktop (xfwm4 + plank dock + Chromium) made of rectangles. */
 export const desktopScene = ({ width: W, height: H, accent, page }: DesktopSceneOptions): Scene => {
   const r: Rect[] = []
-  const add = (x: number, y: number, w: number, h: number, color: number) => r.push({ x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), color })
+  const add = (x: number, y: number, w: number, h: number, color: number) =>
+    r.push({ x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), color })
   const box = (x: number, y: number, w: number, h: number, fill: number, border: number) => {
     add(x, y, w, h, border)
     add(x + 1, y + 1, w - 2, h - 2, fill)
@@ -62,14 +63,22 @@ export const desktopScene = ({ width: W, height: H, accent, page }: DesktopScene
   const top = hex("#1f2a48")
   const bottom = mix(hex("#2b6c74"), accent, 0.18)
   const bands = 40
-  for (let i = 0; i < bands; i++) add(0, (i * H) / bands, W, Math.ceil(H / bands) + 1, mix(top, bottom, i / (bands - 1)))
+  for (let i = 0; i < bands; i++)
+    add(0, (i * H) / bands, W, Math.ceil(H / bands) + 1, mix(top, bottom, i / (bands - 1)))
 
   // a terminal window peeking out behind the browser
   const tx = W * 0.7
   const ty = H * 0.5
   add(tx, ty, W * 0.27, H * 0.33, hex("#1e1f22"))
   add(tx, ty, W * 0.27, 32, hex("#2b2d31"))
-  for (let i = 0; i < 9; i++) add(tx + 18, ty + 52 + i * 26, [220, 120, 300, 180, 90, 260, 140, 200, 60][i]!, 10, i % 3 === 0 ? hex("#6ee7a8") : hex("#c9cdd4"))
+  for (let i = 0; i < 9; i++)
+    add(
+      tx + 18,
+      ty + 52 + i * 26,
+      [220, 120, 300, 180, 90, 260, 140, 200, 60][i]!,
+      10,
+      i % 3 === 0 ? hex("#6ee7a8") : hex("#c9cdd4"),
+    )
 
   // the browser (Chromium) window
   const bx = W * 0.1
@@ -117,7 +126,8 @@ export const desktopScene = ({ width: W, height: H, accent, page }: DesktopScene
     add(cx + 24, cy + 16, 24, 24, accent)
     add(cx + 60, cy + 24, 160, 10, hex("#202124"))
     add(cx, cy + 56, 220, ch - 56, hex("#ffffff")) // sidebar
-    for (let i = 0; i < 7; i++) add(cx + 24, cy + 90 + i * 40, [120, 150, 100, 140, 90, 130, 110][i]!, 9, i === 1 ? accent : hex("#9aa0a6"))
+    for (let i = 0; i < 7; i++)
+      add(cx + 24, cy + 90 + i * 40, [120, 150, 100, 140, 90, 130, 110][i]!, 9, i === 1 ? accent : hex("#9aa0a6"))
     const gx = cx + 250
     const gy = cy + 80
     const card = (x: number, y: number, w: number, h: number) => box(x, y, w, h, hex("#ffffff"), hex("#e3e5e8"))
@@ -133,7 +143,15 @@ export const desktopScene = ({ width: W, height: H, accent, page }: DesktopScene
     add(gx + 20, gy + 154, 180, 10, hex("#202124"))
     const bars = [0.45, 0.6, 0.52, 0.7, 0.66, 0.82, 0.74, 0.9, 0.78, 0.95, 0.88, 0.97]
     const slot = (chartW - 40) / bars.length
-    bars.forEach((v, i) => add(gx + 20 + i * slot + 6, gy + 530 - v * 320, slot - 12, v * 320, i === bars.length - 1 ? accent : mix(accent, hex("#ffffff"), 0.55)))
+    bars.forEach((v, i) =>
+      add(
+        gx + 20 + i * slot + 6,
+        gy + 530 - v * 320,
+        slot - 12,
+        v * 320,
+        i === bars.length - 1 ? accent : mix(accent, hex("#ffffff"), 0.55),
+      ),
+    )
     card(gx + chartW + 12, gy + 130, tile, 420)
     for (let i = 0; i < 8; i++) {
       add(gx + chartW + 32, gy + 160 + i * 46, 26, 26, mix(accent, hex("#ffffff"), 0.6))
@@ -177,7 +195,16 @@ interface PixelFormat {
   blueMax: number
 }
 
-const SERVER_FORMAT: PixelFormat = { bpp: 32, bigEndian: false, redShift: 16, greenShift: 8, blueShift: 0, redMax: 255, greenMax: 255, blueMax: 255 }
+const SERVER_FORMAT: PixelFormat = {
+  bpp: 32,
+  bigEndian: false,
+  redShift: 16,
+  greenShift: 8,
+  blueShift: 0,
+  redMax: 255,
+  greenMax: 255,
+  blueMax: 255,
+}
 
 class Bytes {
   private parts: number[] = []
@@ -189,7 +216,10 @@ class Bytes {
     return this.u8(v >> 8).u8(v)
   }
   u32(v: number) {
-    return this.u8(v >>> 24).u8(v >>> 16).u8(v >>> 8).u8(v)
+    return this.u8(v >>> 24)
+      .u8(v >>> 16)
+      .u8(v >>> 8)
+      .u8(v)
   }
   s32(v: number) {
     return this.u32(v >>> 0)
@@ -211,7 +241,13 @@ export interface RfbSessionOptions {
   /** Accepts input (a `mode=control` socket). */
   readonly control: boolean
   /** Called on every input event (dev diagnostics). */
-  readonly onInput?: (event: { readonly kind: "pointer" | "key"; readonly x?: number; readonly y?: number; readonly key?: number; readonly down?: boolean }) => void
+  readonly onInput?: (event: {
+    readonly kind: "pointer" | "key"
+    readonly x?: number
+    readonly y?: number
+    readonly key?: number
+    readonly down?: boolean
+  }) => void
 }
 
 type Phase = "version" | "security" | "init" | "normal" | "closed"
@@ -393,7 +429,10 @@ export class RfbSession {
   private mark(x: number, y: number) {
     const s = 18
     const accent = this.options.scene.accent
-    this.rects.push({ x: x - s / 2, y: y - s / 2, w: s, h: s, color: 0xffffff }, { x: x - s / 2 + 3, y: y - s / 2 + 3, w: s - 6, h: s - 6, color: accent })
+    this.rects.push(
+      { x: x - s / 2, y: y - s / 2, w: s, h: s, color: 0xffffff },
+      { x: x - s / 2 + 3, y: y - s / 2 + 3, w: s - 6, h: s - 6, color: accent },
+    )
     this.dirty.push({ x: x - s / 2, y: y - s / 2, w: s, h: s })
   }
 
@@ -445,7 +484,11 @@ export class RfbSession {
     const r = (rgb >> 16) & 255
     const g = (rgb >> 8) & 255
     const b = rgb & 255
-    const v = ((Math.round((r * f.redMax) / 255) << f.redShift) | (Math.round((g * f.greenMax) / 255) << f.greenShift) | (Math.round((b * f.blueMax) / 255) << f.blueShift)) >>> 0
+    const v =
+      ((Math.round((r * f.redMax) / 255) << f.redShift) |
+        (Math.round((g * f.greenMax) / 255) << f.greenShift) |
+        (Math.round((b * f.blueMax) / 255) << f.blueShift)) >>>
+      0
     const n = f.bpp / 8
     const bytes: number[] = []
     for (let i = 0; i < n; i++) bytes.push((v >>> (8 * i)) & 255)
@@ -471,7 +514,8 @@ export class RfbSession {
     // raw fallback: paint the rects into a pixel buffer
     msg.s32(ENC_RAW)
     const colors = new Uint32Array(region.w * region.h)
-    for (const s of subs) for (let y = s.y; y < s.y + s.h; y++) colors.fill(s.color, y * region.w + s.x, y * region.w + s.x + s.w)
+    for (const s of subs)
+      for (let y = s.y; y < s.y + s.h; y++) colors.fill(s.color, y * region.w + s.x, y * region.w + s.x + s.w)
     for (const c of colors) msg.bytes(this.pixel(c))
   }
 }

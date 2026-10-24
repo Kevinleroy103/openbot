@@ -32,11 +32,30 @@ import { type ReactNode, StrictMode, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { Avatar, AvatarStack } from "./avatar/Avatar.tsx"
 import { AvatarPicker } from "./avatar/AvatarPicker.tsx"
-import { type AvatarColor, AvatarColors, AvatarExpressions, type AvatarShape, AvatarShapes, botTintStyle, defaultBotAvatar } from "./avatar/palette.ts"
+import {
+  type AvatarColor,
+  AvatarColors,
+  AvatarExpressions,
+  type AvatarShape,
+  AvatarShapes,
+  botTintStyle,
+  defaultBotAvatar,
+} from "./avatar/palette.ts"
 import { cn } from "./cn.ts"
 import { Icon } from "./Icon.tsx"
 import { HeaderPill, IconButton, PillButton, Spinner } from "./primitives/buttons.tsx"
-import { Card, CardActions, CardBody, CardHeader, CardLink, KeyBadge, OptionRow, Sheet, SheetField, StatusPill } from "./primitives/card.tsx"
+import {
+  Card,
+  CardActions,
+  CardBody,
+  CardHeader,
+  CardLink,
+  KeyBadge,
+  OptionRow,
+  Sheet,
+  SheetField,
+  StatusPill,
+} from "./primitives/card.tsx"
 import {
   ActivityRow,
   Bubble,
@@ -92,13 +111,57 @@ interface DemoBot {
 }
 
 const bots: ReadonlyArray<DemoBot> = [
-  { id: "b1", name: "Chief of Staff", shape: "blob", color: "cyan", label: "Ops", preview: "Booked: marina house, deposit paid." },
-  { id: "b2", name: "Sales Outbound", shape: "cloud", color: "orange", label: "Sales", preview: "Done.", status: "unread" },
+  {
+    id: "b1",
+    name: "Chief of Staff",
+    shape: "blob",
+    color: "cyan",
+    label: "Ops",
+    preview: "Booked: marina house, deposit paid.",
+  },
+  {
+    id: "b2",
+    name: "Sales Outbound",
+    shape: "cloud",
+    color: "orange",
+    label: "Sales",
+    preview: "Done.",
+    status: "unread",
+  },
   { id: "b3", name: "Inbox Manager", shape: "teardrop", color: "violet", preview: "Typing…", status: "working" },
-  { id: "b4", name: "Research Scout", shape: "hex", color: "blue", label: "Research", preview: "Three competitor launches this week", status: "unread" },
-  { id: "b5", name: "Expense Clerk", shape: "square", color: "red", preview: "Report filed. 9 receipts, nothing flagged" },
-  { id: "b6", name: "Release Engineer", shape: "wedge", color: "green", label: "Infra", preview: "Build 2.0.21 is live on TestFlight." },
-  { id: "b7", name: "Data Analyst", shape: "clover", color: "yellow", label: "Data", preview: "Waiting on your approval", status: "attention" },
+  {
+    id: "b4",
+    name: "Research Scout",
+    shape: "hex",
+    color: "blue",
+    label: "Research",
+    preview: "Three competitor launches this week",
+    status: "unread",
+  },
+  {
+    id: "b5",
+    name: "Expense Clerk",
+    shape: "square",
+    color: "red",
+    preview: "Report filed. 9 receipts, nothing flagged",
+  },
+  {
+    id: "b6",
+    name: "Release Engineer",
+    shape: "wedge",
+    color: "green",
+    label: "Infra",
+    preview: "Build 2.0.21 is live on TestFlight.",
+  },
+  {
+    id: "b7",
+    name: "Data Analyst",
+    shape: "clover",
+    color: "yellow",
+    label: "Data",
+    preview: "Waiting on your approval",
+    status: "attention",
+  },
   { id: "b8", name: "Travel Desk", shape: "sparkle", color: "magenta", preview: "Flights held until Friday noon." },
 ]
 const bot = (id: string) => bots.find((b) => b.id === id)!
@@ -112,7 +175,13 @@ function PinnedTile({ b, current }: { b: DemoBot; current?: boolean }) {
       aria-current={current ? "page" : undefined}
       className="flex min-w-0 flex-col items-center gap-1 rounded-xl px-1.5 pt-1.5 pb-1.5 transition-colors hover:bg-hover aria-[current=page]:bg-active"
     >
-      <Avatar shape={b.shape} color={b.color} size={56} working={b.status === "working"} {...(b.status === "unread" ? { status: "unread" } : {})} />
+      <Avatar
+        shape={b.shape}
+        color={b.color}
+        size={56}
+        working={b.status === "working"}
+        {...(b.status === "unread" ? { status: "unread" } : {})}
+      />
       <span className="max-w-full truncate text-xs text-fg">{b.name}</span>
       {b.label ? <LabelChip>{b.label}</LabelChip> : <span className="h-[18px]" />}
     </button>
@@ -139,7 +208,9 @@ function BotRow({ b, current }: { b: DemoBot; current?: boolean }) {
           <span className="truncate text-base font-medium text-fg">{b.name}</span>
           {b.label && <LabelChip>{b.label}</LabelChip>}
         </span>
-        <span className={cn("truncate text-sm", b.status === "attention" ? "text-warn-fg" : "text-fg-secondary")}>{b.preview}</span>
+        <span className={cn("truncate text-sm", b.status === "attention" ? "text-warn-fg" : "text-fg-secondary")}>
+          {b.preview}
+        </span>
       </span>
       {b.status === "unread" && <UnreadDot className="me-1" />}
     </button>
@@ -182,8 +253,15 @@ function Sidebar() {
         <SectionHeader title="Hidden Bots" count={1} />
       </div>
       <div className="flex items-center gap-2 px-4 py-3">
-        <span className="inline-flex size-9 items-center justify-center rounded-full bg-elevated text-sm text-fg-secondary hairline border-line-tertiary shadow-control">A</span>
-        <PillButton variant="ghost" size="lg" leadingIcon={Monitor} className="flex-1 bg-elevated hairline border-line-tertiary shadow-control hover:bg-elevated-hover">
+        <span className="inline-flex size-9 items-center justify-center rounded-full bg-elevated text-sm text-fg-secondary hairline border-line-tertiary shadow-control">
+          A
+        </span>
+        <PillButton
+          variant="ghost"
+          size="lg"
+          leadingIcon={Monitor}
+          className="flex-1 bg-elevated hairline border-line-tertiary shadow-control hover:bg-elevated-hover"
+        >
           Computers
         </PillButton>
       </div>
@@ -293,7 +371,10 @@ function ApprovalCard({ state = "pending" }: { state?: "pending" | "always" | "d
 function Transcript({ working = true }: { working?: boolean }) {
   const chief = bot("b1")
   const scout = bot("b4")
-  const botRun = ["Two things: the deck review at 2pm, and a yes/no on the offsite venue. Everything else is handled.", "Deck → numbers checked against the finance sheet · 2 stale slides flagged"]
+  const botRun = [
+    "Two things: the deck review at 2pm, and a yes/no on the offsite venue. Everything else is handled.",
+    "Deck → numbers checked against the finance sheet · 2 stale slides flagged",
+  ]
   return (
     <div className="flex flex-col">
       <BubbleGroup side="user">
@@ -336,7 +417,16 @@ function Transcript({ working = true }: { working?: boolean }) {
       {working && (
         <ActivityRow
           className="mt-1"
-          avatar={<Avatar shape={chief.shape} color={chief.color} size={28} working expression="inspecting" eyeColor="var(--ob-chrome)" />}
+          avatar={
+            <Avatar
+              shape={chief.shape}
+              color={chief.color}
+              size={28}
+              working
+              expression="inspecting"
+              eyeColor="var(--ob-chrome)"
+            />
+          }
           label="Running a few commands…"
         />
       )}
@@ -347,7 +437,10 @@ function Transcript({ working = true }: { working?: boolean }) {
 function DetailsPane({ editor = false }: { editor?: boolean }) {
   const chief = bot("b1")
   const [tab, setTab] = useState<"details" | "library" | "computer">("details")
-  const [avatar, setAvatar] = useState<{ shape: AvatarShape; color: AvatarColor }>({ shape: chief.shape, color: chief.color })
+  const [avatar, setAvatar] = useState<{ shape: AvatarShape; color: AvatarColor }>({
+    shape: chief.shape,
+    color: chief.color,
+  })
   const [edTab, setEdTab] = useState<"bot" | "generate" | "upload">("bot")
   return (
     <aside className="relative flex w-[320px] shrink-0 flex-col border-s-[0.5px] border-line-tertiary bg-chrome">
@@ -377,7 +470,9 @@ function DetailsPane({ editor = false }: { editor?: boolean }) {
           <SheetField label="Model">opus</SheetField>
           <SheetField label="Node">This computer</SheetField>
         </Sheet>
-        <p className="px-4 pt-4 text-center text-sm text-fg-secondary">Routines are recurring tasks this Bot runs on a schedule. Ask it in chat to set one up.</p>
+        <p className="px-4 pt-4 text-center text-sm text-fg-secondary">
+          Routines are recurring tasks this Bot runs on a schedule. Ask it in chat to set one up.
+        </p>
       </div>
       {editor && (
         <div className="absolute top-[150px] right-3 left-3 z-10 flex flex-col gap-4 rounded-2xl bg-elevated p-2 pb-5 hairline border-line-secondary shadow-popover">
@@ -400,14 +495,25 @@ function DetailsPane({ editor = false }: { editor?: boolean }) {
   )
 }
 
-function ChatScene({ details = false, editor = false, children }: { details?: boolean; editor?: boolean; children?: ReactNode }) {
+function ChatScene({
+  details = false,
+  editor = false,
+  children,
+}: {
+  details?: boolean
+  editor?: boolean
+  children?: ReactNode
+}) {
   const chief = bot("b1")
   return (
     <div className="flex h-screen bg-chrome">
       <Sidebar />
       <main className="relative flex min-w-[424px] flex-1 flex-col bg-pane" style={botTintStyle(chief.color)}>
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-2.5">
-          <HeaderPill className="pointer-events-auto" avatar={<Avatar shape={chief.shape} color={chief.color} size={24} />}>
+          <HeaderPill
+            className="pointer-events-auto"
+            avatar={<Avatar shape={chief.shape} color={chief.color} size={24} />}
+          >
             {chief.name}
           </HeaderPill>
         </div>
@@ -437,8 +543,19 @@ const paletteItems: ReadonlyArray<PaletteItem> = [
     ...(b.label ? { chip: <LabelChip>{b.label}</LabelChip> } : {}),
     ...(b.status === "unread" ? { trailing: <UnreadDot /> } : {}),
   })),
-  { id: "s1", label: "Settings › Computers", group: "Settings", leading: <Icon icon={Monitor} size="xl" className="text-icon-secondary" /> },
-  { id: "a1", label: "New chat", group: "Actions", leading: <Icon icon={Plus} size="xl" className="text-icon-secondary" />, trailing: <KeyBadge>⌘N</KeyBadge> },
+  {
+    id: "s1",
+    label: "Settings › Computers",
+    group: "Settings",
+    leading: <Icon icon={Monitor} size="xl" className="text-icon-secondary" />,
+  },
+  {
+    id: "a1",
+    label: "New chat",
+    group: "Actions",
+    leading: <Icon icon={Plus} size="xl" className="text-icon-secondary" />,
+    trailing: <KeyBadge>⌘N</KeyBadge>,
+  },
 ]
 
 function OverlaysScene() {
@@ -521,11 +638,19 @@ function SettingsScene() {
                   ]}
                 />,
               )}
-              {row("Show steps", "Show a collapsed “N steps” row under finished turns.", <Switch checked={steps} onCheckedChange={setSteps} label="Show steps" />)}
+              {row(
+                "Show steps",
+                "Show a collapsed “N steps” row under finished turns.",
+                <Switch checked={steps} onCheckedChange={setSteps} label="Show steps" />,
+              )}
             </div>
             <div className="mt-8 mb-2 text-sm text-fg-secondary">Bots</div>
             <div className="flex flex-col rounded-3xl bg-elevated hairline border-line-tertiary">
-              {row("Bot messaging", "Let Bots message each other and hand off work.", <Switch checked={messaging} onCheckedChange={setMessaging} label="Bot messaging" />)}
+              {row(
+                "Bot messaging",
+                "Let Bots message each other and hand off work.",
+                <Switch checked={messaging} onCheckedChange={setMessaging} label="Bot messaging" />,
+              )}
               {row("Reset onboarding", "Show the first-run guide again.", <PillButton>Reset</PillButton>)}
             </div>
           </div>
@@ -593,7 +718,10 @@ function StoryPage() {
         <Section title="Surfaces & roles" className="gap-2">
           {swatches.map((s) => (
             <div key={s} className="flex w-[104px] flex-col gap-1">
-              <div className="h-12 rounded-xl hairline border-line-secondary" style={{ background: `var(--ob-${s})` }} />
+              <div
+                className="h-12 rounded-xl hairline border-line-secondary"
+                style={{ background: `var(--ob-${s})` }}
+              />
               <span className="truncate text-2xs text-fg-secondary">{s}</span>
             </div>
           ))}
@@ -669,7 +797,10 @@ function StoryPage() {
         </Section>
 
         <Section title="Bubbles (grouped corners) & transcript parts" className="block">
-          <div className="w-full max-w-[760px] rounded-3xl bg-pane p-4 hairline border-line-tertiary" style={botTintStyle("orange")}>
+          <div
+            className="w-full max-w-[760px] rounded-3xl bg-pane p-4 hairline border-line-tertiary"
+            style={botTintStyle("orange")}
+          >
             <BubbleGroup side="bot">
               {["First in a run", "Middle bubble with a little more text", "Last in the run"].map((t, i) => (
                 <Bubble key={t} side="bot" position={groupPosition(i, 3)}>
@@ -693,7 +824,10 @@ function StoryPage() {
               Updated memory for
               <EventChip leading={<Avatar shape="star" color="violet" size={16} />}>Account Manager</EventChip>
             </EventLine>
-            <ActivityRow avatar={<Avatar shape="cloud" color="orange" size={28} working eyeColor="var(--ob-pane)" />} label="Typing…" />
+            <ActivityRow
+              avatar={<Avatar shape="cloud" color="orange" size={28} working eyeColor="var(--ob-pane)" />}
+              label="Typing…"
+            />
           </div>
         </Section>
 
@@ -707,9 +841,19 @@ function StoryPage() {
 
         <Section title="Forms" className="items-end gap-6">
           <TextField label="Name" defaultValue="Chief of Staff" wrapperClassName="w-60" />
-          <TextField label="Label" placeholder="Add a label" description="Shown next to the name" wrapperClassName="w-60" />
+          <TextField
+            label="Label"
+            placeholder="Add a label"
+            description="Shown next to the name"
+            wrapperClassName="w-60"
+          />
           <TextField label="Webhook" defaultValue="not a url" error="Enter a valid URL" wrapperClassName="w-60" />
-          <TextArea label="Instructions" defaultValue={"You are the chief of staff.\nKeep the calendar sane."} wrapperClassName="w-72" rows={3} />
+          <TextArea
+            label="Instructions"
+            defaultValue={"You are the chief of staff.\nKeep the calendar sane."}
+            wrapperClassName="w-72"
+            rows={3}
+          />
           <div className="flex items-center gap-3">
             <Switch checked={on} onCheckedChange={setOn} label="Notifications" />
             <Switch checked={false} label="Off" />
@@ -762,7 +906,12 @@ function StoryPage() {
           <MenuPanel label="Mention" className="w-[300px]">
             <MenuLabel>Bots</MenuLabel>
             {bots.slice(0, 5).map((b, i) => (
-              <MenuItem key={b.id} active={i === 0} leading={<Avatar shape={b.shape} color={b.color} size={20} />} trailing="Bot">
+              <MenuItem
+                key={b.id}
+                active={i === 0}
+                leading={<Avatar shape={b.shape} color={b.color} size={20} />}
+                trailing="Bot"
+              >
                 {b.name}
               </MenuItem>
             ))}
@@ -774,7 +923,12 @@ function StoryPage() {
           <div className="flex flex-col items-start gap-3">
             <TooltipSurface>Context 62 % · 124k / 200k</TooltipSurface>
             <Toast title="Routine saved" icon={ShieldCheck} tone="success" />
-            <Toast title="Couldn't reach Build Box" icon={X} tone="danger" action={{ label: "Retry", onClick: () => {} }} />
+            <Toast
+              title="Couldn't reach Build Box"
+              icon={X}
+              tone="danger"
+              action={{ label: "Retry", onClick: () => {} }}
+            />
             <Tooltip content="Opens the search palette">
               <PillButton onClick={() => setPalette(true)} leadingIcon={Search}>
                 Open palette
@@ -792,7 +946,11 @@ function StoryPage() {
             </Menu>
           </div>
           <DialogPanel width={400} label="Delete Bot">
-            <DialogHeader title="Delete Chief of Staff?" description="This removes the Bot, its routines and its memory." onClose={() => {}} />
+            <DialogHeader
+              title="Delete Chief of Staff?"
+              description="This removes the Bot, its routines and its memory."
+              onClose={() => {}}
+            />
             <DialogFooter>
               <PillButton>Cancel</PillButton>
               <PillButton variant="danger">Delete</PillButton>
@@ -857,7 +1015,11 @@ function StoryPage() {
         </Section>
 
         <Dialog open={dialog} onOpenChange={setDialog} label="Example dialog">
-          <DialogHeader title="New session?" description="The Bot's memory and files stay." onClose={() => setDialog(false)} />
+          <DialogHeader
+            title="New session?"
+            description="The Bot's memory and files stay."
+            onClose={() => setDialog(false)}
+          />
           <DialogBody>Starting a new session ends the native harness session; the next turn starts fresh.</DialogBody>
           <DialogFooter>
             <PillButton onClick={() => setDialog(false)}>Cancel</PillButton>

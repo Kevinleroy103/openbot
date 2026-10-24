@@ -61,7 +61,8 @@ export const normalizeCommand = (command: string): string => command.trim().repl
 
 const SHELL_CONTROL = /[;&|`$<>()\n\r]/
 
-const startsWithCommand = (command: string, prefix: string): boolean => command === prefix || command.startsWith(`${prefix} `)
+const startsWithCommand = (command: string, prefix: string): boolean =>
+  command === prefix || command.startsWith(`${prefix} `)
 
 /**
  * Allow: the whole command (free of control characters) starts with the prefix. Deny / ask: ANY
@@ -79,7 +80,22 @@ export const commandMatches = (prefix: string, command: string, action: Approval
 }
 
 /** Read-only filters an allow rule tolerates after a pipe (`… | tail -20`). */
-const PIPE_FILTERS: ReadonlySet<string> = new Set(["head", "tail", "grep", "rg", "wc", "sort", "uniq", "cut", "tr", "nl", "column", "cat", "less", "more"])
+const PIPE_FILTERS: ReadonlySet<string> = new Set([
+  "head",
+  "tail",
+  "grep",
+  "rg",
+  "wc",
+  "sort",
+  "uniq",
+  "cut",
+  "tr",
+  "nl",
+  "column",
+  "cat",
+  "less",
+  "more",
+])
 /** Redirections an allow rule tolerates (they only route output to the terminal or nowhere). */
 const HARMLESS_REDIRECT = /(^| )(?:2>&1|1>&2|>&2|[12]?>\/dev\/null|&>\/dev\/null)(?= |$)/g
 
@@ -163,7 +179,9 @@ export const evaluateRules = (
 ): PolicyDecision => {
   const applicable = rules.filter((r) => (r.botId === undefined || r.botId === botId) && ruleMatches(r, subject))
   for (const [scope, action] of ORDER) {
-    const rule = applicable.find((r) => r.action === action && (scope === "bot" ? r.botId !== undefined : r.botId === undefined))
+    const rule = applicable.find(
+      (r) => r.action === action && (scope === "bot" ? r.botId !== undefined : r.botId === undefined),
+    )
     if (rule !== undefined) return { action, rule }
   }
   return { action: "ask" }
@@ -211,7 +229,9 @@ export const suggestCommandPrefix = (command: string): string | undefined => {
   const segments = normalizeCommand(command).split(/&&|\|\||[;&|\n\r]/)
   for (const raw of segments) {
     // redirections and substitutions end the words that can name the program
-    const words = normalizeCommand(raw.split(/[`<>()]|\$\(/)[0] ?? "").split(" ").filter((w) => w.length > 0)
+    const words = normalizeCommand(raw.split(/[`<>()]|\$\(/)[0] ?? "")
+      .split(" ")
+      .filter((w) => w.length > 0)
     let i = 0
     while (i < words.length && ASSIGNMENT.test(words[i]!)) i++
     if (i >= words.length) continue // only assignments (`f=x;`): the program comes later
@@ -250,7 +270,11 @@ const dirname = (path: string): string => {
 export const commonDirectory = (paths: ReadonlyArray<string>): string | undefined => {
   const absolute = paths.filter((p) => p.startsWith("/") && !hasDotDot(p))
   if (absolute.length === 0 || absolute.length !== paths.length) return undefined
-  const split = absolute.map((p) => dirname(p).split("/").filter((s) => s.length > 0))
+  const split = absolute.map((p) =>
+    dirname(p)
+      .split("/")
+      .filter((s) => s.length > 0),
+  )
   const first = split[0]!
   let n = first.length
   for (const parts of split.slice(1)) {
@@ -273,18 +297,27 @@ export const suggestRule = (subject: PolicySubject, workspace?: string): Suggest
     const prefix = suggestCommandPrefix(subject.command)
     if (prefix !== undefined) match.commandPrefix = prefix
   }
-  if ((subject.surface === "file-edit" || subject.surface === "file-read") && subject.paths !== undefined && subject.paths.length > 0) {
+  if (
+    (subject.surface === "file-edit" || subject.surface === "file-read") &&
+    subject.paths !== undefined &&
+    subject.paths.length > 0
+  ) {
     // Files inside the bot's workspace: the whole workspace, not the one folder this request touched.
-    const dir = workspace !== undefined && workspace.startsWith("/") && subject.paths.every((p) => !hasDotDot(p) && pathMatches(workspace, p))
-      ? trimSlash(workspace)
-      : commonDirectory(subject.paths)
+    const dir =
+      workspace !== undefined &&
+      workspace.startsWith("/") &&
+      subject.paths.every((p) => !hasDotDot(p) && pathMatches(workspace, p))
+        ? trimSlash(workspace)
+        : commonDirectory(subject.paths)
     if (dir !== undefined && dir !== "/") match.pathPrefix = dir
   }
   return { surface: subject.surface, match }
 }
 
 /** One-line human description of a rule (event lines, card details). */
-export const describeRule = (rule: Pick<ApprovalRule, "surface" | "match"> & { readonly action?: ApprovalAction }): string => {
+export const describeRule = (
+  rule: Pick<ApprovalRule, "surface" | "match"> & { readonly action?: ApprovalAction },
+): string => {
   const parts: Array<string> = []
   if (rule.match.toolName !== undefined) parts.push(rule.match.toolName)
   if (rule.match.commandPrefix !== undefined) parts.push(`\`${rule.match.commandPrefix}\``)

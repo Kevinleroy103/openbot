@@ -48,7 +48,11 @@ export interface OpenCodeHarnessConfig {
 }
 
 /** Paths the adapter owns under the data root. */
-export const openCodePaths = (dataDir: { readonly root: string; readonly opencodeConfig: string; readonly skillsLib: string }) => ({
+export const openCodePaths = (dataDir: {
+  readonly root: string
+  readonly opencodeConfig: string
+  readonly skillsLib: string
+}) => ({
   /** Server cwd and catalog location. */
   serverDir: joinPath(dataDir.root, "opencode"),
   /** Empty `OPENCODE_TEST_HOME`. */
@@ -65,7 +69,12 @@ export const makeOpenCodeDriver = (
   kind: "opencode",
   displayName: DISPLAY_NAME,
   capabilities: OPENCODE_CAPABILITIES,
-  probe: probeOpenCode({ host, capabilities: OPENCODE_CAPABILITIES, directory: options.directory, binaryFound: options.binaryFound }),
+  probe: probeOpenCode({
+    host,
+    capabilities: OPENCODE_CAPABILITIES,
+    directory: options.directory,
+    binaryFound: options.binaryFound,
+  }),
   listModels: listOpenCodeModels(host, options.directory),
   openSession: (input) => openOpenCodeSession(host, input, options.session),
 })
@@ -80,23 +89,32 @@ const makeDir = (path: string) =>
   Effect.tryPromise({
     try: () => mkdir(path, { recursive: true }),
     catch: (cause) =>
-      new HarnessError({ harness: "opencode", code: "open-failed", message: `Cannot create ${path}: ${describeClientError(cause)}`, cause }),
+      new HarnessError({
+        harness: "opencode",
+        code: "open-failed",
+        message: `Cannot create ${path}: ${describeClientError(cause)}`,
+        cause,
+      }),
   })
 
 /** The OpenCode driver bound to the current `DataDir` (and `ProcessLedger`, when provided). */
 export const makeOpenCodeDriverLive = (
   config: OpenCodeHarnessConfig = {},
 ): Effect.Effect<HarnessDriver, never, DataDir | Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const dataDir = yield* DataDir
     const ledger = yield* Effect.serviceOption(ProcessLedger)
     const paths = openCodePaths(dataDir)
     const binary = config.startTransport ? undefined : resolveOpenCodeBinary(config.binary)
 
-    const spawn: Effect.Effect<OpenCodeTransport, HarnessError, Scope.Scope> = Effect.gen(function*() {
+    const spawn: Effect.Effect<OpenCodeTransport, HarnessError, Scope.Scope> = Effect.gen(function* () {
       if (binary === undefined) {
         return yield* Effect.fail(
-          new HarnessError({ harness: "opencode", code: "not-installed", message: "The opencode CLI was not found on PATH." }),
+          new HarnessError({
+            harness: "opencode",
+            code: "not-installed",
+            message: "The opencode CLI was not found on PATH.",
+          }),
         )
       }
       yield* makeDir(paths.serverDir)
@@ -121,14 +139,16 @@ export const makeOpenCodeDriverLive = (
             onNone: () => Effect.void,
             onSome: (l) =>
               Effect.flatMap(Clock.currentTimeMillis, (startedAt) =>
-                l.record({ pid, pgid: pid, kind: "opencode-serve", label: paths.serverDir, startedAt })).pipe(
-                  Effect.catch((error) => Effect.logWarning(`ProcessLedger.record failed: ${error.message}`)),
-                ),
+                l.record({ pid, pgid: pid, kind: "opencode-serve", label: paths.serverDir, startedAt }),
+              ).pipe(Effect.catch((error) => Effect.logWarning(`ProcessLedger.record failed: ${error.message}`))),
           }),
         onReaped: (pid) =>
           Option.match(ledger, {
             onNone: () => Effect.void,
-            onSome: (l) => l.remove(pid).pipe(Effect.catch((error) => Effect.logWarning(`ProcessLedger.remove failed: ${error.message}`))),
+            onSome: (l) =>
+              l
+                .remove(pid)
+                .pipe(Effect.catch((error) => Effect.logWarning(`ProcessLedger.remove failed: ${error.message}`))),
           }),
       })
     })

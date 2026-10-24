@@ -30,7 +30,12 @@ const profile = () => {
 
 /** A long-running stand-in for Chromium whose argv carries `extra`, spawned detached like the real one. */
 const fakeBrowser = (extra: string) => {
-  const p = Bun.spawn(["sh", "-c", "sleep 60", "sh", extra], { detached: true, stdin: "ignore", stdout: "ignore", stderr: "ignore" })
+  const p = Bun.spawn(["sh", "-c", "sleep 60", "sh", extra], {
+    detached: true,
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  })
   procs.push(p)
   return p
 }

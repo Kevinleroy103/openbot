@@ -19,7 +19,15 @@ import {
   settingsQueryAtom,
   uploadFilesAtom,
 } from "../src/index.ts"
-import { botFixture, conversationFixture, FakeBrain, FlakyProxy, messageFixture, type RunningBrain, startBrain } from "./support/fakeBrain.ts"
+import {
+  botFixture,
+  conversationFixture,
+  FakeBrain,
+  FlakyProxy,
+  messageFixture,
+  type RunningBrain,
+  startBrain,
+} from "./support/fakeBrain.ts"
 import { makeRegistry, runFn, valueOf, waitFor } from "./support/registry.ts"
 
 const C1 = "cnv_1"
@@ -59,7 +67,10 @@ describe("conversation replica", () => {
       const first = await waitFor(registry, atom, (r) => conversationValue(r)?.synchronized === true)
       expect(texts(conversationValue(first)!)).toEqual(["one", "two"])
       expect(conversationValue(first)!.cursor).toEqual({ epoch: "e1", sequence: 2 })
-      expect(brain.subscribes.filter((s) => s.rpc === "conversations.subscribe").at(-1)).toMatchObject({ after: undefined, plan: "snapshot" })
+      expect(brain.subscribes.filter((s) => s.rpc === "conversations.subscribe").at(-1)).toMatchObject({
+        after: undefined,
+        plan: "snapshot",
+      })
       expect(registry.get(connectionAtom).status).toBe("online")
       const generation = registry.get(connectionAtom).generation
 
@@ -85,13 +96,19 @@ describe("conversation replica", () => {
       // 5. link back: reconnect, resubscribe with the last cursor, replay only the missed changes
       const subscribesBefore = brain.subscribes.length
       proxy.restore()
-      const resumed = await waitFor(registry, atom, (r) => conversationValue(r)?.synchronized === true && conversationValue(r)?.cursor?.sequence === 7)
+      const resumed = await waitFor(
+        registry,
+        atom,
+        (r) => conversationValue(r)?.synchronized === true && conversationValue(r)?.cursor?.sequence === 7,
+      )
       const resumes = brain.subscribes.slice(subscribesBefore).filter((s) => s.rpc === "conversations.subscribe")
       expect(resumes[0]).toMatchObject({ after: { epoch: "e1", sequence: 3 }, plan: "replay" })
       expect(resumes.every((s) => s.plan === "replay")).toBe(true)
       expect(texts(conversationValue(resumed)!)).toEqual(["two", "three (edited)", "four", "five"])
       // identical to the server's replica: nothing lost, nothing duplicated
-      expect(texts(conversationValue(resumed)!)).toEqual(transcriptOf(c1.state).map((e) => (e.kind === "message" ? e.text : e.kind)))
+      expect(texts(conversationValue(resumed)!)).toEqual(
+        transcriptOf(c1.state).map((e) => (e.kind === "message" ? e.text : e.kind)),
+      )
       expect(registry.get(connectionAtom)).toMatchObject({ status: "online", attempt: 0 })
       expect(registry.get(connectionAtom).generation).toBeGreaterThan(generation)
 
@@ -115,11 +132,19 @@ describe("conversation replica", () => {
       proxy.cut()
       await waitFor(registry, atom, (r) => conversationValue(r)?.synchronized === false)
       const c2 = brain.conversation(C2)
-      for (let i = 1; i <= 300; i++) c2.apply({ type: "entry.upserted", entry: messageFixture(C2, `ent_${String(i).padStart(4, "0")}`, i, `m${i}`) })
+      for (let i = 1; i <= 300; i++)
+        c2.apply({ type: "entry.upserted", entry: messageFixture(C2, `ent_${String(i).padStart(4, "0")}`, i, `m${i}`) })
       const before = brain.subscribes.length
       proxy.restore()
-      const resumed = await waitFor(registry, atom, (r) => conversationValue(r)?.synchronized === true && conversationValue(r)?.cursor?.sequence === 300)
-      expect(brain.subscribes.slice(before).find((s) => s.rpc === "conversations.subscribe")).toMatchObject({ after: { epoch: "e1", sequence: 0 }, plan: "snapshot" })
+      const resumed = await waitFor(
+        registry,
+        atom,
+        (r) => conversationValue(r)?.synchronized === true && conversationValue(r)?.cursor?.sequence === 300,
+      )
+      expect(brain.subscribes.slice(before).find((s) => s.rpc === "conversations.subscribe")).toMatchObject({
+        after: { epoch: "e1", sequence: 0 },
+        plan: "snapshot",
+      })
       expect(conversationValue(resumed)!.entries.size).toBe(300)
     } finally {
       unmount()
@@ -139,7 +164,10 @@ describe("conversation replica", () => {
       const before = brain.subscribes.length
       unmount = registry.mount(atom)
       await waitFor(registry, atom, (r) => conversationValue(r)?.synchronized === true)
-      expect(brain.subscribes.slice(before).find((s) => s.rpc === "conversations.subscribe")).toMatchObject({ after: cursor, plan: "replay" })
+      expect(brain.subscribes.slice(before).find((s) => s.rpc === "conversations.subscribe")).toMatchObject({
+        after: cursor,
+        plan: "replay",
+      })
     } finally {
       unmount()
       registry.dispose()
@@ -171,7 +199,11 @@ describe("connection supervisor", () => {
       const first = await waitFor(registry, atom, (r) => conversationValue(r)?.synchronized === true)
       const cursor = conversationValue(first)!.cursor!
       proxy.cut()
-      await waitFor(registry, connectionAtom, (s: ConnectionState) => s.status === "offline" && s.nextRetryAt !== undefined)
+      await waitFor(
+        registry,
+        connectionAtom,
+        (s: ConnectionState) => s.status === "offline" && s.nextRetryAt !== undefined,
+      )
       proxy.restore()
       const before = brain.subscribes.length
       const started = Date.now()
@@ -179,7 +211,10 @@ describe("connection supervisor", () => {
       await waitFor(registry, connectionAtom, (s: ConnectionState) => s.status === "online", 2_000)
       await waitFor(registry, atom, (r) => conversationValue(r)?.synchronized === true, 2_000)
       expect(Date.now() - started).toBeLessThan(2_000)
-      expect(brain.subscribes.slice(before).find((s) => s.rpc === "conversations.subscribe")).toMatchObject({ after: cursor, plan: "replay" })
+      expect(brain.subscribes.slice(before).find((s) => s.rpc === "conversations.subscribe")).toMatchObject({
+        after: cursor,
+        plan: "replay",
+      })
     } finally {
       unmount()
       unmountConn()
@@ -200,7 +235,11 @@ describe("roster replica", () => {
       brain.roster.apply({ type: "bot.upserted", bot: botFixture("bot_2", "Coder", "cnv_9") })
       const before = brain.subscribes.length
       proxy.restore()
-      const resumed = await waitFor(registry, rosterAtom, (r) => valueOf(r)?.synchronized === true && valueOf(r)!.bots.size === 2)
+      const resumed = await waitFor(
+        registry,
+        rosterAtom,
+        (r) => valueOf(r)?.synchronized === true && valueOf(r)!.bots.size === 2,
+      )
       expect(brain.subscribes.slice(before).find((s) => s.rpc === "roster.subscribe")).toMatchObject({ plan: "replay" })
       expect(valueOf(resumed)!.cursor).toEqual(brain.roster.head)
     } finally {
@@ -253,20 +292,34 @@ describe("command atoms", () => {
     const unmountOutbox = registry.mount(outboxAtom(conversationId))
     try {
       await waitFor(registry, atom, (r) => valueOf(r)?.synchronized === true)
-      const exit = await runFn(registry, sendMessageAtom, { conversationId, text: "hello from the client", clientNonce: "nonce-1" })
+      const exit = await runFn(registry, sendMessageAtom, {
+        conversationId,
+        text: "hello from the client",
+        clientNonce: "nonce-1",
+      })
       expect(Exit.isSuccess(exit) && exit.value.disposition).toBe("started")
       const state = await waitFor(registry, atom, (r) => texts(valueOf(r)!).includes("hello from the client"))
-      const entry = transcriptOf(valueOf(state)!).find((e) => e.kind === "message" && e.text === "hello from the client")
+      const entry = transcriptOf(valueOf(state)!).find(
+        (e) => e.kind === "message" && e.text === "hello from the client",
+      )
       expect(entry && entry.kind === "message" && entry.clientNonce).toBe("nonce-1")
       await waitFor(registry, outboxAtom(conversationId), (items) => items.length === 0)
 
       // same nonce again → the brain reports a duplicate, nothing new in the transcript
-      const again = await runFn(registry, sendMessageAtom, { conversationId, text: "hello from the client", clientNonce: "nonce-1" })
+      const again = await runFn(registry, sendMessageAtom, {
+        conversationId,
+        text: "hello from the client",
+        clientNonce: "nonce-1",
+      })
       expect(Exit.isSuccess(again) && again.value.disposition).toBe("duplicate")
 
       // a failed send stays in the outbox as failed (error tray), with a readable message
       brain.failNextSend = true
-      const failed = await runFn(registry, sendMessageAtom, { conversationId, text: "will fail", clientNonce: "nonce-2" })
+      const failed = await runFn(registry, sendMessageAtom, {
+        conversationId,
+        text: "will fail",
+        clientNonce: "nonce-2",
+      })
       expect(Exit.isFailure(failed)).toBe(true)
       const outbox = registry.get(outboxAtom(conversationId))
       expect(outbox).toHaveLength(1)
@@ -330,7 +383,12 @@ describe("command atoms", () => {
       expect(new TextDecoder().decode(brain.uploads.at(-1)!.bytes)).toBe("hi there")
 
       const uploadsBefore = brain.uploads.length
-      const huge = { name: "huge.bin", type: "", size: 11 * 1024 * 1024, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }
+      const huge = {
+        name: "huge.bin",
+        type: "",
+        size: 11 * 1024 * 1024,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+      }
       const tooBig = await runFn(registry, atom, [huge])
       expect(Exit.isFailure(tooBig) && JSON.stringify(tooBig)).toContain("InvalidInput")
       expect(brain.uploads.length).toBe(uploadsBefore)
@@ -339,4 +397,3 @@ describe("command atoms", () => {
     }
   })
 })
-

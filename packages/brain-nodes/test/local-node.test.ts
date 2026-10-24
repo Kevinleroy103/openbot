@@ -24,11 +24,11 @@ const daemon = (extra?: Partial<NonNullable<LocalNodeDaemonOptions["node"]>>): L
 
 const withLocal = <A, E>(options: LocalNodeDaemonOptions, effect: Effect.Effect<A, E, any>, extra?: Layer.Layer<any>) =>
   run(
-    effect.pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path, localDaemon: options, ...(extra ? { extra } : {}) }))) as any) as Effect.Effect<
-      A,
-      E,
-      never
-    >,
+    effect.pipe(
+      Effect.provide(
+        Layer.fresh(brainStack({ dataRoot: dir.path, localDaemon: options, ...(extra ? { extra } : {}) })),
+      ) as any,
+    ) as Effect.Effect<A, E, never>,
   )
 
 const workspace = (botId: string) => {
@@ -64,13 +64,16 @@ describe("local node", () => {
     })
     return withLocal(
       daemon(),
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const client = yield* (yield* NodeDirectory).client(LOCAL_NODE_ID)
         workspace("bot_proj")
         workspace("bot_plain")
-        const events = yield* client["shell.exec"]({ inv: inv("bot_proj", 1), command: "pwd", cwd: project, timeoutMs: 10_000 }).pipe(
-          Stream.runCollect,
-        )
+        const events = yield* client["shell.exec"]({
+          inv: inv("bot_proj", 1),
+          command: "pwd",
+          cwd: project,
+          timeoutMs: 10_000,
+        }).pipe(Stream.runCollect)
         expect(outputOf(events)).toContain(project)
         yield* client["fs.write"]({ inv: inv("bot_proj", 2), path: join(project, "a.txt"), content: "x" })
         yield* client["fs.write"]({ inv: inv("bot_plain", 3), path: join(shared, "b.txt"), content: "y" })
@@ -84,7 +87,7 @@ describe("local node", () => {
   test("node_local is registered online and runs shell.exec and fs calls through NodeDirectory.client", () =>
     withLocal(
       daemon(),
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const directory = yield* NodeDirectory
         const summary = yield* directory.get(LOCAL_NODE_ID)
         expect(summary).toMatchObject({ id: LOCAL_NODE_ID, kind: "local", status: "online", label: "This computer" })
@@ -106,7 +109,11 @@ describe("local node", () => {
         expect(outputOf(events)).toContain(ws)
         expect(events.at(-1)).toMatchObject({ _tag: "Exit", code: 0, timedOut: false })
 
-        const written = yield* client["fs.write"]({ inv: inv("bot_local", 2), path: join(ws, "note.txt"), content: "hi there" })
+        const written = yield* client["fs.write"]({
+          inv: inv("bot_local", 2),
+          path: join(ws, "note.txt"),
+          content: "hi there",
+        })
         expect(written.size).toBe(8)
         const read = yield* client["fs.read"]({ inv: inv("bot_local", 3), path: join(ws, "note.txt") })
         expect(read).toMatchObject({ content: "hi there", truncated: false })
@@ -123,7 +130,7 @@ describe("local node", () => {
   test("NodeFiles.download streams a file from the local node intact (fs.download over an in-memory transfer stream)", () =>
     withLocal(
       daemon(),
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const files = yield* NodeFiles
         const ws = workspace("bot_send")
         mkdirSync(join(ws, "output"), { recursive: true })
@@ -133,8 +140,14 @@ describe("local node", () => {
         const sha = (bytes: Uint8Array) => new Bun.CryptoHasher("sha256").update(bytes).digest("hex")
 
         const download = yield* Effect.scoped(
-          Effect.gen(function*() {
-            const dl = yield* files.download({ nodeId: LOCAL_NODE_ID, inv: inv("bot_send", 1), path: "output/cache-demo.mp4", cwd: ws, maxBytes: 50_000_000 })
+          Effect.gen(function* () {
+            const dl = yield* files.download({
+              nodeId: LOCAL_NODE_ID,
+              inv: inv("bot_send", 1),
+              path: "output/cache-demo.mp4",
+              cwd: ws,
+              maxBytes: 50_000_000,
+            })
             const hasher = new Bun.CryptoHasher("sha256")
             let size = 0
             let chunks = 0
@@ -143,22 +156,59 @@ describe("local node", () => {
                 hasher.update(chunk)
                 size += chunk.byteLength
                 chunks++
-              }))
-            return { name: dl.name, path: dl.path, size: dl.size, headLength: dl.head.byteLength, received: size, chunks, sha: hasher.digest("hex") }
+              }),
+            )
+            return {
+              name: dl.name,
+              path: dl.path,
+              size: dl.size,
+              headLength: dl.head.byteLength,
+              received: size,
+              chunks,
+              sha: hasher.digest("hex"),
+            }
           }),
         )
-        expect(download).toMatchObject({ name: "cache-demo.mp4", path: join(ws, "output", "cache-demo.mp4"), size: data.byteLength, headLength: 4096 })
+        expect(download).toMatchObject({
+          name: "cache-demo.mp4",
+          path: join(ws, "output", "cache-demo.mp4"),
+          size: data.byteLength,
+          headLength: 4096,
+        })
         expect(download.received).toBe(data.byteLength)
         expect(download.chunks).toBe(10)
         expect(download.sha).toBe(sha(data))
 
         // the same path policy as fs.read: other bots' workspaces and anything outside are refused
         workspace("bot_other2")
-        const otherBot = yield* Effect.flip(Effect.scoped(files.download({ nodeId: LOCAL_NODE_ID, inv: inv("bot_other2", 2), path: join(ws, "output", "cache-demo.mp4"), maxBytes: 50_000_000 })))
+        const otherBot = yield* Effect.flip(
+          Effect.scoped(
+            files.download({
+              nodeId: LOCAL_NODE_ID,
+              inv: inv("bot_other2", 2),
+              path: join(ws, "output", "cache-demo.mp4"),
+              maxBytes: 50_000_000,
+            }),
+          ),
+        )
         expect(otherBot._tag).toBe("PathDenied")
-        const tooBig = yield* Effect.flip(Effect.scoped(files.download({ nodeId: LOCAL_NODE_ID, inv: inv("bot_send", 3), path: "output/cache-demo.mp4", cwd: ws, maxBytes: 1_000_000 })))
+        const tooBig = yield* Effect.flip(
+          Effect.scoped(
+            files.download({
+              nodeId: LOCAL_NODE_ID,
+              inv: inv("bot_send", 3),
+              path: "output/cache-demo.mp4",
+              cwd: ws,
+              maxBytes: 1_000_000,
+            }),
+          ),
+        )
         expect(tooBig).toMatchObject({ _tag: "FsError", code: "EFBIG" })
-        const offline = yield* Effect.flip(Effect.scoped(files.download({ nodeId: "nod_gone" as never, inv: inv("bot_send", 4), path: "x", maxBytes: 1 })))
+        const offline = yield* Effect.flip(
+          Effect.scoped(
+            files.download({ nodeId: "nod_gone" as never, inv: inv("bot_send", 4), path: "x", maxBytes: 1 }),
+          ),
+        )
         expect(offline._tag).toBe("NodeUnavailable")
       }),
     ))
@@ -166,7 +216,7 @@ describe("local node", () => {
   test("NodeFiles.upload writes a streamed file into the bot's workspace (verified, atomic); a same-size file is kept", () =>
     withLocal(
       daemon(),
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const files = yield* NodeFiles
         const ws = workspace("bot_inbox")
         const data = new Uint8Array(5 * 1024 * 1024 + 99)
@@ -175,13 +225,33 @@ describe("local node", () => {
         const parts: Array<Uint8Array> = []
         for (let at = 0; at < data.length; at += 700_001) parts.push(data.slice(at, at + 700_001))
         const target = join(ws, "inbox", "att_9", "diagram.png")
-        const first = yield* files.upload({ nodeId: LOCAL_NODE_ID, inv: inv("bot_inbox", 1), path: target, size: data.byteLength, chunks: Stream.fromIterable(parts) })
+        const first = yield* files.upload({
+          nodeId: LOCAL_NODE_ID,
+          inv: inv("bot_inbox", 1),
+          path: target,
+          size: data.byteLength,
+          chunks: Stream.fromIterable(parts),
+        })
         expect(first).toEqual({ path: target, size: data.byteLength, skipped: false })
         const sha = (bytes: Uint8Array) => new Bun.CryptoHasher("sha256").update(bytes).digest("hex")
         expect(sha(new Uint8Array(readFileSync(target)))).toBe(sha(data))
-        const again = yield* files.upload({ nodeId: LOCAL_NODE_ID, inv: inv("bot_inbox", 2), path: target, size: data.byteLength, chunks: Stream.die("must not be read") })
+        const again = yield* files.upload({
+          nodeId: LOCAL_NODE_ID,
+          inv: inv("bot_inbox", 2),
+          path: target,
+          size: data.byteLength,
+          chunks: Stream.die("must not be read"),
+        })
         expect(again.skipped).toBe(true)
-        const outside = yield* Effect.flip(files.upload({ nodeId: LOCAL_NODE_ID, inv: inv("bot_inbox", 3), path: "/etc/openbot-test.bin", size: 1, chunks: Stream.make(new Uint8Array([1])) }))
+        const outside = yield* Effect.flip(
+          files.upload({
+            nodeId: LOCAL_NODE_ID,
+            inv: inv("bot_inbox", 3),
+            path: "/etc/openbot-test.bin",
+            size: 1,
+            chunks: Stream.make(new Uint8Array([1])),
+          }),
+        )
         expect(outside._tag).toBe("PathDenied")
       }),
     ))
@@ -189,25 +259,33 @@ describe("local node", () => {
   test("a node ceiling of ask goes to ApprovalService.evaluateNode as node_local", () =>
     withLocal(
       daemon({ policy: { ceiling: "ask" } }),
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const directory = yield* NodeDirectory
         const approvals = yield* ApprovalServiceFake
         const ws = workspace("bot_ask")
         const client = yield* directory.client(LOCAL_NODE_ID)
-        const events = yield* client["shell.exec"]({ inv: inv("bot_ask", 1), command: "echo approved", cwd: ws, timeoutMs: 10_000 })
-          .pipe(Stream.runCollect)
+        const events = yield* client["shell.exec"]({
+          inv: inv("bot_ask", 1),
+          command: "echo approved",
+          cwd: ws,
+          timeoutMs: 10_000,
+        }).pipe(Stream.runCollect)
         expect(outputOf(events)).toContain("approved")
         const asked = yield* approvals.nodeRequests
         expect(asked.length).toBeGreaterThanOrEqual(1)
         expect(asked[0]!.nodeId).toBe(LOCAL_NODE_ID)
-        expect(asked[0]!.request).toMatchObject({ botId: "bot_ask", runId: "bot_ask:cnv_bot_ask", action: "run-command" })
+        expect(asked[0]!.request).toMatchObject({
+          botId: "bot_ask",
+          runId: "bot_ask:cnv_bot_ask",
+          action: "run-command",
+        })
       }),
     ))
 
   test("the terminal socket runs a pty in the bot's workspace on the local node", () =>
     withLocal(
       daemon(),
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         const botId = "bot_term" as BotId
         yield* putBot(makeBot({ id: botId, hostNodeId: LOCAL_NODE_ID }))
@@ -216,7 +294,7 @@ describe("local node", () => {
         const decoder = new TextDecoder()
         let screen = ""
         const readUntil = (needle: string) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             while (!screen.includes(needle)) {
               for (const f of yield* term.pull) screen += typeof f === "string" ? `\n[text]${f}\n` : decoder.decode(f)
             }
@@ -237,19 +315,22 @@ describe("local node", () => {
   test("terminal refusals: unknown bot 404, offline host 503", () =>
     withLocal(
       daemon(),
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const server = yield* startServer
         yield* putBot(makeBot({ id: "bot_far" as BotId, hostNodeId: "nod_missing" as never }))
         const status = (botId: string) =>
-          Effect.promise(async () =>
-            (await fetch(`${server.http}/ws/terminal/${botId}`, {
-              headers: {
-                connection: "upgrade",
-                upgrade: "websocket",
-                "sec-websocket-version": "13",
-                "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
-              },
-            })).status
+          Effect.promise(
+            async () =>
+              (
+                await fetch(`${server.http}/ws/terminal/${botId}`, {
+                  headers: {
+                    connection: "upgrade",
+                    upgrade: "websocket",
+                    "sec-websocket-version": "13",
+                    "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+                  },
+                })
+              ).status,
           )
         expect(yield* status("bot_nobody")).toBe(404)
         expect(yield* status("bot_far")).toBe(503)

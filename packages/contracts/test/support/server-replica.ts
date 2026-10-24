@@ -60,7 +60,10 @@ export class ServerReplica {
   subscribe(after?: StreamCursor, tailLimit?: number): KnownConversationStreamItem[] {
     const oldest = this.log[0]?.cursor.sequence ?? this.sequence + 1
     if (resumePlan(after, this.head, oldest) === "replay") {
-      return [...this.log.filter((i) => i.cursor.sequence > after!.sequence), { kind: "synchronized", cursor: this.head }]
+      return [
+        ...this.log.filter((i) => i.cursor.sequence > after!.sequence),
+        { kind: "synchronized", cursor: this.head },
+      ]
     }
     return [this.snapshot(tailLimit), { kind: "synchronized", cursor: this.head }]
   }

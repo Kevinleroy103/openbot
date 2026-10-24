@@ -11,12 +11,16 @@ import {
   UsageService,
   userActor,
 } from "../../src/ports/index.ts"
+import { MemoryServiceLive, SettingsServiceLive, UsageServiceLive } from "../../src/services/automation/index.ts"
 import {
-  MemoryServiceLive,
-  SettingsServiceLive,
-  UsageServiceLive,
-} from "../../src/services/automation/index.ts"
-import { botId, ConversationServiceFake, LiveHubFake, makeClaims, runTest, setTime, turnId } from "../../src/testing/index.ts"
+  botId,
+  ConversationServiceFake,
+  LiveHubFake,
+  makeClaims,
+  runTest,
+  setTime,
+  turnId,
+} from "../../src/testing/index.ts"
 import { BOT_A, BOT_B, baseLayer, DM_A, GROUP, seed } from "./helpers.ts"
 
 const failsWith = (exit: Exit.Exit<unknown, unknown>, tag: string) =>
@@ -28,7 +32,7 @@ describe("MemoryService", () => {
 
   test("fact CRUD keeps MEMORY.md in sync and bot changes emit memory-updated events", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const memory = yield* MemoryService
         const store = yield* MemoryStore
@@ -39,7 +43,12 @@ describe("MemoryService", () => {
           body: "The owner likes dark themes.",
         })
         const afterPut = yield* store.readIndex(BOT_A.id)
-        yield* memory.putFact(asBotA, BOT_A.id, { id: fact.id, title: "Prefers dark mode", description: "Confirmed twice", body: "x" })
+        yield* memory.putFact(asBotA, BOT_A.id, {
+          id: fact.id,
+          title: "Prefers dark mode",
+          description: "Confirmed twice",
+          body: "x",
+        })
         const userFact = yield* memory.putFact(userActor, BOT_A.id, { title: "Timezone", body: "Europe/Berlin" })
         const afterUpdate = yield* memory.get(BOT_A.id)
         const recalled = yield* memory.recall(BOT_A.id, "BERLIN")
@@ -50,7 +59,11 @@ describe("MemoryService", () => {
       }),
       layer(),
     )
-    expect(out.fact).toMatchObject({ id: "prefers-dark-mode", title: "Prefers dark mode", body: "The owner likes dark themes." })
+    expect(out.fact).toMatchObject({
+      id: "prefers-dark-mode",
+      title: "Prefers dark mode",
+      body: "The owner likes dark themes.",
+    })
     expect(out.afterPut).toBe("# Ada's memory\n- [Prefers dark mode](prefers-dark-mode.md) — UI preference\n")
     expect(out.afterUpdate.index).toBe(
       "# Ada's memory\n- [Prefers dark mode](prefers-dark-mode.md) — Confirmed twice\n- [Timezone](timezone.md)\n",
@@ -71,14 +84,16 @@ describe("MemoryService", () => {
 
   test("refusals: unknown bot, another bot's memory, invalid input, missing fact", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const memory = yield* MemoryService
         return {
           unknownBot: yield* Effect.exit(memory.get(botId("bot_missing"))),
           otherBot: yield* Effect.exit(memory.putFact(asBotA, BOT_B.id, { title: "x", body: "y" })),
           blank: yield* Effect.exit(memory.putFact(userActor, BOT_A.id, { title: "   ", body: "y" })),
-          badId: yield* Effect.exit(memory.putFact(userActor, BOT_A.id, { id: "Not A Slug" as MemoryFactId, title: "x", body: "y" })),
+          badId: yield* Effect.exit(
+            memory.putFact(userActor, BOT_A.id, { id: "Not A Slug" as MemoryFactId, title: "x", body: "y" }),
+          ),
           missing: yield* Effect.exit(memory.deleteFact(userActor, BOT_A.id, "nope" as MemoryFactId)),
         }
       }),
@@ -93,7 +108,7 @@ describe("MemoryService", () => {
 
   test("promptIndex caps MEMORY.md at 4 KB", async () => {
     const index = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         const memory = yield* MemoryService
         yield* memory.setIndex(BOT_A.id, "é".repeat(5000))
@@ -111,11 +126,11 @@ describe("SettingsService", () => {
 
   test("update persists one key per field, publishes settings.updated and streams changes", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const repo = yield* SettingsRepo
         yield* repo.set("theme", "dark")
         // Built after seeding so the initial value is read from the repo.
-        return yield* Effect.gen(function*() {
+        return yield* Effect.gen(function* () {
           const settings = yield* SettingsService
           const initial = yield* settings.get
           const changes = yield* Stream.runCollect(Stream.take(settings.changes, 2)).pipe(
@@ -149,27 +164,55 @@ describe("SettingsService", () => {
 
   test("rules CRUD: ids and createdAt allocated, updates keep createdAt, bot scope validated", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* seed
         yield* setTime(1000)
         const settings = yield* SettingsService
-        const global = yield* settings.upsertRule({ surface: "shell", match: { commandPrefix: "git status" }, action: "allow" })
+        const global = yield* settings.upsertRule({
+          surface: "shell",
+          match: { commandPrefix: "git status" },
+          action: "allow",
+        })
         yield* setTime(2000)
         const scoped = yield* settings.upsertRule({ botId: BOT_A.id, surface: "file-edit", match: {}, action: "ask" })
-        const edited = yield* settings.upsertRule({ id: global.id, surface: "shell", match: { commandPrefix: "git" }, action: "deny" })
+        const edited = yield* settings.upsertRule({
+          id: global.id,
+          surface: "shell",
+          match: { commandPrefix: "git" },
+          action: "deny",
+        })
         const forB = yield* settings.listRules({ botId: BOT_B.id })
         const forA = yield* settings.listRules({ botId: BOT_A.id })
-        const unknownBot = yield* Effect.exit(settings.upsertRule({ botId: botId("bot_x"), surface: "shell", match: {}, action: "deny" }))
-        const blank = yield* Effect.exit(settings.upsertRule({ surface: "shell", match: { commandPrefix: "  " }, action: "deny" }))
+        const unknownBot = yield* Effect.exit(
+          settings.upsertRule({ botId: botId("bot_x"), surface: "shell", match: {}, action: "deny" }),
+        )
+        const blank = yield* Effect.exit(
+          settings.upsertRule({ surface: "shell", match: { commandPrefix: "  " }, action: "deny" }),
+        )
         yield* settings.deleteRule(scoped.id)
         const deleteAgain = yield* Effect.exit(settings.deleteRule(scoped.id))
-        return { global, scoped, edited, forA, forB, unknownBot, blank, deleteAgain, all: yield* settings.listRules({}) }
+        return {
+          global,
+          scoped,
+          edited,
+          forA,
+          forB,
+          unknownBot,
+          blank,
+          deleteAgain,
+          all: yield* settings.listRules({}),
+        }
       }),
       layer(),
     )
     expect(out.global).toMatchObject({ createdAt: 1000, origin: "user", action: "allow" })
     expect(out.global.id).toMatch(/^rul_/)
-    expect(out.edited).toMatchObject({ id: out.global.id, createdAt: 1000, action: "deny", match: { commandPrefix: "git" } })
+    expect(out.edited).toMatchObject({
+      id: out.global.id,
+      createdAt: 1000,
+      action: "deny",
+      match: { commandPrefix: "git" },
+    })
     expect(out.forB.map((r) => r.id)).toEqual([out.global.id])
     expect(out.forA.map((r) => r.id).sort()).toEqual([out.global.id, out.scoped.id].sort())
     expect(failsWith(out.unknownBot, "NotFound")).toBe(true)
@@ -182,14 +225,29 @@ describe("SettingsService", () => {
 describe("UsageService", () => {
   test("records usage and aggregates per bot (turn count, since filter)", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const usage = yield* UsageService
         const base = { conversationId: DM_A.id, harness: "fake" }
         yield* setTime(100)
-        yield* usage.record({ ...base, botId: BOT_A.id, turnId: turnId("trn_1"), usage: { inputTokens: 10, outputTokens: 5 } })
+        yield* usage.record({
+          ...base,
+          botId: BOT_A.id,
+          turnId: turnId("trn_1"),
+          usage: { inputTokens: 10, outputTokens: 5 },
+        })
         yield* setTime(200)
-        yield* usage.record({ ...base, botId: BOT_A.id, turnId: turnId("trn_1"), usage: { inputTokens: 1, outputTokens: 1 } })
-        yield* usage.record({ ...base, botId: BOT_A.id, turnId: turnId("trn_2"), usage: { inputTokens: 2, outputTokens: 2 } })
+        yield* usage.record({
+          ...base,
+          botId: BOT_A.id,
+          turnId: turnId("trn_1"),
+          usage: { inputTokens: 1, outputTokens: 1 },
+        })
+        yield* usage.record({
+          ...base,
+          botId: BOT_A.id,
+          turnId: turnId("trn_2"),
+          usage: { inputTokens: 2, outputTokens: 2 },
+        })
         yield* usage.record({ ...base, botId: BOT_B.id, usage: { inputTokens: 7, outputTokens: 0 } })
         return { all: yield* usage.byBot({}), since: yield* usage.byBot({ sinceMs: 150 }) }
       }),
@@ -198,6 +256,9 @@ describe("UsageService", () => {
     const a = out.all.find((u) => u.botId === BOT_A.id)
     expect(a).toMatchObject({ usage: { inputTokens: 13, outputTokens: 8 }, turnCount: 2, lastAt: 200 })
     expect(out.all.find((u) => u.botId === BOT_B.id)).toMatchObject({ usage: { inputTokens: 7 }, turnCount: 0 })
-    expect(out.since.find((u) => u.botId === BOT_A.id)).toMatchObject({ usage: { inputTokens: 3, outputTokens: 3 }, turnCount: 2 })
+    expect(out.since.find((u) => u.botId === BOT_A.id)).toMatchObject({
+      usage: { inputTokens: 3, outputTokens: 3 },
+      turnCount: 2,
+    })
   })
 })

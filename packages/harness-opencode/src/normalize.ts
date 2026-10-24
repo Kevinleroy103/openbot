@@ -117,7 +117,9 @@ const ACTIVITY_LABELS: Readonly<Record<ToolKind, string>> = {
  * contracts phrases), everything else by kind.
  */
 export const activityOf = (cls: ToolClass): string =>
-  cls.mcp !== undefined && (cls.kind === "mcp" || cls.kind === "subagent") ? openBotToolActivity(cls.mcp.tool) : ACTIVITY_LABELS[cls.kind]
+  cls.mcp !== undefined && (cls.kind === "mcp" || cls.kind === "subagent")
+    ? openBotToolActivity(cls.mcp.tool)
+    : ACTIVITY_LABELS[cls.kind]
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim()
@@ -205,8 +207,10 @@ export const turnErrorOf = (error: unknown, fallbackCode = "turn-failed"): Harne
   const status = num(e.status)
   const text = `${code} ${message}`
   const auth = status === 401 || status === 403 || /auth|credential|unauthori[sz]ed|forbidden|free.?tier/i.test(text)
-  const retryable = !auth &&
-    (status === 429 || (status !== undefined && status >= 500) ||
+  const retryable =
+    !auth &&
+    (status === 429 ||
+      (status !== undefined && status >= 500) ||
       /rate.?limit|overload|timeout|timed out|network|transport|unavailable|temporar|econn/i.test(text))
   return { code, message, retryable }
 }
@@ -217,7 +221,8 @@ export interface NormalizerOptions {
   /** The native session this normalizer belongs to. */
   readonly sessionID: string
   /** Context window of a model (from `model.list` `limit.context`), when known. */
-  readonly contextWindow?: ((model: { readonly providerID: string; readonly id: string }) => number | undefined) | undefined
+  readonly contextWindow?:
+    ((model: { readonly providerID: string; readonly id: string }) => number | undefined) | undefined
   /**
    * The session's host node: OpenBot node tools called without a `node` argument run there, so
    * their entries are attributed to it (as the Codex adapter does).
@@ -226,7 +231,17 @@ export interface NormalizerOptions {
 }
 
 /** Gateway tools that execute on a node (`node` argument, default: the host node). */
-const NODE_TOOLS = new Set(["shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "browser", "computer"])
+const NODE_TOOLS = new Set([
+  "shell",
+  "read_file",
+  "write_file",
+  "edit_file",
+  "list_dir",
+  "glob",
+  "grep",
+  "browser",
+  "computer",
+])
 
 export interface OpenCodeNormalizer {
   /** The OpenBot turn that native events are attributed to. */
@@ -280,8 +295,10 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
   const permissionTools = new Map<string, string>()
   const declined = new Set<string>()
 
-  const toolKey = (assistantMessageID: string | undefined, callID: string) => `oc:tool:${assistantMessageID ?? "_"}:${callID}`
-  const partKey = (kind: "text" | "reasoning", data: Rec) => `oc:${kind}:${str(data.assistantMessageID) ?? "_"}:${num(data.ordinal) ?? 0}`
+  const toolKey = (assistantMessageID: string | undefined, callID: string) =>
+    `oc:tool:${assistantMessageID ?? "_"}:${callID}`
+  const partKey = (kind: "text" | "reasoning", data: Rec) =>
+    `oc:${kind}:${str(data.assistantMessageID) ?? "_"}:${num(data.ordinal) ?? 0}`
 
   const resetTurn = () => {
     turnId = undefined
@@ -326,11 +343,13 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
       } else if (item._tag === "Reasoning" && item.streaming) {
         out.push(upsert(key, { ...item, streaming: false }))
       } else if (item._tag === "ToolCall" && (item.status === "pending" || item.status === "running")) {
-        out.push(upsert(key, {
-          ...item,
-          status: "failed",
-          error: mode === "interrupted" ? "Interrupted" : "The tool call did not finish.",
-        }))
+        out.push(
+          upsert(key, {
+            ...item,
+            status: "failed",
+            error: mode === "interrupted" ? "Interrupted" : "The tool call did not finish.",
+          }),
+        )
       }
     }
     return out
@@ -342,13 +361,22 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
     return out
   }
 
-  const textLike = (kind: "text" | "reasoning", data: Rec, phase: "started" | "delta" | "ended"): ReadonlyArray<HarnessEvent> => {
+  const textLike = (
+    kind: "text" | "reasoning",
+    data: Rec,
+    phase: "started" | "delta" | "ended",
+  ): ReadonlyArray<HarnessEvent> => {
     const key = partKey(kind, data)
     const messageID = str(data.assistantMessageID)
     rememberPart(messageID, key)
     const prev = items.get(key)
     const prevText = prev && (prev._tag === "Message" || prev._tag === "Reasoning") ? prev.text : ""
-    const text = phase === "started" ? prevText : phase === "delta" ? prevText + (str(data.delta) ?? "") : (str(data.text) ?? prevText)
+    const text =
+      phase === "started"
+        ? prevText
+        : phase === "delta"
+          ? prevText + (str(data.delta) ?? "")
+          : (str(data.text) ?? prevText)
     const streaming = phase !== "ended"
     if (kind === "text") {
       const item: MessageItem = { _tag: "Message", role: "bot", text, streaming }
@@ -371,7 +399,7 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
 
   const baseTool = (key: string, name: string, input: unknown): ToolCallItem => {
     const cls = classifyTool(name)
-    const nodeId = cls.mcp && NODE_TOOLS.has(cls.mcp.tool) ? str(rec(input).node) ?? options.hostNodeId : undefined
+    const nodeId = cls.mcp && NODE_TOOLS.has(cls.mcp.tool) ? (str(rec(input).node) ?? options.hostNodeId) : undefined
     return {
       _tag: "ToolCall",
       toolName: name,
@@ -403,9 +431,11 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
       ...base,
       status: prev && prev.status !== "pending" ? prev.status : "running",
       input,
-      ...(command !== undefined ? { command: { command, ...(str(i.workdir) ?? str(i.cwd) ? { cwd: (str(i.workdir) ?? str(i.cwd))! } : {}) } } : {}),
+      ...(command !== undefined
+        ? { command: { command, ...((str(i.workdir) ?? str(i.cwd)) ? { cwd: (str(i.workdir) ?? str(i.cwd))! } : {}) } }
+        : {}),
       ...(path && (cls.kind === "file-write" || cls.kind === "file-edit") && !prev?.fileChanges
-        ? { fileChanges: [{ path, kind: cls.kind === "file-write" ? "add" as const : "update" as const }] }
+        ? { fileChanges: [{ path, kind: cls.kind === "file-write" ? ("add" as const) : ("update" as const) }] }
         : {}),
     }
     return [upsert(key, item)]
@@ -418,7 +448,10 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
     const info = toolInfos.get(key)
     const prev = toolItem(key) ?? baseTool(key, info?.name ?? "tool", info?.input ?? {})
     const parts = Array.isArray(data.content) ? data.content.map(rec) : []
-    const text = parts.filter((p) => p.type === "text").map((p) => str(p.text) ?? "").join("\n")
+    const text = parts
+      .filter((p) => p.type === "text")
+      .map((p) => str(p.text) ?? "")
+      .join("\n")
     const images = parts
       .filter((p) => p.type === "file" && (str(p.mime) ?? "").startsWith("image/") && str(p.uri))
       .map((p) => ({ mime: str(p.mime)!, url: str(p.uri)! }))
@@ -435,12 +468,12 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
       ...(fullText.length > 0 ? { outputPreview: clip(fullText, OUTPUT_PREVIEW_CHARS) } : {}),
       ...(fullText.length > 0 || images.length > 0
         ? {
-          output: {
-            ...(fullText.length > 0 ? { text: fullText.slice(0, OUTPUT_TEXT_CHARS) } : {}),
-            ...(images.length > 0 ? { images } : {}),
-            ...(truncated ? { truncated: true } : {}),
-          },
-        }
+            output: {
+              ...(fullText.length > 0 ? { text: fullText.slice(0, OUTPUT_TEXT_CHARS) } : {}),
+              ...(images.length > 0 ? { images } : {}),
+              ...(truncated ? { truncated: true } : {}),
+            },
+          }
         : {}),
       ...(error !== undefined ? { error } : {}),
       ...(prev.command && exit !== undefined ? { command: { ...prev.command, exitCode: exit } } : {}),
@@ -456,13 +489,16 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
     const key = toolKey(str(source.messageID), callID)
     if (permID) permissionTools.set(permID, key)
     const prev = toolItem(key)
-    const files = Array.isArray(rec(data.metadata).files) ? (rec(data.metadata).files as ReadonlyArray<unknown>).map(rec) : []
+    const files = Array.isArray(rec(data.metadata).files)
+      ? (rec(data.metadata).files as ReadonlyArray<unknown>).map(rec)
+      : []
     if (!prev || files.length === 0) return []
     const fileChanges = files
       .filter((f) => str(f.file))
       .map((f) => ({
         path: str(f.file)!,
-        kind: f.status === "added" ? "add" as const : f.status === "deleted" ? "delete" as const : "update" as const,
+        kind:
+          f.status === "added" ? ("add" as const) : f.status === "deleted" ? ("delete" as const) : ("update" as const),
         ...(str(f.patch) ? { diff: str(f.patch)! } : {}),
       }))
     return fileChanges.length > 0 ? [upsert(key, { ...prev, fileChanges })] : []
@@ -492,7 +528,8 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
     const out: Array<HarnessEvent> = []
     for (const key of partsByMessage.get(str(data.assistantMessageID) ?? "") ?? []) {
       const item = items.get(key)
-      if (item?._tag === "Message" && item.aborted !== true) out.push(upsert(key, { ...item, streaming: false, aborted: true }))
+      if (item?._tag === "Message" && item.aborted !== true)
+        out.push(upsert(key, { ...item, streaming: false, aborted: true }))
     }
     return out
   }
@@ -509,7 +546,8 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
     if (eventSessionId(event) !== options.sessionID) return []
     if (type === "session.step.started") {
       const model = rec(data.model)
-      if (str(model.providerID) && str(model.id)) currentModel = { providerID: str(model.providerID)!, id: str(model.id)! }
+      if (str(model.providerID) && str(model.id))
+        currentModel = { providerID: str(model.providerID)!, id: str(model.id)! }
     }
     if (type === "session.tool.input.started" || type === "session.tool.called") {
       const callID = str(data.id)
@@ -532,11 +570,18 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
         const reason = str(data.reason) ?? "user"
         return reason === "user"
           ? terminal({ _tag: "TurnInterrupted", turnId }, "interrupted")
-          : terminal({
-            _tag: "TurnFailed",
-            turnId,
-            error: { code: `interrupted:${reason}`, message: `OpenCode stopped the turn (${reason}).`, retryable: true },
-          }, "interrupted")
+          : terminal(
+              {
+                _tag: "TurnFailed",
+                turnId,
+                error: {
+                  code: `interrupted:${reason}`,
+                  message: `OpenCode stopped the turn (${reason}).`,
+                  retryable: true,
+                },
+              },
+              "interrupted",
+            )
       }
       case "session.text.started":
         return textLike("text", data, "started")
@@ -577,14 +622,23 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
         return status.type === "retry" ? [activity(`Retrying (attempt ${int(status.attempt)})…`)] : []
       }
       case "session.compaction.ended":
-        return [upsert(`oc:compaction:${event.id ?? "_"}`, { _tag: "Notice", level: "info", text: "Conversation compacted.", code: "compacted" })]
+        return [
+          upsert(`oc:compaction:${event.id ?? "_"}`, {
+            _tag: "Notice",
+            level: "info",
+            text: "Conversation compacted.",
+            code: "compacted",
+          }),
+        ]
       case "session.compaction.failed":
-        return [upsert(`oc:compaction:${event.id ?? "_"}`, {
-          _tag: "Notice",
-          level: "warning",
-          text: `Compaction failed: ${str(rec(data.error).message) ?? "unknown error"}`,
-          code: "compaction-failed",
-        })]
+        return [
+          upsert(`oc:compaction:${event.id ?? "_"}`, {
+            _tag: "Notice",
+            level: "warning",
+            text: `Compaction failed: ${str(rec(data.error).message) ?? "unknown error"}`,
+            code: "compaction-failed",
+          }),
+        ]
       default:
         return []
     }
@@ -606,9 +660,10 @@ export const makeNormalizer = (options: NormalizerOptions): OpenCodeNormalizer =
     compacted: (estimatedTokens, model) => {
       if (model) currentModel = { providerID: model.providerID, id: model.id }
       const window = currentModel ? options.contextWindow?.(currentModel) : undefined
-      lastContext = window !== undefined && window > 0
-        ? { usedTokens: Math.min(int(estimatedTokens), int(window)), windowTokens: int(window) }
-        : undefined
+      lastContext =
+        window !== undefined && window > 0
+          ? { usedTokens: Math.min(int(estimatedTokens), int(window)), windowTokens: int(window) }
+          : undefined
     },
   }
 }

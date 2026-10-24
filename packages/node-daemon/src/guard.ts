@@ -32,7 +32,14 @@ export const makeGuard = (policy: NodePolicyShape, audit: AuditLogShape): Guard 
   const decide = (input: PolicyCheck) =>
     policy.check(input).pipe(
       Effect.tapError((e) =>
-        audit.record({ inv: input.inv, action: input.action, target: input.target, decision: "refused", by: "node", error: e.reason }),
+        audit.record({
+          inv: input.inv,
+          action: input.action,
+          target: input.target,
+          decision: "refused",
+          by: "node",
+          error: e.reason,
+        }),
       ),
     )
   const guard = (<A, E, R>(

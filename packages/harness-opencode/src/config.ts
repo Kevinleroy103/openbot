@@ -84,20 +84,35 @@ export const mcpServerName = (sessionKey: string, bindingName: string): string =
  * Splits a native tool name into an OpenBot MCP reference: `openbot_whoami` (static name) or
  * `openbot-3f9a1c2b7d_message_bot` (per-session name) → `{server: "openbot", tool}`.
  */
-export const parseOpenBotMcpTool = (toolName: string): { readonly server: string; readonly tool: string } | undefined => {
+export const parseOpenBotMcpTool = (
+  toolName: string,
+): { readonly server: string; readonly tool: string } | undefined => {
   const match = /^openbot(?:-[a-z0-9]+)?_(.+)$/.exec(toolName)
   return match?.[1] ? { server: "openbot", tool: match[1] } : undefined
 }
 
 // ---------------------------------------------------------------------------- permissions
 
-const rule = (action: string, effect: PermissionRule["effect"], resource = "*"): PermissionRule => ({ action, resource, effect })
+const rule = (action: string, effect: PermissionRule["effect"], resource = "*"): PermissionRule => ({
+  action,
+  resource,
+  effect,
+})
 
 /**
  * Native permission actions of OpenCode's built-in file-system and shell tools (sdk-opencode.md
  * §8.1; `write`, `patch` and `edit` all assert `edit`). Denied for B1 (`brain-mcp-hands`).
  */
-export const BUILTIN_TOOL_ACTIONS = ["shell", "read", "edit", "write", "glob", "grep", "list", "external_directory"] as const
+export const BUILTIN_TOOL_ACTIONS = [
+  "shell",
+  "read",
+  "edit",
+  "write",
+  "glob",
+  "grep",
+  "list",
+  "external_directory",
+] as const
 
 /**
  * Extra actions denied for B1: Code Mode `execute` reaches OpenCode's own namespace tools
@@ -131,7 +146,9 @@ export const sessionRules = (input: {
   rule("edit", "ask"),
   rule("external_directory", "ask"),
   rule("subagent", "deny"),
-  ...(input.skills === undefined ? [] : [rule("skill", "deny"), ...input.skills.map((name) => rule("skill", "allow", name))]),
+  ...(input.skills === undefined
+    ? []
+    : [rule("skill", "deny"), ...input.skills.map((name) => rule("skill", "allow", name))]),
   ...(input.grants ?? []),
   ...(input.disableBuiltinTools
     ? [...BUILTIN_TOOL_ACTIONS, ...B1_EXTRA_DENIED_ACTIONS].map((action) => rule(action, "deny"))
@@ -170,7 +187,8 @@ export const parseModel = (model: string | undefined, effort: string | undefined
 }
 
 /** OpenBot's model id for an OpenCode model (`provider/model`). */
-export const modelId = (ref: { readonly providerID: string; readonly id: string }): string => `${ref.providerID}/${ref.id}`
+export const modelId = (ref: { readonly providerID: string; readonly id: string }): string =>
+  `${ref.providerID}/${ref.id}`
 
 // ---------------------------------------------------------------------------- instructions
 
@@ -197,9 +215,14 @@ export const instructionEntries = (
   instructions: RenderedInstructions,
 ): ReadonlyArray<{ readonly key: string; readonly value: string }> => {
   const entries = (Object.keys(INSTRUCTION_KEYS) as ReadonlyArray<keyof typeof INSTRUCTION_KEYS>)
-    .map((section) => ({ key: INSTRUCTION_KEYS[section], value: (instructions.sections[section] ?? "").trim().slice(0, MAX_ENTRY_CHARS) }))
+    .map((section) => ({
+      key: INSTRUCTION_KEYS[section],
+      value: (instructions.sections[section] ?? "").trim().slice(0, MAX_ENTRY_CHARS),
+    }))
     .filter((entry) => entry.value.length > 0)
   // A renderer that fills only `text` still reaches the model.
   const text = instructions.text.trim()
-  return entries.length > 0 || text.length === 0 ? entries : [{ key: "openbot.instructions", value: text.slice(0, MAX_ENTRY_CHARS) }]
+  return entries.length > 0 || text.length === 0
+    ? entries
+    : [{ key: "openbot.instructions", value: text.slice(0, MAX_ENTRY_CHARS) }]
 }

@@ -131,7 +131,13 @@ const V1_RPCS = [
 describe("OpenBotRpcs", () => {
   test("exposes exactly the v1 procedure list", () => {
     expect([...OpenBotRpcs.requests.keys()].sort()).toEqual([...V1_RPCS].sort())
-    for (const cut of ["messages.feedback", "bots.setAvatarImage", "conversations.thread", "conversations.outline", "routines.webhookCredential"]) {
+    for (const cut of [
+      "messages.feedback",
+      "bots.setAvatarImage",
+      "conversations.thread",
+      "conversations.outline",
+      "routines.webhookCredential",
+    ]) {
       expect(OpenBotRpcs.requests.has(cut)).toBe(false)
     }
     expect([...OpenBotRpcs.requests.keys()].some((k) => k.startsWith("connectors."))).toBe(false)
@@ -141,7 +147,12 @@ describe("OpenBotRpcs", () => {
     // Type-level only: never executed. Breaks the typecheck if a payload or result shape drifts.
     const _usage = Effect.gen(function* () {
       const client = yield* RpcClient.make(OpenBotRpcs)
-      const sent = yield* client["messages.send"]({ conversationId: "cnv_1" as ConversationId, text: "hi", clientNonce: "n1", mode: "auto" })
+      const sent = yield* client["messages.send"]({
+        conversationId: "cnv_1" as ConversationId,
+        text: "hi",
+        clientNonce: "n1",
+        mode: "auto",
+      })
       const _disposition: "started" | "queued" | "steered" | "duplicate" = sent.disposition
       const settings = yield* client["settings.update"]({ patch: { theme: "dark" } })
       const _theme: "system" | "dark" | "light" = settings.theme
@@ -172,10 +183,21 @@ test("subscribe streams and typed errors survive the real JSON encode/decode pat
 
   const Handlers = WireRpcs.toLayer({
     "conversations.subscribe": ({ conversationId, after }) =>
-      conversationId === replica.state.conversation!.id ? Stream.fromIterable(replica.subscribe(after)) : Stream.fail(new NotFound({ entity: "conversation", id: conversationId })),
+      conversationId === replica.state.conversation!.id
+        ? Stream.fromIterable(replica.subscribe(after))
+        : Stream.fail(new NotFound({ entity: "conversation", id: conversationId })),
     "roster.subscribe": () =>
       Stream.fromIterable([
-        { kind: "snapshot", cursor: { epoch: "r1", sequence: 0 }, bots: [], conversations: [], activities: [], nodes: [], sections: [], settings: DEFAULT_SETTINGS },
+        {
+          kind: "snapshot",
+          cursor: { epoch: "r1", sequence: 0 },
+          bots: [],
+          conversations: [],
+          activities: [],
+          nodes: [],
+          sections: [],
+          settings: DEFAULT_SETTINGS,
+        },
         { kind: "synchronized", cursor: { epoch: "r1", sequence: 0 } },
       ] as const),
     "requests.respond": ({ requestId }) => {
@@ -194,14 +216,28 @@ test("subscribe streams and typed errors survive the real JSON encode/decode pat
       (s) => Effect.promise(() => s.stop(true)),
     )
     const client = yield* RpcClient.make(WireRpcs, { disableTracing: true }).pipe(
-      Effect.provide(RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${server.port}/rpc` }).pipe(Layer.provide(FetchHttpClient.layer))),
+      Effect.provide(
+        RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${server.port}/rpc` }).pipe(
+          Layer.provide(FetchHttpClient.layer),
+        ),
+      ),
     )
     const conversationId = "conv_fixture" as ConversationId
     const items = yield* client["conversations.subscribe"]({ conversationId }).pipe(Stream.runCollect)
-    const resumed = yield* client["conversations.subscribe"]({ conversationId, after: { epoch: "ep1", sequence: replica.sequence - 3 } }).pipe(Stream.runCollect)
+    const resumed = yield* client["conversations.subscribe"]({
+      conversationId,
+      after: { epoch: "ep1", sequence: replica.sequence - 3 },
+    }).pipe(Stream.runCollect)
     const roster = yield* client["roster.subscribe"]({}).pipe(Stream.runCollect)
-    const missing = yield* Effect.flip(client["conversations.subscribe"]({ conversationId: "nope" as ConversationId }).pipe(Stream.runCollect))
-    const notPending = yield* Effect.flip(client["requests.respond"]({ requestId: "req_001" as RequestId, response: { type: "decision", decision: "allow-once" } }))
+    const missing = yield* Effect.flip(
+      client["conversations.subscribe"]({ conversationId: "nope" as ConversationId }).pipe(Stream.runCollect),
+    )
+    const notPending = yield* Effect.flip(
+      client["requests.respond"]({
+        requestId: "req_001" as RequestId,
+        response: { type: "decision", decision: "allow-once" },
+      }),
+    )
     return { items: [...items], resumed: [...resumed], roster: [...roster], missing, notPending }
   }).pipe(Effect.provide(Handlers), Effect.provide(RpcSerialization.layerJson), Effect.scoped)
 

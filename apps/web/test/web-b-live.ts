@@ -7,7 +7,10 @@
 //   - `/ws/terminal/:botId`: a tiny echo "pty" speaking the terminal wire format.
 import type { Server, ServerWebSocket } from "bun"
 
-type Kind = { kind: "rpc"; upstream?: WebSocket; queue: string[] } | { kind: "screen"; botId: string; mode: "view" | "control" } | { kind: "terminal" }
+type Kind =
+  | { kind: "rpc"; upstream?: WebSocket; queue: string[] }
+  | { kind: "screen"; botId: string; mode: "view" | "control" }
+  | { kind: "terminal" }
 
 export interface LiveStub {
   /** Input events received on control sockets (parsed JSON). */
@@ -32,13 +35,26 @@ export const encodeFrame = (meta: object, image: Uint8Array): Uint8Array => {
   return out
 }
 
-export const makeLiveStub = (options: { readonly mockRpcUrl: string; readonly jpeg: Uint8Array; readonly width: number; readonly height: number }): LiveStub => {
+export const makeLiveStub = (options: {
+  readonly mockRpcUrl: string
+  readonly jpeg: Uint8Array
+  readonly width: number
+  readonly height: number
+}): LiveStub => {
   const screens = new Set<ServerWebSocket<Kind>>()
   const pending = new Map<string, { tag: string; payload: Record<string, unknown> }>()
   let seq = 0
   const frame = () =>
     encodeFrame(
-      { seq: seq++, mime: "image/jpeg", width: options.width, height: options.height, viewportWidth: options.width, viewportHeight: options.height, timestamp: Date.now() },
+      {
+        seq: seq++,
+        mime: "image/jpeg",
+        width: options.width,
+        height: options.height,
+        viewportWidth: options.width,
+        viewportHeight: options.height,
+        timestamp: Date.now(),
+      },
       options.jpeg,
     )
   const stub: LiveStub = {
@@ -47,14 +63,22 @@ export const makeLiveStub = (options: { readonly mockRpcUrl: string; readonly jp
     holder: "bot",
     fetch: (req, server) => {
       const url = new URL(req.url)
-      if (url.pathname === "/rpc") return server.upgrade(req, { data: { kind: "rpc", queue: [] } }) ? undefined : new Response("upgrade failed", { status: 400 })
+      if (url.pathname === "/rpc")
+        return server.upgrade(req, { data: { kind: "rpc", queue: [] } })
+          ? undefined
+          : new Response("upgrade failed", { status: 400 })
       const screen = /^\/ws\/computer\/([^/]+)$/.exec(url.pathname)
       if (screen) {
         const mode = url.searchParams.get("mode") === "control" ? "control" : "view"
         if (mode === "control" && stub.holder !== "user") return new Response("Take control first", { status: 403 })
-        return server.upgrade(req, { data: { kind: "screen", botId: decodeURIComponent(screen[1]!), mode } }) ? undefined : new Response("upgrade failed", { status: 400 })
+        return server.upgrade(req, { data: { kind: "screen", botId: decodeURIComponent(screen[1]!), mode } })
+          ? undefined
+          : new Response("upgrade failed", { status: 400 })
       }
-      if (/^\/ws\/terminal\//.test(url.pathname)) return server.upgrade(req, { data: { kind: "terminal" } }) ? undefined : new Response("upgrade failed", { status: 400 })
+      if (/^\/ws\/terminal\//.test(url.pathname))
+        return server.upgrade(req, { data: { kind: "terminal" } })
+          ? undefined
+          : new Response("upgrade failed", { status: 400 })
       return undefined
     },
     websocket: {
@@ -117,14 +141,22 @@ export const makeLiveStub = (options: { readonly mockRpcUrl: string; readonly jp
       const raw = JSON.parse(text) as unknown
       for (const m of Array.isArray(raw) ? raw : [raw]) {
         const msg = m as { _tag?: string; id?: unknown; tag?: string; payload?: Record<string, unknown> }
-        if (msg._tag === "Request" && typeof msg.tag === "string" && msg.tag.startsWith("computer.")) pending.set(String(msg.id), { tag: msg.tag, payload: msg.payload ?? {} })
+        if (msg._tag === "Request" && typeof msg.tag === "string" && msg.tag.startsWith("computer."))
+          pending.set(String(msg.id), { tag: msg.tag, payload: msg.payload ?? {} })
       }
     } catch {
       // not JSON
     }
   }
 
-  const status = (botId: string) => ({ botId, nodeId: "node_local", state: "ready", surface: "browser", controller: stub.holder, viewPath: `/ws/computer/${botId}` })
+  const status = (botId: string) => ({
+    botId,
+    nodeId: "node_local",
+    state: "ready",
+    surface: "browser",
+    controller: stub.holder,
+    viewPath: `/ws/computer/${botId}`,
+  })
 
   const rewrite = (text: string): string => {
     let raw: unknown

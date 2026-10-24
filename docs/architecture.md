@@ -67,26 +67,27 @@ node-protocol ─┤                     (browser-safe, effect only)
   contracts                       ─┘
 ```
 
-| Package | Path | Depends on | Owns | Must not |
-|---|---|---|---|---|
-| `@openbot/contracts` | packages/contracts | effect | Domain + wire schemas, typed errors, `OpenBotRpcs`, replica stream items, client projection reducer, harness event (normalized) schemas | import Bun/DOM APIs |
-| `@openbot/node-protocol` | packages/node-protocol | effect | `NodeRpcs`, `BrainRpcs`, node schemas/errors, stream kinds & framing, direction mux, Ed25519 + pairing helpers (WebCrypto), `PROTOCOL_VERSION` | import Bun-only APIs (must run in browser/Bun) |
-| `@openbot/core` | packages/core | contracts, node-protocol, effect | Ports (§3), domain services (§4.3), in-memory test doubles | import any SDK, SQL, React, `Bun.*`, `node:*` (use Effect `Clock`, `Random`) |
-| `@openbot/persistence` | packages/persistence | core, contracts, effect, @effect/sql-sqlite-bun, @effect/platform-bun | SQLite repositories, migrations, file stores (memory, skills, attachments), boot recovery | business rules |
-| `@openbot/harness-fake` | packages/harness-fake | core, contracts, effect, @modelcontextprotocol/sdk | Deterministic scripted harness (tests, offline demo) | — |
-| `@openbot/harness-claude` | packages/harness-claude | core, contracts, effect, @anthropic-ai/claude-agent-sdk | Claude driver/session/normalizer/probe | leak SDK types out of the package |
-| `@openbot/harness-codex` | packages/harness-codex | core, contracts, effect, @openai/codex | app-server process mgmt, JSON-RPC peer, driver/session/normalizer/probe, CODEX_HOME setup | — |
-| `@openbot/harness-opencode` | packages/harness-opencode | core, contracts, effect, @opencode/client | `opencode serve` mgmt, event hub, driver/session/normalizer/probe | — |
-| `@openbot/gateway` | packages/gateway | core, contracts, node-protocol, effect, @modelcontextprotocol/sdk | MCP gateway HTTP handler, per-run tokens, toolkits (bot, node, browser) | — |
-| `@openbot/node-daemon` | packages/node-daemon | node-protocol, effect, @effect/platform-bun | `NodeHandlersLive`, PathPolicy, NodePolicy, AuditLog, BrowserManager (CDP), DialOut + BrainLink, key store | depend on core |
-| `@openbot/brain-nodes` | packages/brain-nodes | core, contracts, node-protocol, node-daemon, effect, @effect/platform-bun | NodeRegistry, NodeGateway (/node), StreamBroker (/node/stream), relay routes, LocalNode, PlacementService impl, ComputerService (screencast relay + control lease), pairing | — |
-| `@openbot/ui` | packages/ui | react, lucide-react, (dev: tailwindcss) | Theme tokens (generated CSS), primitives, avatars, icon wrapper | fetch data |
-| `@openbot/client` | packages/client | contracts, effect, @effect/atom-react, @effect/platform-browser | AtomRpc client, connection supervisor, subscription atoms (roster, conversation) with resume + reducer, command atoms | render UI |
-| `@openbot/server` | apps/server | everything brain-side + @openbot/web | Composition root: config, data dir, listeners, auth, RPC handlers, boot sequence | business rules |
-| `@openbot/web` | apps/web | ui, client, contracts, react, react-dom, @effect/atom-react, @xterm/xterm | Screens and app state | talk to SDKs |
-| `@openbot/node` | apps/node | node-daemon, node-protocol, effect, @effect/platform-bun | Daemon CLI: `pair`, `run`, `status` | — |
+| Package                     | Path                      | Depends on                                                                | Owns                                                                                                                                                                        | Must not                                                                     |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `@openbot/contracts`        | packages/contracts        | effect                                                                    | Domain + wire schemas, typed errors, `OpenBotRpcs`, replica stream items, client projection reducer, harness event (normalized) schemas                                     | import Bun/DOM APIs                                                          |
+| `@openbot/node-protocol`    | packages/node-protocol    | effect                                                                    | `NodeRpcs`, `BrainRpcs`, node schemas/errors, stream kinds & framing, direction mux, Ed25519 + pairing helpers (WebCrypto), `PROTOCOL_VERSION`                              | import Bun-only APIs (must run in browser/Bun)                               |
+| `@openbot/core`             | packages/core             | contracts, node-protocol, effect                                          | Ports (§3), domain services (§4.3), in-memory test doubles                                                                                                                  | import any SDK, SQL, React, `Bun.*`, `node:*` (use Effect `Clock`, `Random`) |
+| `@openbot/persistence`      | packages/persistence      | core, contracts, effect, @effect/sql-sqlite-bun, @effect/platform-bun     | SQLite repositories, migrations, file stores (memory, skills, attachments), boot recovery                                                                                   | business rules                                                               |
+| `@openbot/harness-fake`     | packages/harness-fake     | core, contracts, effect, @modelcontextprotocol/sdk                        | Deterministic scripted harness (tests, offline demo)                                                                                                                        | —                                                                            |
+| `@openbot/harness-claude`   | packages/harness-claude   | core, contracts, effect, @anthropic-ai/claude-agent-sdk                   | Claude driver/session/normalizer/probe                                                                                                                                      | leak SDK types out of the package                                            |
+| `@openbot/harness-codex`    | packages/harness-codex    | core, contracts, effect, @openai/codex                                    | app-server process mgmt, JSON-RPC peer, driver/session/normalizer/probe, CODEX_HOME setup                                                                                   | —                                                                            |
+| `@openbot/harness-opencode` | packages/harness-opencode | core, contracts, effect, @opencode/client                                 | `opencode serve` mgmt, event hub, driver/session/normalizer/probe                                                                                                           | —                                                                            |
+| `@openbot/gateway`          | packages/gateway          | core, contracts, node-protocol, effect, @modelcontextprotocol/sdk         | MCP gateway HTTP handler, per-run tokens, toolkits (bot, node, browser)                                                                                                     | —                                                                            |
+| `@openbot/node-daemon`      | packages/node-daemon      | node-protocol, effect, @effect/platform-bun                               | `NodeHandlersLive`, PathPolicy, NodePolicy, AuditLog, BrowserManager (CDP), DialOut + BrainLink, key store                                                                  | depend on core                                                               |
+| `@openbot/brain-nodes`      | packages/brain-nodes      | core, contracts, node-protocol, node-daemon, effect, @effect/platform-bun | NodeRegistry, NodeGateway (/node), StreamBroker (/node/stream), relay routes, LocalNode, PlacementService impl, ComputerService (screencast relay + control lease), pairing | —                                                                            |
+| `@openbot/ui`               | packages/ui               | react, lucide-react, (dev: tailwindcss)                                   | Theme tokens (generated CSS), primitives, avatars, icon wrapper                                                                                                             | fetch data                                                                   |
+| `@openbot/client`           | packages/client           | contracts, effect, @effect/atom-react, @effect/platform-browser           | AtomRpc client, connection supervisor, subscription atoms (roster, conversation) with resume + reducer, command atoms                                                       | render UI                                                                    |
+| `@openbot/server`           | apps/server               | everything brain-side + @openbot/web                                      | Composition root: config, data dir, listeners, auth, RPC handlers, boot sequence                                                                                            | business rules                                                               |
+| `@openbot/web`              | apps/web                  | ui, client, contracts, react, react-dom, @effect/atom-react, @xterm/xterm | Screens and app state                                                                                                                                                       | talk to SDKs                                                                 |
+| `@openbot/node`             | apps/node                 | node-daemon, node-protocol, effect, @effect/platform-bun                  | Daemon CLI: `pair`, `run`, `status`                                                                                                                                         | —                                                                            |
 
 Rules:
+
 - Every package exports source (`"exports": {".": "./src/index.ts"}`); there is no build step except `bun build --compile` for `apps/node`.
 - The root `typecheck` runs `bun check` over every package listed in the root `tsconfig.json` references; a package with tests has `test: bun test`.
 - Pin versions exactly through the root `catalog:`; effect is 4.0.4 (D4.5).
@@ -99,25 +100,25 @@ All ports are `Context.Service` classes in `packages/core/src/ports/`. Signature
 
 ```ts
 // packages/core/src/ports/Harness.ts
-export type HarnessKind = "claude" | "codex" | "opencode" | "fake"   // contracts.HarnessKind (open string decoded, unknown kinds kept)
+export type HarnessKind = "claude" | "codex" | "opencode" | "fake" // contracts.HarnessKind (open string decoded, unknown kinds kept)
 
 export interface HarnessCapabilities {
-  readonly resume: boolean            // reopen a native session by id
-  readonly steer: boolean             // inject user input into a running turn
+  readonly resume: boolean // reopen a native session by id
+  readonly steer: boolean // inject user input into a running turn
   readonly interrupt: boolean
   readonly approvals: "interactive" | "policy-only" | "none"
-  readonly questions: boolean         // native AskUserQuestion / requestUserInput / form
+  readonly questions: boolean // native AskUserQuestion / requestUserInput / form
   readonly compact: boolean
   readonly contextUsage: boolean
-  readonly images: boolean            // image attachments in user input
-  readonly remotePlacements: ReadonlyArray<PlacementMode>   // which remote modes the driver implements
+  readonly images: boolean // image attachments in user input
+  readonly remotePlacements: ReadonlyArray<PlacementMode> // which remote modes the driver implements
 }
 
 export interface HarnessDriver {
   readonly kind: HarnessKind
-  readonly displayName: string                       // "Claude", "Codex", "OpenCode", "Fake"
+  readonly displayName: string // "Claude", "Codex", "OpenCode", "Fake"
   readonly capabilities: HarnessCapabilities
-  readonly probe: Effect.Effect<HarnessStatus>       // installed? version? auth/account label? never throws; no model call
+  readonly probe: Effect.Effect<HarnessStatus> // installed? version? auth/account label? never throws; no model call
   readonly listModels: Effect.Effect<ReadonlyArray<ModelInfo>, HarnessError>
   readonly openSession: (input: OpenSessionInput) => Effect.Effect<HarnessSession, HarnessError, Scope.Scope>
 }
@@ -125,22 +126,22 @@ export interface HarnessDriver {
 // ONE session per bot (D5.0 "one mind per bot"), shared by all of its conversations.
 export interface OpenSessionInput {
   readonly bot: Bot
-  readonly conversationId: ConversationId            // the bot's HOME conversation (its DM)
-  readonly sessionKey: string                        // sessionKeyOf(bot.id, bot.directConversationId)
-  readonly nativeSessionId: string | undefined       // resume when defined
-  readonly placement: ResolvedPlacement              // §3.3
-  readonly instructions: RenderedInstructions        // §4.3.7 persona + team + memory index + node description
-  readonly mcp: ReadonlyArray<McpBinding>            // §3.4; never put tokens on argv
+  readonly conversationId: ConversationId // the bot's HOME conversation (its DM)
+  readonly sessionKey: string // sessionKeyOf(bot.id, bot.directConversationId)
+  readonly nativeSessionId: string | undefined // resume when defined
+  readonly placement: ResolvedPlacement // §3.3
+  readonly instructions: RenderedInstructions // §4.3.7 persona + team + memory index + node description
+  readonly mcp: ReadonlyArray<McpBinding> // §3.4; never put tokens on argv
   readonly model: string | undefined
   readonly effort: string | undefined
-  readonly onRequest: (req: HarnessRequest) => Effect.Effect<HarnessRequestResolution>  // approvals & questions (blocks the native callback until resolved)
+  readonly onRequest: (req: HarnessRequest) => Effect.Effect<HarnessRequestResolution> // approvals & questions (blocks the native callback until resolved)
 }
 
 export interface HarnessSession {
-  readonly events: Stream.Stream<HarnessEvent>       // hot, per session; normalized (contracts.HarnessEvent)
+  readonly events: Stream.Stream<HarnessEvent> // hot, per session; normalized (contracts.HarnessEvent)
   readonly nativeSessionId: Effect.Effect<string | undefined>
-  readonly startTurn: (input: TurnInput) => Effect.Effect<void, HarnessError>   // completes when ACCEPTED; turn end arrives as an event
-  readonly steer: (input: TurnInput) => Effect.Effect<void, HarnessError>       // capability-gated; fails with HarnessError("unsupported") otherwise
+  readonly startTurn: (input: TurnInput) => Effect.Effect<void, HarnessError> // completes when ACCEPTED; turn end arrives as an event
+  readonly steer: (input: TurnInput) => Effect.Effect<void, HarnessError> // capability-gated; fails with HarnessError("unsupported") otherwise
   readonly interrupt: Effect.Effect<void>
   readonly compact: Effect.Effect<void, HarnessError>
   readonly contextUsage: Effect.Effect<ContextUsage | undefined>
@@ -148,38 +149,43 @@ export interface HarnessSession {
 
 export interface TurnInput {
   readonly turnId: TurnId
-  readonly conversationId?: ConversationId            // the turn's conversation (replies, tools, cards land there)
-  readonly text: string                               // rendered with origin tags + sender attribution (§4.3.2)
+  readonly conversationId?: ConversationId // the turn's conversation (replies, tools, cards land there)
+  readonly text: string // rendered with origin tags + sender attribution (§4.3.2)
   readonly attachments: ReadonlyArray<{ readonly path: string; readonly mime: string; readonly name: string }>
 }
 
 // One driver per (kind, account/profile, D2.7); `profileId` absent = the harness's default account.
-export class HarnessRegistry extends Context.Service<HarnessRegistry, {
-  readonly get: (kind: string, profileId?: string) => Effect.Effect<HarnessDriver, HarnessUnavailable>
-  readonly list: Effect.Effect<ReadonlyArray<HarnessDriver>>
-}>()("openbot/HarnessRegistry") {}
+export class HarnessRegistry extends Context.Service<
+  HarnessRegistry,
+  {
+    readonly get: (kind: string, profileId?: string) => Effect.Effect<HarnessDriver, HarnessUnavailable>
+    readonly list: Effect.Effect<ReadonlyArray<HarnessDriver>>
+  }
+>()("openbot/HarnessRegistry") {}
 ```
 
 **`HarnessEvent`** is defined in contracts (`packages/contracts/src/harness.ts`) as a tagged union. Adapters emit **whole items keyed by a stable native key**. Core allocates `EntryId`s and revisions, persists them and publishes them.
 
-| `_tag` | Fields | Notes |
-|---|---|---|
-| `SessionBound` | `nativeSessionId` | persist ASAP |
-| `TurnStarted` | `turnId`, `initiator?: "harness"` | `"harness"`: a turn the harness started itself (adapter id; core joins it to the running turn or runs it as a "system" turn, D2.1) |
-| `ItemUpserted` | `key`, `item: HarnessItem`, `turnId` | `HarnessItem` = `Message{role:"bot", text, streaming, phase?, aborted?}` \| `Reasoning{text, streaming}` \| `ToolCall{toolName, title, kind: shell\|file-read\|file-edit\|search\|web\|mcp\|browser\|computer\|subagent\|other, status: pending\|running\|completed\|failed\|declined, inputSummary, outputPreview?, nodeId?, parentKey?}` \| `Notice{level, text}` |
-| `Activity` | `label` (e.g. "Searching the web", "Typing…"), `toolKind?` | drives the activity row |
-| `Usage` | `usage: contracts.Usage` | per step or turn |
-| `ContextUsage` | `usedTokens`, `windowTokens` | |
-| `TurnCompleted` | `turnId`, `stopReason?` | finalize all streaming items of the turn |
-| `TurnFailed` | `turnId`, `error: {code, message, retryable}` | |
-| `TurnInterrupted` | `turnId` | mark streaming bot text `aborted` |
-| `SessionClosed` | `reason` | runner reopens with resume on next turn |
+| `_tag`            | Fields                                                     | Notes                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionBound`    | `nativeSessionId`                                          | persist ASAP                                                                                                                                                                                                                                                                                                                                                        |
+| `TurnStarted`     | `turnId`, `initiator?: "harness"`                          | `"harness"`: a turn the harness started itself (adapter id; core joins it to the running turn or runs it as a "system" turn, D2.1)                                                                                                                                                                                                                                  |
+| `ItemUpserted`    | `key`, `item: HarnessItem`, `turnId`                       | `HarnessItem` = `Message{role:"bot", text, streaming, phase?, aborted?}` \| `Reasoning{text, streaming}` \| `ToolCall{toolName, title, kind: shell\|file-read\|file-edit\|search\|web\|mcp\|browser\|computer\|subagent\|other, status: pending\|running\|completed\|failed\|declined, inputSummary, outputPreview?, nodeId?, parentKey?}` \| `Notice{level, text}` |
+| `Activity`        | `label` (e.g. "Searching the web", "Typing…"), `toolKind?` | drives the activity row                                                                                                                                                                                                                                                                                                                                             |
+| `Usage`           | `usage: contracts.Usage`                                   | per step or turn                                                                                                                                                                                                                                                                                                                                                    |
+| `ContextUsage`    | `usedTokens`, `windowTokens`                               |                                                                                                                                                                                                                                                                                                                                                                     |
+| `TurnCompleted`   | `turnId`, `stopReason?`                                    | finalize all streaming items of the turn                                                                                                                                                                                                                                                                                                                            |
+| `TurnFailed`      | `turnId`, `error: {code, message, retryable}`              |                                                                                                                                                                                                                                                                                                                                                                     |
+| `TurnInterrupted` | `turnId`                                                   | mark streaming bot text `aborted`                                                                                                                                                                                                                                                                                                                                   |
+| `SessionClosed`   | `reason`                                                   | runner reopens with resume on next turn                                                                                                                                                                                                                                                                                                                             |
 
 `HarnessRequest` is an approval or question raised by the native harness:
+
 - `{kind: "tool-approval"|"command-approval"|"file-approval"|"mcp-approval", toolName, title, detail, command?, paths?, nodeId?, suggestions?}`
 - `{kind: "question", questions: [{id, prompt, options[], multiSelect, allowFreeText}]}`
 
 `HarnessRequestResolution`:
+
 - `{decision: "allow-once"|"allow-session"|"allow-always"|"deny"|"cancel", message?}`
 - `{answers: Record<id, string|string[]>}` for questions
 
@@ -194,25 +200,37 @@ All repos return `Effect<_, RepoError>`. RepoError is a defect-like tagged error
 ### 3.3 Placement port
 
 ```ts
-export type PlacementMode = "native-local" | "brain-mcp-hands" | "codex-environment"   // later: "claude-cli-on-node" | "opencode-on-node"
+export type PlacementMode = "native-local" | "brain-mcp-hands" | "codex-environment" // later: "claude-cli-on-node" | "opencode-on-node"
 export interface ResolvedPlacement {
   readonly mode: PlacementMode
-  readonly hostNodeId: NodeId                       // node_local when colocated
-  readonly workspacePath: string                    // absolute path ON the host node
-  readonly harnessCwd: string                       // cwd for the harness process (brain path; equals workspacePath for native-local)
+  readonly hostNodeId: NodeId // node_local when colocated
+  readonly workspacePath: string // absolute path ON the host node
+  readonly harnessCwd: string // cwd for the harness process (brain path; equals workspacePath for native-local)
   readonly env: Readonly<Record<string, string>>
-  readonly disableBuiltinTools: boolean             // B1
-  readonly codexEnvironment?: { readonly environmentId: string; readonly execServerUrl: string; readonly authBearerToken: string; readonly cwd: string }
+  readonly disableBuiltinTools: boolean // B1
+  readonly codexEnvironment?: {
+    readonly environmentId: string
+    readonly execServerUrl: string
+    readonly authBearerToken: string
+    readonly cwd: string
+  }
   readonly toolsets: ReadonlyArray<"bot" | "node" | "browser" | "computer">
-  readonly promptAppend: string                     // describes where tools run, node OS, workspace
-  readonly release: Effect.Effect<void>             // relays/tunnels torn down
+  readonly promptAppend: string // describes where tools run, node OS, workspace
+  readonly release: Effect.Effect<void> // relays/tunnels torn down
 }
-export class PlacementService extends Context.Service<PlacementService, {
-  readonly resolve: (input: { bot: Bot; driver: HarnessDriver }) => Effect.Effect<ResolvedPlacement, PlacementError, Scope.Scope>
-}>()("openbot/PlacementService") {}
+export class PlacementService extends Context.Service<
+  PlacementService,
+  {
+    readonly resolve: (input: {
+      bot: Bot
+      driver: HarnessDriver
+    }) => Effect.Effect<ResolvedPlacement, PlacementError, Scope.Scope>
+  }
+>()("openbot/PlacementService") {}
 ```
 
 Rules (D1.5):
+
 - `hostNodeId === node_local` (or unset) → `native-local`.
 - Remote host node:
   - Codex + node advertises `codex.exec-server` → `codex-environment`;
@@ -222,19 +240,29 @@ Rules (D1.5):
 ### 3.4 Gateway binding and node access
 
 ```ts
-export interface McpBinding { readonly name: "openbot"; readonly url: string; readonly headers: Readonly<Record<string, string>> }
-export class McpBindingIssuer extends Context.Service<McpBindingIssuer, {
-  // mints a per-session bearer bound to {botId, conversationId (home = DM), sessionKey, toolsets, hostNodeId, boundNodeIds};
-  // revoked when the scope closes. Per tool call the gateway substitutes the conversation of the bot's running turn.
-  readonly issue: (claims: McpClaims) => Effect.Effect<McpBinding, never, Scope.Scope>
-}>()("openbot/McpBindingIssuer") {}
+export interface McpBinding {
+  readonly name: "openbot"
+  readonly url: string
+  readonly headers: Readonly<Record<string, string>>
+}
+export class McpBindingIssuer extends Context.Service<
+  McpBindingIssuer,
+  {
+    // mints a per-session bearer bound to {botId, conversationId (home = DM), sessionKey, toolsets, hostNodeId, boundNodeIds};
+    // revoked when the scope closes. Per tool call the gateway substitutes the conversation of the bot's running turn.
+    readonly issue: (claims: McpClaims) => Effect.Effect<McpBinding, never, Scope.Scope>
+  }
+>()("openbot/McpBindingIssuer") {}
 
-export class NodeDirectory extends Context.Service<NodeDirectory, {
-  readonly list: Effect.Effect<ReadonlyArray<NodeSummary>>
-  readonly changes: Stream.Stream<NodeSummary>
-  readonly client: (nodeId: NodeId) => Effect.Effect<NodeClient, NodeUnavailable>   // NodeClient = RpcClient of node-protocol NodeRpcs
-  readonly capabilities: (nodeId: NodeId) => Effect.Effect<ReadonlyArray<string>, NodeUnavailable>
-}>()("openbot/NodeDirectory") {}
+export class NodeDirectory extends Context.Service<
+  NodeDirectory,
+  {
+    readonly list: Effect.Effect<ReadonlyArray<NodeSummary>>
+    readonly changes: Stream.Stream<NodeSummary>
+    readonly client: (nodeId: NodeId) => Effect.Effect<NodeClient, NodeUnavailable> // NodeClient = RpcClient of node-protocol NodeRpcs
+    readonly capabilities: (nodeId: NodeId) => Effect.Effect<ReadonlyArray<string>, NodeUnavailable>
+  }
+>()("openbot/NodeDirectory") {}
 ```
 
 `node_local` is always present in `NodeDirectory` unless it is disabled by config.
@@ -276,26 +304,26 @@ Port `vendor/scratch/contracts/src` (domain-contract.md §F.4) and extend it. Fi
 
 #### 4.1.1 App RPCs (`OpenBotRpcs`)
 
-Start from the seed `rpc.ts`. **Cut for v1:** connectors.*, tasks.*, messages.feedback, bots.setAvatarImage, conversations.thread/outline, routines.webhookCredential. **Keep or add:**
+Start from the seed `rpc.ts`. **Cut for v1:** connectors._, tasks._, messages.feedback, bots.setAvatarImage, conversations.thread/outline, routines.webhookCredential. **Keep or add:**
 
-| Group | RPCs |
-|---|---|
-| session | `session.info` → `{ownerName, version, dataDir, firstRun}` |
-| roster | `roster.subscribe {after?}` stream |
-| bots | `bots.create {name, label?, avatar?, harness, hostNodeId?, instructions?, clientNonce}`, `bots.update {botId, patch}`, `bots.delete`, `bots.get`, `bots.readContext` → `{instructions, memory: BotMemory}`, `bots.newSession {botId}` (drop the native session, same conversation), `bots.compact {botId}` |
-| sections | `sections.list/create/rename/delete/reorder`, `bots.setSection` (via patch) |
-| conversations | `conversations.subscribe {conversationId, after?}` stream, `conversations.history`, `conversations.exchange {botId, peerBotId, at?|before?|after?, limit}`, `conversations.createGroup {title, memberBotIds, leadBotId?}`, `conversations.setMembers`, `conversations.rename`, `conversations.markRead`, `conversations.setHidden` |
-| messages | `messages.send {conversationId, text, attachmentIds?, replyToId?, addressedBotIds?, clientNonce, mode?: auto\|queue\|steer}`, `messages.lookupSend`, `messages.react`, `turns.interrupt`, `turns.retry`, `attachments.upload` |
-| requests | `requests.respond {requestId, response}`, `requests.listPending` |
-| routines | `routines.list/create/update/setEnabled/delete/runNow`, `routines.runs {routineId}` |
-| memory | `memory.get {botId}`, `memory.putFact`, `memory.deleteFact`, `memory.setIndex` |
-| skills | `skills.list`, `skills.upsert`, `skills.delete`, `skills.assign`, `skills.search`, `skills.preview`, `skills.install` (skills.sh) |
-| harnesses | `harnesses.status` → `HarnessStatus[]`, `harnesses.models {kind}` |
-| nodes | `nodes.list`, `nodes.createPairingCode` → `{code, expiresAt, command}`, `nodes.rename`, `nodes.revoke`, `nodes.setCapabilities {nodeId, approved[]}` |
-| computer | `computer.status {botId}`, `computer.ensure {botId}` (start browser window), `computer.lease {botId, take: boolean}` |
-| settings | `settings.get`, `settings.update {patch}`, `rules.list/upsert/delete` |
-| slack (D3.4) | `slack.status`, `slack.connect {userToken?, appToken?}`, `slack.disconnect`, `slack.sendDraft {entryId, text}`, `slack.discardDraft {entryId}` |
-| usage | `usage.byBot {sinceMs?}` |
+| Group         | RPCs                                                                                                                                                                                                                                                                                                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| session       | `session.info` → `{ownerName, version, dataDir, firstRun}`                                                                                                                                                                                                                                                 |
+| roster        | `roster.subscribe {after?}` stream                                                                                                                                                                                                                                                                         |
+| bots          | `bots.create {name, label?, avatar?, harness, hostNodeId?, instructions?, clientNonce}`, `bots.update {botId, patch}`, `bots.delete`, `bots.get`, `bots.readContext` → `{instructions, memory: BotMemory}`, `bots.newSession {botId}` (drop the native session, same conversation), `bots.compact {botId}` |
+| sections      | `sections.list/create/rename/delete/reorder`, `bots.setSection` (via patch)                                                                                                                                                                                                                                |
+| conversations | `conversations.subscribe {conversationId, after?}` stream, `conversations.history`, `conversations.exchange {botId, peerBotId, at?                                                                                                                                                                         | before? | after?, limit}`, `conversations.createGroup {title, memberBotIds, leadBotId?}`, `conversations.setMembers`, `conversations.rename`, `conversations.markRead`, `conversations.setHidden` |
+| messages      | `messages.send {conversationId, text, attachmentIds?, replyToId?, addressedBotIds?, clientNonce, mode?: auto\|queue\|steer}`, `messages.lookupSend`, `messages.react`, `turns.interrupt`, `turns.retry`, `attachments.upload`                                                                              |
+| requests      | `requests.respond {requestId, response}`, `requests.listPending`                                                                                                                                                                                                                                           |
+| routines      | `routines.list/create/update/setEnabled/delete/runNow`, `routines.runs {routineId}`                                                                                                                                                                                                                        |
+| memory        | `memory.get {botId}`, `memory.putFact`, `memory.deleteFact`, `memory.setIndex`                                                                                                                                                                                                                             |
+| skills        | `skills.list`, `skills.upsert`, `skills.delete`, `skills.assign`, `skills.search`, `skills.preview`, `skills.install` (skills.sh)                                                                                                                                                                          |
+| harnesses     | `harnesses.status` → `HarnessStatus[]`, `harnesses.models {kind}`                                                                                                                                                                                                                                          |
+| nodes         | `nodes.list`, `nodes.createPairingCode` → `{code, expiresAt, command}`, `nodes.rename`, `nodes.revoke`, `nodes.setCapabilities {nodeId, approved[]}`                                                                                                                                                       |
+| computer      | `computer.status {botId}`, `computer.ensure {botId}` (start browser window), `computer.lease {botId, take: boolean}`                                                                                                                                                                                       |
+| settings      | `settings.get`, `settings.update {patch}`, `rules.list/upsert/delete`                                                                                                                                                                                                                                      |
+| slack (D3.4)  | `slack.status`, `slack.connect {userToken?, appToken?}`, `slack.disconnect`, `slack.sendDraft {entryId, text}`, `slack.discardDraft {entryId}`                                                                                                                                                             |
+| usage         | `usage.byBot {sinceMs?}`                                                                                                                                                                                                                                                                                   |
 
 ### 4.2 node-protocol
 
@@ -365,6 +393,7 @@ A **Delivery** is `{id, conversationId, botId, kind: user-message|bot-message|ro
 #### 4.3.2 Group routing (D5.1)
 
 Order of precedence:
+
 1. Explicit `addressedBotIds` (mentions), with `@everyone` meaning all members.
 2. The reply-to author.
 3. The lead bot.
@@ -378,6 +407,7 @@ Bot replies in a group are bot-authored entries in the group conversation. If a 
 #### 4.3.3 Bot-to-bot (D5.2)
 
 `message_bot {to, text, urgency}` (from a group turn to a fellow member: noted, woken by the sender's reply when it @mentions them, else the text is posted in the group; D5.2):
+
 - appends a bot-authored message entry (author = sender) into the **recipient's direct conversation**;
 - appends an event entry "Messaged @Recipient" in the sender's current conversation;
 - enqueues a Delivery to the recipient.
@@ -391,6 +421,7 @@ The global switch `settings.botMessaging=false` makes these tools return an erro
 #### 4.3.4 Approval flow (D5.6)
 
 Native request → `onRequest(req)`:
+
 1. Evaluate rules. Order: bot deny > bot ask > bot allow > global deny > global ask > global allow > default (ask).
 2. `allow` → resolve immediately and record a small event entry.
 3. `deny` → resolve deny with the message "Blocked by your rules".
@@ -405,6 +436,7 @@ The gateway's async asks (`ask_user`, `request_approval`, `request_takeover`) po
 The scheduler fiber keeps, for each enabled routine, `nextRunAt` from `Cron.parse` (effect `Cron`), an interval or once. It sleeps until the earliest one, using `Clock` so tests can drive it with `TestClock`.
 
 When a routine fires:
+
 1. Create a `RoutineRun` and append an event entry "Routine ‹name› started" into the bot's direct conversation (`output=direct`), or into a new `routine-run` conversation.
 2. Deliver a `routine` Delivery with the routine prompt.
 3. When the turn ends, close the run with a status and a summary (the last bot message, truncated).
@@ -414,10 +446,12 @@ Missed runs during downtime: at most one catch-up run per routine at boot, if th
 #### 4.3.6 Live replicas (D4.3)
 
 `LiveHub` keeps one replica per conversation and one for the roster. Every persisted change is appended to the replica:
+
 - `sequence++`, persisted in `ReplicaLog`, ring buffer of the last 256;
 - then published to a `PubSub`.
 
 `subscribe(after?)`:
+
 - matching epoch and a gap of 256 or less → replay from the ring buffer, then `synchronized`, then live;
 - otherwise → `snapshot` (tail window: 100 entries plus pending requests and turns), then `synchronized`, then live.
 
@@ -426,6 +460,7 @@ Writes are **committed before publishing**.
 #### 4.3.7 Instructions
 
 `InstructionRenderer` assembles, in order:
+
 1. OpenBot base (who you are, that you are a Bot in a team, how to use the openbot tools, the async rules for `ask_user`/approvals, `start_task` for long work, and the rule to talk like a person and never describe the mechanics — principles only, never example phrases, D5.7);
 2. the bot's `instructions`;
 3. the team roster (name, label, harness, one line each);
@@ -433,6 +468,7 @@ Writes are **committed before publishing**.
 5. `placement.promptAppend`.
 
 Adapters inject the result as:
+
 - Claude: `systemPrompt.append` with `snapshot: false` semantics (a new session on change);
 - Codex: `developerInstructions`;
 - OpenCode: instruction entries.
@@ -713,6 +749,7 @@ Per-adapter specifics:
 ### 5.2 Harness asks approval
 
 The native callback calls `onRequest` → `ApprovalService.evaluate`:
+
 - `ask` → a RuntimeRequest plus a card;
 - the user answers through `requests.respond` → the Deferred resolves → the native reply goes out → the card shows the resolved state.
 
@@ -732,6 +769,7 @@ The native callback calls `onRequest` → `ApprovalService.evaluate`:
 ### 5.5 Watching and taking over a Bot's screen (D1.7)
 
 Desktop (`desktop@1`):
+
 1. Details › Computer → `computer.ensure {botId}` → `desktop.ensure` on the host node (the bot's own X display, window manager, dock, VNC servers). The status carries `surface: "desktop"`, `width`, `height`.
 2. The UI opens `/ws/computer/:botId?mode=view` with noVNC (view only). The brain ensures the desktop, mints a ticket and calls `computer.stream {mode: "view"}`; the node dials `/node/stream/:id` and bridges it to the bot's view-only VNC server; the brain splices raw RFB both ways. Every viewer gets its own node stream.
 3. "Take control" → `computer.lease {take: true}` (mirrored with `lease.set`: the bot's `computer.act` now gets `LeaseHeld`) → a second socket with `mode=control` → `vnc-control`.
@@ -739,12 +777,14 @@ Desktop (`desktop@1`):
 5. "Reset" → `computer.reset`: `desktop.stop`, every viewer closes (1012); the next viewer or `computer` action starts a fresh desktop.
 
 Hand-off (`request_takeover`, any screen):
+
 1. The bot brings a login, 2FA prompt or CAPTCHA up on its screen and calls `request_takeover {instruction}`; the gateway calls `ApprovalService.requestTakeover`: a `handoff` RuntimeRequest + `HandoffCard` ("Action needed": Take over / Skip) in the conversation, a notification, and `{status: pending}` back to the bot, which ends its turn.
 2. Take over → the UI opens the computer view and calls `computer.lease {take: true}` (the card stays pending).
 3. I'm done → `computer.lease {take: false}` (or `requests.respond {acknowledge: done}`, which hands the screen back too) → the request resolves `done` and the bot gets "The owner finished on your screen and handed it back." as a new message. Skip → `requests.respond {acknowledge: skip}` → "The owner skipped taking over."
 4. No answer within 30 minutes (re-armed while the owner holds the screen) → expired, and the bot is told.
 
 Browser only (`browser@1`, no desktop):
+
 1. Details › Computer → `computer.ensure {botId}` → `browser.ensure` on the host node.
 2. The UI opens `/ws/computer/:botId?mode=view`.
 3. The brain asks the node for `browser.screencast` → the node dials `/node/stream/:id` → frames are spliced to the viewer.

@@ -30,7 +30,11 @@ for (const theme of ["dark", "light"] as const) {
     `details, instructions, settings › computers pairing and computer view in the app (${theme})`,
     async () => {
       const errors: string[] = []
-      const page = await browser!.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: theme })
+      const page = await browser!.newPage({
+        viewport: { width: 1440, height: 900 },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      })
       page.on("pageerror", (e) => errors.push(e.message))
       await page.addInitScript((t) => localStorage.setItem("openbot.theme", t), theme)
       await page.goto(mock!.url)

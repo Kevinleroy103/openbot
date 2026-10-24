@@ -52,7 +52,7 @@ export const makeFakeDriver = (options?: FakeDriverOptions): HarnessDriver => {
   const windowTokens = options?.windowTokens ?? 200_000
   const toolTimeout = options?.toolTimeout ?? Duration.minutes(5)
 
-  const openSession = Effect.fn("FakeHarness.openSession")(function*(input: OpenSessionInput) {
+  const openSession = Effect.fn("FakeHarness.openSession")(function* (input: OpenSessionInput) {
     const nativeSessionId = input.nativeSessionId ?? nativeIdFor(input.sessionKey, ++sessions)
     return yield* openFakeSession(input, {
       nativeSessionId,

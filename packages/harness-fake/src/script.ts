@@ -53,7 +53,20 @@ export type Directive =
   | { readonly _tag: "Updated"; readonly message: string }
   | { readonly _tag: "Default"; readonly text: string }
 
-export const DIRECTIVE_NAMES = ["echo", "slow", "tool", "approve", "ask", "fail", "think", "crash", "recall", "bg", "work", "upd"] as const
+export const DIRECTIVE_NAMES = [
+  "echo",
+  "slow",
+  "tool",
+  "approve",
+  "ask",
+  "fail",
+  "think",
+  "crash",
+  "recall",
+  "bg",
+  "work",
+  "upd",
+] as const
 export type DirectiveName = (typeof DIRECTIVE_NAMES)[number]
 
 const LINE = new RegExp(`^\\s*(?:@[^\\s:]+[,]?\\s+)*(${DIRECTIVE_NAMES.join("|")})\\s*:[ \\t]?(.*)$`, "i")
@@ -95,7 +108,11 @@ const parseTool = (rest: string): Directive => {
 
 const parseAsk = (rest: string): Directive => {
   const [prompt = "", ...options] = rest.split("|").map((part) => part.trim())
-  return { _tag: "Ask", prompt: prompt === "" ? "Can you help me decide?" : prompt, options: options.filter((o) => o !== "") }
+  return {
+    _tag: "Ask",
+    prompt: prompt === "" ? "Can you help me decide?" : prompt,
+    options: options.filter((o) => o !== ""),
+  }
 }
 
 /** `<seconds> <title>` (seconds default 3, title default "the work"). */
@@ -194,7 +211,8 @@ export const scriptSourceOf = (text: string): string => {
   }
   const messages = blocks.map((b) => b.join("\n").trim()).filter((m) => m !== "")
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (directivesOf(messages[i]!).length > 0 || RESULT_OF.test(messages[i]!.split(/\r?\n/)[0]!.trim())) return messages[i]!
+    if (directivesOf(messages[i]!).length > 0 || RESULT_OF.test(messages[i]!.split(/\r?\n/)[0]!.trim()))
+      return messages[i]!
   }
   return messages[messages.length - 1] ?? text
 }
@@ -219,7 +237,8 @@ export const chunksOf = (text: string): ReadonlyArray<string> => {
 }
 
 /** Rough token estimate (≈4 characters per token), never below 1 for non-empty text. */
-export const estimateTokens = (text: string): number => (text.length === 0 ? 0 : Math.max(1, Math.ceil(text.length / 4)))
+export const estimateTokens = (text: string): number =>
+  text.length === 0 ? 0 : Math.max(1, Math.ceil(text.length / 4))
 
 /** Caps `text` at `max` characters, appending an ellipsis marker. */
 export const cap = (text: string, max: number): { readonly text: string; readonly truncated: boolean } =>

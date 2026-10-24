@@ -38,7 +38,10 @@ const PCM16_SCALE = 0x8000
 const lastLines = (text: string): string => text.trim().split("\n").slice(-ERROR_TAIL_LINES).join(" ")
 
 export const errorReason = (stderr: string): string => {
-  const lines = stderr.trim().split("\n").map((line) => line.trim())
+  const lines = stderr
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
   return lines.findLast((line) => /^error\b/i.test(line)) ?? lastLines(stderr)
 }
 
@@ -56,16 +59,23 @@ export const markInstalled = (layout: SttLayout, runtime: SttArchive, model: Stt
   return writeFile(layout.marker, JSON.stringify(marker))
 }
 
-export const downloadVerified = async (archive: SttArchive, file: string, onReceived: (bytes: number) => void, signal: AbortSignal) => {
+export const downloadVerified = async (
+  archive: SttArchive,
+  file: string,
+  onReceived: (bytes: number) => void,
+  signal: AbortSignal,
+) => {
   const response = await fetch(archive.url, { signal })
-  if (!response.ok || response.body === null) throw new Error(`Downloading ${archive.url} failed (HTTP ${response.status}).`)
+  if (!response.ok || response.body === null)
+    throw new Error(`Downloading ${archive.url} failed (HTTP ${response.status}).`)
   const hash = createHash("sha256")
   const sink = Bun.file(file).writer()
   let received = 0
   try {
     for await (const chunk of response.body) {
       received += chunk.byteLength
-      if (received > archive.bytes) throw new Error(`${path.basename(file)} is larger than its pinned ${archive.bytes} bytes.`)
+      if (received > archive.bytes)
+        throw new Error(`${path.basename(file)} is larger than its pinned ${archive.bytes} bytes.`)
       hash.update(chunk)
       sink.write(chunk)
       onReceived(received)
@@ -73,11 +83,16 @@ export const downloadVerified = async (archive: SttArchive, file: string, onRece
   } finally {
     await sink.end()
   }
-  if (hash.digest("hex") !== archive.sha256) throw new Error(`${path.basename(file)} does not match its pinned checksum.`)
+  if (hash.digest("hex") !== archive.sha256)
+    throw new Error(`${path.basename(file)} does not match its pinned checksum.`)
 }
 
 const untar = async (archiveFile: string, into: string) => {
-  const tar = Bun.spawn(["tar", archiveFile.endsWith(".gz") ? "-xzf" : "-xjf", archiveFile, "-C", into], { stdout: "ignore", stderr: "pipe", timeout: UNPACK_TIMEOUT_MS })
+  const tar = Bun.spawn(["tar", archiveFile.endsWith(".gz") ? "-xzf" : "-xjf", archiveFile, "-C", into], {
+    stdout: "ignore",
+    stderr: "pipe",
+    timeout: UNPACK_TIMEOUT_MS,
+  })
   const [exitCode, stderr] = await Promise.all([tar.exited, new Response(tar.stderr).text()])
   if (exitCode !== 0) throw new Error(`Unpacking ${path.basename(archiveFile)} failed: ${lastLines(stderr)}`)
 }
@@ -87,7 +102,8 @@ export const unpackSingleFolder = async (archiveFile: string, destination: strin
   await mkdir(staging, { recursive: true })
   await untar(archiveFile, staging)
   const entries = await readdir(staging)
-  if (entries.length !== 1 || entries[0] === undefined) throw new Error(`${path.basename(archiveFile)} does not hold exactly one folder.`)
+  if (entries.length !== 1 || entries[0] === undefined)
+    throw new Error(`${path.basename(archiveFile)} does not hold exactly one folder.`)
   await rm(destination, { recursive: true, force: true })
   await rename(path.join(staging, entries[0]), destination)
   await rm(staging, { recursive: true, force: true })
@@ -139,7 +155,8 @@ export const pcm16WavSamples = (wav: Uint8Array): { readonly samples: Float32Arr
     const chunkId = String.fromCharCode(...wav.subarray(offset, offset + 4))
     const chunkBytes = view.getUint32(offset + 4, true)
     if (chunkId === "fmt ") sampleRate = view.getUint32(offset + 12, true)
-    if (chunkId === "data") return { samples: pcm16Samples(wav.subarray(offset + 8, offset + 8 + chunkBytes)), sampleRate }
+    if (chunkId === "data")
+      return { samples: pcm16Samples(wav.subarray(offset + 8, offset + 8 + chunkBytes)), sampleRate }
     offset += 8 + chunkBytes
   }
   throw new Error("The WAV file has no audio data.")
@@ -161,7 +178,8 @@ interface RecognizerOptions {
   readonly startupTimeoutMs: number
 }
 
-export const sharedLibraryName = (): string => (process.platform === "darwin" ? "libsherpa-onnx-c-api.dylib" : "libsherpa-onnx-c-api.so")
+export const sharedLibraryName = (): string =>
+  process.platform === "darwin" ? "libsherpa-onnx-c-api.dylib" : "libsherpa-onnx-c-api.so"
 
 export const killGroup = (pid: number, signal: NodeJS.Signals) => {
   try {
@@ -218,7 +236,8 @@ export const startRecognizer = (options: RecognizerOptions): Promise<Recognizer>
 
     void (async () => {
       const decoder = new TextDecoder()
-      for await (const chunk of child.stderr) stderrTail = (stderrTail + decoder.decode(chunk, { stream: true })).slice(-STDERR_TAIL_CHARS)
+      for await (const chunk of child.stderr)
+        stderrTail = (stderrTail + decoder.decode(chunk, { stream: true })).slice(-STDERR_TAIL_CHARS)
     })().catch(() => undefined)
 
     const startupTimer = setTimeout(() => {
@@ -257,7 +276,10 @@ export const startRecognizer = (options: RecognizerOptions): Promise<Recognizer>
     const stop = async () => {
       broken = true
       killGroup(child.pid, "SIGTERM")
-      const exited = await Promise.race([child.exited.then(() => true), Bun.sleep(RECOGNIZER_STOP_GRACE_MS).then(() => false)])
+      const exited = await Promise.race([
+        child.exited.then(() => true),
+        Bun.sleep(RECOGNIZER_STOP_GRACE_MS).then(() => false),
+      ])
       if (!exited) killGroup(child.pid, "SIGKILL")
       await child.exited
     }

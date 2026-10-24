@@ -5,7 +5,15 @@ import { Icon, type IconSize } from "../Icon.tsx"
 
 // ------------------------------------------------------------------------------------------- Spinner
 
-export function Spinner({ size = 14, className, label }: { readonly size?: number; readonly className?: string; readonly label?: string }): ReactNode {
+export function Spinner({
+  size = 14,
+  className,
+  label,
+}: {
+  readonly size?: number
+  readonly className?: string
+  readonly label?: string
+}): ReactNode {
   return (
     <span
       className={cn("inline-flex shrink-0 items-center justify-center", className)}
@@ -34,7 +42,13 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   readonly ref?: Ref<HTMLButtonElement>
 }
 
-const iconButtonBox: Record<IconButtonSize, string> = { 20: "size-5", 24: "size-6", 28: "size-7", 36: "size-9", 44: "size-11" }
+const iconButtonBox: Record<IconButtonSize, string> = {
+  20: "size-5",
+  24: "size-6",
+  28: "size-7",
+  36: "size-9",
+  44: "size-11",
+}
 const iconButtonGlyph: Record<IconButtonSize, IconSize> = { 20: "xs", 24: "sm", 28: "lg", 36: "lg", 44: "xl" }
 
 const iconButtonVariant: Record<IconButtonVariant, string> = {
@@ -82,7 +96,8 @@ export function IconButton({
 
 // ---------------------------------------------------------------------------------------- PillButton
 
-export type PillButtonVariant = "primary" | "secondary" | "ghost" | "tertiary" | "danger" | "danger-soft" | "accent" | "accent-soft" | "outline"
+export type PillButtonVariant =
+  "primary" | "secondary" | "ghost" | "tertiary" | "danger" | "danger-soft" | "accent" | "accent-soft" | "outline"
 export type PillButtonSize = "xs" | "sm" | "md" | "card" | "lg"
 
 export interface PillButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -146,7 +161,11 @@ export function PillButton({
       )}
       {...rest}
     >
-      {loading ? <Spinner size={size === "xs" ? 12 : 14} /> : leadingIcon ? <Icon icon={leadingIcon} size={pillIcon[size]} className="-ms-0.5" /> : null}
+      {loading ? (
+        <Spinner size={size === "xs" ? 12 : 14} />
+      ) : leadingIcon ? (
+        <Icon icon={leadingIcon} size={pillIcon[size]} className="-ms-0.5" />
+      ) : null}
       {children}
       {trailingIcon && <Icon icon={trailingIcon} size={pillIcon[size]} className="-me-1 opacity-70" />}
     </button>

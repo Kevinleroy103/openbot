@@ -9,7 +9,12 @@ test.skipIf(!existsSync(chromiumPath))(
   async () => {
     const { files, errors } = await takeScreenshots({ only: ["all", "chat"] })
     expect(errors).toEqual([])
-    expect(files.map((f) => f.slice(screenshotDir.length + 1)).sort()).toEqual(["all-dark.png", "all-light.png", "chat-dark.png", "chat-light.png"])
+    expect(files.map((f) => f.slice(screenshotDir.length + 1)).sort()).toEqual([
+      "all-dark.png",
+      "all-light.png",
+      "chat-dark.png",
+      "chat-light.png",
+    ])
     for (const f of files) expect(statSync(f).size).toBeGreaterThan(20_000)
   },
   60_000,

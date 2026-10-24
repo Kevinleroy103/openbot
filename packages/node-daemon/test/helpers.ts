@@ -22,7 +22,8 @@ import {
 import { makeMemorySocketPair } from "@openbot/node-protocol/testing"
 import { NodeHandlersLive, NodeInfo, type NodeConfigInput } from "../src/index.ts"
 
-export const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>): Promise<A> => Effect.runPromise(Effect.scoped(effect))
+export const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
+  Effect.runPromise(Effect.scoped(effect))
 
 /** A fresh temp dir (realpath'd, so containment checks compare canonical paths). */
 export const tempDir = (prefix = "node-daemon-"): { readonly path: string; readonly cleanup: () => void } => {
@@ -81,7 +82,8 @@ export const fakeLinks = (brain: FakeBrain): Layer.Layer<BrainLink | StreamDiale
     Layer.succeed(StreamDialer, {
       dial: ({ ticket, kind }) =>
         Effect.suspend(() => {
-          if (ticket.streamToken === "expired") return Effect.fail(new StreamRefused({ kind, reason: "expired ticket" }))
+          if (ticket.streamToken === "expired")
+            return Effect.fail(new StreamRefused({ kind, reason: "expired ticket" }))
           const pair = makeMemorySocketPair()
           brain.streams.set(ticket.streamId, pair.b)
           return Effect.succeed(pair.a)

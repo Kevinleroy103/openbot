@@ -9,7 +9,13 @@ import { localNodeSummary, makeBot, NodeDirectoryFake, remoteNodeSummary, Sequen
 import { Effect, Exit, Layer, Scope } from "effect"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { BrainNodesConfig, PlacementServiceLive, RelayService, RelayServiceLive, StreamBrokerLive } from "../src/index.ts"
+import {
+  BrainNodesConfig,
+  PlacementServiceLive,
+  RelayService,
+  RelayServiceLive,
+  StreamBrokerLive,
+} from "../src/index.ts"
 import { run, tempDir } from "./helpers.ts"
 
 const dir = tempDir()
@@ -94,7 +100,8 @@ const resolve = (bot: Bot, kind: string, remotePlacements: ReadonlyArray<Placeme
 const resolveIn = (nodes: ReadonlyArray<NodeSummary>, bot: Bot, kind: Kind) =>
   run(Effect.provide(resolve(bot, kind, remotePlacementsOf[kind]), layer(nodes)))
 
-const botOn = (hostNodeId: NodeId, extra?: Partial<Bot>) => makeBot({ id: "bot_ada" as Bot["id"], hostNodeId, ...extra })
+const botOn = (hostNodeId: NodeId, extra?: Partial<Bot>) =>
+  makeBot({ id: "bot_ada" as Bot["id"], hostNodeId, ...extra })
 
 interface Expectation {
   readonly mode: PlacementMode
@@ -108,10 +115,22 @@ const kinds: ReadonlyArray<Kind> = ["claude", "codex", "opencode", "fake"]
 /** The D1.5 matrix: [host, kind, expectation]. */
 const matrix: ReadonlyArray<readonly [keyof typeof hosts, Kind, Expectation]> = kinds.flatMap((kind) => [
   // local host: native tools everywhere
-  ["local", kind, { mode: "native-local", disableBuiltinTools: false, toolsets: ["bot"], codexEnvironment: false }] as const,
-  ["localBrowser", kind, { mode: "native-local", disableBuiltinTools: false, toolsets: ["bot", "browser"], codexEnvironment: false }] as const,
+  [
+    "local",
+    kind,
+    { mode: "native-local", disableBuiltinTools: false, toolsets: ["bot"], codexEnvironment: false },
+  ] as const,
+  [
+    "localBrowser",
+    kind,
+    { mode: "native-local", disableBuiltinTools: false, toolsets: ["bot", "browser"], codexEnvironment: false },
+  ] as const,
   // remote host without codex.exec-server: B1 for everyone (Codex falls back to B1)
-  ["remote", kind, { mode: "brain-mcp-hands", disableBuiltinTools: true, toolsets: ["bot", "node"], codexEnvironment: false }] as const,
+  [
+    "remote",
+    kind,
+    { mode: "brain-mcp-hands", disableBuiltinTools: true, toolsets: ["bot", "node"], codexEnvironment: false },
+  ] as const,
   // remote host with codex.exec-server: Codex E, everyone else B1
   [
     "remoteCodex",
@@ -121,11 +140,25 @@ const matrix: ReadonlyArray<readonly [keyof typeof hosts, Kind, Expectation]> = 
       : { mode: "brain-mcp-hands", disableBuiltinTools: true, toolsets: ["bot", "node"], codexEnvironment: false },
   ] as const,
   // capabilities add the browser / computer toolsets
-  ["remoteBrowser", kind, { mode: "brain-mcp-hands", disableBuiltinTools: true, toolsets: ["bot", "node", "browser"], codexEnvironment: false }] as const,
+  [
+    "remoteBrowser",
+    kind,
+    {
+      mode: "brain-mcp-hands",
+      disableBuiltinTools: true,
+      toolsets: ["bot", "node", "browser"],
+      codexEnvironment: false,
+    },
+  ] as const,
   [
     "remoteDesktop",
     kind,
-    { mode: "brain-mcp-hands", disableBuiltinTools: true, toolsets: ["bot", "node", "browser", "computer"], codexEnvironment: false },
+    {
+      mode: "brain-mcp-hands",
+      disableBuiltinTools: true,
+      toolsets: ["bot", "node", "browser", "computer"],
+      codexEnvironment: false,
+    },
   ] as const,
 ])
 
@@ -154,7 +187,7 @@ describe("placement matrix (D1.5)", () => {
 describe("placement details", () => {
   test("codex-environment: relay URL on the internal listener, bearer grant, node cwd; release revokes it", () =>
     run(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const relays = yield* RelayService
         const scope = yield* Scope.make()
         const placement: ResolvedPlacement = yield* resolve(botOn(REMOTE), "codex", remotePlacementsOf.codex).pipe(

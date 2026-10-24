@@ -4,7 +4,13 @@ import { useToast } from "@openbot/ui"
 import { type ReactNode, useState } from "react"
 import { ConfirmDialog } from "../details/kit.tsx"
 
-export function ConnectDeviceDialog({ code, onClose }: { readonly code: string; readonly onClose: () => void }): ReactNode {
+export function ConnectDeviceDialog({
+  code,
+  onClose,
+}: {
+  readonly code: string
+  readonly onClose: () => void
+}): ReactNode {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const { toast } = useToast()

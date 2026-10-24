@@ -56,7 +56,8 @@ export const makeShellExec =
         yield* guard.check({ inv: p.inv, action: "run-command", target: p.command })
         const limit = Math.max(1024, Math.floor(p.outputLimitBytes ?? config.limits.execOutputBytes))
         const timeoutMs = Math.max(1, Math.min(Math.floor(p.timeoutMs), MAX_TIMEOUT_MS))
-        const spillDir = cwd.root.mode === "rw" ? path.join(cwd.rootDir, ".openbot", "spill") : path.join(config.dataDir, "spill")
+        const spillDir =
+          cwd.root.mode === "rw" ? path.join(cwd.rootDir, ".openbot", "spill") : path.join(config.dataDir, "spill")
         const spillPath = path.join(spillDir, `${safeName(p.inv.invocationId)}.log`)
         return run(config, p, cwd.real, limit, timeoutMs, spillPath, guard, active)
       }),
@@ -185,7 +186,14 @@ const run = (
     }).pipe(
       Effect.onExit((exit) =>
         exit._tag === "Failure" && Cause.hasInterruptsOnly(exit.cause)
-          ? guard.audit.record({ inv: p.inv, action: "run-command", target: p.command, decision: "allowed", outcome: "error", error: "interrupted" })
+          ? guard.audit.record({
+              inv: p.inv,
+              action: "run-command",
+              target: p.command,
+              decision: "allowed",
+              outcome: "error",
+              error: "interrupted",
+            })
           : Effect.void,
       ),
     ),

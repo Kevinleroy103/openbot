@@ -98,9 +98,17 @@ export interface ComputerServiceShape {
   readonly reset: (botId: BotId) => Effect.Effect<ComputerStatus, NotFound | NodeUnavailable>
   readonly leaseChanges: Stream.Stream<ComputerLeaseChange>
   /** `GET /ws/computer/:botId?mode=view|control` — call AFTER the server authorized the request. */
-  readonly viewer: (input: { readonly botId: string; readonly mode: ViewerMode; readonly passive?: boolean | undefined }) => Handler
+  readonly viewer: (input: {
+    readonly botId: string
+    readonly mode: ViewerMode
+    readonly passive?: boolean | undefined
+  }) => Handler
   /** `GET /ws/terminal/:botId?cols=&rows=` — call AFTER the server authorized the request. */
-  readonly terminal: (input: { readonly botId: string; readonly cols?: number | undefined; readonly rows?: number | undefined }) => Handler
+  readonly terminal: (input: {
+    readonly botId: string
+    readonly cols?: number | undefined
+    readonly rows?: number | undefined
+  }) => Handler
   /** Viewers currently attached to a bot's screen (screencast or desktop relays; tests, diagnostics). */
   readonly viewerCount: (botId: BotId) => Effect.Effect<number>
 }
@@ -154,15 +162,13 @@ const surfaceOf = (capabilities: ReadonlyArray<string>): ComputerStatus["surface
   hasCapability(capabilities, "desktop")
     ? "desktop"
     : hasCapability(capabilities, "screen")
-    ? "screen"
-    : hasCapability(capabilities, "browser")
-    ? "browser"
-    : "none"
+      ? "screen"
+      : hasCapability(capabilities, "browser")
+        ? "browser"
+        : "none"
 
 const decodeInput = Schema.decodeUnknownOption(Schema.fromJsonString(BrowserInputEvent))
-const decodeNotice = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Struct({ _tag: Schema.String })),
-)
+const decodeNotice = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Struct({ _tag: Schema.String })))
 
 /** Programs a node lacks for desktops, from a `DesktopUnavailable` failure. */
 const missingOf = (e: unknown): ReadonlyArray<string> | undefined => {
@@ -217,7 +223,7 @@ export const toNodeUnavailable = (nodeId: NodeId, error: unknown): NodeUnavailab
 const clampSize = (n: number | undefined, fallback: number, max: number) =>
   n === undefined || !Number.isFinite(n) || n < 1 ? fallback : Math.min(Math.floor(n), max)
 
-export const makeComputerService = Effect.gen(function*() {
+export const makeComputerService = Effect.gen(function* () {
   const bots = yield* BotRepo
   const directory = yield* NodeDirectory
   const registry = yield* NodeRegistry
@@ -244,7 +250,8 @@ export const makeComputerService = Effect.gen(function*() {
 
   const getBot = (botId: BotId) =>
     Effect.flatMap(Effect.orDie(bots.get(botId)), (bot) =>
-      Option.isSome(bot) ? Effect.succeed(bot.value) : Effect.fail(new NotFound({ entity: "bot", id: botId })))
+      Option.isSome(bot) ? Effect.succeed(bot.value) : Effect.fail(new NotFound({ entity: "bot", id: botId })),
+    )
 
   const controllerOf = (botId: BotId): LeaseHolder => controllers.get(botId) ?? "bot"
 
@@ -262,18 +269,23 @@ export const makeComputerService = Effect.gen(function*() {
   }
 
   const statusOf = (botId: BotId) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const bot = yield* getBot(botId)
       const nodeId = bot.hostNodeId
       const node = yield* Effect.option(directory.get(nodeId))
       const base = { botId, nodeId, controller: controllerOf(botId) } as const
       if (Option.isNone(node)) {
-        return { ...base, state: "error", surface: "none", message: `Can't reach ${bot.name}'s computer` } satisfies ComputerStatus
+        return {
+          ...base,
+          state: "error",
+          surface: "none",
+          message: `Can't reach ${bot.name}'s computer`,
+        } satisfies ComputerStatus
       }
       const support = yield* desktopSupportOf(nodeId)
       const screenSupport = yield* screenSupportOf(nodeId)
       // the node could give a screen if it had these programs or permissions (shown whatever the surface)
-      const lackingList = screenSupport !== undefined ? screenSupport.missing : support?.missing ?? []
+      const lackingList = screenSupport !== undefined ? screenSupport.missing : (support?.missing ?? [])
       const lacking = lackingList.length > 0 ? { missing: lackingList } : {}
       const surface = surfaceOf(node.value.capabilities)
       if (surface === "none") {
@@ -281,24 +293,27 @@ export const makeComputerService = Effect.gen(function*() {
           ...base,
           state: "unsupported",
           surface,
-          message: "missing" in lacking
-            ? `${node.value.label} can't give ${bot.name} a screen yet`
-            : `${node.value.label} has no browser for ${bot.name}`,
+          message:
+            "missing" in lacking
+              ? `${node.value.label} can't give ${bot.name} a screen yet`
+              : `${node.value.label} has no browser for ${bot.name}`,
           ...lacking,
         } satisfies ComputerStatus
       }
       const viewPath = `/ws/computer/${botId}`
       const c = computers.get(botId)
       const current = c !== undefined && c.nodeId === nodeId && c.surface === surface ? c : undefined
-      const size = surface === "desktop" ? sizeOf(current, support) : surface === "screen" ? sizeOf(current, screenSupport) : {}
-      const missing = surface === "browser"
-        ? lacking
-        : current?.missing !== undefined
-        ? { missing: current.missing }
-        // a Mac's permissions as of its hello, until the screen was used
-        : surface === "screen" && current?.state !== "ready"
-        ? lacking
-        : {}
+      const size =
+        surface === "desktop" ? sizeOf(current, support) : surface === "screen" ? sizeOf(current, screenSupport) : {}
+      const missing =
+        surface === "browser"
+          ? lacking
+          : current?.missing !== undefined
+            ? { missing: current.missing }
+            : // a Mac's permissions as of its hello, until the screen was used
+              surface === "screen" && current?.state !== "ready"
+              ? lacking
+              : {}
       if (node.value.status !== "online") {
         return {
           ...base,
@@ -329,9 +344,10 @@ export const makeComputerService = Effect.gen(function*() {
   ) =>
     Effect.sync(() => {
       const prev = computers.get(botId)
-      const base: BotComputer = prev !== undefined && prev.nodeId === nodeId && prev.surface === surface
-        ? prev
-        : { nodeId, surface, state: "absent", message: undefined, windowTargetId: undefined }
+      const base: BotComputer =
+        prev !== undefined && prev.nodeId === nodeId && prev.surface === surface
+          ? prev
+          : { nodeId, surface, state: "absent", message: undefined, windowTargetId: undefined }
       computers.set(botId, { ...base, ...patch })
     })
 
@@ -378,22 +394,26 @@ export const makeComputerService = Effect.gen(function*() {
     Effect.suspend(() => {
       const before = controllerOf(botId)
       controllers.set(botId, holder)
-      return before === holder ? Effect.void : PubSub.publish(leaseChanges, { botId, holder, cause }).pipe(Effect.asVoid)
+      return before === holder
+        ? Effect.void
+        : PubSub.publish(leaseChanges, { botId, holder, cause }).pipe(Effect.asVoid)
     })
 
   // ---------------------------------------------------------------- ComputerPort
   const ensure: ComputerServiceShape["ensure"] = (botId) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const lock = yield* lockFor(botId)
       return yield* lock.withPermits(1)(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const s = yield* statusOf(botId)
           if (s.state === "unsupported" || s.state === "ready" || s.surface === "none") return s
           const surface = s.surface
           const client = yield* directory.client(s.nodeId)
           yield* setComputer(botId, s.nodeId, surface, { state: "starting", message: undefined })
           if (surface === "desktop") {
-            const ensured = yield* Effect.result(client["desktop.ensure"]({ botId }).pipe(Effect.timeout(DESKTOP_START_TIMEOUT)))
+            const ensured = yield* Effect.result(
+              client["desktop.ensure"]({ botId }).pipe(Effect.timeout(DESKTOP_START_TIMEOUT)),
+            )
             if (Result.isFailure(ensured)) {
               yield* setComputer(botId, s.nodeId, surface, {
                 state: "error",
@@ -411,15 +431,21 @@ export const makeComputerService = Effect.gen(function*() {
               })
             }
           } else if (surface === "screen") {
-            const ensured = yield* Effect.result(client["screen.ensure"]({ botId }).pipe(Effect.timeout(SCREEN_CHECK_TIMEOUT)))
+            const ensured = yield* Effect.result(
+              client["screen.ensure"]({ botId }).pipe(Effect.timeout(SCREEN_CHECK_TIMEOUT)),
+            )
             if (Result.isFailure(ensured)) {
               const failure = ensured.failure
               yield* setComputer(botId, s.nodeId, surface, {
                 state: "error",
                 // a Mac's permissions: its own words say what to allow
-                message: typeof failure === "object" && failure !== null && "_tag" in failure && failure._tag === "DesktopUnavailable"
-                  ? failure.message
-                  : `Can't use the screen: ${nodeErrorText(failure)}`,
+                message:
+                  typeof failure === "object" &&
+                  failure !== null &&
+                  "_tag" in failure &&
+                  failure._tag === "DesktopUnavailable"
+                    ? failure.message
+                    : `Can't use the screen: ${nodeErrorText(failure)}`,
                 missing: missingOf(failure),
               })
             } else {
@@ -444,14 +470,15 @@ export const makeComputerService = Effect.gen(function*() {
             }
           }
           const after = yield* statusOf(botId)
-          if (after.state === "ready" && controllerOf(botId) === "user") yield* Effect.ignore(mirrorLease(botId, s.nodeId, "user"))
+          if (after.state === "ready" && controllerOf(botId) === "user")
+            yield* Effect.ignore(mirrorLease(botId, s.nodeId, "user"))
           return after
         }),
       )
     })
 
   const lease: ComputerServiceShape["lease"] = (botId, take) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const s = yield* statusOf(botId)
       if (s.surface === "none" || s.state === "unsupported") {
         return yield* new Conflict({ reason: "This computer has no screen to take over" })
@@ -472,13 +499,13 @@ export const makeComputerService = Effect.gen(function*() {
     })
 
   const reset: ComputerServiceShape["reset"] = (botId) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const s = yield* statusOf(botId)
       // only desktops can be reset; a browser window has nothing to start over
       if (s.surface !== "desktop") return s
       const lock = yield* lockFor(botId)
       yield* lock.withPermits(1)(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const client = yield* directory.client(s.nodeId)
           yield* closeDesktopViewers(botId, DesktopCloseCodes.reset, "screen reset")
           const stopped = yield* Effect.result(client["desktop.stop"]({ botId }))
@@ -501,34 +528,44 @@ export const makeComputerService = Effect.gen(function*() {
   /** Pump the bot's screencast to every viewer until the node stream ends or the hub stops. */
   const runHub = (hub: Hub) =>
     Effect.scoped(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ensured = yield* Effect.result(ensure(hub.botId))
         if (Result.isFailure(ensured) || ensured.success.state !== "ready") {
           const message = Result.isFailure(ensured)
             ? ensured.failure.message
-            : ensured.success.message ?? (hub.surface === "screen" ? "The screen is not available" : "The browser is not available")
+            : (ensured.success.message ??
+              (hub.surface === "screen" ? "The screen is not available" : "The browser is not available"))
           return yield* broadcast(hub, notice({ _tag: "Ended", reason: message }))
         }
         const client = yield* directory.client(hub.nodeId)
         const opened = yield* Effect.result(
           hub.surface === "screen"
             ? Effect.map(
-              openNodeStream(broker, {
-                nodeId: hub.nodeId,
-                kind: "screen",
-                open: (ticket) => client["screen.stream"]({ botId: hub.botId, streamId: ticket.streamId, streamToken: ticket.streamToken }),
-              }),
-              (o) => o.socket,
-            ).pipe(Effect.mapError((e): unknown => e))
+                openNodeStream(broker, {
+                  nodeId: hub.nodeId,
+                  kind: "screen",
+                  open: (ticket) =>
+                    client["screen.stream"]({
+                      botId: hub.botId,
+                      streamId: ticket.streamId,
+                      streamToken: ticket.streamToken,
+                    }),
+                }),
+                (o) => o.socket,
+              ).pipe(Effect.mapError((e): unknown => e))
             : Effect.map(
-              openNodeStream(broker, {
-                nodeId: hub.nodeId,
-                kind: "cdp-screencast",
-                open: (ticket) =>
-                  client["browser.screencast"]({ botId: hub.botId, streamId: ticket.streamId, streamToken: ticket.streamToken }),
-              }),
-              (o) => o.socket,
-            ).pipe(Effect.mapError((e): unknown => e)),
+                openNodeStream(broker, {
+                  nodeId: hub.nodeId,
+                  kind: "cdp-screencast",
+                  open: (ticket) =>
+                    client["browser.screencast"]({
+                      botId: hub.botId,
+                      streamId: ticket.streamId,
+                      streamToken: ticket.streamToken,
+                    }),
+                }),
+                (o) => o.socket,
+              ).pipe(Effect.mapError((e): unknown => e)),
         )
         if (Result.isFailure(opened)) {
           return yield* broadcast(hub, notice({ _tag: "Ended", reason: nodeErrorText(opened.failure) }))
@@ -537,15 +574,20 @@ export const makeComputerService = Effect.gen(function*() {
         const pumped = yield* Effect.exit(
           Effect.forever(
             Effect.flatMap(node.pull, (frames) =>
-              Effect.forEach(frames, (frame) => {
-                if (typeof frame === "string") {
-                  const tag = decodeNotice(frame)
-                  if (Option.isSome(tag) && tag.value._tag === "Url") hub.lastUrl = frame
-                } else {
-                  hub.lastFrame = frame
-                }
-                return broadcast(hub, frame)
-              }, { discard: true })),
+              Effect.forEach(
+                frames,
+                (frame) => {
+                  if (typeof frame === "string") {
+                    const tag = decodeNotice(frame)
+                    if (Option.isSome(tag) && tag.value._tag === "Url") hub.lastUrl = frame
+                  } else {
+                    hub.lastFrame = frame
+                  }
+                  return broadcast(hub, frame)
+                },
+                { discard: true },
+              ),
+            ),
           ),
         )
         if (Exit.isFailure(pumped)) {
@@ -566,27 +608,37 @@ export const makeComputerService = Effect.gen(function*() {
     )
 
   const joinHub = (botId: BotId, nodeId: NodeId, surface: Hub["surface"], viewer: Omit<Viewer, "id">) =>
-    hubLock.withPermits(1)(
-      Effect.gen(function*() {
-        let hub = hubs.get(botId)
-        let stale: Fiber.Fiber<void> | undefined
-        if (hub !== undefined && (hub.nodeId !== nodeId || hub.surface !== surface)) {
-          // the bot moved to another node: stop the old stream (outside the lock, as in leaveHub)
-          stale = hub.fiber
-          hubs.delete(botId)
-          hub = undefined
-        }
-        const v: Viewer = { ...viewer, id: ++viewerSeq }
-        if (hub === undefined) {
-          const created: Hub = { botId, nodeId, surface, viewers: new Map([[v.id, v]]), lastFrame: undefined, lastUrl: undefined, fiber: undefined }
-          hubs.set(botId, created)
-          created.fiber = yield* Effect.forkIn(runHub(created), layerScope, { startImmediately: true })
-          return { hub: created, viewer: v, stale }
-        }
-        hub.viewers.set(v.id, v)
-        return { hub, viewer: v, stale }
-      }),
-    ).pipe(Effect.tap(({ stale }) => (stale === undefined ? Effect.void : Fiber.interrupt(stale))))
+    hubLock
+      .withPermits(1)(
+        Effect.gen(function* () {
+          let hub = hubs.get(botId)
+          let stale: Fiber.Fiber<void> | undefined
+          if (hub !== undefined && (hub.nodeId !== nodeId || hub.surface !== surface)) {
+            // the bot moved to another node: stop the old stream (outside the lock, as in leaveHub)
+            stale = hub.fiber
+            hubs.delete(botId)
+            hub = undefined
+          }
+          const v: Viewer = { ...viewer, id: ++viewerSeq }
+          if (hub === undefined) {
+            const created: Hub = {
+              botId,
+              nodeId,
+              surface,
+              viewers: new Map([[v.id, v]]),
+              lastFrame: undefined,
+              lastUrl: undefined,
+              fiber: undefined,
+            }
+            hubs.set(botId, created)
+            created.fiber = yield* Effect.forkIn(runHub(created), layerScope, { startImmediately: true })
+            return { hub: created, viewer: v, stale }
+          }
+          hub.viewers.set(v.id, v)
+          return { hub, viewer: v, stale }
+        }),
+      )
+      .pipe(Effect.tap(({ stale }) => (stale === undefined ? Effect.void : Fiber.interrupt(stale))))
 
   /**
    * The last viewer stops the hub. The hub fiber is interrupted OUTSIDE the lock: its own finalizer
@@ -594,20 +646,22 @@ export const makeComputerService = Effect.gen(function*() {
    * the brain's shutdown would hang).
    */
   const leaveHub = (hub: Hub, viewer: Viewer) =>
-    hubLock.withPermits(1)(
-      Effect.sync(() => {
-        hub.viewers.delete(viewer.id)
-        if (hub.viewers.size === 0 && hubs.get(hub.botId) === hub) {
-          hubs.delete(hub.botId)
-          return hub.fiber
-        }
-        return undefined
-      }),
-    ).pipe(Effect.flatMap((fiber) => (fiber === undefined ? Effect.void : Fiber.interrupt(fiber))))
+    hubLock
+      .withPermits(1)(
+        Effect.sync(() => {
+          hub.viewers.delete(viewer.id)
+          if (hub.viewers.size === 0 && hubs.get(hub.botId) === hub) {
+            hubs.delete(hub.botId)
+            return hub.fiber
+          }
+          return undefined
+        }),
+      )
+      .pipe(Effect.flatMap((fiber) => (fiber === undefined ? Effect.void : Fiber.interrupt(fiber))))
 
   const runViewer = (socket: Socket.Socket, botId: BotId, nodeId: NodeId, mode: ViewerMode, surface: Hub["surface"]) =>
     Effect.scoped(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const io: Duplex = yield* open(socket)
         // joining and registering the leave are one step (a viewer can drop at any moment)
         const { hub } = yield* Effect.acquireRelease(
@@ -620,18 +674,25 @@ export const makeComputerService = Effect.gen(function*() {
         if (hub.lastFrame !== undefined) yield* Effect.ignore(io.writer.write(hub.lastFrame))
         yield* Effect.forever(
           Effect.flatMap(io.pull, (frames) =>
-            Effect.forEach(frames, (frame) => {
-              if (mode !== "control" || typeof frame !== "string" || controllerOf(botId) !== "user") return Effect.void
-              const event = decodeInput(frame)
-              if (Option.isNone(event)) return Effect.void
-              return directory.client(nodeId).pipe(
-                Effect.flatMap((client) =>
-                  surface === "screen"
-                    ? Effect.ignore(client["screen.input"]({ botId, event: event.value }))
-                    : Effect.ignore(client["browser.input"]({ botId, event: event.value }))),
-                Effect.ignore,
-              )
-            }, { discard: true })),
+            Effect.forEach(
+              frames,
+              (frame) => {
+                if (mode !== "control" || typeof frame !== "string" || controllerOf(botId) !== "user")
+                  return Effect.void
+                const event = decodeInput(frame)
+                if (Option.isNone(event)) return Effect.void
+                return directory.client(nodeId).pipe(
+                  Effect.flatMap((client) =>
+                    surface === "screen"
+                      ? Effect.ignore(client["screen.input"]({ botId, event: event.value }))
+                      : Effect.ignore(client["browser.input"]({ botId, event: event.value })),
+                  ),
+                  Effect.ignore,
+                )
+              },
+              { discard: true },
+            ),
+          ),
         )
       }),
     ).pipe(Effect.ignore)
@@ -660,13 +721,18 @@ export const makeComputerService = Effect.gen(function*() {
    */
   const runDesktopViewer = (socket: Socket.Socket, botId: BotId, nodeId: NodeId, mode: ViewerMode, passive: boolean) =>
     Effect.scoped(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const io = yield* open(socket)
         // registered at once, so a release or reset during the start-up closes this viewer too
-        yield* Effect.acquireRelease(joinDesktop(botId, mode, io.writer, passive && mode === "view"), (v) => leaveDesktop(botId, v))
+        yield* Effect.acquireRelease(joinDesktop(botId, mode, io.writer, passive && mode === "view"), (v) =>
+          leaveDesktop(botId, v),
+        )
         const fail = (code: number, reason: string) => closeWriter(io.writer, code, reason)
         // a preview never wakes a sleeping screen
-        if (passive && (yield* Effect.map(Effect.option(statusOf(botId)), (s) => Option.isSome(s) && s.value.state === "absent"))) {
+        if (
+          passive &&
+          (yield* Effect.map(Effect.option(statusOf(botId)), (s) => Option.isSome(s) && s.value.state === "absent"))
+        ) {
           return yield* fail(DesktopCloseCodes.reset, "screen asleep")
         }
         const ensured = yield* Effect.result(ensure(botId))
@@ -690,7 +756,12 @@ export const makeComputerService = Effect.gen(function*() {
             nodeId,
             kind: mode === "control" ? "vnc-control" : "vnc-view",
             open: (ticket) =>
-              client.success["computer.stream"]({ botId, mode, streamId: ticket.streamId, streamToken: ticket.streamToken }),
+              client.success["computer.stream"]({
+                botId,
+                mode,
+                streamId: ticket.streamId,
+                streamToken: ticket.streamToken,
+              }),
           }),
         )
         if (Result.isFailure(opened)) {
@@ -706,14 +777,17 @@ export const makeComputerService = Effect.gen(function*() {
         const remote = yield* open(opened.success.socket)
         const result = yield* splice(io, remote, { mapAB: binaryFrame, mapBA: binaryFrame })
         // the node ended the stream without a close code of its own (dropped, failed): say so
-        if (result.endedBy === "b" && (result.closeCode === undefined || result.closeCode === 1005 || result.closeCode === 1006)) {
+        if (
+          result.endedBy === "b" &&
+          (result.closeCode === undefined || result.closeCode === 1005 || result.closeCode === 1006)
+        ) {
           yield* fail(DesktopCloseCodes.failed, "The screen stream ended")
         }
       }),
     ).pipe(Effect.catchCause((cause) => Effect.logDebug("desktop viewer ended", { botId, mode, cause })))
 
   const viewer: ComputerServiceShape["viewer"] = ({ botId, mode, passive }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest
       const s = yield* Effect.result(statusOf(botId as BotId))
       if (Result.isFailure(s)) return HttpServerResponse.text("unknown bot", { status: 404 })
@@ -721,7 +795,11 @@ export const makeComputerService = Effect.gen(function*() {
       if (st.surface === "none" || st.state === "unsupported") {
         return HttpServerResponse.text(st.message ?? "no live view", { status: 409 })
       }
-      if (st.state === "error" && st.message !== undefined && Option.isNone(yield* Effect.option(directory.client(st.nodeId)))) {
+      if (
+        st.state === "error" &&
+        st.message !== undefined &&
+        Option.isNone(yield* Effect.option(directory.client(st.nodeId)))
+      ) {
         return HttpServerResponse.text(st.message, { status: 503 })
       }
       if (mode === "control" && st.controller !== "user") {
@@ -732,21 +810,32 @@ export const makeComputerService = Effect.gen(function*() {
       if (st.surface === "desktop") {
         // detached: the route fiber is interrupted when the viewer closes (G2); the relay closes the
         // node stream itself
-        const fiber = yield* Effect.forkDetach(runDesktopViewer(upgraded.success, botId as BotId, st.nodeId, mode, passive === true))
+        const fiber = yield* Effect.forkDetach(
+          runDesktopViewer(upgraded.success, botId as BotId, st.nodeId, mode, passive === true),
+        )
         yield* Fiber.await(fiber)
         return HttpServerResponse.empty()
       }
-      yield* runViewer(upgraded.success, botId as BotId, st.nodeId, mode, st.surface === "screen" ? "screen" : "browser")
+      yield* runViewer(
+        upgraded.success,
+        botId as BotId,
+        st.nodeId,
+        mode,
+        st.surface === "screen" ? "screen" : "browser",
+      )
       return HttpServerResponse.empty()
     })
 
   // ---------------------------------------------------------------- terminal
   const runTerminal = (socket: Socket.Socket, botId: BotId, node: NodeSummary, cols: number, rows: number) =>
     Effect.scoped(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const io = yield* open(socket)
         const fail = (message: string) =>
-          Effect.andThen(Effect.ignore(io.writer.write(JSON.stringify({ error: message }))), closeWriter(io.writer, 1011, message))
+          Effect.andThen(
+            Effect.ignore(io.writer.write(JSON.stringify({ error: message }))),
+            closeWriter(io.writer, 1011, message),
+          )
         const client = yield* Effect.result(directory.client(node.id))
         if (Result.isFailure(client)) return yield* fail(client.failure.message)
         const cwd = workspacePathFor({ node, botId, dataDir })
@@ -765,7 +854,14 @@ export const makeComputerService = Effect.gen(function*() {
             nodeId: node.id,
             kind: "pty",
             open: (ticket) =>
-              client.success["pty.open"]({ inv, cols, rows, cwd, streamId: ticket.streamId, streamToken: ticket.streamToken }),
+              client.success["pty.open"]({
+                inv,
+                cols,
+                rows,
+                cwd,
+                streamId: ticket.streamId,
+                streamToken: ticket.streamToken,
+              }),
           }),
         )
         if (Result.isFailure(opened)) return yield* fail(nodeErrorText(opened.failure))
@@ -775,7 +871,7 @@ export const makeComputerService = Effect.gen(function*() {
     ).pipe(Effect.catchCause((cause) => Effect.logDebug("terminal ended", { botId, cause })))
 
   const terminal: ComputerServiceShape["terminal"] = ({ botId, cols, rows }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest
       const bot = yield* Effect.option(getBot(botId as BotId))
       if (Option.isNone(bot)) return HttpServerResponse.text("unknown bot", { status: 404 })
@@ -798,7 +894,7 @@ export const makeComputerService = Effect.gen(function*() {
 
   // ---------------------------------------------------------------- idle desktops sleep
   /** Bots with work under way: an active turn, a queued or running task, or a pending hand-off. */
-  const busyBots = Effect.gen(function*() {
+  const busyBots = Effect.gen(function* () {
     const [active, running, pending] = yield* Effect.all([
       turns.listActive,
       tasks.list({ statuses: ["queued", "running"] }),
@@ -817,13 +913,20 @@ export const makeComputerService = Effect.gen(function*() {
   const watchedOrHeld = (botId: BotId) => watching(botId) > 0 || controllerOf(botId) === "user"
 
   const sleepDesktop = (botId: BotId, nodeId: NodeId) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const lock = yield* lockFor(botId)
       yield* lock.withPermits(1)(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const c = computers.get(botId)
           // woken elsewhere, moved, or someone came to watch meanwhile
-          if (c === undefined || c.nodeId !== nodeId || c.surface !== "desktop" || c.state !== "ready" || watchedOrHeld(botId)) return
+          if (
+            c === undefined ||
+            c.nodeId !== nodeId ||
+            c.surface !== "desktop" ||
+            c.state !== "ready" ||
+            watchedOrHeld(botId)
+          )
+            return
           const client = yield* directory.client(nodeId)
           // the previews show it asleep (1012: they do not reconnect on their own)
           yield* closeDesktopViewers(botId, DesktopCloseCodes.reset, "screen asleep")
@@ -839,7 +942,7 @@ export const makeComputerService = Effect.gen(function*() {
   /** When each ready desktop was first seen by the idle check, and whether its keep-awake was logged. */
   const awakeSince = new Map<BotId, { readonly at: number; logged: boolean }>()
 
-  const sleepIdleDesktops = Effect.gen(function*() {
+  const sleepIdleDesktops = Effect.gen(function* () {
     const awake = [...computers].filter(([, c]) => c.surface === "desktop" && c.state === "ready")
     for (const botId of [...lastAwake.keys()]) if (!awake.some(([id]) => id === botId)) lastAwake.delete(botId)
     for (const botId of [...awakeSince.keys()]) if (!awake.some(([id]) => id === botId)) awakeSince.delete(botId)
@@ -880,7 +983,7 @@ export const makeComputerService = Effect.gen(function*() {
   // a node that comes back online gets the user's leases again; one that goes away loses its windows
   yield* directory.changes.pipe(
     Stream.runForEach((change) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (change.type === "node.removed") {
           for (const [botId, c] of computers) if (c.nodeId === change.nodeId) computers.delete(botId)
           return
@@ -894,17 +997,21 @@ export const makeComputerService = Effect.gen(function*() {
           // the node gets the leases again (also hand-backs it missed while it was away)
           for (const [botId, holder] of [...controllers]) {
             const bot = yield* Effect.option(getBot(botId))
-            if (Option.isSome(bot) && bot.value.hostNodeId === node.id) yield* Effect.ignore(mirrorLease(botId, node.id, holder))
+            if (Option.isSome(bot) && bot.value.hostNodeId === node.id)
+              yield* Effect.ignore(mirrorLease(botId, node.id, holder))
           }
         }
-      })
+      }),
     ),
     Effect.forkIn(layerScope, { startImmediately: true }),
   )
   yield* registry.events.pipe(
     Stream.runForEach((event) =>
       Effect.sync(() => {
-        const data = (typeof event.data === "object" && event.data !== null ? event.data : {}) as Record<string, unknown>
+        const data = (typeof event.data === "object" && event.data !== null ? event.data : {}) as Record<
+          string,
+          unknown
+        >
         const botId = typeof data["botId"] === "string" ? (data["botId"] as BotId) : undefined
         if (botId === undefined) return
         const c = computers.get(botId)
@@ -912,12 +1019,19 @@ export const makeComputerService = Effect.gen(function*() {
         if (event.type === NodeEventTypes.desktopStarted) {
           lastAwake.delete(botId)
           if (c === undefined || c.nodeId !== event.nodeId || c.state !== "starting") {
-            computers.set(botId, { nodeId: event.nodeId, surface: "desktop", state: "ready", message: undefined, windowTargetId: undefined })
+            computers.set(botId, {
+              nodeId: event.nodeId,
+              surface: "desktop",
+              state: "ready",
+              message: undefined,
+              windowTargetId: undefined,
+            })
           }
           return
         }
         if (event.type === NodeEventTypes.desktopStopped) {
-          if (c !== undefined && c.surface === "desktop" && c.nodeId === event.nodeId) computers.set(botId, { ...c, state: "absent" })
+          if (c !== undefined && c.surface === "desktop" && c.nodeId === event.nodeId)
+            computers.set(botId, { ...c, state: "absent" })
           return
         }
         // on a desktop node the browser is one window of the screen (and a Mac shares its whole
@@ -930,10 +1044,16 @@ export const makeComputerService = Effect.gen(function*() {
         if (event.type === NodeEventTypes.browserOpened) {
           const windowTargetId = typeof data["windowTargetId"] === "string" ? data["windowTargetId"] : undefined
           if (c === undefined || c.nodeId !== event.nodeId || c.state !== "starting") {
-            computers.set(botId, { nodeId: event.nodeId, surface: "browser", state: "ready", message: undefined, windowTargetId })
+            computers.set(botId, {
+              nodeId: event.nodeId,
+              surface: "browser",
+              state: "ready",
+              message: undefined,
+              windowTargetId,
+            })
           }
         }
-      })
+      }),
     ),
     Effect.forkIn(layerScope, { startImmediately: true }),
   )
@@ -946,7 +1066,8 @@ export const makeComputerService = Effect.gen(function*() {
     leaseChanges: Stream.fromPubSub(leaseChanges),
     viewer,
     terminal,
-    viewerCount: (botId) => Effect.sync(() => (hubs.get(botId)?.viewers.size ?? 0) + (desktopViewers.get(botId)?.size ?? 0)),
+    viewerCount: (botId) =>
+      Effect.sync(() => (hubs.get(botId)?.viewers.size ?? 0) + (desktopViewers.get(botId)?.size ?? 0)),
   })
   return service
 })
@@ -955,7 +1076,16 @@ export const makeComputerService = Effect.gen(function*() {
 export const ComputerServiceLive: Layer.Layer<
   ComputerPort | ComputerService,
   never,
-  BotRepo | TurnRepo | TaskRepo | RequestRepo | NodeDirectory | NodeRegistry | StreamBroker | DataDir | IdGen | BrainNodesConfig
+  | BotRepo
+  | TurnRepo
+  | TaskRepo
+  | RequestRepo
+  | NodeDirectory
+  | NodeRegistry
+  | StreamBroker
+  | DataDir
+  | IdGen
+  | BrainNodesConfig
 > = Layer.effectContext(
   Effect.map(makeComputerService, (service) =>
     Context.make(ComputerService, service).pipe(
@@ -969,5 +1099,6 @@ export const ComputerServiceLive: Layer.Layer<
           leaseChanges: service.leaseChanges,
         }),
       ),
-    )),
+    ),
+  ),
 )

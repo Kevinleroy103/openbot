@@ -20,18 +20,26 @@ export function NewGroupForm({ onCreated, onCancel, initialBotIds }: NewGroupFor
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return bots.filter((b) => !b.hidden || picked.includes(b.id)).filter((b) => !q || b.name.toLowerCase().includes(q) || (b.label ?? "").toLowerCase().includes(q))
+    return bots
+      .filter((b) => !b.hidden || picked.includes(b.id))
+      .filter((b) => !q || b.name.toLowerCase().includes(q) || (b.label ?? "").toLowerCase().includes(q))
   }, [bots, query, picked])
   const pickedBots = picked.map((id) => bots.find((b) => b.id === id)).filter((b): b is Bot => b !== undefined)
   const leadId = lead && picked.includes(lead) ? lead : picked[0]
   const valid = picked.length >= MIN_GROUP_BOTS && picked.length <= MAX_GROUP_BOTS
   const full = picked.length >= MAX_GROUP_BOTS
 
-  const toggle = (id: BotId) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= MAX_GROUP_BOTS ? p : [...p, id]))
+  const toggle = (id: BotId) =>
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= MAX_GROUP_BOTS ? p : [...p, id]))
 
   const submit = async () => {
     if (!valid) return
-    const r = await create.run({ title: title.trim(), memberBotIds: [...picked], ...(leadId ? { leadBotId: leadId } : {}), clientNonce: nonce })
+    const r = await create.run({
+      title: title.trim(),
+      memberBotIds: [...picked],
+      ...(leadId ? { leadBotId: leadId } : {}),
+      clientNonce: nonce,
+    })
     if (r.ok) onCreated(r.value.id)
   }
 
@@ -58,7 +66,11 @@ export function NewGroupForm({ onCreated, onCancel, initialBotIds }: NewGroupFor
               Members · {picked.length} of {MIN_GROUP_BOTS}–{MAX_GROUP_BOTS}
             </span>
             <div className="relative w-44">
-              <Icon icon={Search} size="xs" className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-icon-tertiary" />
+              <Icon
+                icon={Search}
+                size="xs"
+                className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-icon-tertiary"
+              />
               <input
                 aria-label="Find a Bot"
                 value={query}
@@ -68,8 +80,16 @@ export function NewGroupForm({ onCreated, onCancel, initialBotIds }: NewGroupFor
               />
             </div>
           </div>
-          <div role="group" aria-label="Members" className="flex max-h-[300px] flex-col gap-px overflow-y-auto rounded-2xl bg-elevated p-1 hairline border-line-tertiary scrollbar-thin">
-            {visible.length === 0 && <p className="px-3 py-4 text-center text-sm text-fg-tertiary">{bots.length === 0 ? "Create some Bots first." : "No Bots match."}</p>}
+          <div
+            role="group"
+            aria-label="Members"
+            className="flex max-h-[300px] flex-col gap-px overflow-y-auto rounded-2xl bg-elevated p-1 hairline border-line-tertiary scrollbar-thin"
+          >
+            {visible.length === 0 && (
+              <p className="px-3 py-4 text-center text-sm text-fg-tertiary">
+                {bots.length === 0 ? "Create some Bots first." : "No Bots match."}
+              </p>
+            )}
             {visible.map((b) => {
               const on = picked.includes(b.id)
               return (
@@ -81,7 +101,10 @@ export function NewGroupForm({ onCreated, onCancel, initialBotIds }: NewGroupFor
                   disabled={!on && full}
                   onClick={() => toggle(b.id)}
                   data-testid="group-candidate"
-                  className={cn("flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-1 text-start transition-colors hover:bg-hover disabled:opacity-40", on && "bg-active hover:bg-active")}
+                  className={cn(
+                    "flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-1 text-start transition-colors hover:bg-hover disabled:opacity-40",
+                    on && "bg-active hover:bg-active",
+                  )}
                 >
                   <Avatar shape={b.avatar.shape} color={b.avatar.color} size={28} />
                   <span className="min-w-0 truncate text-base text-fg">{b.name}</span>
@@ -124,11 +147,24 @@ export function NewGroupForm({ onCreated, onCancel, initialBotIds }: NewGroupFor
         {create.error && <ErrorLine className="px-0">{create.error}</ErrorLine>}
       </div>
       <div className="flex items-center justify-end gap-2 py-3 ps-4 pe-3">
-        <span className="me-auto text-xs text-fg-tertiary">{picked.length < MIN_GROUP_BOTS ? `Pick at least ${MIN_GROUP_BOTS} Bots` : full ? `Up to ${MAX_GROUP_BOTS} Bots` : ""}</span>
+        <span className="me-auto text-xs text-fg-tertiary">
+          {picked.length < MIN_GROUP_BOTS
+            ? `Pick at least ${MIN_GROUP_BOTS} Bots`
+            : full
+              ? `Up to ${MAX_GROUP_BOTS} Bots`
+              : ""}
+        </span>
         <PillButton variant="secondary" size="card" onClick={onCancel}>
           Cancel
         </PillButton>
-        <PillButton type="submit" variant="primary" size="card" disabled={!valid} loading={create.pending} data-testid="create-group">
+        <PillButton
+          type="submit"
+          variant="primary"
+          size="card"
+          disabled={!valid}
+          loading={create.pending}
+          data-testid="create-group"
+        >
           Create group
         </PillButton>
       </div>

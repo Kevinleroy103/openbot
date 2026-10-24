@@ -10,12 +10,18 @@ const LIVE = "Check the staging deploy"
 const FINAL = "Check the staging deploy and tell me if it is green."
 
 const draftIs = (page: Page, expected: string) =>
-  page.waitForFunction(({ selector, value }) => document.querySelector<HTMLTextAreaElement>(selector)?.value === value, { selector: EXPENSE_BOX, value: expected })
+  page.waitForFunction(
+    ({ selector, value }) => document.querySelector<HTMLTextAreaElement>(selector)?.value === value,
+    { selector: EXPENSE_BOX, value: expected },
+  )
 
 const mockStt = async (mock: RunningMock): Promise<{ readonly status: SttStatus; readonly discards: number }> =>
   (await fetch(`${mock.url}/api/mock/stt`)).json() as Promise<{ readonly status: SttStatus; readonly discards: number }>
 
-const setMockStt = async (mock: RunningMock, state: { readonly failsAppend: boolean; readonly resetToReady?: boolean; readonly finishDelayMs?: number }) => {
+const setMockStt = async (
+  mock: RunningMock,
+  state: { readonly failsAppend: boolean; readonly resetToReady?: boolean; readonly finishDelayMs?: number },
+) => {
   const query = `failsAppend=${state.failsAppend ? 1 : 0}&resetToReady=${state.resetToReady ? 1 : 0}&finishDelayMs=${state.finishDelayMs ?? 0}`
   await fetch(`${mock.url}/api/mock/stt?${query}`, { method: "POST" })
 }
@@ -71,7 +77,9 @@ describe.skipIf(!existsSync(chromiumPath))("dictation against the dev mock", () 
     await page.getByRole("button", { name: "Dictate" }).waitFor()
     await page.waitForFunction((selector) => {
       const textarea = document.querySelector<HTMLTextAreaElement>(selector)
-      return textarea !== null && document.activeElement === textarea && textarea.selectionStart === textarea.value.length
+      return (
+        textarea !== null && document.activeElement === textarea && textarea.selectionStart === textarea.value.length
+      )
     }, EXPENSE_BOX)
     expect(errors).toEqual([])
   }, 30_000)
@@ -190,7 +198,11 @@ describe.skipIf(!existsSync(chromiumPath))("dictation against the dev mock", () 
     const box = page.getByRole("textbox", { name: "Message Bot" })
     await box.fill("From new chat")
     await page.getByRole("button", { name: "Dictate" }).click()
-    await page.waitForFunction(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value.includes("staging") === true)
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value.includes("staging") ===
+        true,
+    )
     await setMockStt(mock, { failsAppend: false, finishDelayMs: 1_500 })
     await box.press("Enter")
     await page.evaluate(() => {
@@ -212,10 +224,18 @@ describe.skipIf(!existsSync(chromiumPath))("dictation against the dev mock", () 
     const box = page.getByRole("textbox", { name: "Message Bot" })
     await box.fill("Kept")
     await page.getByRole("button", { name: "Dictate" }).click()
-    await page.waitForFunction(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value.includes("staging") === true)
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value.includes("staging") ===
+        true,
+    )
     await box.press("Enter")
     await page.getByText("Pick who to message first").waitFor()
-    await page.waitForFunction((expected) => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value === expected, `Kept ${FINAL}`)
+    await page.waitForFunction(
+      (expected) =>
+        document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value === expected,
+      `Kept ${FINAL}`,
+    )
     expect(errors).toEqual([])
   }, 30_000)
 
@@ -226,7 +246,11 @@ describe.skipIf(!existsSync(chromiumPath))("dictation against the dev mock", () 
     const box = page.getByRole("textbox", { name: "Message Bot" })
     await box.fill("Picked late")
     await page.getByRole("button", { name: "Dictate" }).click()
-    await page.waitForFunction(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value.includes("staging") === true)
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Bot"]')?.value.includes("staging") ===
+        true,
+    )
     await setMockStt(mock, { failsAppend: false, finishDelayMs: 1_500 })
     await box.press("Enter")
     await page.getByRole("combobox", { name: "To" }).fill("Expense")
@@ -237,10 +261,17 @@ describe.skipIf(!existsSync(chromiumPath))("dictation against the dev mock", () 
 
   test("an attachment removed while the transcript finishes is not sent with the message", async () => {
     const { page, errors, box } = await openExpenseChat(browser, mock.url)
-    await page.locator('input[type="file"]').first().setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("notes") })
+    await page
+      .locator('input[type="file"]')
+      .first()
+      .setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("notes") })
     const remove = page.getByRole("button", { name: "Remove notes.txt" })
     await remove.waitFor()
-    await page.waitForFunction(() => document.querySelector('[aria-label="Remove notes.txt"]')?.parentElement?.querySelector('[role="status"]') == null)
+    await page.waitForFunction(
+      () =>
+        document.querySelector('[aria-label="Remove notes.txt"]')?.parentElement?.querySelector('[role="status"]') ==
+        null,
+    )
     await box.fill("Note")
     await setMockStt(mock, { failsAppend: false, finishDelayMs: 1_500 })
     await page.getByRole("button", { name: "Dictate" }).click()

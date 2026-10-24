@@ -9,21 +9,32 @@
  * `--public-origin`; none when OpenBot is only on loopback). `sends: "needs-you"` keeps only a Bot
  * waiting for the owner and failures. Each push is sent once (`Idempotency-Key`: the notification id).
  */
-import { HARK_DISCONNECTED, HARK_URL, type HarkSends, type HarkStatus, InvalidInput, type Notification, Unavailable } from "@openbot/contracts"
+import {
+  HARK_DISCONNECTED,
+  HARK_URL,
+  type HarkSends,
+  type HarkStatus,
+  InvalidInput,
+  type Notification,
+  Unavailable,
+} from "@openbot/contracts"
 import { BotRepo, LiveHub } from "@openbot/core"
 import { Clock, Context, Effect, Layer, Option, Stream } from "effect"
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { ServerConfig } from "./config.ts"
 
-export class Hark extends Context.Service<Hark, {
-  readonly status: Effect.Effect<HarkStatus>
-  /** Sends a test notification to the webhook and keeps it when Hark takes it. */
-  readonly connect: (webhook: string) => Effect.Effect<HarkStatus, InvalidInput | Unavailable>
-  readonly disconnect: Effect.Effect<HarkStatus>
-  readonly test: Effect.Effect<HarkStatus, InvalidInput | Unavailable>
-  readonly setSends: (sends: HarkSends) => Effect.Effect<HarkStatus, InvalidInput>
-}>()("openbot/server/Hark") {}
+export class Hark extends Context.Service<
+  Hark,
+  {
+    readonly status: Effect.Effect<HarkStatus>
+    /** Sends a test notification to the webhook and keeps it when Hark takes it. */
+    readonly connect: (webhook: string) => Effect.Effect<HarkStatus, InvalidInput | Unavailable>
+    readonly disconnect: Effect.Effect<HarkStatus>
+    readonly test: Effect.Effect<HarkStatus, InvalidInput | Unavailable>
+    readonly setSends: (sends: HarkSends) => Effect.Effect<HarkStatus, InvalidInput>
+  }
+>()("openbot/server/Hark") {}
 
 export interface HarkOptions {
   /** Where the webhook is kept (`DataDir.hark`). */
@@ -70,7 +81,7 @@ const clip = (text: string, max: number) => (text.length <= max ? text : `${text
 const needsYou = (n: Notification) => n.kind === "waiting" || n.kind === "error"
 
 export const makeHark = (options: HarkOptions) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const config = yield* ServerConfig
     const hub = yield* LiveHub
     const bots = yield* BotRepo
@@ -86,7 +97,12 @@ export const makeHark = (options: HarkOptions) =>
     const status = (): HarkStatus =>
       saved === undefined
         ? HARK_DISCONNECTED
-        : { connected: true, sends: saved.sends, ...(problem === undefined ? {} : { problem }), ...(lastSentAt === undefined ? {} : { lastSentAt }) }
+        : {
+            connected: true,
+            sends: saved.sends,
+            ...(problem === undefined ? {} : { problem }),
+            ...(lastSentAt === undefined ? {} : { lastSentAt }),
+          }
 
     /** POSTs one notification; a failure is the reason in words. */
     const post = (token: string, body: Record<string, unknown>, idempotencyKey: string) =>
@@ -99,10 +115,13 @@ export const makeHark = (options: HarkOptions) =>
             signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
           })
           if (response.ok) return undefined
-          const detail = await response.json().then((j: unknown) => {
-            const answer = (j ?? {}) as { readonly error?: unknown; readonly message?: unknown }
-            return String(answer.message ?? answer.error ?? "")
-          }, () => "")
+          const detail = await response.json().then(
+            (j: unknown) => {
+              const answer = (j ?? {}) as { readonly error?: unknown; readonly message?: unknown }
+              return String(answer.message ?? answer.error ?? "")
+            },
+            () => "",
+          )
           switch (response.status) {
             case 404:
               return "Hark doesn't know this webhook (was the service deleted?). Paste a new one."
@@ -120,20 +139,29 @@ export const makeHark = (options: HarkOptions) =>
       }).pipe(Effect.catch((reason) => Effect.succeed<string | undefined>(reason)))
 
     const linkTo = (conversationId: string | undefined) =>
-      origin === undefined ? {} : { url: conversationId === undefined ? `${origin}/` : `${origin}/#/c/${conversationId}` }
+      origin === undefined
+        ? {}
+        : { url: conversationId === undefined ? `${origin}/` : `${origin}/#/c/${conversationId}` }
 
     const forward = (n: Notification) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const current = saved
         if (current === undefined || (current.sends === "needs-you" && !needsYou(n))) return
-        const bot = n.botId === undefined ? Option.none() : yield* bots.get(n.botId).pipe(Effect.orElseSucceed(() => Option.none()))
+        const bot =
+          n.botId === undefined
+            ? Option.none()
+            : yield* bots.get(n.botId).pipe(Effect.orElseSucceed(() => Option.none()))
         const text = n.body.trim() === "" ? n.title : n.body
-        const failed = yield* post(current.token, {
-          title: clip(n.title, 80),
-          body: clip(text, 8_000),
-          ...linkTo(n.conversationId),
-          ...(Option.isSome(bot) ? { project: clip(bot.value.name, 80) } : {}),
-        }, n.id)
+        const failed = yield* post(
+          current.token,
+          {
+            title: clip(n.title, 80),
+            body: clip(text, 8_000),
+            ...linkTo(n.conversationId),
+            ...(Option.isSome(bot) ? { project: clip(bot.value.name, 80) } : {}),
+          },
+          n.id,
+        )
         if (saved !== current) return
         problem = failed
         if (failed === undefined) lastSentAt = yield* Clock.currentTimeMillis
@@ -142,20 +170,24 @@ export const makeHark = (options: HarkOptions) =>
 
     yield* hub.subscribeRoster({}).pipe(
       Stream.runForEach((item) =>
-        item.kind === "change" && item.change.type === "notification" ? forward(item.change.notification) : Effect.void
+        item.kind === "change" && item.change.type === "notification" ? forward(item.change.notification) : Effect.void,
       ),
       Effect.catchCause((cause) => Effect.logWarning("Hark: notifications ended", cause)),
       Effect.forkScoped({ startImmediately: true }),
     )
 
     const sendTest = (token: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
-        return yield* post(token, { title: "OpenBot", body: "Connected. Your Bots' notifications will show up here.", ...linkTo(undefined) }, `openbot-test-${now}`)
+        return yield* post(
+          token,
+          { title: "OpenBot", body: "Connected. Your Bots' notifications will show up here.", ...linkTo(undefined) },
+          `openbot-test-${now}`,
+        )
       })
 
     const connect = (webhook: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const token = harkToken(webhook)
         if (token === undefined) {
           return yield* new InvalidInput({ message: "Paste the service's webhook URL from Hark (…/hooks/whk_…)." })
@@ -163,7 +195,10 @@ export const makeHark = (options: HarkOptions) =>
         const failed = yield* sendTest(token)
         if (failed !== undefined) return yield* new InvalidInput({ message: failed })
         const next: Saved = { version: 1, token, sends: saved?.sends ?? "all" }
-        yield* Effect.try({ try: () => writeSaved(options.file, next), catch: () => new Unavailable({ message: "Couldn't save the webhook on the brain." }) })
+        yield* Effect.try({
+          try: () => writeSaved(options.file, next),
+          catch: () => new Unavailable({ message: "Couldn't save the webhook on the brain." }),
+        })
         saved = next
         problem = undefined
         lastSentAt = yield* Clock.currentTimeMillis
@@ -180,7 +215,7 @@ export const makeHark = (options: HarkOptions) =>
         rmSync(options.file, { force: true })
         return status()
       }),
-      test: Effect.gen(function*() {
+      test: Effect.gen(function* () {
         const current = saved
         if (current === undefined) return yield* new InvalidInput({ message: "Hark isn't connected." })
         const failed = yield* sendTest(current.token)
@@ -190,15 +225,19 @@ export const makeHark = (options: HarkOptions) =>
         return status()
       }),
       setSends: (sends) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const current = saved
           if (current === undefined) return yield* new InvalidInput({ message: "Hark isn't connected." })
           const next: Saved = { ...current, sends }
-          yield* Effect.try({ try: () => writeSaved(options.file, next), catch: () => new InvalidInput({ message: "Couldn't save the setting on the brain." }) })
+          yield* Effect.try({
+            try: () => writeSaved(options.file, next),
+            catch: () => new InvalidInput({ message: "Couldn't save the setting on the brain." }),
+          })
           saved = next
           return status()
         }),
     })
   })
 
-export const HarkLive = (options: HarkOptions): Layer.Layer<Hark, never, ServerConfig | LiveHub | BotRepo> => Layer.effect(Hark, makeHark(options))
+export const HarkLive = (options: HarkOptions): Layer.Layer<Hark, never, ServerConfig | LiveHub | BotRepo> =>
+  Layer.effect(Hark, makeHark(options))

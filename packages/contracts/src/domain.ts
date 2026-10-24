@@ -22,10 +22,36 @@ import { SkillName } from "./skills.ts"
 
 // ---------------------------------------------------------------------------- Bot
 /** Avatar colors (D6.3, Grok's 11-color picker; OpenBot ships its own SVG art). */
-export const AvatarColors = ["black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray"] as const
+export const AvatarColors = [
+  "black",
+  "brown",
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "cyan",
+  "blue",
+  "violet",
+  "magenta",
+  "gray",
+] as const
 export type AvatarColor = (typeof AvatarColors)[number]
 /** Avatar shapes offered by the picker (D6.3). Stored as open strings so new shapes never break old data. */
-export const AvatarShapes = ["blob", "cloud", "square", "sparkle", "clover", "heart", "flower", "teardrop", "tablet", "wedge", "house", "star", "hex"] as const
+export const AvatarShapes = [
+  "blob",
+  "cloud",
+  "square",
+  "sparkle",
+  "clover",
+  "heart",
+  "flower",
+  "teardrop",
+  "tablet",
+  "wedge",
+  "house",
+  "star",
+  "hex",
+] as const
 export type AvatarShape = (typeof AvatarShapes)[number]
 
 export const BotAvatar = Schema.Struct({
@@ -260,10 +286,23 @@ export const SlackTrigger = Schema.Struct({
 export type SlackTrigger = typeof SlackTrigger.Type
 
 /** Triggers a client may create or update in v1. */
-export const RoutineTriggerInput = Schema.Union([CronTrigger, IntervalTrigger, OnceTrigger, ManualTrigger, SlackTrigger])
+export const RoutineTriggerInput = Schema.Union([
+  CronTrigger,
+  IntervalTrigger,
+  OnceTrigger,
+  ManualTrigger,
+  SlackTrigger,
+])
 export type RoutineTriggerInput = typeof RoutineTriggerInput.Type
 /** Triggers as stored and shown (input triggers plus decode-only `webhook`). */
-export const RoutineTrigger = Schema.Union([CronTrigger, IntervalTrigger, OnceTrigger, ManualTrigger, SlackTrigger, WebhookTrigger])
+export const RoutineTrigger = Schema.Union([
+  CronTrigger,
+  IntervalTrigger,
+  OnceTrigger,
+  ManualTrigger,
+  SlackTrigger,
+  WebhookTrigger,
+])
 export type RoutineTrigger = typeof RoutineTrigger.Type
 
 export const RoutineOutput = Schema.Literals(["direct", "own-conversation"])

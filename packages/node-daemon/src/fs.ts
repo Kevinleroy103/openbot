@@ -28,10 +28,13 @@ import type { NodeConfigShape } from "./config.ts"
 import type { Guard } from "./guard.ts"
 import type { PathPolicyShape, ResolvedPath } from "./PathPolicy.ts"
 
-export const sha256Hex = (data: string | Uint8Array): string => new Bun.CryptoHasher("sha256").update(data).digest("hex")
+export const sha256Hex = (data: string | Uint8Array): string =>
+  new Bun.CryptoHasher("sha256").update(data).digest("hex")
 
 const errCode = (e: unknown): string =>
-  e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "string" ? (e as { code: string }).code : "EIO"
+  e && typeof e === "object" && "code" in e && typeof (e as { code: unknown }).code === "string"
+    ? (e as { code: string }).code
+    : "EIO"
 
 const errMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
@@ -53,7 +56,10 @@ const statOrUndefined = async (p: string) => {
 
 /** Atomic write: tmp file next to the target, then rename. */
 export const atomicWrite = async (target: string, data: string | Uint8Array): Promise<void> => {
-  const tmp = path.join(path.dirname(target), `.${path.basename(target)}.openbot-tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`)
+  const tmp = path.join(
+    path.dirname(target),
+    `.${path.basename(target)}.openbot-tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`,
+  )
   let mode: number | undefined
   try {
     mode = (await fsp.stat(target)).mode & 0o7777
@@ -93,10 +99,17 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
       Effect.gen(function* () {
         const r = yield* paths.resolve({ path: p.path, botId: p.inv.botId, access: "read" })
         const st = yield* attempt("read", p.path, () => fsp.stat(r.real))
-        if (st.isDirectory()) return yield* new FsError({ op: "read", path: p.path, code: "EISDIR", reason: "is a directory; use fs.list" })
-        if (!st.isFile()) return yield* new FsError({ op: "read", path: p.path, code: "EINVAL", reason: "not a regular file" })
+        if (st.isDirectory())
+          return yield* new FsError({ op: "read", path: p.path, code: "EISDIR", reason: "is a directory; use fs.list" })
+        if (!st.isFile())
+          return yield* new FsError({ op: "read", path: p.path, code: "EINVAL", reason: "not a regular file" })
         if (st.size > limits.writeBytes) {
-          return yield* new FsError({ op: "read", path: p.path, code: "EFBIG", reason: `file is larger than ${limits.writeBytes} bytes` })
+          return yield* new FsError({
+            op: "read",
+            path: p.path,
+            code: "EFBIG",
+            reason: `file is larger than ${limits.writeBytes} bytes`,
+          })
         }
         const bytes = yield* attempt("read", p.path, () => Bun.file(r.real).bytes())
         const offset = Math.max(0, Math.floor(p.offset ?? 0))
@@ -118,7 +131,8 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
     attempt("write", real, async () => {
       const st = await statOrUndefined(real)
       if (!st) return ""
-      if (!st.isFile()) throw Object.assign(new Error("not a regular file"), { code: st.isDirectory() ? "EISDIR" : "EINVAL" })
+      if (!st.isFile())
+        throw Object.assign(new Error("not a regular file"), { code: st.isDirectory() ? "EISDIR" : "EINVAL" })
       return sha256Hex(await Bun.file(real).bytes())
     })
 
@@ -136,7 +150,12 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
         let r = yield* paths.resolve({ path: p.path, botId: p.inv.botId, access: "write" })
         const data = p.encoding === "base64" ? base64Decode(p.content) : new TextEncoder().encode(p.content)
         if (data.byteLength > limits.writeBytes) {
-          return yield* new FsError({ op: "write", path: p.path, code: "EFBIG", reason: `content is larger than ${limits.writeBytes} bytes` })
+          return yield* new FsError({
+            op: "write",
+            path: p.path,
+            code: "EFBIG",
+            reason: `content is larger than ${limits.writeBytes} bytes`,
+          })
         }
         const cur = yield* currentSha(r.real)
         if (p.expectedSha256 !== undefined && cur !== p.expectedSha256) {
@@ -170,21 +189,36 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
         const r = yield* paths.resolve({ path: p.path, botId: p.inv.botId, access: "write" })
         if (!r.exists) return yield* new FsError({ op: "edit", path: p.path, code: "ENOENT", reason: "no such file" })
         const st = yield* attempt("edit", p.path, () => fsp.stat(r.real))
-        if (!st.isFile()) return yield* new FsError({ op: "edit", path: p.path, code: st.isDirectory() ? "EISDIR" : "EINVAL", reason: "not a regular file" })
+        if (!st.isFile())
+          return yield* new FsError({
+            op: "edit",
+            path: p.path,
+            code: st.isDirectory() ? "EISDIR" : "EINVAL",
+            reason: "not a regular file",
+          })
         const bytes = yield* attempt("edit", p.path, () => Bun.file(r.real).bytes())
         const sha = sha256Hex(bytes)
         if (p.expectedSha256 !== undefined && sha !== p.expectedSha256) {
-          return yield* new EditFailed({ path: p.path, reason: `stale edit: the file's sha256 is ${sha}, expected ${p.expectedSha256}; re-read it first` })
+          return yield* new EditFailed({
+            path: p.path,
+            reason: `stale edit: the file's sha256 is ${sha}, expected ${p.expectedSha256}; re-read it first`,
+          })
         }
         if (p.oldString === "") return yield* new EditFailed({ path: p.path, reason: "oldString must not be empty" })
-        if (p.oldString === p.newString) return yield* new EditFailed({ path: p.path, reason: "oldString and newString are identical" })
+        if (p.oldString === p.newString)
+          return yield* new EditFailed({ path: p.path, reason: "oldString and newString are identical" })
         const text = new TextDecoder().decode(bytes)
         const n = text.split(p.oldString).length - 1
         if (n === 0) return yield* new EditFailed({ path: p.path, reason: "oldString was not found in the file" })
         if (n > 1 && !p.replaceAll) {
-          return yield* new EditFailed({ path: p.path, reason: `oldString matches ${n} times; add surrounding context to make it unique, or set replaceAll` })
+          return yield* new EditFailed({
+            path: p.path,
+            reason: `oldString matches ${n} times; add surrounding context to make it unique, or set replaceAll`,
+          })
         }
-        const out = p.replaceAll ? text.split(p.oldString).join(p.newString) : text.replace(p.oldString, () => p.newString)
+        const out = p.replaceAll
+          ? text.split(p.oldString).join(p.newString)
+          : text.replace(p.oldString, () => p.newString)
         yield* attempt("edit", p.path, () => atomicWrite(r.real, out))
         return { sha256: sha256Hex(out), replacements: p.replaceAll ? n : 1 } satisfies FsEditResult
       }),
@@ -197,7 +231,13 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
         const r = yield* paths.resolve({ path: p.path, botId: p.inv.botId, access: "read" })
         const st = yield* attempt("stat", p.path, () => statOrUndefined(r.requested))
         if (!st) return null
-        return { path: r.requested, type: typeOf(st), size: st.size, mtimeMs: Math.floor(st.mtimeMs), mode: st.mode & 0o7777 } satisfies FileStat
+        return {
+          path: r.requested,
+          type: typeOf(st),
+          size: st.size,
+          mtimeMs: Math.floor(st.mtimeMs),
+          mode: st.mode & 0o7777,
+        } satisfies FileStat
       }),
     )
 
@@ -213,7 +253,8 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
       Effect.gen(function* () {
         const r = yield* paths.resolve({ path: p.path, botId: p.inv.botId, access: "read" })
         const st = yield* attempt("list", p.path, () => fsp.stat(r.real))
-        if (!st.isDirectory()) return yield* new FsError({ op: "list", path: p.path, code: "ENOTDIR", reason: "not a directory" })
+        if (!st.isDirectory())
+          return yield* new FsError({ op: "list", path: p.path, code: "ENOTDIR", reason: "not a directory" })
         const depth = Math.max(1, Math.floor(p.depth ?? 1))
         const limit = Math.max(1, Math.min(Math.floor(p.limit ?? limits.listEntries), limits.listEntries * 10))
         return yield* attempt("list", p.path, async (): Promise<FsListResult> => {
@@ -241,7 +282,12 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
                 break
               }
               const type = typeOf(cst)
-              entries.push({ path: childRel, type, size: type === "dir" ? 0 : cst.size, mtimeMs: Math.floor(cst.mtimeMs) })
+              entries.push({
+                path: childRel,
+                type,
+                size: type === "dir" ? 0 : cst.size,
+                mtimeMs: Math.floor(cst.mtimeMs),
+              })
               if (type === "dir" && level < depth) queue.push({ rel: childRel, level: level + 1 })
             }
           }
@@ -250,13 +296,19 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
       }),
     )
 
-  const glob = (p: { readonly inv: Invocation; readonly pattern: string; readonly cwd: string; readonly limit?: number | undefined }) =>
+  const glob = (p: {
+    readonly inv: Invocation
+    readonly pattern: string
+    readonly cwd: string
+    readonly limit?: number | undefined
+  }) =>
     guard(
       { inv: p.inv, action: "list-directory", target: `${p.cwd}:${p.pattern}` },
       Effect.gen(function* () {
         const r = yield* paths.resolve({ path: p.cwd, botId: p.inv.botId, access: "read" })
         const st = yield* attempt("glob", p.cwd, () => fsp.stat(r.real))
-        if (!st.isDirectory()) return yield* new FsError({ op: "glob", path: p.cwd, code: "ENOTDIR", reason: "cwd is not a directory" })
+        if (!st.isDirectory())
+          return yield* new FsError({ op: "glob", path: p.cwd, code: "ENOTDIR", reason: "cwd is not a directory" })
         const limit = Math.max(1, Math.min(Math.floor(p.limit ?? limits.globResults), limits.globResults * 10))
         return yield* attempt("glob", p.cwd, async (): Promise<FsGlobResult> => {
           const found: Array<{ abs: string; mtime: number }> = []
@@ -293,7 +345,8 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
       { inv: p.inv, action: "read-file", target: `${p.path}:${p.pattern}` },
       Effect.gen(function* () {
         const r = yield* paths.resolve({ path: p.path, botId: p.inv.botId, access: "read" })
-        if (!r.exists) return yield* new FsError({ op: "grep", path: p.path, code: "ENOENT", reason: "no such file or directory" })
+        if (!r.exists)
+          return yield* new FsError({ op: "grep", path: p.path, code: "ENOENT", reason: "no such file or directory" })
         const limit = Math.max(1, Math.min(Math.floor(p.limit ?? limits.grepMatches), limits.grepMatches * 10))
         const opts = { ...p, limit, contextLines: Math.max(0, Math.min(Math.floor(p.contextLines ?? 0), 20)) }
         const raw = config.binaries.rg ? yield* grepRipgrep(config.binaries.rg, r, opts) : yield* grepJs(r, opts)
@@ -310,22 +363,39 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
       }),
     )
 
-  const move = (p: { readonly inv: Invocation; readonly from: string; readonly to: string; readonly overwrite?: boolean | undefined }) =>
+  const move = (p: {
+    readonly inv: Invocation
+    readonly from: string
+    readonly to: string
+    readonly overwrite?: boolean | undefined
+  }) =>
     guard(
       { inv: p.inv, action: "write-file", target: `${p.from} -> ${p.to}` },
       Effect.gen(function* () {
         const from = yield* paths.resolve({ path: p.from, botId: p.inv.botId, access: "write" })
         const to = yield* paths.resolve({ path: p.to, botId: p.inv.botId, access: "write" })
-        if (!from.exists) return yield* new FsError({ op: "move", path: p.from, code: "ENOENT", reason: "no such file or directory" })
-        if (from.real === from.rootDir) return yield* new PathDenied({ path: p.from, reason: "cannot move a workspace root" })
-        if (to.exists && !p.overwrite) return yield* new FsError({ op: "move", path: p.to, code: "EEXIST", reason: "destination exists; set overwrite" })
+        if (!from.exists)
+          return yield* new FsError({ op: "move", path: p.from, code: "ENOENT", reason: "no such file or directory" })
+        if (from.real === from.rootDir)
+          return yield* new PathDenied({ path: p.from, reason: "cannot move a workspace root" })
+        if (to.exists && !p.overwrite)
+          return yield* new FsError({
+            op: "move",
+            path: p.to,
+            code: "EEXIST",
+            reason: "destination exists; set overwrite",
+          })
         yield* attempt("move", p.to, () => fsp.mkdir(path.dirname(to.real), { recursive: true }))
         yield* attempt("move", p.from, async () => {
           try {
             await fsp.rename(from.real, to.real)
           } catch (e) {
             if (errCode(e) !== "EXDEV") throw e
-            await fsp.cp(from.real, to.real, { recursive: true, force: p.overwrite ?? false, errorOnExist: !p.overwrite })
+            await fsp.cp(from.real, to.real, {
+              recursive: true,
+              force: p.overwrite ?? false,
+              errorOnExist: !p.overwrite,
+            })
             await fsp.rm(from.real, { recursive: true, force: true })
           }
         })
@@ -337,10 +407,13 @@ export const makeFsOps = ({ config, paths, guard }: FsOpsDeps) => {
       { inv: p.inv, action: "write-file", target: p.path },
       Effect.gen(function* () {
         const r = yield* paths.resolve({ path: p.path, botId: p.inv.botId, access: "write" })
-        if (r.real === r.rootDir) return yield* new PathDenied({ path: p.path, reason: "cannot remove a workspace root" })
+        if (r.real === r.rootDir)
+          return yield* new PathDenied({ path: p.path, reason: "cannot remove a workspace root" })
         const st = yield* attempt("remove", p.path, () => fsp.lstat(r.requested))
         if (st.isDirectory()) {
-          yield* attempt("remove", p.path, () => (p.recursive ? fsp.rm(r.real, { recursive: true }) : fsp.rmdir(r.real)))
+          yield* attempt("remove", p.path, () =>
+            p.recursive ? fsp.rm(r.real, { recursive: true }) : fsp.rmdir(r.real),
+          )
         } else {
           // a symlink is removed itself, never its target
           yield* attempt("remove", p.path, () => fsp.unlink(r.requested))
@@ -407,7 +480,8 @@ const grepRipgrep = (rg: string, r: ResolvedPath, o: GrepOpts): Effect.Effect<Ra
               counts.set(abs, (counts.get(abs) ?? 0) + 1)
               matches++
             }
-            if (lines.length < MAX_SCAN_LINES) lines.push({ path: abs, line: ln, text: text.replace(/\r?\n$/, ""), isMatch: m.type === "match" })
+            if (lines.length < MAX_SCAN_LINES)
+              lines.push({ path: abs, line: ln, text: text.replace(/\r?\n$/, ""), isMatch: m.type === "match" })
           }
           for await (const chunk of proc.stdout) {
             buf += decoder.decode(chunk, { stream: true })
@@ -494,7 +568,8 @@ const grepJs = (r: ResolvedPath, o: GrepOpts): Effect.Effect<RawGrep, FsError> =
       all.forEach((l, i) => {
         if (re.test(l)) {
           hit.add(i)
-          for (let k = Math.max(0, i - o.contextLines); k <= Math.min(all.length - 1, i + o.contextLines); k++) keep.add(k)
+          for (let k = Math.max(0, i - o.contextLines); k <= Math.min(all.length - 1, i + o.contextLines); k++)
+            keep.add(k)
         }
       })
       if (hit.size === 0) continue
@@ -508,7 +583,12 @@ const grepJs = (r: ResolvedPath, o: GrepOpts): Effect.Effect<RawGrep, FsError> =
     return { lines, counts, truncated }
   })
 
-const finishGrep = (raw: RawGrep, allows: (abs: string) => boolean, mode: GrepOutputMode, limit: number): FsGrepResult => {
+const finishGrep = (
+  raw: RawGrep,
+  allows: (abs: string) => boolean,
+  mode: GrepOutputMode,
+  limit: number,
+): FsGrepResult => {
   const files = [...raw.counts.keys()].filter(allows).sort()
   let truncated = raw.truncated
   if (mode === "files_with_matches") {
@@ -517,7 +597,12 @@ const finishGrep = (raw: RawGrep, allows: (abs: string) => boolean, mode: GrepOu
   }
   if (mode === "count") {
     if (files.length > limit) truncated = true
-    return { matches: [], files: files.slice(0, limit), counts: files.slice(0, limit).map((f) => ({ path: f, count: raw.counts.get(f) ?? 0 })), truncated }
+    return {
+      matches: [],
+      files: files.slice(0, limit),
+      counts: files.slice(0, limit).map((f) => ({ path: f, count: raw.counts.get(f) ?? 0 })),
+      truncated,
+    }
   }
   const matches: Array<GrepMatch> = []
   let n = 0

@@ -12,7 +12,8 @@ import { basename, join } from "node:path"
 import { type ServerOptions } from "../src/index.ts"
 import { login, type OpenBotClient, rpcClient, startServer, type TestServer } from "./helpers.ts"
 
-const claudeState = (email: string) => JSON.stringify({ oauthAccount: { emailAddress: email, organizationName: "Org" } })
+const claudeState = (email: string) =>
+  JSON.stringify({ oauthAccount: { emailAddress: email, organizationName: "Org" } })
 
 const makeHome = () => {
   const home = mkdtempSync(join(tmpdir(), "openbot-profiles-home-"))
@@ -35,7 +36,11 @@ const makeHome = () => {
 const opened: Array<string> = []
 
 /** A fake driver posing as `kind` for one account; its probe reports an account named after the dir. */
-const accountDriver = (kind: HarnessDriver["kind"], profileId: string | undefined, configDir: string): HarnessDriver => {
+const accountDriver = (
+  kind: HarnessDriver["kind"],
+  profileId: string | undefined,
+  configDir: string,
+): HarnessDriver => {
   const base = makeFakeDriver({ displayName: kind === "claude" ? "Claude" : "Codex" })
   return {
     ...base,
@@ -64,7 +69,8 @@ const serverOptions = (home: string): ServerOptions => ({
   profiles: {
     home,
     env: {},
-    driverFor: (profile) => Effect.succeed(accountDriver(profile.kind as HarnessDriver["kind"], profile.id, profile.configDir!)),
+    driverFor: (profile) =>
+      Effect.succeed(accountDriver(profile.kind as HarnessDriver["kind"], profile.id, profile.configDir!)),
   },
 })
 
@@ -73,7 +79,11 @@ let server: TestServer
 let cookie: string
 
 const boot = async (dataDir?: string) => {
-  server = await startServer({ ...(dataDir ? { dataDir } : {}), config: { harnesses: ["fake", "claude", "codex"] }, server: serverOptions(home) })
+  server = await startServer({
+    ...(dataDir ? { dataDir } : {}),
+    config: { harnesses: ["fake", "claude", "codex"] },
+    server: serverOptions(home),
+  })
   cookie = await login(server.base, server.ownerToken)
 }
 
@@ -88,14 +98,17 @@ afterAll(async () => {
 }, 30_000)
 
 const withClient = <A, E>(f: (client: OpenBotClient) => Effect.Effect<A, E>) =>
-  Effect.runPromise(Effect.scoped(Effect.flatMap(rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base }), f)))
+  Effect.runPromise(
+    Effect.scoped(Effect.flatMap(rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base }), f)),
+  )
 
-const summary = (profiles: ReadonlyArray<HarnessProfile>) => profiles.map((p) => `${p.kind}:${p.isDefault ? "default" : p.label}:${p.configDir ?? "-"}`)
+const summary = (profiles: ReadonlyArray<HarnessProfile>) =>
+  profiles.map((p) => `${p.kind}:${p.isDefault ? "default" : p.label}:${p.configDir ?? "-"}`)
 
 describe("harness accounts", () => {
   test("first boot adds the discovered accounts; status lists one entry per (kind, account)", async () => {
     const { profiles, status } = await withClient((client) =>
-      Effect.all({ profiles: client["harnesses.profiles"]({}), status: client["harnesses.status"]() })
+      Effect.all({ profiles: client["harnesses.profiles"]({}), status: client["harnesses.status"]() }),
     )
     expect(summary(profiles)).toEqual([
       `claude:default:${join(home, ".claude")}`,
@@ -120,21 +133,36 @@ describe("harness accounts", () => {
     mkdirSync(join(home, ".claude-4"))
     writeFileSync(join(home, ".claude-4", ".claude.json"), claudeState("four@example.com"))
     const out = await withClient((client) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const found = yield* client["harnesses.discover"]({ kind: "claude" })
         const added = yield* client["harnesses.addProfile"]({ kind: "claude", label: "", configDir: "~/.claude-4" })
-        const again = yield* Effect.flip(client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: join(home, ".claude-4") }))
-        const defaultDir = yield* Effect.flip(client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: join(home, ".claude") }))
-        const relative = yield* Effect.flip(client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: "claude-9" }))
-        const missing = yield* Effect.flip(client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: join(home, "nope") }))
-        const opencode = yield* Effect.flip(client["harnesses.addProfile"]({ kind: "opencode", label: "x", configDir: home }))
+        const again = yield* Effect.flip(
+          client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: join(home, ".claude-4") }),
+        )
+        const defaultDir = yield* Effect.flip(
+          client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: join(home, ".claude") }),
+        )
+        const relative = yield* Effect.flip(
+          client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: "claude-9" }),
+        )
+        const missing = yield* Effect.flip(
+          client["harnesses.addProfile"]({ kind: "claude", label: "x", configDir: join(home, "nope") }),
+        )
+        const opencode = yield* Effect.flip(
+          client["harnesses.addProfile"]({ kind: "opencode", label: "x", configDir: home }),
+        )
         const afterAdd = yield* client["harnesses.discover"]({ kind: "claude" })
         const status = yield* client["harnesses.status"]()
         return { found, added, again, defaultDir, relative, missing, opencode, afterAdd, status }
-      })
+      }),
     )
     expect(out.found).toEqual([
-      { kind: "claude", configDir: join(home, ".claude-4"), suggestedLabel: "four@example.com (Org)", account: { email: "four@example.com", organization: "Org" } },
+      {
+        kind: "claude",
+        configDir: join(home, ".claude-4"),
+        suggestedLabel: "four@example.com (Org)",
+        account: { email: "four@example.com", organization: "Org" },
+      },
     ])
     expect(out.added).toMatchObject({ kind: "claude", label: "claude-4", configDir: join(home, ".claude-4") })
     expect(out.again._tag).toBe("Conflict")
@@ -150,24 +178,35 @@ describe("harness accounts", () => {
   test("a bot runs on its account; the account cannot be removed while a bot uses it", async () => {
     opened.length = 0
     const out = await withClient((client) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const profiles = yield* client["harnesses.profiles"]({ kind: "claude" })
         const two = profiles.find((p) => p.configDir === join(home, ".claude-2"))!
-        const bot = yield* client["bots.create"]({ name: "Twin", harness: { kind: "claude", profileId: two.id }, clientNonce: "twin-1" })
+        const bot = yield* client["bots.create"]({
+          name: "Twin",
+          harness: { kind: "claude", profileId: two.id },
+          clientNonce: "twin-1",
+        })
         const unknown = yield* Effect.flip(
-          client["bots.create"]({ name: "Ghost", harness: { kind: "claude", profileId: "hpf_nope" }, clientNonce: "ghost-1" }),
+          client["bots.create"]({
+            name: "Ghost",
+            harness: { kind: "claude", profileId: "hpf_nope" },
+            clientNonce: "ghost-1",
+          }),
         )
         yield* client["messages.send"]({ conversationId: bot.directConversationId, text: "hi", clientNonce: "m-1" })
         for (let i = 0; i < 200 && opened.length === 0; i++) yield* Effect.sleep(10)
         const models = yield* client["harnesses.models"]({ kind: "claude", profileId: two.id })
         const refused = yield* Effect.flip(client["harnesses.removeProfile"]({ profileId: two.id }))
-        const moved = yield* client["bots.update"]({ botId: bot.id, patch: { harness: { kind: "claude", profileId: "default" } } })
+        const moved = yield* client["bots.update"]({
+          botId: bot.id,
+          patch: { harness: { kind: "claude", profileId: "default" } },
+        })
         yield* client["harnesses.removeProfile"]({ profileId: two.id })
         const forbidden = yield* Effect.flip(client["harnesses.removeProfile"]({ profileId: "default" }))
         const gone = yield* Effect.flip(client["harnesses.removeProfile"]({ profileId: two.id }))
         const status = yield* client["harnesses.status"]()
         return { bot, two, unknown, models, refused, moved, forbidden, gone, status }
-      })
+      }),
     )
     expect(out.bot.harness).toEqual({ kind: "claude", profileId: out.two.id })
     expect(out.unknown._tag).toBe("HarnessUnavailable")
@@ -186,7 +225,10 @@ describe("harness accounts", () => {
     await server.close({ keepData: true })
     await boot(dataDir)
     const out = await withClient((client) =>
-      Effect.all({ profiles: client["harnesses.profiles"]({ kind: "claude" }), found: client["harnesses.discover"]({ kind: "claude" }) })
+      Effect.all({
+        profiles: client["harnesses.profiles"]({ kind: "claude" }),
+        found: client["harnesses.discover"]({ kind: "claude" }),
+      }),
     )
     expect(summary(out.profiles)).toEqual([
       `claude:default:${join(home, ".claude")}`,

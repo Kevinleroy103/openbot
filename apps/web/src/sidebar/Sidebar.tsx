@@ -27,11 +27,20 @@ import {
   ShieldCheck,
   Sun,
   SunMoon,
-  Trash2, Pencil } from "lucide-react"
+  Trash2,
+  Pencil,
+} from "lucide-react"
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react"
 import { useAtomSet } from "@effect/atom-react"
 import { Exit } from "effect"
-import { DEFAULT_SETTINGS, type BotId, type BotPatch, type ConversationId, type SectionId, type SidebarPlace } from "@openbot/contracts"
+import {
+  DEFAULT_SETTINGS,
+  type BotId,
+  type BotPatch,
+  type ConversationId,
+  type SectionId,
+  type SidebarPlace,
+} from "@openbot/contracts"
 import { commands, updateSettingsAtom } from "@openbot/client"
 import {
   Avatar,
@@ -104,7 +113,13 @@ interface ContextTarget {
   readonly touch?: boolean
 }
 
-function RowContextMenu({ target, onClose }: { readonly target: ContextTarget; readonly onClose: () => void }): ReactNode {
+function RowContextMenu({
+  target,
+  onClose,
+}: {
+  readonly target: ContextTarget
+  readonly onClose: () => void
+}): ReactNode {
   const ref = useRef<HTMLDivElement>(null)
   const phone = useIsPhone()
   const armed = useArmedClicks()
@@ -123,7 +138,10 @@ function RowContextMenu({ target, onClose }: { readonly target: ContextTarget; r
     const el = ref.current
     if (!el || phone) return
     const r = el.getBoundingClientRect()
-    setPos({ left: Math.min(target.x, window.innerWidth - r.width - 8), top: Math.min(target.y, window.innerHeight - r.height - 8) })
+    setPos({
+      left: Math.min(target.x, window.innerWidth - r.width - 8),
+      top: Math.min(target.y, window.innerHeight - r.height - 8),
+    })
     const down = (e: PointerEvent) => {
       if (!el.contains(e.target as Node)) onClose()
     }
@@ -147,130 +165,161 @@ function RowContextMenu({ target, onClose }: { readonly target: ContextTarget; r
   const conversationId = (item.kind === "bot" ? item.bot.directConversationId : item.summary.id) as ConversationId
   const unread = item.unread
   const sections = [...roster.state.sections.values()].sort((a, b) => a.order - b.order)
-  const content = renaming !== undefined && item.kind === "group" ? (
-            <form
-              className="flex flex-col gap-2 p-1.5"
-              onSubmit={(e) => {
-                e.preventDefault()
-                const title = renaming.trim()
-                if (title === "") return
-                onClose()
-                void renameConversation({ conversationId, title }).then((exit) => {
-                  if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
-                })
-              }}
+  const content =
+    renaming !== undefined && item.kind === "group" ? (
+      <form
+        className="flex flex-col gap-2 p-1.5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const title = renaming.trim()
+          if (title === "") return
+          onClose()
+          void renameConversation({ conversationId, title }).then((exit) => {
+            if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+          })
+        }}
+      >
+        <MenuLabel>Rename group</MenuLabel>
+        <input
+          autoFocus
+          value={renaming}
+          onChange={(e) => setRenaming(e.target.value)}
+          maxLength={80}
+          aria-label="Group name"
+          className={cn(
+            "rounded-lg bg-secondary px-2.5 text-base text-fg outline-none placeholder:text-fg-tertiary",
+            phone ? "h-11" : "h-8",
+          )}
+        />
+        <div className="flex justify-end gap-1.5">
+          <PillButton type="button" variant="ghost" size="sm" onClick={() => setRenaming(undefined)}>
+            Cancel
+          </PillButton>
+          <PillButton type="submit" variant="primary" size="sm" disabled={renaming.trim() === ""}>
+            Save
+          </PillButton>
+        </div>
+      </form>
+    ) : confirm && item.kind === "bot" ? (
+      <>
+        <MenuLabel>Delete {item.bot.name}? Its chats, routines and memory go too.</MenuLabel>
+        <MenuItem
+          icon={Trash2}
+          danger
+          onSelect={run(
+            () =>
+              void deleteBot({ botId: item.bot.id }).then((exit) => {
+                if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+              }),
+          )}
+        >
+          Delete Bot
+        </MenuItem>
+        <MenuItem onSelect={() => setConfirm(false)}>Cancel</MenuItem>
+      </>
+    ) : confirm && item.kind === "group" ? (
+      <>
+        <MenuLabel>Delete “{item.summary.title}”? Its messages go too; the Bots stay.</MenuLabel>
+        <MenuItem
+          icon={Trash2}
+          danger
+          onSelect={run(
+            () =>
+              void deleteConversation({ conversationId }).then((exit) => {
+                if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+              }),
+          )}
+        >
+          Delete group
+        </MenuItem>
+        <MenuItem onSelect={() => setConfirm(false)}>Cancel</MenuItem>
+      </>
+    ) : (
+      <>
+        {item.kind === "bot" && (
+          <MenuItem
+            icon={item.bot.pinned ? PinOff : Pin}
+            onSelect={run(() => void patch(item.bot.id, { pinned: !item.bot.pinned }))}
+          >
+            {item.bot.pinned ? "Unpin" : "Pin"}
+          </MenuItem>
+        )}
+        {item.kind === "bot" && sections.length > 0 && (
+          <>
+            <MenuLabel>Move to</MenuLabel>
+            {sections.map((s) => (
+              <MenuItem
+                key={s.id}
+                icon={FolderInput}
+                checked={item.bot.sectionId === s.id}
+                onSelect={run(() => void patch(item.bot.id, { sectionId: s.id as SectionId, pinned: false }))}
+              >
+                {s.name}
+              </MenuItem>
+            ))}
+            <MenuItem
+              icon={FolderInput}
+              checked={item.bot.sectionId === undefined && !item.bot.pinned}
+              onSelect={run(() => void patch(item.bot.id, { sectionId: null, pinned: false }))}
             >
-              <MenuLabel>Rename group</MenuLabel>
-              <input
-                autoFocus
-                value={renaming}
-                onChange={(e) => setRenaming(e.target.value)}
-                maxLength={80}
-                aria-label="Group name"
-                className={cn("rounded-lg bg-secondary px-2.5 text-base text-fg outline-none placeholder:text-fg-tertiary", phone ? "h-11" : "h-8")}
-              />
-              <div className="flex justify-end gap-1.5">
-                <PillButton type="button" variant="ghost" size="sm" onClick={() => setRenaming(undefined)}>Cancel</PillButton>
-                <PillButton type="submit" variant="primary" size="sm" disabled={renaming.trim() === ""}>Save</PillButton>
-              </div>
-            </form>
-          ) : confirm && item.kind === "bot" ? (
-            <>
-              <MenuLabel>Delete {item.bot.name}? Its chats, routines and memory go too.</MenuLabel>
-              <MenuItem
-                icon={Trash2}
-                danger
-                onSelect={run(() =>
-                  void deleteBot({ botId: item.bot.id }).then((exit) => {
-                    if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
-                  }),
-                )}
-              >
-                Delete Bot
-              </MenuItem>
-              <MenuItem onSelect={() => setConfirm(false)}>Cancel</MenuItem>
-            </>
-          ) : confirm && item.kind === "group" ? (
-            <>
-              <MenuLabel>Delete “{item.summary.title}”? Its messages go too; the Bots stay.</MenuLabel>
-              <MenuItem
-                icon={Trash2}
-                danger
-                onSelect={run(() =>
-                  void deleteConversation({ conversationId }).then((exit) => {
-                    if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
-                  }),
-                )}
-              >
-                Delete group
-              </MenuItem>
-              <MenuItem onSelect={() => setConfirm(false)}>Cancel</MenuItem>
-            </>
-          ) : (
-            <>
-              {item.kind === "bot" && (
-                <MenuItem icon={item.bot.pinned ? PinOff : Pin} onSelect={run(() => void patch(item.bot.id, { pinned: !item.bot.pinned }))}>
-                  {item.bot.pinned ? "Unpin" : "Pin"}
-                </MenuItem>
-              )}
-              {item.kind === "bot" && sections.length > 0 && (
-                <>
-                  <MenuLabel>Move to</MenuLabel>
-                  {sections.map((s) => (
-                    <MenuItem key={s.id} icon={FolderInput} checked={item.bot.sectionId === s.id} onSelect={run(() => void patch(item.bot.id, { sectionId: s.id as SectionId, pinned: false }))}>
-                      {s.name}
-                    </MenuItem>
-                  ))}
-                  <MenuItem icon={FolderInput} checked={item.bot.sectionId === undefined && !item.bot.pinned} onSelect={run(() => void patch(item.bot.id, { sectionId: null, pinned: false }))}>
-                    Unassigned
-                  </MenuItem>
-                </>
-              )}
-              {item.kind === "group" && (
-                <MenuItem icon={Pencil} onSelect={() => setRenaming(item.summary.title)}>
-                  Rename…
-                </MenuItem>
-              )}
-              <MenuSeparator />
-              <MenuItem icon={unread ? MailOpen : Mail} onSelect={run(() => markRead({ conversationId, ...(unread ? {} : { unread: true }) }))}>
-                {unread ? "Mark as Read" : "Mark as Unread"}
-              </MenuItem>
-              <MenuSeparator />
-              <MenuItem
-                icon={Copy}
-                onSelect={run(() => {
-                  void navigator.clipboard?.writeText(conversationId)
-                  toast({ title: "Conversation ID copied", icon: Copy })
-                })}
-              >
-                Copy conversation ID
-              </MenuItem>
-              <MenuSeparator />
-              {item.kind === "bot" ? (
-                <MenuItem icon={item.bot.hidden ? Eye : EyeOff} onSelect={run(() => void patch(item.bot.id, { hidden: !item.bot.hidden }))}>
-                  {item.bot.hidden ? "Show in sidebar" : "Hide from sidebar"}
-                </MenuItem>
-              ) : (
-                <MenuItem icon={EyeOff} onSelect={run(() => {
-                  void setHidden({ conversationId, hidden: true }).then((exit) => {
-                    if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
-                  })
-                })}>
-                  Hide from sidebar
-                </MenuItem>
-              )}
-              {item.kind === "bot" && (
-                <MenuItem icon={Trash2} danger onSelect={() => setConfirm(true)}>
-                  Delete
-                </MenuItem>
-              )}
-              {item.kind === "group" && (
-                <MenuItem icon={Trash2} danger onSelect={() => setConfirm(true)}>
-                  Delete group…
-                </MenuItem>
-              )}
-            </>
-          )
+              Unassigned
+            </MenuItem>
+          </>
+        )}
+        {item.kind === "group" && (
+          <MenuItem icon={Pencil} onSelect={() => setRenaming(item.summary.title)}>
+            Rename…
+          </MenuItem>
+        )}
+        <MenuSeparator />
+        <MenuItem
+          icon={unread ? MailOpen : Mail}
+          onSelect={run(() => markRead({ conversationId, ...(unread ? {} : { unread: true }) }))}
+        >
+          {unread ? "Mark as Read" : "Mark as Unread"}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem
+          icon={Copy}
+          onSelect={run(() => {
+            void navigator.clipboard?.writeText(conversationId)
+            toast({ title: "Conversation ID copied", icon: Copy })
+          })}
+        >
+          Copy conversation ID
+        </MenuItem>
+        <MenuSeparator />
+        {item.kind === "bot" ? (
+          <MenuItem
+            icon={item.bot.hidden ? Eye : EyeOff}
+            onSelect={run(() => void patch(item.bot.id, { hidden: !item.bot.hidden }))}
+          >
+            {item.bot.hidden ? "Show in sidebar" : "Hide from sidebar"}
+          </MenuItem>
+        ) : (
+          <MenuItem
+            icon={EyeOff}
+            onSelect={run(() => {
+              void setHidden({ conversationId, hidden: true }).then((exit) => {
+                if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+              })
+            })}
+          >
+            Hide from sidebar
+          </MenuItem>
+        )}
+        {item.kind === "bot" && (
+          <MenuItem icon={Trash2} danger onSelect={() => setConfirm(true)}>
+            Delete
+          </MenuItem>
+        )}
+        {item.kind === "group" && (
+          <MenuItem icon={Trash2} danger onSelect={() => setConfirm(true)}>
+            Delete group…
+          </MenuItem>
+        )}
+      </>
+    )
   if (phone) {
     const name = item.kind === "bot" ? item.bot.name : item.summary.title || item.bots.map((b) => b.name).join(", ")
     return (
@@ -283,7 +332,11 @@ function RowContextMenu({ target, onClose }: { readonly target: ContextTarget; r
             {item.kind === "bot" ? (
               <Avatar shape={item.bot.avatar.shape} color={item.bot.avatar.color} size={36} />
             ) : (
-              <AvatarStack size={36} outlineColor="var(--ob-elevated)" avatars={item.bots.map((b) => ({ key: b.id, shape: b.avatar.shape, color: b.avatar.color }))} />
+              <AvatarStack
+                size={36}
+                outlineColor="var(--ob-elevated)"
+                avatars={item.bots.map((b) => ({ key: b.id, shape: b.avatar.shape, color: b.avatar.color }))}
+              />
             )}
             <span className="min-w-0 flex-1 truncate text-lg font-medium text-fg">{name}</span>
             {item.kind === "bot" && item.bot.label && <LabelChip>{item.bot.label}</LabelChip>}
@@ -321,7 +374,21 @@ const useRowMenu = (onMenu: (p: LongPressPoint, touch?: boolean) => void) => {
   }
 }
 
-function PinnedTile({ item, current, onOpen, onMenu, drag, dragged = false }: { readonly item: SidebarItem & { kind: "bot" }; readonly current: boolean; readonly onOpen: () => void; readonly onMenu: (p: LongPressPoint, touch?: boolean) => void; readonly drag?: DragProps; readonly dragged?: boolean }): ReactNode {
+function PinnedTile({
+  item,
+  current,
+  onOpen,
+  onMenu,
+  drag,
+  dragged = false,
+}: {
+  readonly item: SidebarItem & { kind: "bot" }
+  readonly current: boolean
+  readonly onOpen: () => void
+  readonly onMenu: (p: LongPressPoint, touch?: boolean) => void
+  readonly drag?: DragProps
+  readonly dragged?: boolean
+}): ReactNode {
   const b = item.bot
   const menu = useRowMenu(onMenu)
   return (
@@ -333,7 +400,10 @@ function PinnedTile({ item, current, onOpen, onMenu, drag, dragged = false }: { 
       {...drag}
       title={b.name}
       data-bot={b.id}
-      className={cn("flex w-[82px] min-w-0 flex-col items-center rounded-xl px-1.5 pt-2 pb-2 transition-colors duration-100 hover:bg-hover active:bg-active aria-[current=page]:bg-active", dragged && "opacity-40")}
+      className={cn(
+        "flex w-[82px] min-w-0 flex-col items-center rounded-xl px-1.5 pt-2 pb-2 transition-colors duration-100 hover:bg-hover active:bg-active aria-[current=page]:bg-active",
+        dragged && "opacity-40",
+      )}
     >
       <Avatar
         shape={b.avatar.shape}
@@ -341,7 +411,11 @@ function PinnedTile({ item, current, onOpen, onMenu, drag, dragged = false }: { 
         size={56}
         working={item.status === "working"}
         expression={item.status === "working" ? "inspecting" : "neutral"}
-        {...(item.status === "attention" ? { status: "attention" as const } : item.unread ? { status: "unread" as const } : {})}
+        {...(item.status === "attention"
+          ? { status: "attention" as const }
+          : item.unread
+            ? { status: "unread" as const }
+            : {})}
       />
       <span className="mt-[7px] max-w-full truncate text-xs text-fg">{b.name}</span>
       {b.label && <LabelChip className="mt-[5px] max-w-full truncate">{b.label}</LabelChip>}
@@ -397,22 +471,47 @@ function Row({
           {...(item.status === "attention" ? { status: "attention" as const } : {})}
         />
       ) : (
-        <AvatarStack size={size} avatars={item.bots.map((b) => ({ key: b.id, shape: b.avatar.shape, color: b.avatar.color }))} />
+        <AvatarStack
+          size={size}
+          avatars={item.bots.map((b) => ({ key: b.id, shape: b.avatar.shape, color: b.avatar.color }))}
+        />
       )}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn("truncate text-fg", phone ? "text-[16px] leading-[22px]" : "text-base")}>{name}</span>
           {item.kind === "bot" && item.bot.label && <LabelChip>{item.bot.label}</LabelChip>}
-          {at !== undefined && <span className="ms-auto shrink-0 ps-2 text-xs text-fg-tertiary tabular-nums">{formatListTime(at)}</span>}
+          {at !== undefined && (
+            <span className="ms-auto shrink-0 ps-2 text-xs text-fg-tertiary tabular-nums">{formatListTime(at)}</span>
+          )}
         </span>
-        <span className={cn("truncate", phone ? "text-[14px] leading-5" : "text-sm", item.status === "attention" ? "text-warn-fg" : "text-fg-secondary")}>{plainPreview(item.preview, 200) || " "}</span>
+        <span
+          className={cn(
+            "truncate",
+            phone ? "text-[14px] leading-5" : "text-sm",
+            item.status === "attention" ? "text-warn-fg" : "text-fg-secondary",
+          )}
+        >
+          {plainPreview(item.preview, 200) || " "}
+        </span>
       </span>
       {item.unread && <UnreadDot className={phone ? "me-0.5" : "me-1"} />}
     </button>
   )
 }
 
-function SectionHeader({ section, collapsed, onToggle, hidden = false, phone = false }: { readonly section: SidebarSection; readonly collapsed: boolean; readonly onToggle: () => void; readonly hidden?: boolean; readonly phone?: boolean }): ReactNode {
+function SectionHeader({
+  section,
+  collapsed,
+  onToggle,
+  hidden = false,
+  phone = false,
+}: {
+  readonly section: SidebarSection
+  readonly collapsed: boolean
+  readonly onToggle: () => void
+  readonly hidden?: boolean
+  readonly phone?: boolean
+}): ReactNode {
   return (
     <button
       type="button"
@@ -430,7 +529,11 @@ function SectionHeader({ section, collapsed, onToggle, hidden = false, phone = f
       ) : hidden ? (
         <Icon icon={ChevronDown} size="sm" />
       ) : (
-        <Icon icon={ChevronDown} size="xs" className={cn("transition-opacity group-hover:opacity-100", phone ? "opacity-60" : "opacity-0")} />
+        <Icon
+          icon={ChevronDown}
+          size="xs"
+          className={cn("transition-opacity group-hover:opacity-100", phone ? "opacity-60" : "opacity-0")}
+        />
       )}
     </button>
   )
@@ -480,13 +583,25 @@ function OwnerMenu(): ReactNode {
       </MenuItem>
       <MenuSeparator />
       <MenuLabel>Theme</MenuLabel>
-      <MenuItem icon={Sun} checked={settings.theme === "light"} onSelect={() => updateSettings({ patch: { theme: "light" } })}>
+      <MenuItem
+        icon={Sun}
+        checked={settings.theme === "light"}
+        onSelect={() => updateSettings({ patch: { theme: "light" } })}
+      >
         Light
       </MenuItem>
-      <MenuItem icon={Moon} checked={settings.theme === "dark"} onSelect={() => updateSettings({ patch: { theme: "dark" } })}>
+      <MenuItem
+        icon={Moon}
+        checked={settings.theme === "dark"}
+        onSelect={() => updateSettings({ patch: { theme: "dark" } })}
+      >
         Dark
       </MenuItem>
-      <MenuItem icon={SunMoon} checked={settings.theme === "system"} onSelect={() => updateSettings({ patch: { theme: "system" } })}>
+      <MenuItem
+        icon={SunMoon}
+        checked={settings.theme === "system"}
+        onSelect={() => updateSettings({ patch: { theme: "system" } })}
+      >
         Follow System
       </MenuItem>
       <MenuSeparator />
@@ -538,16 +653,33 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
         {index === items.length - 1 && drag.isTarget(place, items.length) && <DropLine edge="bottom" />}
       </div>
     ))
-  const openItem = (item: SidebarItem) => select((item.kind === "bot" ? item.bot.directConversationId : item.summary.id) as ConversationId)
-  const isCurrent = (item: SidebarItem) => open !== null && (item.kind === "bot" ? item.bot.directConversationId : item.summary.id) === open
-  const onMenu = (item: SidebarItem) => (p: LongPressPoint, touch = false) => setMenu({ x: p.x, y: p.y, item, touch })
+  const openItem = (item: SidebarItem) =>
+    select((item.kind === "bot" ? item.bot.directConversationId : item.summary.id) as ConversationId)
+  const isCurrent = (item: SidebarItem) =>
+    open !== null && (item.kind === "bot" ? item.bot.directConversationId : item.summary.id) === open
+  const onMenu =
+    (item: SidebarItem) =>
+    (p: LongPressPoint, touch = false) =>
+      setMenu({ x: p.x, y: p.y, item, touch })
   const onContext = (item: SidebarItem) => (e: ReactMouseEvent) => {
     e.preventDefault()
     setMenu({ x: e.clientX, y: e.clientY, item })
   }
   const empty = roster.loaded && roster.bots.length === 0
 
-  if (compact && !phone) return <CompactSidebar model={model} isCurrent={isCurrent} openItem={openItem} onNewChat={onNewChat} onToggleCompact={onToggleCompact} onContext={onContext} menu={menu} closeMenu={() => setMenu(undefined)} />
+  if (compact && !phone)
+    return (
+      <CompactSidebar
+        model={model}
+        isCurrent={isCurrent}
+        openItem={openItem}
+        onNewChat={onNewChat}
+        onToggleCompact={onToggleCompact}
+        onContext={onContext}
+        menu={menu}
+        closeMenu={() => setMenu(undefined)}
+      />
+    )
 
   return (
     <nav aria-label="Bots" className={cn("relative flex h-full min-w-0 flex-col", phone ? "bg-chrome" : "bg-sidebar")}>
@@ -576,15 +708,38 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
         </div>
       ) : (
         <div className="ob-sidebar-header flex h-[calc(60px+env(safe-area-inset-top))] shrink-0 items-center gap-2 px-4 pt-[env(safe-area-inset-top)]">
-          <IconButton icon={PanelLeft} label={`Compact sidebar (${modKey}B)`} size={28} className="-ms-1 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100" onClick={onToggleCompact} />
+          <IconButton
+            icon={PanelLeft}
+            label={`Compact sidebar (${modKey}B)`}
+            size={28}
+            className="-ms-1 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+            onClick={onToggleCompact}
+          />
           <span className="flex-1" />
-          <IconButton icon={Search} label="Search" title={`Search (${modKey}K)`} variant="elevated" onClick={onSearch} />
-          <IconButton icon={Plus} label="New chat" title={`New chat (${modKey}N)`} variant="elevated" onClick={onNewChat} />
+          <IconButton
+            icon={Search}
+            label="Search"
+            title={`Search (${modKey}K)`}
+            variant="elevated"
+            onClick={onSearch}
+          />
+          <IconButton
+            icon={Plus}
+            label="New chat"
+            title={`New chat (${modKey}N)`}
+            variant="elevated"
+            onClick={onNewChat}
+          />
         </div>
       )}
       <div className={cn("min-h-0 flex-1 overflow-y-auto pb-3 scrollbar-thin", phone ? "px-2.5" : "px-2")}>
         {model.pinned.length > 0 && (
-          <div aria-label="Pinned Bots" role="group" {...drag.zone("pinned", model.pinned)} className="flex flex-wrap items-start justify-center gap-x-1 gap-y-3 px-1 pt-2.5 pb-4">
+          <div
+            aria-label="Pinned Bots"
+            role="group"
+            {...drag.zone("pinned", model.pinned)}
+            className="flex flex-wrap items-start justify-center gap-x-1 gap-y-3 px-1 pt-2.5 pb-4"
+          >
             {model.pinned.map((item, index) => (
               <div key={item.key} className="relative" {...drag.row("pinned", model.pinned, index, "x")}>
                 {drag.isTarget("pinned", index) && <DropLine edge="left" />}
@@ -596,7 +751,9 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
                   drag={drag.source(item)}
                   dragged={drag.dragging?.key === item.key}
                 />
-                {index === model.pinned.length - 1 && drag.isTarget("pinned", model.pinned.length) && <DropLine edge="right" />}
+                {index === model.pinned.length - 1 && drag.isTarget("pinned", model.pinned.length) && (
+                  <DropLine edge="right" />
+                )}
               </div>
             ))}
           </div>
@@ -605,7 +762,12 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
           <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
             <Avatar shape="blob" color="gray" size={56} ghost />
             <p className="text-sm text-fg-secondary">No Bots yet. Create one to get started.</p>
-            <PillButton variant="primary" size="md" leadingIcon={Plus} onClick={() => dialogs.show({ kind: "new-bot" })}>
+            <PillButton
+              variant="primary"
+              size="md"
+              leadingIcon={Plus}
+              onClick={() => dialogs.show({ kind: "new-bot" })}
+            >
               Create a Bot
             </PillButton>
           </div>
@@ -613,11 +775,22 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
         {model.sections.map((section) => {
           const place = section.id as SidebarPlace
           // Unassigned and Group chats show while empty only as a place to drag a chat to
-          if (section.items.length === 0 && (section.id === "unassigned" || section.id === "groups") && !drag.accepts(place)) return null
+          if (
+            section.items.length === 0 &&
+            (section.id === "unassigned" || section.id === "groups") &&
+            !drag.accepts(place)
+          )
+            return null
           // "Unassigned" is only a heading once the owner has created sections of their own (Grok).
           if (section.id === "unassigned" && !model.sections.some((s) => s.id !== "unassigned" && s.id !== "groups")) {
             return (
-              <div key={section.id} {...drag.zone(place, section.items)} className="flex min-h-8 flex-col pb-3" role="group" aria-label="Bots">
+              <div
+                key={section.id}
+                {...drag.zone(place, section.items)}
+                className="flex min-h-8 flex-col pb-3"
+                role="group"
+                aria-label="Bots"
+              >
                 {rows(place, section.items)}
               </div>
             )
@@ -627,28 +800,62 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
             <div
               key={section.id}
               {...drag.zone(place, section.items)}
-              className={cn("rounded-xl pb-3", drag.accepts(place) && isCollapsed && drag.isTarget(place, section.items.length) && "bg-hover")}
+              className={cn(
+                "rounded-xl pb-3",
+                drag.accepts(place) && isCollapsed && drag.isTarget(place, section.items.length) && "bg-hover",
+              )}
               role="group"
               aria-label={section.name}
               data-section={section.id}
             >
-              <SectionHeader section={section} collapsed={isCollapsed} onToggle={() => toggle(section.id)} phone={phone} />
+              <SectionHeader
+                section={section}
+                collapsed={isCollapsed}
+                onToggle={() => toggle(section.id)}
+                phone={phone}
+              />
               {!isCollapsed && section.items.length === 0 && (
-                <p className={cn("px-3 pb-2 text-xs", drag.isTarget(place, 0) ? "text-accent-fg" : "text-fg-tertiary")}>Drag chats here</p>
+                <p className={cn("px-3 pb-2 text-xs", drag.isTarget(place, 0) ? "text-accent-fg" : "text-fg-tertiary")}>
+                  Drag chats here
+                </p>
               )}
-              {!isCollapsed && section.items.length > 0 && <div className="mt-0.5 flex flex-col">{rows(place, section.items)}</div>}
+              {!isCollapsed && section.items.length > 0 && (
+                <div className="mt-0.5 flex flex-col">{rows(place, section.items)}</div>
+              )}
             </div>
           )
         })}
         {model.hidden.items.length > 0 && (
           <div role="group" aria-label="Hidden Bots">
-            <SectionHeader section={model.hidden} collapsed={collapsed.has("hidden")} onToggle={() => toggle("hidden")} hidden phone={phone} />
-            {!collapsed.has("hidden") && model.hidden.items.map((item) => <Row key={item.key} item={item} phone={phone} dimmed current={isCurrent(item)} onOpen={() => openItem(item)} onMenu={onMenu(item)} />)}
+            <SectionHeader
+              section={model.hidden}
+              collapsed={collapsed.has("hidden")}
+              onToggle={() => toggle("hidden")}
+              hidden
+              phone={phone}
+            />
+            {!collapsed.has("hidden") &&
+              model.hidden.items.map((item) => (
+                <Row
+                  key={item.key}
+                  item={item}
+                  phone={phone}
+                  dimmed
+                  current={isCurrent(item)}
+                  onOpen={() => openItem(item)}
+                  onMenu={onMenu(item)}
+                />
+              ))}
           </div>
         )}
       </div>
       {!phone && <DesktopUpdateButton />}
-      <div className={cn("flex shrink-0 items-center gap-2 px-4 pt-2", phone ? "pb-[max(12px,env(safe-area-inset-bottom))]" : "pb-[max(16px,env(safe-area-inset-bottom))]")}>
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-2 px-4 pt-2",
+          phone ? "pb-[max(12px,env(safe-area-inset-bottom))]" : "pb-[max(16px,env(safe-area-inset-bottom))]",
+        )}
+      >
         {!phone && <OwnerMenu />}
         <ConnectAppsPill phone={phone} />
       </div>
@@ -683,10 +890,26 @@ function DesktopUpdateButton({ compact = false }: { readonly compact?: boolean }
   const update = useDesktopUpdate()
   if (!updateReady(update.state)) return null
   const label = update.state?.status === "ready" ? "Restart to update" : "Download the update"
-  if (compact) return <IconButton icon={RefreshCw} label={label} variant="elevated" onClick={update.install} data-testid="desktop-update" />
+  if (compact)
+    return (
+      <IconButton
+        icon={RefreshCw}
+        label={label}
+        variant="elevated"
+        onClick={update.install}
+        data-testid="desktop-update"
+      />
+    )
   return (
     <div className="shrink-0 px-4 pt-2">
-      <PillButton variant="primary" size="md" leadingIcon={RefreshCw} className="w-full" onClick={update.install} data-testid="desktop-update">
+      <PillButton
+        variant="primary"
+        size="md"
+        leadingIcon={RefreshCw}
+        className="w-full"
+        onClick={update.install}
+        data-testid="desktop-update"
+      >
         {label}
       </PillButton>
     </div>
@@ -713,7 +936,10 @@ function CompactSidebar({
   readonly closeMenu: () => void
 }): ReactNode {
   const connectApps = useConnectApps()
-  const groups: ReadonlyArray<ReadonlyArray<SidebarItem>> = [model.pinned, ...model.sections.map((s) => s.items)].filter((g) => g.length > 0)
+  const groups: ReadonlyArray<ReadonlyArray<SidebarItem>> = [
+    model.pinned,
+    ...model.sections.map((s) => s.items),
+  ].filter((g) => g.length > 0)
   return (
     <nav aria-label="Bots" className="flex h-full flex-col items-center bg-sidebar">
       <div className="ob-compact-top flex h-[60px] shrink-0 items-center">
@@ -741,10 +967,17 @@ function CompactSidebar({
                         color={item.bot.avatar.color}
                         size={36}
                         working={item.status === "working"}
-                        {...(item.status === "attention" ? { status: "attention" as const } : item.unread ? { status: "unread" as const } : {})}
+                        {...(item.status === "attention"
+                          ? { status: "attention" as const }
+                          : item.unread
+                            ? { status: "unread" as const }
+                            : {})}
                       />
                     ) : (
-                      <AvatarStack size={36} avatars={item.bots.map((b) => ({ key: b.id, shape: b.avatar.shape, color: b.avatar.color }))} />
+                      <AvatarStack
+                        size={36}
+                        avatars={item.bots.map((b) => ({ key: b.id, shape: b.avatar.shape, color: b.avatar.color }))}
+                      />
                     )}
                   </button>
                 </Tooltip>
@@ -763,5 +996,3 @@ function CompactSidebar({
     </nav>
   )
 }
-
-

@@ -14,7 +14,7 @@ interface PayloadRow {
 const RequestJson = jsonCodec(RuntimeRequest, "runtime request")
 const TurnJson = jsonCodec(Turn, "turn")
 
-export const makeSqlRequestRepo = Effect.gen(function*() {
+export const makeSqlRequestRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   const decodeAll = (op: string, rows: ReadonlyArray<PayloadRow>) =>
     Effect.forEach(rows, (row) => RequestJson.decode(op, row.payload_json, row.id))
@@ -32,7 +32,7 @@ export const makeSqlRequestRepo = Effect.gen(function*() {
         repoOp("RequestRepo.get"),
       ),
     upsert: (request) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const payload = yield* RequestJson.encode("RequestRepo.upsert", request)
         yield* sql`INSERT INTO requests (id, conversation_id, bot_id, turn_id, status, native_request_id, created_at, payload_json)
           VALUES (${request.id}, ${request.conversationId}, ${request.botId}, ${request.turnId ?? null}, ${request.status},
@@ -42,7 +42,7 @@ export const makeSqlRequestRepo = Effect.gen(function*() {
             created_at = excluded.created_at, payload_json = excluded.payload_json`
       }).pipe(repoOp("RequestRepo.upsert")),
     list: (filter) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (filter?.statuses !== undefined && filter.statuses.length === 0) return []
         const clauses = [
           ...(filter?.conversationId === undefined ? [] : [sql`conversation_id = ${filter.conversationId}`]),
@@ -68,20 +68,22 @@ export const makeSqlRequestRepo = Effect.gen(function*() {
   })
 })
 
-export const makeSqlTurnRepo = Effect.gen(function*() {
+export const makeSqlTurnRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   const decodeAll = (op: string, rows: ReadonlyArray<PayloadRow>) =>
     Effect.forEach(rows, (row) => TurnJson.decode(op, row.payload_json, row.id))
 
   return TurnRepo.of({
     get: (id) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM turns WHERE id = ${id}`
         const row = rows[0]
-        return row === undefined ? Option.none() : Option.some(yield* TurnJson.decode("TurnRepo.get", row.payload_json, row.id))
+        return row === undefined
+          ? Option.none()
+          : Option.some(yield* TurnJson.decode("TurnRepo.get", row.payload_json, row.id))
       }).pipe(repoOp("TurnRepo.get")),
     upsert: (turn) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const payload = yield* TurnJson.encode("TurnRepo.upsert", turn)
         yield* sql`INSERT INTO turns (id, conversation_id, bot_id, status, started_at, payload_json)
           VALUES (${turn.id}, ${turn.conversationId}, ${turn.botId}, ${turn.status}, ${turn.startedAt}, ${payload})
@@ -90,14 +92,14 @@ export const makeSqlTurnRepo = Effect.gen(function*() {
         if (turn.voice === true) yield* hideVoiceTurn(sql, turn.id)
       }).pipe(repoOp("TurnRepo.upsert")),
     listByConversation: (conversationId, limit) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const size = Math.floor(limit)
         if (size <= 0) return []
         const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM turns WHERE conversation_id = ${conversationId}
           ORDER BY started_at DESC, id DESC LIMIT ${size}`
         return yield* decodeAll("TurnRepo.listByConversation", [...rows].reverse())
       }).pipe(repoOp("TurnRepo.listByConversation")),
-    listActive: Effect.gen(function*() {
+    listActive: Effect.gen(function* () {
       const rows = yield* sql<PayloadRow>`SELECT id, payload_json FROM turns
         WHERE status IN ('queued', 'running', 'waiting') ORDER BY started_at, id`
       return yield* decodeAll("TurnRepo.listActive", rows)

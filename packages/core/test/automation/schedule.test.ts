@@ -38,7 +38,9 @@ describe("routine triggers", () => {
     expect(validateTrigger({ type: "cron", schedule: "0 9 * * *", timezone: "UTC" }, 0)).toBeUndefined()
     expect(validateTrigger({ type: "cron", schedule: "nope", timezone: "UTC" }, 0)).toContain("5-field")
     expect(validateTrigger({ type: "cron", schedule: "0 25 * * *", timezone: "UTC" }, 0)).toContain("Invalid schedule")
-    expect(validateTrigger({ type: "cron", schedule: "0 9 * * *", timezone: "Mars/Base" }, 0)).toContain("Invalid schedule")
+    expect(validateTrigger({ type: "cron", schedule: "0 9 * * *", timezone: "Mars/Base" }, 0)).toContain(
+      "Invalid schedule",
+    )
     expect(validateTrigger({ type: "webhook" }, 0)).toContain("not supported")
   })
 
@@ -46,7 +48,9 @@ describe("routine triggers", () => {
     expect(describeTrigger({ type: "cron", schedule: "0 9 * * 1-5", timezone: "Europe/Berlin" })).toBe(
       "Weekdays at 9:00 AM (Europe/Berlin)",
     )
-    expect(describeTrigger({ type: "cron", schedule: "30 17 * * 5", timezone: "UTC" })).toBe("Every Friday at 5:30 PM UTC")
+    expect(describeTrigger({ type: "cron", schedule: "30 17 * * 5", timezone: "UTC" })).toBe(
+      "Every Friday at 5:30 PM UTC",
+    )
     expect(describeTrigger({ type: "cron", schedule: "*/15 * * * *", timezone: "UTC" })).toBe('Cron "*/15 * * * *" UTC')
     expect(describeTrigger({ type: "interval", everyMinutes: 120 })).toBe("Every 2 hours")
     expect(describeTrigger({ type: "interval", everyMinutes: 45 })).toBe("Every 45 minutes")
@@ -65,7 +69,9 @@ describe("MEMORY.md index", () => {
   test("upsert replaces the fact's line in place and keeps foreign text; remove drops it", () => {
     const start = "# Notes\nKeep this.\n- [Old](dark-mode.md) — old\n- [Other](other.md)\n"
     const updated = upsertIndexLine(start, fact)
-    expect(updated).toBe("# Notes\nKeep this.\n- [Prefers dark mode](dark-mode.md) — UI preference\n- [Other](other.md)\n")
+    expect(updated).toBe(
+      "# Notes\nKeep this.\n- [Prefers dark mode](dark-mode.md) — UI preference\n- [Other](other.md)\n",
+    )
     expect(upsertIndexLine("", fact)).toBe("- [Prefers dark mode](dark-mode.md) — UI preference\n")
     expect(upsertIndexLine("intro\n\n", fact)).toBe("intro\n- [Prefers dark mode](dark-mode.md) — UI preference\n")
     expect(removeIndexLine(updated, fact.id)).toBe("# Notes\nKeep this.\n- [Other](other.md)\n")

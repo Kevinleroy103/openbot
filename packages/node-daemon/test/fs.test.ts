@@ -52,7 +52,12 @@ describe("fs ops", () => {
       Effect.gen(function* () {
         const { client } = yield* node()
         const bytes = Buffer.from([0, 1, 2, 250, 255])
-        yield* client["fs.write"]({ inv: inv(), path: "bin.dat", content: bytes.toString("base64"), encoding: "base64" })
+        yield* client["fs.write"]({
+          inv: inv(),
+          path: "bin.dat",
+          content: bytes.toString("base64"),
+          encoding: "base64",
+        })
         const r = yield* client["fs.read"]({ inv: inv(), path: "bin.dat", encoding: "base64" })
         expect(Buffer.from(r.content, "base64")).toEqual(bytes)
         expect(r.size).toBe(5)
@@ -64,9 +69,13 @@ describe("fs ops", () => {
       Effect.gen(function* () {
         const { client } = yield* node()
         const first = yield* client["fs.write"]({ inv: inv(), path: "cas.txt", content: "v1", expectedSha256: "" })
-        const again = yield* Effect.flip(client["fs.write"]({ inv: inv(), path: "cas.txt", content: "x", expectedSha256: "" }))
+        const again = yield* Effect.flip(
+          client["fs.write"]({ inv: inv(), path: "cas.txt", content: "x", expectedSha256: "" }),
+        )
         expect(again._tag).toBe("EditFailed")
-        const stale = yield* Effect.flip(client["fs.write"]({ inv: inv(), path: "cas.txt", content: "x", expectedSha256: "0".repeat(64) }))
+        const stale = yield* Effect.flip(
+          client["fs.write"]({ inv: inv(), path: "cas.txt", content: "x", expectedSha256: "0".repeat(64) }),
+        )
         expect(stale._tag).toBe("EditFailed")
         yield* client["fs.write"]({ inv: inv(), path: "cas.txt", content: "v2", expectedSha256: first.sha256 })
         expect(readFileSync(path.join(root, "cas.txt"), "utf8")).toBe("v2")
@@ -83,16 +92,28 @@ describe("fs ops", () => {
         expect((amb as { reason: string }).reason).toContain("2 times")
         const one = yield* client["fs.edit"]({ inv: inv(), path: "e.txt", oldString: "b", newString: "B" })
         expect(one.replacements).toBe(1)
-        const all = yield* client["fs.edit"]({ inv: inv(), path: "e.txt", oldString: "a", newString: "$&x", replaceAll: true })
+        const all = yield* client["fs.edit"]({
+          inv: inv(),
+          path: "e.txt",
+          oldString: "a",
+          newString: "$&x",
+          replaceAll: true,
+        })
         expect(all.replacements).toBe(2)
         // `$&` is literal, not a replacement pattern
         expect(readFileSync(path.join(root, "e.txt"), "utf8")).toBe("$&x B $&x c\n")
         expect(all.sha256).toBe(sha256Hex("$&x B $&x c\n"))
-        const missing = yield* Effect.flip(client["fs.edit"]({ inv: inv(), path: "e.txt", oldString: "nope", newString: "x" }))
+        const missing = yield* Effect.flip(
+          client["fs.edit"]({ inv: inv(), path: "e.txt", oldString: "nope", newString: "x" }),
+        )
         expect(missing._tag).toBe("EditFailed")
-        const stale = yield* Effect.flip(client["fs.edit"]({ inv: inv(), path: "e.txt", oldString: "c", newString: "d", expectedSha256: "00" }))
+        const stale = yield* Effect.flip(
+          client["fs.edit"]({ inv: inv(), path: "e.txt", oldString: "c", newString: "d", expectedSha256: "00" }),
+        )
         expect(stale._tag).toBe("EditFailed")
-        const nofile = yield* Effect.flip(client["fs.edit"]({ inv: inv(), path: "none.txt", oldString: "c", newString: "d" }))
+        const nofile = yield* Effect.flip(
+          client["fs.edit"]({ inv: inv(), path: "none.txt", oldString: "c", newString: "d" }),
+        )
         expect(nofile._tag).toBe("FsError")
       }),
     ))
@@ -146,7 +167,12 @@ describe("fs ops", () => {
           ])
           const ctx = yield* client["fs.grep"]({ inv: inv(), pattern: "^Gamma$", path: "g/a.txt", contextLines: 1 })
           expect(ctx.matches.map((m) => m.line)).toEqual([2, 3, 4])
-          const files = yield* client["fs.grep"]({ inv: inv(), pattern: "beta", path: "g", outputMode: "files_with_matches" })
+          const files = yield* client["fs.grep"]({
+            inv: inv(),
+            pattern: "beta",
+            path: "g",
+            outputMode: "files_with_matches",
+          })
           expect(files.files.map((f) => path.basename(f))).toEqual(["a.txt", "b.md"])
           const counts = yield* client["fs.grep"]({ inv: inv(), pattern: "beta", path: "g", outputMode: "count" })
           expect(counts.counts.map((c) => [path.basename(c.path), c.count])).toEqual([
@@ -208,7 +234,9 @@ describe("fs ops", () => {
         expect(abs._tag).toBe("PathDenied")
         const ssh = yield* failureTag(client["fs.write"]({ inv: inv(), path: ".ssh/authorized_keys", content: "k" }))
         expect(ssh._tag).toBe("PathDenied")
-        const mv = yield* failureTag(client["fs.move"]({ inv: inv(), from: "cas.txt", to: path.join(outside, "stolen") }))
+        const mv = yield* failureTag(
+          client["fs.move"]({ inv: inv(), from: "cas.txt", to: path.join(outside, "stolen") }),
+        )
         expect(mv._tag).toBe("PathDenied")
         const dirRead = yield* failureTag(client["fs.read"]({ inv: inv(), path: "." }))
         expect(dirRead._tag).toBe("FsError")
@@ -218,7 +246,11 @@ describe("fs ops", () => {
   test("policy: a `never` ceiling refuses writes (PolicyRefused, do not retry) and audits it", () =>
     run(
       Effect.gen(function* () {
-        const { client } = yield* node({ dataDir, roots: [root], policy: { ceiling: "always", actions: { "write-file": "never" } } })
+        const { client } = yield* node({
+          dataDir,
+          roots: [root],
+          policy: { ceiling: "always", actions: { "write-file": "never" } },
+        })
         const e = yield* failureTag(client["fs.write"]({ inv: inv(), path: "never.txt", content: "x" }))
         expect(e._tag).toBe("PolicyRefused")
         expect((e as { retry: boolean }).retry).toBe(false)

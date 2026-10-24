@@ -15,7 +15,14 @@ import { RpcClient, type RpcClientError, RpcSerialization } from "effect/rpc"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { InternalListener, PublicListener, type ServerConfigShape, ServerLive, type ServerOptions, WebAuth } from "../src/index.ts"
+import {
+  InternalListener,
+  PublicListener,
+  type ServerConfigShape,
+  ServerLive,
+  type ServerOptions,
+  WebAuth,
+} from "../src/index.ts"
 
 export type ServerServices = Layer.Success<ReturnType<typeof ServerLive>>
 
@@ -36,7 +43,9 @@ export interface TestServer {
   readonly close: (options?: { readonly keepData?: boolean }) => Promise<void>
 }
 
-export const TEST_LOCAL_NODE = { node: { browser: { enabled: false }, detectBinaries: false, forwardAudit: false } } as const
+export const TEST_LOCAL_NODE = {
+  node: { browser: { enabled: false }, detectBinaries: false, forwardAudit: false },
+} as const
 
 export const testConfig = (dataDir: string, overrides?: Partial<ServerConfigShape>): ServerConfigShape => ({
   dataDir,
@@ -112,7 +121,7 @@ export type OpenBotClient = RpcClient.FromGroup<typeof OpenBotRpcs, RpcClientErr
 
 /** An `OpenBotRpcs` client over `/rpc` with the given handshake headers (cookie, origin). Scoped. */
 export const rpcClient = (url: string, headers: Record<string, string>) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const protocol = yield* Layer.build(
       RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
         Layer.provide(BunSocket.layerWebSocket(url, { headers, openTimeout: 5_000 })),
@@ -124,14 +133,14 @@ export const rpcClient = (url: string, headers: Record<string, string>) =>
 
 /** A live conversation replica: subscribes and folds every item with the contract reducer. */
 export const watchConversation = (client: OpenBotClient, conversationId: ConversationId) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const state = yield* Ref.make<ConversationState>(emptyConversationState)
     const items = yield* Ref.make<ReadonlyArray<ConversationStreamItem>>([])
     const fiber = yield* client["conversations.subscribe"]({ conversationId }).pipe(
       Stream.runForEach((item) =>
         Ref.update(state, (s) => applyConversationStreamItem(s, item)).pipe(
           Effect.andThen(Ref.update(items, (all) => [...all, item])),
-        )
+        ),
       ),
       Effect.forkScoped,
     )
@@ -144,7 +153,7 @@ export const eventually = <A, E, R>(
   predicate: (a: A) => boolean,
   options?: { readonly timeout?: number; readonly label?: string },
 ): Effect.Effect<A, E | Error, R> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const deadline = Date.now() + (options?.timeout ?? 10_000)
     let last: A | undefined
     while (Date.now() < deadline) {
@@ -153,7 +162,9 @@ export const eventually = <A, E, R>(
       yield* Effect.sleep("25 millis")
     }
     return yield* Effect.fail(
-      new Error(`timed out waiting for ${options?.label ?? "condition"}; last value: ${JSON.stringify(last)?.slice(0, 2000)}`),
+      new Error(
+        `timed out waiting for ${options?.label ?? "condition"}; last value: ${JSON.stringify(last)?.slice(0, 2000)}`,
+      ),
     )
   })
 

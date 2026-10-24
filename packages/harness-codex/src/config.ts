@@ -57,7 +57,7 @@ export const mcpHandsBaseInstructions = (placement: ResolvedPlacement): string =
     "- list_dir, glob, grep: find files and text.",
     `Each of them takes an optional \`node\` argument; leave it out to use your own computer. Your workspace there is ${placement.workspacePath}; paths are paths on that computer.`,
     "Work in small, verifiable steps: inspect before you change, run commands to check your work, and report what you did.",
-    "Tool results that start with \"ERROR:\" failed; read the message and adapt.",
+    'Tool results that start with "ERROR:" failed; read the message and adapt.',
     "Ask the user with ask_user when a decision is theirs, and use request_approval before destructive or irreversible actions.",
   ].join("\n")
 
@@ -75,7 +75,10 @@ export const planThread = (placement: ResolvedPlacement): ThreadPlan | HarnessEr
     case "codex-environment": {
       const env = placement.codexEnvironment
       if (!env) {
-        return harnessError("open-failed", "The codex-environment placement has no exec-server relay for the host node.")
+        return harnessError(
+          "open-failed",
+          "The codex-environment placement has no exec-server relay for the host node.",
+        )
       }
       if (!isValidEnvironmentId(env.environmentId) || env.environmentId === LOCAL_ENVIRONMENT_ID) {
         return harnessError("open-failed", `"${env.environmentId}" is not a valid Codex environment id.`)
@@ -129,7 +132,10 @@ export const isValidEnvironmentId = (id: string): boolean => /^[A-Za-z0-9_-]{1,6
  * The thread `config` (dotted keys and nested objects are both accepted; sdk-codex.md §4.4).
  * Tokens stay in `http_headers`: never on argv, never in `config.toml` (D3.1, §7).
  */
-export const threadConfig = (mcp: ReadonlyArray<McpBinding>, options: ThreadConfigOptions = {}): Record<string, unknown> => {
+export const threadConfig = (
+  mcp: ReadonlyArray<McpBinding>,
+  options: ThreadConfigOptions = {},
+): Record<string, unknown> => {
   const servers: Record<string, unknown> = {}
   for (const binding of mcp) {
     servers[binding.name] = {
@@ -212,9 +218,10 @@ const IMAGE_MIME = /^image\//i
 export const userInputOf = (turn: TurnInput): ReadonlyArray<Record<string, unknown>> => {
   const images = turn.attachments.filter((a) => IMAGE_MIME.test(a.mime))
   const files = turn.attachments.filter((a) => !IMAGE_MIME.test(a.mime))
-  const text = files.length === 0
-    ? turn.text
-    : `${turn.text}\n\nAttached files (readable on the brain):\n${files.map((f) => `- ${f.name} (${f.mime}): ${f.path}`).join("\n")}`
+  const text =
+    files.length === 0
+      ? turn.text
+      : `${turn.text}\n\nAttached files (readable on the brain):\n${files.map((f) => `- ${f.name} (${f.mime}): ${f.path}`).join("\n")}`
   return [
     { type: "text", text, text_elements: [] },
     ...images.map((image) => ({ type: "localImage", path: image.path })),
@@ -260,11 +267,13 @@ export const skillRulesFor = (
   const library = libraryRoot?.replace(/\/+$/, "")
   const rules: Array<{ path: string; enabled: boolean }> = []
   const seen = new Set<string>()
-  const data = typeof listResult === "object" && listResult !== null && "data" in listResult
-    ? (listResult as { data: unknown }).data
-    : undefined
+  const data =
+    typeof listResult === "object" && listResult !== null && "data" in listResult
+      ? (listResult as { data: unknown }).data
+      : undefined
   for (const entry of Array.isArray(data) ? data : []) {
-    const skills = typeof entry === "object" && entry !== null && "skills" in entry ? (entry as { skills: unknown }).skills : []
+    const skills =
+      typeof entry === "object" && entry !== null && "skills" in entry ? (entry as { skills: unknown }).skills : []
     for (const skill of Array.isArray(skills) ? skills : []) {
       if (typeof skill !== "object" || skill === null) continue
       const path = (skill as { path?: unknown }).path

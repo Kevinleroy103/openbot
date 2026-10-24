@@ -18,7 +18,9 @@ export interface PolicyDecision {
 }
 
 export interface PolicyCheck {
-  readonly inv: Invocation | { readonly botId: string; readonly invocationId?: string; readonly runId?: string; readonly toolCallId?: string }
+  readonly inv:
+    | Invocation
+    | { readonly botId: string; readonly invocationId?: string; readonly runId?: string; readonly toolCallId?: string }
   readonly action: NodeAction
   readonly target: string
   readonly reason?: string | undefined
@@ -42,10 +44,7 @@ const compile = (sources: ReadonlyArray<string>): ReadonlyArray<RegExp> =>
     }
   })
 
-export const makeNodePolicy = (
-  config: NodePolicyConfig,
-  brain: BrainLink["Service"],
-): NodePolicyShape => {
+export const makeNodePolicy = (config: NodePolicyConfig, brain: BrainLink["Service"]): NodePolicyShape => {
   const ask = compile(config.askCommands)
   const deny = compile(config.denyCommands)
   /** allow-always grants from the brain, per bot + action + target (in memory, this process only) */
@@ -88,7 +87,10 @@ export const makeNodePolicy = (
       if (res.decision === "deny") {
         return yield* new PolicyRefused({
           action: input.action,
-          reason: res.by === "unreachable" ? "The node could not reach the brain to ask for approval." : `Denied by ${res.by}.`,
+          reason:
+            res.by === "unreachable"
+              ? "The node could not reach the brain to ask for approval."
+              : `Denied by ${res.by}.`,
           retry: false,
         })
       }

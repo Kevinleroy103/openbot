@@ -14,7 +14,15 @@
  */
 import type { NodeId, NodeSummary } from "@openbot/contracts"
 import { Forbidden, InvalidInput, LOCAL_NODE_ID, NodeUnavailable, NotFound, PairingCode } from "@openbot/contracts"
-import { IdGen, NodeAdmin, type NodeClient, NodeDirectory, type NodeDirectoryChange, type NodeRecord, NodeRepo } from "@openbot/core"
+import {
+  IdGen,
+  NodeAdmin,
+  type NodeClient,
+  NodeDirectory,
+  type NodeDirectoryChange,
+  type NodeRecord,
+  NodeRepo,
+} from "@openbot/core"
 import {
   CloseCodes,
   effectiveCapabilities,
@@ -30,7 +38,19 @@ import {
   pairingCodeExpiresAt,
   parseCapability,
 } from "@openbot/node-protocol"
-import { Clock, Context, Effect, Layer, Option, PubSub, Result, Schema, Semaphore, Stream, SubscriptionRef } from "effect"
+import {
+  Clock,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  PubSub,
+  Result,
+  Schema,
+  Semaphore,
+  Stream,
+  SubscriptionRef,
+} from "effect"
 import type { Scope } from "effect"
 import { hostname as osHostname } from "node:os"
 import { BrainIdentity, BrainNodesConfig } from "./config.ts"
@@ -104,7 +124,9 @@ export interface NodeRegistryShape {
   readonly closeAll: (code?: number, reason?: string) => Effect.Effect<void>
 }
 
-export class NodeRegistry extends Context.Service<NodeRegistry, NodeRegistryShape>()("openbot/brain-nodes/NodeRegistry") {}
+export class NodeRegistry extends Context.Service<NodeRegistry, NodeRegistryShape>()(
+  "openbot/brain-nodes/NodeRegistry",
+) {}
 
 // ============================================================================ helpers
 
@@ -120,7 +142,11 @@ export const normalizeCapabilities = (capabilities: ReadonlyArray<string>): Read
   return out
 }
 
-const summarize = (record: NodeRecord, connection: NodeConnection | undefined, lastSeenAt: number | undefined): NodeSummary => {
+const summarize = (
+  record: NodeRecord,
+  connection: NodeConnection | undefined,
+  lastSeenAt: number | undefined,
+): NodeSummary => {
   const seen = lastSeenAt ?? record.lastSeenAt
   return {
     id: record.id,
@@ -134,7 +160,9 @@ const summarize = (record: NodeRecord, connection: NodeConnection | undefined, l
     roots: record.roots,
     ...(record.version === undefined ? {} : { version: record.version }),
     // a Mac shares its own screen instead: what it needs are permissions, not desktop programs
-    ...(connection?.hello.screen === undefined && connection?.hello.desktop !== undefined && connection.hello.desktop.missing.length > 0
+    ...(connection?.hello.screen === undefined &&
+    connection?.hello.desktop !== undefined &&
+    connection.hello.desktop.missing.length > 0
       ? { desktopMissing: connection.hello.desktop.missing }
       : {}),
     ...(connection?.hello.screen !== undefined && connection.hello.screen.missing.length > 0
@@ -149,7 +177,7 @@ const MAX_LABEL = 64
 
 // ============================================================================ live layer
 
-export const makeNodeRegistry = Effect.gen(function*() {
+export const makeNodeRegistry = Effect.gen(function* () {
   const repo = yield* NodeRepo
   const ids = yield* IdGen
   const config = yield* BrainNodesConfig
@@ -170,7 +198,10 @@ export const makeNodeRegistry = Effect.gen(function*() {
 
   const now = Clock.currentTimeMillis
   const persist = (record: NodeRecord) =>
-    Effect.andThen(Effect.orDie(repo.upsert(record)), Effect.sync(() => void records.set(record.id, record)))
+    Effect.andThen(
+      Effect.orDie(repo.upsert(record)),
+      Effect.sync(() => void records.set(record.id, record)),
+    )
 
   const isVisible = (record: NodeRecord): boolean =>
     record.revokedAt === undefined && (record.kind !== "local" || config.localNode.enabled)
@@ -243,7 +274,7 @@ export const makeNodeRegistry = Effect.gen(function*() {
   const notFound = (nodeId: string) => new NotFound({ entity: "node", id: nodeId })
 
   const admin = NodeAdmin.of({
-    createPairingCode: Effect.gen(function*() {
+    createPairingCode: Effect.gen(function* () {
       const code = generatePairingCode()
       const createdAt = yield* now
       const expiresAt = pairingCodeExpiresAt(createdAt)
@@ -259,14 +290,15 @@ export const makeNodeRegistry = Effect.gen(function*() {
       return PairingCode.make({
         code: display,
         expiresAt: expiresAt as NodeRecord["createdAt"],
-        command: config.nodeInstall === undefined
-          ? `${config.nodeCommand} pair ${origin} ${display}`
-          : installCommand(origin, display),
+        command:
+          config.nodeInstall === undefined
+            ? `${config.nodeCommand} pair ${origin} ${display}`
+            : installCommand(origin, display),
       })
     }),
     rename: (nodeId, label) =>
       locked(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const record = visibleRecord(nodeId)
           if (Option.isNone(record)) return yield* notFound(nodeId)
           const trimmed = label.trim()
@@ -281,7 +313,7 @@ export const makeNodeRegistry = Effect.gen(function*() {
       ),
     revoke: (nodeId) =>
       locked(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           if (nodeId === LOCAL_NODE_ID) {
             return yield* new Forbidden({ reason: "The local node cannot be revoked; disable it with --no-local-node" })
           }
@@ -300,7 +332,7 @@ export const makeNodeRegistry = Effect.gen(function*() {
       ),
     setCapabilities: (nodeId, approved) =>
       locked(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const record = visibleRecord(nodeId)
           if (Option.isNone(record)) return yield* notFound(nodeId)
           const invalid = approved.filter((c) => parseCapability(c.trim()) === undefined)
@@ -320,16 +352,28 @@ export const makeNodeRegistry = Effect.gen(function*() {
   const attach = (input: AttachInput) =>
     Effect.acquireRelease(
       locked(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const record = records.get(input.nodeId)
           if (record === undefined) {
-            return yield* new AttachRefused({ nodeId: input.nodeId, closeCode: CloseCodes.revoked, reason: "unknown node" })
+            return yield* new AttachRefused({
+              nodeId: input.nodeId,
+              closeCode: CloseCodes.revoked,
+              reason: "unknown node",
+            })
           }
           if (record.revokedAt !== undefined) {
-            return yield* new AttachRefused({ nodeId: input.nodeId, closeCode: CloseCodes.revoked, reason: "node revoked" })
+            return yield* new AttachRefused({
+              nodeId: input.nodeId,
+              closeCode: CloseCodes.revoked,
+              reason: "node revoked",
+            })
           }
           if (record.kind === "local" && !config.localNode.enabled) {
-            return yield* new AttachRefused({ nodeId: input.nodeId, closeCode: CloseCodes.revoked, reason: "local node disabled" })
+            return yield* new AttachRefused({
+              nodeId: input.nodeId,
+              closeCode: CloseCodes.revoked,
+              reason: "local node disabled",
+            })
           }
           const at = yield* now
           const declared = normalizeCapabilities(input.hello.capabilities)
@@ -374,7 +418,7 @@ export const makeNodeRegistry = Effect.gen(function*() {
 
   const detach = (connection: NodeConnection) =>
     locked(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (connections.get(connection.nodeId)?.connId !== connection.connId) return
         connections.delete(connection.nodeId)
         const at = yield* now
@@ -390,7 +434,7 @@ export const makeNodeRegistry = Effect.gen(function*() {
 
   const pair = (request: PairRequest) =>
     locked(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const code = normalizePairingCode(request.code)
         if (code === undefined) return yield* new PairingRefused({ status: 400, reason: "malformed pairing code" })
         if (!isValidPublicKey(request.publicKey)) {
@@ -410,17 +454,17 @@ export const makeNodeRegistry = Effect.gen(function*() {
         const base: NodeRecord = reuse
           ? existing
           : {
-            id: nodeId,
-            label: (hostname || "Computer").slice(0, MAX_LABEL),
-            kind: "remote",
-            publicKey: request.publicKey,
-            declaredCapabilities: [],
-            approvedCapabilities: [],
-            platform: request.platform,
-            hostname,
-            roots: [],
-            createdAt: at as NodeRecord["createdAt"],
-          }
+              id: nodeId,
+              label: (hostname || "Computer").slice(0, MAX_LABEL),
+              kind: "remote",
+              publicKey: request.publicKey,
+              declaredCapabilities: [],
+              approvedCapabilities: [],
+              platform: request.platform,
+              hostname,
+              roots: [],
+              createdAt: at as NodeRecord["createdAt"],
+            }
         yield* persist({
           ...base,
           platform: request.platform || base.platform,
@@ -450,7 +494,8 @@ export const makeNodeRegistry = Effect.gen(function*() {
       Effect.flatMap(now, (at) =>
         Effect.sync(() => {
           if (connections.has(nodeId as NodeId)) lastSeen.set(nodeId as NodeId, at)
-        })),
+        }),
+      ),
     pair,
     events: Stream.fromPubSub(events),
     publishEvent: (event) => Effect.asVoid(PubSub.publish(events, event)),
@@ -461,7 +506,7 @@ export const makeNodeRegistry = Effect.gen(function*() {
           [...connections.values()].filter((c) => c.nodeId !== LOCAL_NODE_ID),
           (c) => c.close(code, reason),
           { discard: true },
-        )
+        ),
       ),
   })
 
@@ -478,8 +523,6 @@ export const NodeRegistryLive: Layer.Layer<
   NodeRepo | IdGen | BrainNodesConfig | BrainIdentity
 > = Layer.effectContext(
   Effect.map(makeNodeRegistry, ({ admin, directory, registry }) =>
-    Context.make(NodeDirectory, directory).pipe(
-      Context.add(NodeAdmin, admin),
-      Context.add(NodeRegistry, registry),
-    )),
+    Context.make(NodeDirectory, directory).pipe(Context.add(NodeAdmin, admin), Context.add(NodeRegistry, registry)),
+  ),
 )

@@ -43,7 +43,13 @@ const reasonOf = (message: string | undefined): string | undefined => {
 }
 
 /** `undefined` = the picture is live: nothing to say. */
-export const screenNotice = ({ name, availability, phase, message: raw, starting }: NoticeInput): ScreenNotice | undefined => {
+export const screenNotice = ({
+  name,
+  availability,
+  phase,
+  message: raw,
+  starting,
+}: NoticeInput): ScreenNotice | undefined => {
   const message = reasonOf(raw)
   switch (availability.kind) {
     case "loading":
@@ -58,13 +64,33 @@ export const screenNotice = ({ name, availability, phase, message: raw, starting
     case "unreachable":
       // a Mac that still needs permissions: its own words say what to allow
       if (availability.surface === "screen" && availability.missing && availability.missing.length > 0) {
-        return { icon: "off", title: `${name} can't use the Mac's screen yet`, body: availability.message, action: "retry" }
+        return {
+          icon: "off",
+          title: `${name} can't use the Mac's screen yet`,
+          body: availability.message,
+          action: "retry",
+        }
       }
-      return { icon: "unplug", title: `Can't reach ${name}'s screen`, body: reasonOf(availability.message), action: availability.surface === "desktop" ? "wake" : "retry" }
+      return {
+        icon: "unplug",
+        title: `Can't reach ${name}'s screen`,
+        body: reasonOf(availability.message),
+        action: availability.surface === "desktop" ? "wake" : "retry",
+      }
     case "absent":
       return availability.surface === "desktop"
-        ? { icon: "asleep", title: `${name}'s computer is asleep`, body: `It wakes up when ${name} needs it.`, action: "wake" }
-        : { icon: "off", title: "No screen to show", body: `${name}'s browser isn't open. It opens when ${name} browses, or you can open it now.`, action: "open-browser" }
+        ? {
+            icon: "asleep",
+            title: `${name}'s computer is asleep`,
+            body: `It wakes up when ${name} needs it.`,
+            action: "wake",
+          }
+        : {
+            icon: "off",
+            title: "No screen to show",
+            body: `${name}'s browser isn't open. It opens when ${name} browses, or you can open it now.`,
+            action: "open-browser",
+          }
     case "stream":
       break
   }
@@ -72,7 +98,12 @@ export const screenNotice = ({ name, availability, phase, message: raw, starting
     case "live":
       return undefined
     case "asleep":
-      return { icon: "asleep", title: `${name}'s computer is asleep`, body: message ?? `It wakes up when ${name} needs it.`, action: "wake" }
+      return {
+        icon: "asleep",
+        title: `${name}'s computer is asleep`,
+        body: message ?? `It wakes up when ${name} needs it.`,
+        action: "wake",
+      }
     case "unreachable":
       return { icon: "unplug", title: `Can't reach ${name}'s screen`, body: message ?? "Retrying…", action: "retry" }
     case "ended":

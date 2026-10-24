@@ -20,14 +20,7 @@ import {
 } from "../../src/ports/index.ts"
 import { introductionText } from "../../src/services/conversation/BotService.ts"
 import { AttachmentServiceLive, LiveHubLive, NotifierLive } from "../../src/services/conversation/index.ts"
-import {
-  ApprovalServiceFake,
-  botId,
-  makeBot,
-  makeTurn,
-  runTest,
-  TestPorts,
-} from "../../src/testing/index.ts"
+import { ApprovalServiceFake, botId, makeBot, makeTurn, runTest, TestPorts } from "../../src/testing/index.ts"
 import {
   appLayer,
   collect,
@@ -47,15 +40,29 @@ import {
 describe("BotService", () => {
   test("create: avatar default, DM with a joined event, idempotent nonce, unique names, harness check", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
-        const ada = yield* bots.create({ name: " Ada ", label: "Research", harness: { kind: "fake" }, clientNonce: "c-1" })
+        const ada = yield* bots.create({
+          name: " Ada ",
+          label: "Research",
+          harness: { kind: "fake" },
+          clientNonce: "c-1",
+        })
         const again = yield* bots.create({ name: "Ada", harness: { kind: "fake" }, clientNonce: "c-1" })
         const taken = yield* Effect.flip(bots.create({ name: "ada", harness: { kind: "fake" }, clientNonce: "c-2" }))
-        const reserved = yield* Effect.flip(bots.create({ name: "Everyone", harness: { kind: "fake" }, clientNonce: "c-3" }))
-        const noHarness = yield* Effect.flip(bots.create({ name: "Cy", harness: { kind: "claude" }, clientNonce: "c-4" }))
+        const reserved = yield* Effect.flip(
+          bots.create({ name: "Everyone", harness: { kind: "fake" }, clientNonce: "c-3" }),
+        )
+        const noHarness = yield* Effect.flip(
+          bots.create({ name: "Cy", harness: { kind: "claude" }, clientNonce: "c-4" }),
+        )
         const noNode = yield* Effect.flip(
-          bots.create({ name: "Cy", harness: { kind: "fake" }, hostNodeId: "nod_missing" as never, clientNonce: "c-5" }),
+          bots.create({
+            name: "Cy",
+            harness: { kind: "fake" },
+            hostNodeId: "nod_missing" as never,
+            clientNonce: "c-5",
+          }),
         )
         const dm = yield* conversation(ada.directConversationId)
         return {
@@ -90,9 +97,12 @@ describe("BotService", () => {
 
   test("introduce: an owner-created Bot greets the owner in a hidden first turn; without it nothing runs", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
-        const testing = yield* bots.create({ name: "Testing Bot", label: "QA", harness: { kind: "fake" }, clientNonce: "n-intro" }, { introduce: true })
+        const testing = yield* bots.create(
+          { name: "Testing Bot", label: "QA", harness: { kind: "fake" }, clientNonce: "n-intro" },
+          { introduce: true },
+        )
         const quiet = yield* bots.create({ name: "Quiet", harness: { kind: "fake" }, clientNonce: "n-quiet" })
         yield* settled(testing.directConversationId)
         return {
@@ -115,7 +125,7 @@ describe("BotService", () => {
 
   test("readContext renders the instructions with a placement preview and the memory", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ada = yield* createBot("Ada", { instructions: "Research things carefully." })
         yield* createBot("Bob")
         return yield* (yield* BotService).readContext(ada.id)
@@ -131,7 +141,7 @@ describe("BotService", () => {
 
   test("update: rename follows into the DM; a harness/host change stops runners and drops native sessions", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
         const botRepo = yield* BotRepo
         const ada = yield* createBot("Ada")
@@ -140,7 +150,10 @@ describe("BotService", () => {
         const sessionBefore = yield* Effect.orDie(botRepo.getSession(ada.id))
         const renamed = yield* bots.update(ada.id, { name: "Ada Lovelace", label: null, pinned: true })
         const badHarness = yield* Effect.flip(bots.update(ada.id, { harness: { kind: "codex" } }))
-        const moved = yield* bots.update(ada.id, { harness: { kind: "fake", model: "m-2" }, hostNodeId: "node_local" as never })
+        const moved = yield* bots.update(ada.id, {
+          harness: { kind: "fake", model: "m-2" },
+          hostNodeId: "node_local" as never,
+        })
         const sessionAfterModel = yield* Effect.orDie(botRepo.getSession(ada.id))
         return {
           renamed,
@@ -168,7 +181,7 @@ describe("BotService", () => {
 
   test("harness accounts: profileId is validated, normalized, routed to its driver; switching drops sessions", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
         const botRepo = yield* BotRepo
         const registry = yield* HarnessRegistry
@@ -176,9 +189,19 @@ describe("BotService", () => {
         // A second account of the same harness: its own driver instance.
         const alt = { ...control.driver, profileId: "hpf_alt" }
         yield* registry.register(alt)
-        const explicitDefault = yield* bots.create({ name: "Dee", harness: { kind: "fake", profileId: "default" }, clientNonce: "p-1" })
-        const unknown = yield* Effect.flip(bots.create({ name: "Uno", harness: { kind: "fake", profileId: "hpf_gone" }, clientNonce: "p-2" }))
-        const ada = yield* bots.create({ name: "Ada", harness: { kind: "fake", profileId: "hpf_alt" }, clientNonce: "p-3" })
+        const explicitDefault = yield* bots.create({
+          name: "Dee",
+          harness: { kind: "fake", profileId: "default" },
+          clientNonce: "p-1",
+        })
+        const unknown = yield* Effect.flip(
+          bots.create({ name: "Uno", harness: { kind: "fake", profileId: "hpf_gone" }, clientNonce: "p-2" }),
+        )
+        const ada = yield* bots.create({
+          name: "Ada",
+          harness: { kind: "fake", profileId: "hpf_alt" },
+          clientNonce: "p-3",
+        })
         yield* send(ada.directConversationId, "hello")
         yield* settled(ada.directConversationId)
         const opened = (yield* control.opened).map((o) => o.bot.harness.profileId)
@@ -203,13 +226,17 @@ describe("BotService", () => {
 
   test("delete: stops the bot, removes its DM, leaves groups, cancels requests", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
         const conversations = yield* ConversationService
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
         const cy = yield* createBot("Cy")
-        const group = yield* conversations.createGroup({ title: "Trio", memberBotIds: [ada.id, bob.id, cy.id], leadBotId: ada.id })
+        const group = yield* conversations.createGroup({
+          title: "Trio",
+          memberBotIds: [ada.id, bob.id, cy.id],
+          leadBotId: ada.id,
+        })
         yield* bots.delete(ada.id)
         const missing = yield* Effect.flip(bots.get(ada.id))
         const dm = yield* Effect.flip(conversations.get(ada.directConversationId))
@@ -236,7 +263,7 @@ describe("BotService", () => {
 
   test("sections: create, rename, reorder (strict), delete unassigns bots", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
         const ada = yield* createBot("Ada")
         const work = yield* bots.createSection("Work")
@@ -248,13 +275,24 @@ describe("BotService", () => {
         const partial = yield* Effect.flip(bots.reorderSections([home.id]))
         const dupes = yield* Effect.flip(bots.reorderSections([home.id, home.id]))
         yield* bots.deleteSection(work.id)
-        return { renamed, reordered, partial, dupes, empty, sections: yield* bots.listSections, ada: yield* bots.get(ada.id) }
+        return {
+          renamed,
+          reordered,
+          partial,
+          dupes,
+          empty,
+          sections: yield* bots.listSections,
+          ada: yield* bots.get(ada.id),
+        }
       }),
       appLayer(),
     )
     expect(out.empty._tag).toBe("InvalidInput")
     expect(out.renamed.name).toBe("Jobs")
-    expect(out.reordered.map((s) => [s.name, s.order])).toEqual([["Home", 0], ["Jobs", 1]])
+    expect(out.reordered.map((s) => [s.name, s.order])).toEqual([
+      ["Home", 0],
+      ["Jobs", 1],
+    ])
     expect(out.partial._tag).toBe("Conflict")
     expect(out.dupes._tag).toBe("InvalidInput")
     expect(out.sections.map((s) => s.name)).toEqual(["Home"])
@@ -265,7 +303,7 @@ describe("BotService", () => {
 describe("dragging chats in the sidebar", () => {
   test("Bots and group chats move between places and keep the order they were dropped in", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
         const conversations = yield* ConversationService
         const ada = yield* createBot("Ada")
@@ -273,16 +311,32 @@ describe("dragging chats in the sidebar", () => {
         const work = yield* bots.createSection("Work")
         const group = yield* conversations.createGroup({ title: "Crew", memberBotIds: [ada.id, bob.id] })
         const groupRef = { kind: "group" as const, conversationId: group.id }
-        yield* bots.arrangeSidebar({ place: work.id, items: [{ kind: "bot", botId: bob.id }, groupRef, { kind: "bot", botId: ada.id }] })
-        const placed = { ada: yield* bots.get(ada.id), bob: yield* bots.get(bob.id), group: yield* conversations.summary(group.id) }
+        yield* bots.arrangeSidebar({
+          place: work.id,
+          items: [{ kind: "bot", botId: bob.id }, groupRef, { kind: "bot", botId: ada.id }],
+        })
+        const placed = {
+          ada: yield* bots.get(ada.id),
+          bob: yield* bots.get(bob.id),
+          group: yield* conversations.summary(group.id),
+        }
         yield* bots.arrangeSidebar({ place: "pinned", items: [{ kind: "bot", botId: ada.id }] })
         const pinned = yield* bots.get(ada.id)
         const groupPinned = yield* Effect.flip(bots.arrangeSidebar({ place: "pinned", items: [groupRef] }))
-        const botInGroups = yield* Effect.flip(bots.arrangeSidebar({ place: "groups", items: [{ kind: "bot", botId: bob.id }] }))
+        const botInGroups = yield* Effect.flip(
+          bots.arrangeSidebar({ place: "groups", items: [{ kind: "bot", botId: bob.id }] }),
+        )
         yield* bots.arrangeSidebar({ place: "unassigned", items: [{ kind: "bot", botId: bob.id }] })
         const unassigned = yield* bots.get(bob.id)
         yield* bots.deleteSection(work.id)
-        return { placed, pinned, groupPinned, botInGroups, unassigned, groupAfter: yield* conversations.summary(group.id) }
+        return {
+          placed,
+          pinned,
+          groupPinned,
+          botInGroups,
+          unassigned,
+          groupAfter: yield* conversations.summary(group.id),
+        }
       }),
       appLayer(),
     )
@@ -302,7 +356,7 @@ describe("dragging chats in the sidebar", () => {
 describe("ConversationService bookkeeping", () => {
   test("unread counts, markRead, history paging, rename and hide", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conversations = yield* ConversationService
         const ada = yield* createBot("Ada")
         const dm = ada.directConversationId
@@ -334,12 +388,17 @@ describe("ConversationService bookkeeping", () => {
     expect(out.older.hasMoreBefore).toBe(false)
     expect(out.badLimit._tag).toBe("InvalidInput")
     expect(out.renamed.title).toBe("Ada's desk")
-    expect(out.summary).toMatchObject({ kind: "direct", hiddenFromSidebar: true, preview: "Reply from Ada", unreadCount: out.unread.unreadCount })
+    expect(out.summary).toMatchObject({
+      kind: "direct",
+      hiddenFromSidebar: true,
+      preview: "Reply from Ada",
+      unreadCount: out.unread.unreadCount,
+    })
   })
 
   test("exchange: two bots' messages from both DMs, a page around a time, older and newer pages", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const conversations = yield* ConversationService
         const [ada, bob, cy] = [yield* createBot("Ada"), yield* createBot("Bob"), yield* createBot("Cy")]
         // what message_bot writes: the message in the recipient's DM, addressed to it
@@ -358,7 +417,7 @@ describe("ConversationService bookkeeping", () => {
             }),
           )
         const sent = []
-        for (let i = 1; i <= 9; i++) sent.push(yield* (i % 2 === 1 ? say(ada, bob, `m${i}`) : say(bob, ada, `m${i}`)))
+        for (let i = 1; i <= 9; i++) sent.push(yield* i % 2 === 1 ? say(ada, bob, `m${i}`) : say(bob, ada, `m${i}`))
         yield* say(cy, ada, "from Cy")
         const view = (page: ExchangePage) => ({
           texts: page.entries.map((e) => (e.kind === "message" ? e.text : e.kind)),
@@ -366,7 +425,12 @@ describe("ConversationService bookkeeping", () => {
           newer: page.afterCursor !== null,
         })
         const pair = { botId: ada.id, peerBotId: bob.id, limit: 4 }
-        const around = yield* conversations.exchange({ ...pair, botId: bob.id, peerBotId: ada.id, at: sent[4]!.createdAt })
+        const around = yield* conversations.exchange({
+          ...pair,
+          botId: bob.id,
+          peerBotId: ada.id,
+          at: sent[4]!.createdAt,
+        })
         return {
           newest: view(yield* conversations.exchange(pair)),
           around: view(around),
@@ -403,7 +467,7 @@ describe("ConversationService bookkeeping", () => {
 describe("Orchestrator extras", () => {
   test("answers to async requests (ask_user / request_approval) become deliveries", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         yield* (yield* ApprovalServiceFake).answer({
@@ -424,10 +488,14 @@ describe("Orchestrator extras", () => {
 
   test("writing in a DM settles the Bot's open questions there (answered in chat); a group message does not", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
-        const group = yield* (yield* ConversationService).createGroup({ title: "Duo", memberBotIds: [ada.id, bob.id], leadBotId: ada.id })
+        const group = yield* (yield* ConversationService).createGroup({
+          title: "Duo",
+          memberBotIds: [ada.id, bob.id],
+          leadBotId: ada.id,
+        })
         yield* send(ada.directConversationId, "The first one")
         yield* send(group.id, "Morning")
         yield* settled(ada.directConversationId)
@@ -438,13 +506,19 @@ describe("Orchestrator extras", () => {
     )
     // (every turn's end also cancels that turn's own requests)
     expect(out.cancelled.filter((c) => c.reason !== "turn-ended")).toEqual([
-      { conversationId: out.ada.directConversationId, kinds: ["question"], asyncOnly: true, reason: ANSWERED_IN_CHAT, cardDetail: "Answered in chat" },
+      {
+        conversationId: out.ada.directConversationId,
+        kinds: ["question"],
+        asyncOnly: true,
+        reason: ANSWERED_IN_CHAT,
+        cardDetail: "Answered in chat",
+      },
     ])
   })
 
   test("react toggles the owner's reaction on a message", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const orchestrator = yield* Orchestrator
         const ada = yield* createBot("Ada")
         const sent = yield* send(ada.directConversationId, "hi")
@@ -463,7 +537,7 @@ describe("Orchestrator extras", () => {
 
   test("native approval: the turn waits while the owner decides, then continues", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const approvals = yield* ApprovalService
         const requests = yield* RequestRepo
@@ -471,7 +545,7 @@ describe("Orchestrator extras", () => {
         const ada = yield* createBot("Ada")
         const dm = ada.directConversationId
         yield* driver.setBehavior(ada.id, (turn) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const resolution = yield* turn.request({
               kind: "command-approval",
               toolName: "Bash",
@@ -481,7 +555,8 @@ describe("Orchestrator extras", () => {
             })
             yield* turn.say(`${turn.turnId}/m`, "decision" in resolution ? `Got ${resolution.decision}` : "answers")
             yield* turn.complete()
-          }))
+          }),
+        )
         yield* send(dm, "list files")
         yield* eventually(
           Effect.map(turnsOf(dm), (turns) => turns[0]?.status === "waiting"),
@@ -503,9 +578,9 @@ describe("Orchestrator extras", () => {
     expect(out.entries.some((e) => e.kind === "card" && e.state.status === "resolved")).toBe(true)
   })
 
-  test("autonomy: a new bot (\"workspace\") runs commands in its workspace without a card; \"ask\" brings the card back", async () => {
+  test('autonomy: a new bot ("workspace") runs commands in its workspace without a card; "ask" brings the card back', async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const requests = yield* RequestRepo
         const bots = yield* BotService
@@ -514,7 +589,7 @@ describe("Orchestrator extras", () => {
         const dm = ada.directConversationId
         const workspace = (yield* DataDir).workspaceDir(ada.id)
         yield* driver.setBehavior(ada.id, (turn) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const resolution = yield* turn.request({
               kind: "command-approval",
               toolName: "Bash",
@@ -525,13 +600,17 @@ describe("Orchestrator extras", () => {
             })
             yield* turn.say(`${turn.turnId}/m`, "decision" in resolution ? `Got ${resolution.decision}` : "answers")
             yield* turn.complete()
-          }))
+          }),
+        )
         yield* send(dm, "run the tests")
         yield* settled(dm)
         const auto = yield* transcript(dm)
         yield* bots.update(ada.id, { autonomy: "ask" })
         yield* send(dm, "again")
-        yield* eventually(Effect.map(turnsOf(dm), (turns) => turns[1]?.status === "waiting"), "turn waiting")
+        yield* eventually(
+          Effect.map(turnsOf(dm), (turns) => turns[1]?.status === "waiting"),
+          "turn waiting",
+        )
         const pending = yield* Effect.orDie(requests.list({ conversationId: dm, statuses: ["pending"] }))
         yield* approvals.respond({ requestId: pending[0]!.id, response: { type: "decision", decision: "deny" } })
         yield* settled(dm)
@@ -542,21 +621,36 @@ describe("Orchestrator extras", () => {
     expect(out.autonomy).toBe("workspace")
     expect(out.auto.some((e) => e.kind === "card")).toBe(false)
     expect(messagesOf(out.auto).at(-1)?.text).toBe("Got allow-once")
-    expect(eventsOf(out.auto)).toContainEqual(expect.objectContaining({ type: "auto-decided", decision: "allowed", autonomy: "workspace" }))
+    expect(eventsOf(out.auto)).toContainEqual(
+      expect.objectContaining({ type: "auto-decided", decision: "allowed", autonomy: "workspace" }),
+    )
     expect(out.pending).toHaveLength(1)
   })
 
   test("default autonomy from Settings; create_bot's ceiling caps it; project folders are validated and rendered", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotService
         const settings = yield* SettingsService
         const byDefault = yield* bots.create({ name: "Ada", harness: { kind: "fake" }, clientNonce: "d-1" })
-        const explicit = yield* bots.create({ name: "Bo", harness: { kind: "fake" }, autonomy: "full", clientNonce: "d-2" })
+        const explicit = yield* bots.create({
+          name: "Bo",
+          harness: { kind: "fake" },
+          autonomy: "full",
+          clientNonce: "d-2",
+        })
         yield* settings.update({ defaultAutonomy: "full" })
-        const capped = yield* bots.create({ name: "Cy", harness: { kind: "fake" }, clientNonce: "d-3" }, { autonomyCeiling: "workspace" })
-        const uncapped = yield* bots.create({ name: "Di", harness: { kind: "fake" }, clientNonce: "d-4" }, { autonomyCeiling: "full" })
-        const updated = yield* bots.update(byDefault.id, { projectFolders: ["/home/me/projects/snip/", "/home/me/projects/snip", "~/code"] })
+        const capped = yield* bots.create(
+          { name: "Cy", harness: { kind: "fake" }, clientNonce: "d-3" },
+          { autonomyCeiling: "workspace" },
+        )
+        const uncapped = yield* bots.create(
+          { name: "Di", harness: { kind: "fake" }, clientNonce: "d-4" },
+          { autonomyCeiling: "full" },
+        )
+        const updated = yield* bots.update(byDefault.id, {
+          projectFolders: ["/home/me/projects/snip/", "/home/me/projects/snip", "~/code"],
+        })
         const refused = yield* Effect.flip(bots.update(byDefault.id, { projectFolders: ["/"] }))
         yield* settings.update({ sharedProjectFolders: ["/srv/shared"] })
         const context = yield* bots.readContext(byDefault.id)
@@ -577,13 +671,16 @@ describe("Orchestrator extras", () => {
 
   test("stopBot interrupts the running turn and drops queued ones", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
         const dm = ada.directConversationId
         yield* driver.setBehavior(ada.id, holdBehavior)
         const first = yield* send(dm, "one")
-        yield* eventually(Effect.map(driver.turns, (t) => t.length === 1), "turn started")
+        yield* eventually(
+          Effect.map(driver.turns, (t) => t.length === 1),
+          "turn started",
+        )
         yield* send(dm, "two")
         yield* (yield* Orchestrator).stopBot(ada.id)
         const outcome = yield* Effect.flatMap(Orchestrator, (o) => o.awaitDelivery("missing")).pipe(Effect.flip)
@@ -597,12 +694,15 @@ describe("Orchestrator extras", () => {
 
   test("recover republishes boot-recovery changes and resets activities", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const hub = yield* LiveHub
         const ada = yield* createBot("Ada")
         const dm = ada.directConversationId
         const live = yield* collect(hub.subscribeConversation({ conversationId: dm }))
-        yield* eventually(Effect.map(live.items, (items) => items.length === 2), "snapshot")
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length === 2),
+          "snapshot",
+        )
         const turn = makeTurn({ conversationId: dm, botId: ada.id, status: "interrupted", stopReason: "brain-restart" })
         yield* Effect.orDie((yield* TurnRepo).upsert(turn))
         yield* (yield* Orchestrator).recover({
@@ -614,12 +714,22 @@ describe("Orchestrator extras", () => {
           interruptedRuns: [],
           interruptedTasks: [],
         })
-        yield* eventually(Effect.map(live.items, (items) => items.length >= 3), "republished turn")
-        return { items: (yield* live.items) as ReadonlyArray<KnownConversationStreamItem>, activities: yield* hub.activities, ada }
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length >= 3),
+          "republished turn",
+        )
+        return {
+          items: (yield* live.items) as ReadonlyArray<KnownConversationStreamItem>,
+          activities: yield* hub.activities,
+          ada,
+        }
       }),
       appLayer(),
     )
-    expect(out.items[2]).toMatchObject({ kind: "change", change: { type: "turn.upserted", turn: { status: "interrupted" } } })
+    expect(out.items[2]).toMatchObject({
+      kind: "change",
+      change: { type: "turn.upserted", turn: { status: "interrupted" } },
+    })
     expect(out.activities).toContainEqual(expect.objectContaining({ botId: out.ada.id, state: "idle" }))
   })
 })
@@ -633,7 +743,7 @@ describe("NotifierLive and AttachmentServiceLive", () => {
 
   test("notify honors the bot's preference and publishes a roster notification", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const bots = yield* BotRepo
         const notifier = yield* Notifier
         const hub = yield* LiveHub
@@ -647,27 +757,46 @@ describe("NotifierLive and AttachmentServiceLive", () => {
         results.push(yield* notifier.notify({ kind: "finished", botId: mentions.id, title: "M", body: "done" }))
         results.push(yield* notifier.notify({ kind: "waiting", botId: mentions.id, title: "M", body: "needs you" }))
         results.push(yield* notifier.notify({ kind: "error", botId: none.id, title: "N", body: "broken" }))
-        yield* eventually(Effect.map(live.items, (items) => items.length === 4), "notifications")
+        yield* eventually(
+          Effect.map(live.items, (items) => items.length === 4),
+          "notifications",
+        )
         return { results, items: yield* live.items }
       }),
       layer(),
     )
     expect(out.results.map((n) => n?.kind)).toEqual(["finished", undefined, "waiting", undefined])
-    expect(out.items.slice(2).map((i) => i.kind === "change" && i.change.type)).toEqual(["notification", "notification"])
+    expect(out.items.slice(2).map((i) => i.kind === "change" && i.change.type)).toEqual([
+      "notification",
+      "notification",
+    ])
   })
 
   test("upload validates and returns the contract view", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const attachments = yield* AttachmentService
-        const ok = yield* attachments.upload({ name: "notes/today.txt", mime: "text/plain", bytes: new TextEncoder().encode("hi") })
-        const empty = yield* Effect.flip(attachments.upload({ name: "a.txt", mime: "text/plain", bytes: new Uint8Array() }))
-        const badMime = yield* Effect.flip(attachments.upload({ name: "a.txt", mime: "nope", bytes: new Uint8Array([1]) }))
+        const ok = yield* attachments.upload({
+          name: "notes/today.txt",
+          mime: "text/plain",
+          bytes: new TextEncoder().encode("hi"),
+        })
+        const empty = yield* Effect.flip(
+          attachments.upload({ name: "a.txt", mime: "text/plain", bytes: new Uint8Array() }),
+        )
+        const badMime = yield* Effect.flip(
+          attachments.upload({ name: "a.txt", mime: "nope", bytes: new Uint8Array([1]) }),
+        )
         return { ok, empty, badMime, got: yield* attachments.get(ok.id) }
       }),
       layer(),
     )
-    expect(out.ok).toMatchObject({ name: "notes_today.txt", mime: "text/plain", byteSize: 2, url: `/api/attachments/${out.ok.id}` })
+    expect(out.ok).toMatchObject({
+      name: "notes_today.txt",
+      mime: "text/plain",
+      byteSize: 2,
+      url: `/api/attachments/${out.ok.id}`,
+    })
     expect(out.got).toEqual(out.ok)
     expect(out.empty._tag).toBe("InvalidInput")
     expect(out.badMime._tag).toBe("InvalidInput")

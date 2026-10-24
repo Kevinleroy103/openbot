@@ -50,7 +50,7 @@ const opt = <K extends string, V>(key: K, value: V | undefined): { readonly [P i
 
 /** Maps the flat tool arguments to a node-protocol `ComputerAction` (per-action required fields). */
 export const toComputerAction = (args: Args): Effect.Effect<ComputerAction, ToolRefusal> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const action = args.action
     const coordinate = opt("coordinate", args.coordinate)
     switch (action) {
@@ -89,7 +89,11 @@ export const toComputerAction = (args: Args): Effect.Effect<ComputerAction, Tool
       case "key":
         return { action, text: yield* need(args.text, "text", action) }
       case "hold_key":
-        return { action, text: yield* need(args.text, "text", action), duration: yield* need(args.duration, "duration", action) }
+        return {
+          action,
+          text: yield* need(args.text, "text", action),
+          duration: yield* need(args.duration, "duration", action),
+        }
       case "wait":
         return { action, duration: args.duration ?? 1 }
     }
@@ -107,10 +111,15 @@ const explain = (error: unknown, shared: boolean): Effect.Effect<never, unknown>
       readonly reason?: unknown
       readonly missing?: ReadonlyArray<string> | undefined
     }
-    if (e._tag === "LeaseHeld") return refuse(shared && typeof e.reason === "string" && e.reason !== "" ? e.reason : OWNER_HAS_SCREEN)
+    if (e._tag === "LeaseHeld")
+      return refuse(shared && typeof e.reason === "string" && e.reason !== "" ? e.reason : OWNER_HAS_SCREEN)
     if (e._tag === "DesktopUnavailable") {
-      const message = typeof e.message === "string" && e.message.trim() !== "" ? e.message.trim() : "Your screen is not available"
-      const missing = !shared && e.missing !== undefined && e.missing.length > 0 ? ` This computer lacks: ${e.missing.join(", ")}.` : ""
+      const message =
+        typeof e.message === "string" && e.message.trim() !== "" ? e.message.trim() : "Your screen is not available"
+      const missing =
+        !shared && e.missing !== undefined && e.missing.length > 0
+          ? ` This computer lacks: ${e.missing.join(", ")}.`
+          : ""
       return refuse(`${message.replace(/[.!?]?$/, ".")}${missing}`)
     }
   }
@@ -128,30 +137,41 @@ const computer = defineTool({
     "Take a screenshot first, and again whenever you need to see what happened.",
     "Prefer the `browser` tool for web pages; use `computer` for everything else (desktop apps, file dialogs, windows, terminal GUIs).",
     "Actions: screenshot; zoom {region: [x0, y0, x1, y1]} (a closer look; coordinates stay in full-screenshot space);",
-    "left_click, right_click, middle_click, double_click, triple_click {coordinate?: [x, y], text?: keys held, e.g. \"shift\"};",
+    'left_click, right_click, middle_click, double_click, triple_click {coordinate?: [x, y], text?: keys held, e.g. "shift"};',
     "mouse_move {coordinate}; left_click_drag {start_coordinate, coordinate}; left_mouse_down, left_mouse_up {coordinate?};",
-    "scroll {scroll_direction, scroll_amount?, coordinate?}; type {text}; key {text: a key or combination, e.g. \"Return\", \"ctrl+s\"};",
+    'scroll {scroll_direction, scroll_amount?, coordinate?}; type {text}; key {text: a key or combination, e.g. "Return", "ctrl+s"};',
     "hold_key {text, duration}; wait {duration}; cursor_position.",
   ].join(" "),
   params: p.params({
     action: p.literals(ComputerActionName.literals, "What to do."),
     coordinate: point("[x, y] in screenshot pixels: where to click, move, scroll or drag to."),
     start_coordinate: point("[x, y] in screenshot pixels where a left_click_drag starts."),
-    region: p.optional(p.array(p.number(), "[x0, y0, x1, y1] in screenshot pixels for zoom.", { minItems: 4, maxItems: 4 })),
-    text: p.optional(p.string("Text to type; the key or combination for key / hold_key; keys held during a click or scroll.")),
+    region: p.optional(
+      p.array(p.number(), "[x0, y0, x1, y1] in screenshot pixels for zoom.", { minItems: 4, maxItems: 4 }),
+    ),
+    text: p.optional(
+      p.string("Text to type; the key or combination for key / hold_key; keys held during a click or scroll."),
+    ),
     scroll_direction: p.optional(p.literals(["up", "down", "left", "right"], "Scroll direction.")),
-    scroll_amount: p.optional(p.number("Scroll amount in wheel notches (default 3).", { integer: true, min: 1, max: 30 })),
-    duration: p.optional(p.number(`Seconds to wait or hold a key (max ${MAX_WAIT_SECONDS}).`, { min: 0, max: MAX_WAIT_SECONDS })),
+    scroll_amount: p.optional(
+      p.number("Scroll amount in wheel notches (default 3).", { integer: true, min: 1, max: 30 }),
+    ),
+    duration: p.optional(
+      p.number(`Seconds to wait or hold a key (max ${MAX_WAIT_SECONDS}).`, { min: 0, max: MAX_WAIT_SECONDS }),
+    ),
   }),
   annotations: { title: "Computer", destructiveHint: true, openWorldHint: true },
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       // the screen is always the host node's (architecture §4.6)
       const target = yield* resolveTarget(ctx, undefined, ["desktop", "screen"])
-      const shared = !hasCapability(target.node.capabilities, "desktop") && hasCapability(target.node.capabilities, "screen")
+      const shared =
+        !hasCapability(target.node.capabilities, "desktop") && hasCapability(target.node.capabilities, "screen")
       const action = yield* toComputerAction(args)
       yield* ctx.progress(`Computer: ${args.action}`)
-      const result = yield* target.client["computer.act"]({ inv: target.inv, action }).pipe(Effect.catch((e) => explain(e, shared)))
+      const result = yield* target.client["computer.act"]({ inv: target.inv, action }).pipe(
+        Effect.catch((e) => explain(e, shared)),
+      )
       const text = result.text === "" ? `Done: ${args.action}.` : result.text
       // the node answers bad arguments as text ("ERROR: coordinate [x, y] is required")
       if (result.image === undefined && text.startsWith("ERROR:")) return errorResult(text)
@@ -172,13 +192,13 @@ const requestTakeover = defineTool({
     "Ask the owner to take over your screen for something you must not or cannot do yourself: signing in, a password, a 2FA or verification code, a CAPTCHA, a payment or another personal confirmation. Bring it up on your screen first. Returns immediately with status pending: the owner gets an Action needed card, takes over your screen and hands it back; their answer (done or skipped) arrives later as a new message. End your turn after calling it.",
   params: p.params({
     instruction: p.text(
-      "What the owner should do on your screen, in one or two sentences (e.g. \"Sign in to GitHub and approve the 2FA prompt\").",
+      'What the owner should do on your screen, in one or two sentences (e.g. "Sign in to GitHub and approve the 2FA prompt").',
     ),
   }),
   annotations: { title: "Ask the owner to take over", destructiveHint: false, openWorldHint: false },
   available: hasScreen,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const receipt = yield* (yield* ApprovalService).requestTakeover(ctx.tool, { instruction: args.instruction })
       return textResult(`status: pending\nrequestId: ${receipt.requestId}\n${PENDING_HINT}`)
     }),

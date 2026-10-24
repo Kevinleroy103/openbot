@@ -240,7 +240,9 @@ export const mux = (
             toClient.fail(err)
             yield* Deferred.succeed(closed, err)
             // best effort: on a half-open socket the close frame may never leave
-            yield* Effect.forkDetach(Effect.timeout(Effect.ignore(writer.write(new Socket.CloseEvent(1001, "liveness timeout"))), "1 second"))
+            yield* Effect.forkDetach(
+              Effect.timeout(Effect.ignore(writer.write(new Socket.CloseEvent(1001, "liveness timeout"))), "1 second"),
+            )
             return
           }
         }
@@ -252,7 +254,10 @@ export const mux = (
         reader: Effect.gen(function* () {
           const scope = yield* Effect.scope
           if (inbox.error) return yield* Effect.fail(inbox.error)
-          yield* Scope.addFinalizer(scope, Effect.sync(() => inbox.cancel(closeError(1000, "reader released"))))
+          yield* Scope.addFinalizer(
+            scope,
+            Effect.sync(() => inbox.cancel(closeError(1000, "reader released"))),
+          )
           return { pull: inbox.pull, upgrade: Socket.SocketUpgradeError.unsupported }
         }),
         writer: Effect.succeed(writer),
@@ -346,4 +351,6 @@ export const makePeer = <Serve extends Rpc.Any, Call extends Rpc.Any>(
 export const stampedNodeId = (headers: Headers): string | undefined => headers[ProtocolHeaders.nodeId]
 
 /** Stamp pairs for the brain mux. */
-export const nodeStamp = (nodeId: string): ReadonlyArray<readonly [string, string]> => [[ProtocolHeaders.nodeId, nodeId]]
+export const nodeStamp = (nodeId: string): ReadonlyArray<readonly [string, string]> => [
+  [ProtocolHeaders.nodeId, nodeId],
+]

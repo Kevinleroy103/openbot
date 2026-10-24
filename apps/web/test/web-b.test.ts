@@ -76,7 +76,8 @@ const open = async (query: string, theme: "dark" | "light", viaLiveStub = false)
   const page = await browser!.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
   page.on("pageerror", (e) => errors.push(`${query}/${theme}: ${e.message}`))
   page.on("console", (m) => {
-    if (m.type() === "error" && !/WebSocket|ERR_CONNECTION|Failed to load resource/.test(m.text())) errors.push(`${query}/${theme}: ${m.text()}`)
+    if (m.type() === "error" && !/WebSocket|ERR_CONNECTION|Failed to load resource/.test(m.text()))
+      errors.push(`${query}/${theme}: ${m.text()}`)
   })
   await page.goto(`${viaLiveStub ? liveBase : base}&theme=${theme}&${query}`)
   await page.evaluate(() => document.fonts.ready)
@@ -154,7 +155,11 @@ for (const theme of ["dark", "light"] as const) {
       const page = await open("scene=computer", theme, true)
       await page.getByTestId("computer-view").waitFor({ timeout: 15_000 })
       const canvas = page.getByTestId("computer-view").getByTestId("screen-canvas")
-      const visible = await until(() => canvas.evaluate((c) => getComputedStyle(c).visibility), (v) => v === "visible", 15_000)
+      const visible = await until(
+        () => canvas.evaluate((c) => getComputedStyle(c).visibility),
+        (v) => v === "visible",
+        15_000,
+      )
       expect(visible).toBe("visible")
       await page.getByRole("button", { name: "Take control" }).waitFor()
       await shot(page, `computer-live-watching-${theme}`)
@@ -162,12 +167,18 @@ for (const theme of ["dark", "light"] as const) {
       await page.getByRole("button", { name: "Take control" }).click()
       await page.getByText("You're in control").waitFor()
       // input flows once the control socket is up (the canvas is wired for input then)
-      await page.locator('[data-testid="computer-view"] [data-testid="screen-canvas"][data-interactive]').waitFor({ timeout: 10_000 })
+      await page
+        .locator('[data-testid="computer-view"] [data-testid="screen-canvas"][data-interactive]')
+        .waitFor({ timeout: 10_000 })
       await page.waitForTimeout(300)
       const box = (await canvas.boundingBox())!
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
       await page.keyboard.type("hi")
-      const inputs = await until(async () => [...live!.inputs], (l) => l.some((e) => e["_tag"] === "key" && e["key"] === "i"), 5000)
+      const inputs = await until(
+        async () => [...live!.inputs],
+        (l) => l.some((e) => e["_tag"] === "key" && e["key"] === "i"),
+        5000,
+      )
       const down = inputs.find((e) => e["_tag"] === "mouse" && e["type"] === "down")
       expect(down).toBeDefined()
       // the click at the frame center lands at the center of the 1280×800 page viewport
@@ -182,7 +193,11 @@ for (const theme of ["dark", "light"] as const) {
       await page.getByTestId("computer-tab-terminal").click()
       await page.getByTestId("terminal-host").getByText("openbot@node").first().waitFor({ timeout: 10_000 })
       await page.keyboard.type("ls")
-      const typed = await until(async () => live!.terminalInput.join(""), (t) => t.includes("ls"), 5000)
+      const typed = await until(
+        async () => live!.terminalInput.join(""),
+        (t) => t.includes("ls"),
+        5000,
+      )
       expect(typed).toContain("ls")
       await shot(page, `computer-terminal-${theme}`)
       await page.close()
@@ -196,7 +211,11 @@ for (const theme of ["dark", "light"] as const) {
       live!.holder = "bot"
       const page = await open("scene=details&tab=computer", theme, true)
       await page.getByTestId("screen-thumbnail").waitFor({ timeout: 15_000 })
-      await until(() => page.getByTestId("screen-canvas").evaluate((c) => getComputedStyle(c).visibility), (v) => v === "visible", 15_000)
+      await until(
+        () => page.getByTestId("screen-canvas").evaluate((c) => getComputedStyle(c).visibility),
+        (v) => v === "visible",
+        15_000,
+      )
       await shot(page, `details-computer-live-${theme}`)
       await page.getByRole("tab", { name: "Details" }).click()
       await page.getByTestId("routine-row").first().getByRole("button").first().click()
@@ -241,7 +260,10 @@ for (const theme of ["dark", "light"] as const) {
       await page.getByTestId("pair-computer").click()
       const code = page.getByTestId("pairing-code")
       await code.waitFor()
-      const shown = await until(async () => (await code.innerText()).replace(/[^A-Za-z0-9]/g, ""), (t) => t.length >= 8)
+      const shown = await until(
+        async () => (await code.innerText()).replace(/[^A-Za-z0-9]/g, ""),
+        (t) => t.length >= 8,
+      )
       expect(shown.length).toBeGreaterThanOrEqual(8)
       await shot(page, `settings-pairing-${theme}`)
       await page.close()
@@ -286,16 +308,23 @@ for (const theme of ["dark", "light"] as const) {
   )
 }
 
-test.skipIf(!enabled)("creating a bot from the form calls bots.create", async () => {
-  const page = await open("scene=newbot", "dark")
-  await page.getByTestId("harness-chip-fake").waitFor({ timeout: 15_000 })
-  await page.getByTestId("harness-chip-fake").click()
-  await page.getByTestId("new-bot-name").fill("Web B Bot")
-  await page.getByTestId("create-bot").click()
-  const created = await until(() => page.evaluate(() => document.body.dataset.created ?? ""), (id) => id.length > 0)
-  expect(created).toMatch(/.+/)
-  await page.close()
-}, 30_000)
+test.skipIf(!enabled)(
+  "creating a bot from the form calls bots.create",
+  async () => {
+    const page = await open("scene=newbot", "dark")
+    await page.getByTestId("harness-chip-fake").waitFor({ timeout: 15_000 })
+    await page.getByTestId("harness-chip-fake").click()
+    await page.getByTestId("new-bot-name").fill("Web B Bot")
+    await page.getByTestId("create-bot").click()
+    const created = await until(
+      () => page.evaluate(() => document.body.dataset.created ?? ""),
+      (id) => id.length > 0,
+    )
+    expect(created).toMatch(/.+/)
+    await page.close()
+  },
+  30_000,
+)
 
 test.skipIf(!enabled)("no page errors", () => {
   expect(errors).toEqual([])

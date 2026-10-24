@@ -28,7 +28,10 @@ export const toAttachment = (record: AttachmentRecord): Attachment =>
   })
 
 const validName = (raw: string): Effect.Effect<string, InvalidInput> => {
-  const name = [...raw.trim()].filter((c) => c.charCodeAt(0) >= 0x20 && c.charCodeAt(0) !== 0x7f).join("").replace(/[\\/]/g, "_")
+  const name = [...raw.trim()]
+    .filter((c) => c.charCodeAt(0) >= 0x20 && c.charCodeAt(0) !== 0x7f)
+    .join("")
+    .replace(/[\\/]/g, "_")
   return name.length === 0 || name.length > MAX_NAME_LENGTH
     ? Effect.fail(new InvalidInput({ message: `The file name must be 1 to ${MAX_NAME_LENGTH} characters.` }))
     : Effect.succeed(name)
@@ -43,23 +46,27 @@ export const storeAttachmentStream = <E>(
   store: AttachmentStore["Service"],
   input: AttachmentStreamInput<E>,
 ): Effect.Effect<Attachment, InvalidInput | E> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const name = yield* validName(input.name)
     if (!MIME.test(input.mime)) return yield* new InvalidInput({ message: `Unsupported media type "${input.mime}".` })
     const record = yield* store.putStream({ ...input, name, mime: input.mime.toLowerCase() }).pipe(
-      Effect.catchIf((e): e is RepoError => e instanceof RepoError, (e) => Effect.die(e)),
+      Effect.catchIf(
+        (e): e is RepoError => e instanceof RepoError,
+        (e) => Effect.die(e),
+      ),
     )
     return toAttachment(record)
   })
 
 export const AttachmentServiceLive: Layer.Layer<AttachmentService, never, AttachmentStore> = Layer.effect(
   AttachmentService,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const store = yield* AttachmentStore
     return AttachmentService.of({
-      upload: Effect.fn("AttachmentService.upload")(function*(input) {
+      upload: Effect.fn("AttachmentService.upload")(function* (input) {
         const name = yield* validName(input.name)
-        if (!MIME.test(input.mime)) return yield* new InvalidInput({ message: `Unsupported media type "${input.mime}".` })
+        if (!MIME.test(input.mime))
+          return yield* new InvalidInput({ message: `Unsupported media type "${input.mime}".` })
         if (input.bytes.byteLength === 0) return yield* new InvalidInput({ message: "The file is empty." })
         if (input.bytes.byteLength > MAX_ATTACHMENT_BYTES) {
           return yield* new InvalidInput({ message: "Attachments are limited to 25 MB." })

@@ -47,13 +47,22 @@ export function SessionProvider({ children }: { readonly children: ReactNode }):
 }
 
 /** A fresh client runtime per connection (a new OpenBot or session rebuilds everything). */
-export function ClientProvider({ connection, children }: { readonly connection: Connection; readonly children: ReactNode }): ReactNode {
+export function ClientProvider({
+  connection,
+  children,
+}: {
+  readonly connection: Connection
+  readonly children: ReactNode
+}): ReactNode {
   const config = defaultClientConfig({
     url: `${connection.origin.replace(/^http/, "ws")}/rpc`,
     ...(Platform.OS === "web" ? {} : { headers: sessionHeaders(connection) }),
   })
   return (
-    <RegistryProvider key={`${connection.origin} ${connection.sessionToken}`} initialValues={[[clientConfigAtom, config]]}>
+    <RegistryProvider
+      key={`${connection.origin} ${connection.sessionToken}`}
+      initialValues={[[clientConfigAtom, config]]}
+    >
       {children}
     </RegistryProvider>
   )

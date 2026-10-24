@@ -19,7 +19,17 @@
  * hand-offs" event. `settings.botMessaging = false` (the global kill switch) refuses every tool.
  * Tools are idempotent on the harness tool-call id (`ToolContext.callId`, D3.3).
  */
-import type { Attachment, Bot, BotId, Conversation, ConversationId, EntryId, KnownConversationEvent, KnownTranscriptEntry, NodeId } from "@openbot/contracts"
+import type {
+  Attachment,
+  Bot,
+  BotId,
+  Conversation,
+  ConversationId,
+  EntryId,
+  KnownConversationEvent,
+  KnownTranscriptEntry,
+  NodeId,
+} from "@openbot/contracts"
 import type { Invocation } from "@openbot/node-protocol"
 import { HarnessUnavailable, InvalidInput, NotFound } from "@openbot/contracts"
 import { Effect, Layer, Option } from "effect"
@@ -60,8 +70,7 @@ export const isSingleEmoji = (text: string): boolean => {
   const graphemes = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)]
   return graphemes.length === 1 && /\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u{1F3FB}-\u{1F3FF}]/u.test(text)
 }
-export const HOP_LIMIT_MESSAGE =
-  `Stopped: too many hand-offs (more than ${MAX_BOT_HOPS} bot-to-bot hops in this chain). Do not message other Bots again for this request; finish your turn.`
+export const HOP_LIMIT_MESSAGE = `Stopped: too many hand-offs (more than ${MAX_BOT_HOPS} bot-to-bot hops in this chain). Do not message other Bots again for this request; finish your turn.`
 
 /** Model-readable reason a file could not be sent (node, transfer or validation failure). */
 export const describeSendFailure = describeFileFailure
@@ -72,7 +81,7 @@ export const MessagingLive: Layer.Layer<
   Orchestrator | ConversationService | SettingsService | BotRepo | EntryRepo | IdGen | NodeFiles | AttachmentStore
 > = Layer.effect(
   Messaging,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const orchestrator = yield* Orchestrator
     const conversations = yield* ConversationService
     const settings = yield* SettingsService
@@ -98,7 +107,8 @@ export const MessagingLive: Layer.Layer<
     // ------------------------------------------------------------------ guards
 
     const ensureEnabled = Effect.flatMap(settings.get, (s) =>
-      s.botMessaging ? Effect.void : Effect.fail(new InvalidInput({ message: MESSAGING_DISABLED })))
+      s.botMessaging ? Effect.void : Effect.fail(new InvalidInput({ message: MESSAGING_DISABLED })),
+    )
 
     const senderOf = (ctx: ToolContext) => required(bots.get(ctx.claims.botId), "bot", ctx.claims.botId)
 
@@ -112,7 +122,9 @@ export const MessagingLive: Layer.Layer<
       const trimmed = text.trim()
       if (trimmed === "") return Effect.fail(new InvalidInput({ message: `The ${what} cannot be empty.` }))
       if (trimmed.length > MAX_BOT_MESSAGE_CHARS) {
-        return Effect.fail(new InvalidInput({ message: `The ${what} is longer than ${MAX_BOT_MESSAGE_CHARS} characters.` }))
+        return Effect.fail(
+          new InvalidInput({ message: `The ${what} is longer than ${MAX_BOT_MESSAGE_CHARS} characters.` }),
+        )
       }
       return Effect.succeed(trimmed)
     }
@@ -122,17 +134,20 @@ export const MessagingLive: Layer.Layer<
      * `deliveryId`. Over the limit: a hop-limit event in `eventConversationId`, then `InvalidInput`.
      */
     const nextChain = (ctx: ToolContext, deliveryId: string, eventConversationId: ConversationId) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         // A background task is not part of the bot's running turn (D5.7): its messages start a chain.
-        const current = ctx.taskId !== undefined ? Option.none<CausalChain>() : yield* orchestrator.currentChain(ctx.claims.botId)
+        const current =
+          ctx.taskId !== undefined ? Option.none<CausalChain>() : yield* orchestrator.currentChain(ctx.claims.botId)
         const chain: CausalChain = Option.isSome(current)
           ? { rootId: current.value.rootId, hops: current.value.hops + 1 }
           : { rootId: deliveryId, hops: 1 }
         if (chain.hops > MAX_BOT_HOPS) {
-          yield* Effect.ignore(conversations.appendEvent({
-            conversationId: eventConversationId,
-            event: { type: "hop-limit", hops: chain.hops - 1 },
-          }))
+          yield* Effect.ignore(
+            conversations.appendEvent({
+              conversationId: eventConversationId,
+              event: { type: "hop-limit", hops: chain.hops - 1 },
+            }),
+          )
           return yield* new InvalidInput({ message: HOP_LIMIT_MESSAGE })
         }
         return chain
@@ -140,9 +155,10 @@ export const MessagingLive: Layer.Layer<
 
     const unavailable = (bot: Bot, error: NotFound | HarnessUnavailable, where = `@${bot.name}'s chat`) =>
       new InvalidInput({
-        message: error._tag === "HarnessUnavailable"
-          ? `Your message was saved in ${where}, but @${bot.name} cannot run right now: ${error.message}`
-          : `@${bot.name} cannot receive messages right now.`,
+        message:
+          error._tag === "HarnessUnavailable"
+            ? `Your message was saved in ${where}, but @${bot.name} cannot run right now: ${error.message}`
+            : `@${bot.name} cannot receive messages right now.`,
       })
 
     // ------------------------------------------------------------------ direct (message_bot, handoff_task)
@@ -150,10 +166,13 @@ export const MessagingLive: Layer.Layer<
     /** The group the sender works in when the recipient is a fellow member (else undefined). */
     const sharedGroup = (ctx: ToolContext, sender: Bot, recipient: Bot) =>
       Effect.map(Effect.option(conversations.get(ctx.claims.conversationId)), (found) =>
-        Option.isSome(found) && found.value.kind === "group" && found.value.memberBotIds.includes(sender.id) &&
-          found.value.memberBotIds.includes(recipient.id)
+        Option.isSome(found) &&
+        found.value.kind === "group" &&
+        found.value.memberBotIds.includes(sender.id) &&
+        found.value.memberBotIds.includes(recipient.id)
           ? found.value
-          : undefined)
+          : undefined,
+      )
 
     /** `@Recipient text`, unless the text already opens with that mention. */
     const addressed = (recipient: Bot, text: string) =>
@@ -169,7 +188,7 @@ export const MessagingLive: Layer.Layer<
         readonly event: (recipient: Bot, sender: Bot, entryId: EntryId) => KnownConversationEvent
       },
     ) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const key = idempotencyKey(tool, ctx)
         if (key !== undefined && done.has(key)) return done.get(key) as MessageBotResult
         yield* ensureEnabled
@@ -185,13 +204,15 @@ export const MessagingLive: Layer.Layer<
           const text = addressed(recipient, input.text)
           // From a group turn: the reply addresses the member (no duplicate post, D5.2). A background
           // task has no reply in the group: it posts.
-          const noted = ctx.taskId === undefined && (yield* orchestrator.noteGroupAddress({
-            botId: sender.id,
-            conversationId: group.id,
-            recipientBotId: recipient.id,
-            text,
-            causalChain,
-          }))
+          const noted =
+            ctx.taskId === undefined &&
+            (yield* orchestrator.noteGroupAddress({
+              botId: sender.id,
+              conversationId: group.id,
+              recipientBotId: recipient.id,
+              text,
+              causalChain,
+            }))
           if (noted) {
             return remember(key, {
               recipientBotId: recipient.id,
@@ -211,17 +232,19 @@ export const MessagingLive: Layer.Layer<
             streaming: false,
             addressedBotIds: [recipient.id],
           })
-          yield* orchestrator.deliver({
-            id: deliveryId,
-            conversationId: group.id,
-            botId: recipient.id,
-            kind: "bot-message",
-            text,
-            fromBotId: sender.id,
-            sourceEntryId: posted.id,
-            causalChain,
-            urgency: input.urgency,
-          }).pipe(Effect.mapError((error) => unavailable(recipient, error, "the group chat")))
+          yield* orchestrator
+            .deliver({
+              id: deliveryId,
+              conversationId: group.id,
+              botId: recipient.id,
+              kind: "bot-message",
+              text,
+              fromBotId: sender.id,
+              sourceEntryId: posted.id,
+              causalChain,
+              urgency: input.urgency,
+            })
+            .pipe(Effect.mapError((error) => unavailable(recipient, error, "the group chat")))
           return remember(key, {
             recipientBotId: recipient.id,
             conversationId: group.id,
@@ -241,23 +264,27 @@ export const MessagingLive: Layer.Layer<
           toBotId: recipient.id,
         })
         const senderTurn = ctx.taskId !== undefined ? Option.none() : yield* orchestrator.activeTurn(sender.id)
-        yield* Effect.ignore(conversations.appendEvent({
-          conversationId: ctx.claims.conversationId,
-          author: { kind: "bot", botId: sender.id },
-          event: input.event(recipient, sender, entry.id),
-          turnId: Option.isSome(senderTurn) ? senderTurn.value.id : undefined,
-        }))
-        yield* orchestrator.deliver({
-          id: deliveryId,
-          conversationId: recipient.directConversationId,
-          botId: recipient.id,
-          kind: "bot-message",
-          text: input.text,
-          fromBotId: sender.id,
-          sourceEntryId: entry.id,
-          causalChain,
-          urgency: input.urgency,
-        }).pipe(Effect.mapError((error) => unavailable(recipient, error)))
+        yield* Effect.ignore(
+          conversations.appendEvent({
+            conversationId: ctx.claims.conversationId,
+            author: { kind: "bot", botId: sender.id },
+            event: input.event(recipient, sender, entry.id),
+            turnId: Option.isSome(senderTurn) ? senderTurn.value.id : undefined,
+          }),
+        )
+        yield* orchestrator
+          .deliver({
+            id: deliveryId,
+            conversationId: recipient.directConversationId,
+            botId: recipient.id,
+            kind: "bot-message",
+            text: input.text,
+            fromBotId: sender.id,
+            sourceEntryId: entry.id,
+            causalChain,
+            urgency: input.urgency,
+          })
+          .pipe(Effect.mapError((error) => unavailable(recipient, error)))
         const result: MessageBotResult = {
           recipientBotId: recipient.id,
           conversationId: recipient.directConversationId,
@@ -267,7 +294,7 @@ export const MessagingLive: Layer.Layer<
         return remember(key, result)
       })
 
-    const messageBot = Effect.fn("Messaging.messageBot")(function*(
+    const messageBot = Effect.fn("Messaging.messageBot")(function* (
       ctx: ToolContext,
       input: { readonly to: string; readonly text: string; readonly urgency: DeliveryUrgency },
     ) {
@@ -287,15 +314,18 @@ export const MessagingLive: Layer.Layer<
       })
     })
 
-    const handoffTask = Effect.fn("Messaging.handoffTask")(function*(
+    const handoffTask = Effect.fn("Messaging.handoffTask")(function* (
       ctx: ToolContext,
       input: { readonly to: string; readonly task: string; readonly context?: string | undefined },
     ) {
       const task = yield* validText(input.task, "task")
       const context = input.context?.trim() ?? ""
-      const text = context === "" ? `Task handed off to you:\n${task}` : `Task handed off to you:\n${task}\n\nContext:\n${context}`
+      const text =
+        context === "" ? `Task handed off to you:\n${task}` : `Task handed off to you:\n${task}\n\nContext:\n${context}`
       if (text.length > MAX_BOT_MESSAGE_CHARS) {
-        return yield* new InvalidInput({ message: `The task and context are longer than ${MAX_BOT_MESSAGE_CHARS} characters.` })
+        return yield* new InvalidInput({
+          message: `The task and context are longer than ${MAX_BOT_MESSAGE_CHARS} characters.`,
+        })
       }
       return yield* sendToBot("handoff_task", ctx, {
         to: input.to,
@@ -314,7 +344,7 @@ export const MessagingLive: Layer.Layer<
 
     // ------------------------------------------------------------------ groups (post_to_group)
 
-    const postToGroup = Effect.fn("Messaging.postToGroup")(function*(
+    const postToGroup = Effect.fn("Messaging.postToGroup")(function* (
       ctx: ToolContext,
       input: { readonly conversationId?: ConversationId | undefined; readonly text: string },
     ) {
@@ -329,62 +359,80 @@ export const MessagingLive: Layer.Layer<
       const conversation = yield* conversations.get(conversationId)
       if (conversation.kind !== "group") {
         return yield* new InvalidInput({
-          message: input.conversationId === undefined
-            ? "This conversation is not a group chat. Pass the conversationId of a group you are in."
-            : "That conversation is not a group chat.",
+          message:
+            input.conversationId === undefined
+              ? "This conversation is not a group chat. Pass the conversationId of a group you are in."
+              : "That conversation is not a group chat.",
         })
       }
       if (!conversation.memberBotIds.includes(sender.id)) {
         return yield* new InvalidInput({ message: `You are not a member of the group "${conversation.title}".` })
       }
-      const members = (yield* Effect.forEach(conversation.memberBotIds, (id) => orDie(bots.get(id))))
-        .flatMap((b): Array<Bot> => (Option.isSome(b) ? [b.value] : []))
-      const targets: ReadonlyArray<BotId> = routeBotMessage({ group: conversation, members, text, senderBotId: sender.id })
+      const members = (yield* Effect.forEach(conversation.memberBotIds, (id) => orDie(bots.get(id)))).flatMap(
+        (b): Array<Bot> => (Option.isSome(b) ? [b.value] : []),
+      )
+      const targets: ReadonlyArray<BotId> = routeBotMessage({
+        group: conversation,
+        members,
+        text,
+        senderBotId: sender.id,
+      })
       const rootId = yield* ids.next(CoreIdPrefix.delivery)
       const chain = targets.length > 0 ? yield* nextChain(ctx, rootId, conversation.id) : undefined
-      const entry = yield* conversations.appendEntry(compact({
-        kind: "message" as const,
-        conversationId: conversation.id,
-        author: { kind: "bot" as const, botId: sender.id },
-        role: "bot" as const,
-        text,
-        attachments: [],
-        streaming: false,
-        addressedBotIds: targets.length > 0 ? targets : undefined,
-      }))
+      const entry = yield* conversations.appendEntry(
+        compact({
+          kind: "message" as const,
+          conversationId: conversation.id,
+          author: { kind: "bot" as const, botId: sender.id },
+          role: "bot" as const,
+          text,
+          attachments: [],
+          streaming: false,
+          addressedBotIds: targets.length > 0 ? targets : undefined,
+        }),
+      )
       if (conversation.id !== ctx.claims.conversationId) {
-        yield* Effect.ignore(conversations.appendEvent({
-          conversationId: ctx.claims.conversationId,
-          author: { kind: "bot", botId: sender.id },
-          event: { type: "posted-to-group", conversationId: conversation.id, title: conversation.title, entryId: entry.id },
-        }))
+        yield* Effect.ignore(
+          conversations.appendEvent({
+            conversationId: ctx.claims.conversationId,
+            author: { kind: "bot", botId: sender.id },
+            event: {
+              type: "posted-to-group",
+              conversationId: conversation.id,
+              title: conversation.title,
+              entryId: entry.id,
+            },
+          }),
+        )
       }
       for (const target of targets) {
-        yield* orchestrator.deliver({
-          conversationId: conversation.id,
-          botId: target,
-          kind: "bot-message",
-          text,
-          fromBotId: sender.id,
-          sourceEntryId: entry.id,
-          causalChain: chain,
-          urgency: "urgent",
-        }).pipe(
-          Effect.catch((error) => Effect.logWarning(`Messaging: post_to_group delivery to ${target} failed`, error)),
-        )
+        yield* orchestrator
+          .deliver({
+            conversationId: conversation.id,
+            botId: target,
+            kind: "bot-message",
+            text,
+            fromBotId: sender.id,
+            sourceEntryId: entry.id,
+            causalChain: chain,
+            urgency: "urgent",
+          })
+          .pipe(
+            Effect.catch((error) => Effect.logWarning(`Messaging: post_to_group delivery to ${target} failed`, error)),
+          )
       }
       return remember(key, { conversationId: conversation.id, entryId: entry.id })
     })
 
     // ------------------------------------------------------------------ reactions (react)
 
-    const react = Effect.fn("Messaging.react")(function*(
+    const react = Effect.fn("Messaging.react")(function* (
       ctx: ToolContext,
       input: { readonly emoji: string; readonly messageId?: EntryId | undefined },
     ) {
       const emoji = input.emoji.trim()
       if (!isSingleEmoji(emoji)) {
-        return yield* new InvalidInput({ message: "react needs exactly one emoji, e.g. \"👍\"." })
+        return yield* new InvalidInput({ message: 'react needs exactly one emoji, e.g. "👍".' })
       }
       const sender = yield* senderOf(ctx)
       let target: KnownTranscriptEntry | undefined
@@ -400,9 +448,12 @@ export const MessagingLive: Layer.Layer<
       } else {
         // The message that triggered this turn: the newest one from someone else here.
         const tail = yield* orDie(entries.page({ conversationId: ctx.claims.conversationId, limit: 50 }))
-        target = [...tail.entries].reverse().find((e): e is KnownTranscriptEntry =>
-          e.kind === "message" && !(e.author.kind === "bot" && e.author.botId === sender.id)
-        )
+        target = [...tail.entries]
+          .reverse()
+          .find(
+            (e): e is KnownTranscriptEntry =>
+              e.kind === "message" && !(e.author.kind === "bot" && e.author.botId === sender.id),
+          )
         if (target === undefined) return yield* new InvalidInput({ message: "There is no message to react to here." })
       }
       const by = { kind: "bot" as const, botId: sender.id }
@@ -420,11 +471,16 @@ export const MessagingLive: Layer.Layer<
     /** Where `send_file` posts: the current conversation, a group, or a bot's DM (`to`). */
     type FileDestination =
       | { readonly kind: "current"; readonly conversationId: ConversationId }
-      | { readonly kind: "group"; readonly conversationId: ConversationId; readonly group: Extract<Conversation, { kind: "group" }>; readonly recipient?: Bot | undefined }
+      | {
+          readonly kind: "group"
+          readonly conversationId: ConversationId
+          readonly group: Extract<Conversation, { kind: "group" }>
+          readonly recipient?: Bot | undefined
+        }
       | { readonly kind: "direct"; readonly conversationId: ConversationId; readonly recipient: Bot }
 
     const fileDestination = (ctx: ToolContext, sender: Bot, to: string | undefined) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ref = to?.trim() ?? ""
         if (ref === "") {
           const conversationId = ctx.claims.conversationId
@@ -446,67 +502,96 @@ export const MessagingLive: Layer.Layer<
         yield* ensureEnabled
         const recipient = yield* resolveBot(ref)
         if (recipient.id === sender.id) {
-          return yield* new InvalidInput({ message: "You cannot send files to yourself. Leave out `to` to send them to the owner." })
+          return yield* new InvalidInput({
+            message: "You cannot send files to yourself. Leave out `to` to send them to the owner.",
+          })
         }
         // in a group turn with the recipient: the files stay in the group (D5.2)
         const group = yield* sharedGroup(ctx, sender, recipient)
-        if (group !== undefined) return { kind: "group", conversationId: group.id, group, recipient } satisfies FileDestination as FileDestination
-        return { kind: "direct", conversationId: recipient.directConversationId, recipient } satisfies FileDestination as FileDestination
+        if (group !== undefined)
+          return {
+            kind: "group",
+            conversationId: group.id,
+            group,
+            recipient,
+          } satisfies FileDestination as FileDestination
+        return {
+          kind: "direct",
+          conversationId: recipient.directConversationId,
+          recipient,
+        } satisfies FileDestination as FileDestination
       })
 
     /** One file from a node into the attachment store (streamed; the node's path policy applies). */
     const importOne = (
-      input: { readonly nodeId: NodeId; readonly inv: Invocation; readonly cwd?: string | undefined; readonly progress?: ((message: string) => Effect.Effect<void>) | undefined },
+      input: {
+        readonly nodeId: NodeId
+        readonly inv: Invocation
+        readonly cwd?: string | undefined
+        readonly progress?: ((message: string) => Effect.Effect<void>) | undefined
+      },
       path: string,
       count: number,
     ) =>
-      Effect.scoped(Effect.gen(function*() {
-        const download = yield* nodeFiles.download({
-          nodeId: input.nodeId,
-          inv: input.inv,
-          path,
-          cwd: input.cwd,
-          maxBytes: sendLimits.maxFileBytes,
-        })
-        const mime = detectMime(download.name, download.head)
-        const size = imageDimensions(mime, download.head)
-        if (input.progress !== undefined) yield* input.progress(`Sending ${download.name} (${formatBytes(download.size)})…`)
-        const attachment: Attachment = yield* storeAttachmentStream(attachmentStore, {
-          name: download.name,
-          mime,
-          chunks: download.chunks,
-          width: size?.width,
-          height: size?.height,
-        })
-        return { attachment, path: download.path } satisfies SentFile
-      })).pipe(
-        Effect.mapError((error) =>
-          new InvalidInput({
-            message: count === 1
-              ? `Could not send ${path}: ${describeSendFailure(error)}`
-              : `Could not send ${path}: ${describeSendFailure(error)}. Nothing was sent; fix it (or leave it out) and try again.`,
+      Effect.scoped(
+        Effect.gen(function* () {
+          const download = yield* nodeFiles.download({
+            nodeId: input.nodeId,
+            inv: input.inv,
+            path,
+            cwd: input.cwd,
+            maxBytes: sendLimits.maxFileBytes,
           })
+          const mime = detectMime(download.name, download.head)
+          const size = imageDimensions(mime, download.head)
+          if (input.progress !== undefined)
+            yield* input.progress(`Sending ${download.name} (${formatBytes(download.size)})…`)
+          const attachment: Attachment = yield* storeAttachmentStream(attachmentStore, {
+            name: download.name,
+            mime,
+            chunks: download.chunks,
+            width: size?.width,
+            height: size?.height,
+          })
+          return { attachment, path: download.path } satisfies SentFile
+        }),
+      ).pipe(
+        Effect.mapError(
+          (error) =>
+            new InvalidInput({
+              message:
+                count === 1
+                  ? `Could not send ${path}: ${describeSendFailure(error)}`
+                  : `Could not send ${path}: ${describeSendFailure(error)}. Nothing was sent; fix it (or leave it out) and try again.`,
+            }),
         ),
       )
 
-    const importFiles = Effect.fn("Messaging.importFiles")(function*(input: Parameters<Messaging["Service"]["importFiles"]>[0]) {
+    const importFiles = Effect.fn("Messaging.importFiles")(function* (
+      input: Parameters<Messaging["Service"]["importFiles"]>[0],
+    ) {
       const paths = [...new Set(input.paths.map((p) => p.trim()).filter((p) => p.length > 0))]
       if (paths.length === 0) return []
       if (paths.length > sendLimits.maxFiles) {
-        return yield* new InvalidInput({ message: `At most ${sendLimits.maxFiles} files at once; archive the rest (zip/tar) first.` })
+        return yield* new InvalidInput({
+          message: `At most ${sendLimits.maxFiles} files at once; archive the rest (zip/tar) first.`,
+        })
       }
       const stored: Array<Attachment> = []
       return yield* Effect.forEach(paths, (path) =>
         importOne(input, path, paths.length).pipe(
           Effect.map((file) => file.attachment),
           Effect.tap((attachment) => Effect.sync(() => stored.push(attachment))),
-        )).pipe(
-          // a later file failed (or the call was cancelled): drop the ones already stored
-          Effect.onError(() => Effect.forEach(stored, (a) => Effect.ignore(attachmentStore.delete(a.id)), { discard: true })),
-        )
+        ),
+      ).pipe(
+        // a later file failed (or the call was cancelled): drop the ones already stored
+        Effect.onError(() =>
+          Effect.forEach(stored, (a) => Effect.ignore(attachmentStore.delete(a.id)), { discard: true }),
+        ),
+      )
     })
 
-    const sendFiles = Effect.fn("Messaging.sendFiles")(function*(
+    const sendFiles = Effect.fn("Messaging.sendFiles")(function* (
       ctx: ToolContext,
       input: Parameters<Messaging["Service"]["sendFiles"]>[1],
     ) {
@@ -531,7 +616,8 @@ export const MessagingLive: Layer.Layer<
         }
       }
       const paths = [...new Set(input.paths.map((p) => p.trim()).filter((p) => p.length > 0))]
-      if (paths.length === 0) return yield* new InvalidInput({ message: "Pass `path` (or `paths`): the file(s) to send." })
+      if (paths.length === 0)
+        return yield* new InvalidInput({ message: "Pass `path` (or `paths`): the file(s) to send." })
       if (paths.length > sendLimits.maxFiles) {
         return yield* new InvalidInput({
           message: `send_file sends at most ${sendLimits.maxFiles} files per call; send the rest in another call or archive them (zip/tar) first.`,
@@ -543,88 +629,105 @@ export const MessagingLive: Layer.Layer<
       }
       // deliveries to other bots extend the causal chain (hop limit), checked before any transfer
       const deliveryId = yield* ids.next(CoreIdPrefix.delivery)
-      const members = destination.kind === "group" && destination.recipient === undefined
-        ? (yield* Effect.forEach(destination.group.memberBotIds, (id) => orDie(bots.get(id))))
-          .flatMap((b): Array<Bot> => (Option.isSome(b) ? [b.value] : []))
-        : []
-      const targets: ReadonlyArray<BotId> = destination.kind === "current"
-        ? []
-        : destination.kind === "direct" || destination.recipient !== undefined
-        ? [destination.recipient!.id]
-        : routeBotMessage({ group: destination.group, members, text: caption, senderBotId: sender.id })
+      const members =
+        destination.kind === "group" && destination.recipient === undefined
+          ? (yield* Effect.forEach(destination.group.memberBotIds, (id) => orDie(bots.get(id)))).flatMap(
+              (b): Array<Bot> => (Option.isSome(b) ? [b.value] : []),
+            )
+          : []
+      const targets: ReadonlyArray<BotId> =
+        destination.kind === "current"
+          ? []
+          : destination.kind === "direct" || destination.recipient !== undefined
+            ? [destination.recipient!.id]
+            : routeBotMessage({ group: destination.group, members, text: caption, senderBotId: sender.id })
       const chain = targets.length > 0 ? yield* nextChain(ctx, deliveryId, ctx.claims.conversationId) : undefined
 
       const sendOne = (path: string) => importOne(input, path, paths.length)
 
       const sent: Array<SentFile> = []
-      const stored = yield* Effect.forEach(paths, (path) => Effect.tap(sendOne(path), (file) => Effect.sync(() => sent.push(file)))).pipe(
+      const stored = yield* Effect.forEach(paths, (path) =>
+        Effect.tap(sendOne(path), (file) => Effect.sync(() => sent.push(file))),
+      ).pipe(
         // a later file failed (or the call was cancelled): drop the files already stored
         Effect.onError(() =>
-          Effect.forEach(sent, (file) => Effect.ignore(attachmentStore.delete(file.attachment.id)), { discard: true })
+          Effect.forEach(sent, (file) => Effect.ignore(attachmentStore.delete(file.attachment.id)), { discard: true }),
         ),
       )
       const attachments = stored.map((file) => file.attachment)
-      const entry = yield* conversations.appendEntry(compact({
-        kind: "message" as const,
-        conversationId,
-        author: { kind: "bot" as const, botId: sender.id },
-        role: "bot" as const,
-        text: caption,
-        attachments,
-        streaming: false,
-        clientNonce: nonce,
-        // part of the sender's turn only where that turn is
-        turnId: conversationId === ctx.claims.conversationId ? ctx.turnId : undefined,
-        toBotId: destination.kind === "direct" ? destination.recipient.id : undefined,
-        addressedBotIds: destination.kind === "group" && targets.length > 0 ? targets : undefined,
-      }))
+      const entry = yield* conversations.appendEntry(
+        compact({
+          kind: "message" as const,
+          conversationId,
+          author: { kind: "bot" as const, botId: sender.id },
+          role: "bot" as const,
+          text: caption,
+          attachments,
+          streaming: false,
+          clientNonce: nonce,
+          // part of the sender's turn only where that turn is
+          turnId: conversationId === ctx.claims.conversationId ? ctx.turnId : undefined,
+          toBotId: destination.kind === "direct" ? destination.recipient.id : undefined,
+          addressedBotIds: destination.kind === "group" && targets.length > 0 ? targets : undefined,
+        }),
+      )
       if (destination.kind === "direct") {
         const senderTurn = ctx.taskId !== undefined ? Option.none() : yield* orchestrator.activeTurn(sender.id)
-        yield* Effect.ignore(conversations.appendEvent({
-          conversationId: ctx.claims.conversationId,
-          author: { kind: "bot", botId: sender.id },
-          event: {
-            type: "messaged-bot",
-            toBotId: destination.recipient.id,
-            toName: destination.recipient.name,
-            conversationId: destination.recipient.directConversationId,
-            entryId: entry.id,
-            urgency: "background",
-          },
-          turnId: Option.isSome(senderTurn) ? senderTurn.value.id : undefined,
-        }))
+        yield* Effect.ignore(
+          conversations.appendEvent({
+            conversationId: ctx.claims.conversationId,
+            author: { kind: "bot", botId: sender.id },
+            event: {
+              type: "messaged-bot",
+              toBotId: destination.recipient.id,
+              toName: destination.recipient.name,
+              conversationId: destination.recipient.directConversationId,
+              entryId: entry.id,
+              urgency: "background",
+            },
+            turnId: Option.isSome(senderTurn) ? senderTurn.value.id : undefined,
+          }),
+        )
       } else if (destination.kind === "group" && conversationId !== ctx.claims.conversationId) {
-        yield* Effect.ignore(conversations.appendEvent({
-          conversationId: ctx.claims.conversationId,
-          author: { kind: "bot", botId: sender.id },
-          event: { type: "posted-to-group", conversationId, title: destination.group.title, entryId: entry.id },
-        }))
-      }
-      // the recipients read the caption and get the files copied into their workspace (BotRunner)
-      const deliveryText = caption !== "" ? caption : `Sent you ${attachments.length === 1 ? attachments[0]!.name : `${attachments.length} files`}.`
-      for (const [i, target] of targets.entries()) {
-        yield* orchestrator.deliver({
-          ...(i === 0 ? { id: deliveryId } : {}),
-          conversationId,
-          botId: target,
-          kind: "bot-message",
-          text: deliveryText,
-          attachmentIds: attachments.map((a) => a.id),
-          fromBotId: sender.id,
-          sourceEntryId: entry.id,
-          causalChain: chain,
-          urgency: "background",
-        }).pipe(
-          Effect.catch((error) => Effect.logWarning(`Messaging: send_file delivery to ${target} failed`, error)),
+        yield* Effect.ignore(
+          conversations.appendEvent({
+            conversationId: ctx.claims.conversationId,
+            author: { kind: "bot", botId: sender.id },
+            event: { type: "posted-to-group", conversationId, title: destination.group.title, entryId: entry.id },
+          }),
         )
       }
-      return remember(key, compact({
-        conversationId,
-        entryId: entry.id,
-        files: stored,
-        destination: destination.kind,
-        recipientBotId: destination.kind === "current" ? undefined : destination.recipient?.id,
-      }) satisfies SendFilesResult)
+      // the recipients read the caption and get the files copied into their workspace (BotRunner)
+      const deliveryText =
+        caption !== ""
+          ? caption
+          : `Sent you ${attachments.length === 1 ? attachments[0]!.name : `${attachments.length} files`}.`
+      for (const [i, target] of targets.entries()) {
+        yield* orchestrator
+          .deliver({
+            ...(i === 0 ? { id: deliveryId } : {}),
+            conversationId,
+            botId: target,
+            kind: "bot-message",
+            text: deliveryText,
+            attachmentIds: attachments.map((a) => a.id),
+            fromBotId: sender.id,
+            sourceEntryId: entry.id,
+            causalChain: chain,
+            urgency: "background",
+          })
+          .pipe(Effect.catch((error) => Effect.logWarning(`Messaging: send_file delivery to ${target} failed`, error)))
+      }
+      return remember(
+        key,
+        compact({
+          conversationId,
+          entryId: entry.id,
+          files: stored,
+          destination: destination.kind,
+          recipientBotId: destination.kind === "current" ? undefined : destination.recipient?.id,
+        }) satisfies SendFilesResult,
+      )
     })
 
     return Messaging.of({ messageBot, postToGroup, handoffTask, react, sendFiles, importFiles })

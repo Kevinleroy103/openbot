@@ -6,7 +6,16 @@
  * slack_search / slack_read / slack_find → SlackConnector · slack_draft → SlackService.draft (an
  * editable draft the owner sends themselves; nothing reaches Slack from a Bot directly).
  */
-import { type DataDir, type IdGen, Messaging, type NodeDirectory, type SlackConversation, SlackConnector, type SlackMessage, SlackService } from "@openbot/core"
+import {
+  type DataDir,
+  type IdGen,
+  Messaging,
+  type NodeDirectory,
+  type SlackConversation,
+  SlackConnector,
+  type SlackMessage,
+  SlackService,
+} from "@openbot/core"
 import { Effect, Option } from "effect"
 import * as p from "../params.ts"
 import { capText, textResult, ToolRefusal } from "../results.ts"
@@ -18,10 +27,12 @@ const slackConnected = ({ slack }: ToolAvailability): boolean => slack === true
 const NOT_CONNECTED = "Slack isn't connected."
 
 const connector = Effect.serviceOption(SlackConnector).pipe(
-  Effect.flatMap(Option.match({
-    onNone: () => Effect.fail(new ToolRefusal({ message: NOT_CONNECTED })),
-    onSome: Effect.succeed,
-  })),
+  Effect.flatMap(
+    Option.match({
+      onNone: () => Effect.fail(new ToolRefusal({ message: NOT_CONNECTED })),
+      onSome: Effect.succeed,
+    }),
+  ),
 )
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -36,13 +47,18 @@ export const slackTime = (ts: string): string => {
 const MESSAGE_TEXT_CHARS = 1_500
 
 /** One message: a header line, then its text indented. */
-export const formatSlackMessage = (message: SlackMessage, options?: { readonly where?: string | undefined; readonly link?: boolean }): string => {
+export const formatSlackMessage = (
+  message: SlackMessage,
+  options?: { readonly where?: string | undefined; readonly link?: boolean },
+): string => {
   const facts = [`ts ${message.ts}`]
   if (message.threadTs !== undefined && message.threadTs !== message.ts) facts.push(`in thread ${message.threadTs}`)
-  if (message.replyCount !== undefined && message.replyCount > 0) facts.push(`${message.replyCount} ${message.replyCount === 1 ? "reply" : "replies"}`)
+  if (message.replyCount !== undefined && message.replyCount > 0)
+    facts.push(`${message.replyCount} ${message.replyCount === 1 ? "reply" : "replies"}`)
   const head = [options?.where, message.author, slackTime(message.ts)].filter((part) => part !== undefined).join(" · ")
   const text = message.text.length > MESSAGE_TEXT_CHARS ? `${message.text.slice(0, MESSAGE_TEXT_CHARS)}…` : message.text
-  const files = message.files === undefined || message.files.length === 0 ? [] : [`  [files: ${message.files.join(", ")}]`]
+  const files =
+    message.files === undefined || message.files.length === 0 ? [] : [`  [files: ${message.files.join(", ")}]`]
   return [
     `${head} (${facts.join(", ")})`,
     ...text.split("\n").map((line) => `  ${line}`),
@@ -55,8 +71,8 @@ const describeConversation = (conversation: SlackConversation): string =>
   conversation.kind === "dm"
     ? `DM with ${conversation.label}`
     : conversation.kind === "group-dm"
-    ? `group DM with ${conversation.label}`
-    : conversation.label
+      ? `group DM with ${conversation.label}`
+      : conversation.label
 
 const slackSearch = defineTool({
   name: "slack_search",
@@ -71,7 +87,7 @@ const slackSearch = defineTool({
   available: slackConnected,
   idempotent: false,
   handler: (args) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const slack = yield* connector
       const found = yield* slack.search({ query: args.query, limit: args.limit ?? 20 })
       if (found.messages.length === 0) return textResult(`Nothing in Slack matches ${JSON.stringify(args.query)}.`)
@@ -88,7 +104,9 @@ const slackRead = defineTool({
     "Read a Slack conversation the owner can see: its latest messages, oldest first, or one thread. `conversation` is a channel (#name or its id), a person (@handle or their name: the owner's DM with them), or a Slack message link (opens that message's thread). Page back with `before` (the ts of the oldest message you have).",
   params: p.params({
     conversation: p.text("#channel, a channel id, @person or their name, or a Slack message link."),
-    thread: p.optional(p.string("Read this thread instead: the ts of its first message (as shown by slack_read or slack_search).")),
+    thread: p.optional(
+      p.string("Read this thread instead: the ts of its first message (as shown by slack_read or slack_search)."),
+    ),
     limit: p.optional(p.number("How many messages (default 30, at most 100).", { integer: true, min: 1, max: 100 })),
     before: p.optional(p.string("Only messages before this ts (to page back).")),
   }),
@@ -96,7 +114,7 @@ const slackRead = defineTool({
   available: slackConnected,
   idempotent: false,
   handler: (args) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const slack = yield* connector
       const read = yield* slack.read({
         conversation: args.conversation,
@@ -105,7 +123,8 @@ const slackRead = defineTool({
         before: args.before === undefined || args.before.trim() === "" ? undefined : args.before.trim(),
       })
       const place = `${describeConversation(read.conversation)} (${read.conversation.id})`
-      if (read.messages.length === 0) return textResult(`${place}: no messages${args.before === undefined ? "" : " before that"}.`)
+      if (read.messages.length === 0)
+        return textResult(`${place}: no messages${args.before === undefined ? "" : " before that"}.`)
       const oldest = read.messages[0]!.ts
       const head = `${place}${read.conversation.topic === undefined || read.conversation.topic === "" ? "" : ` — topic: ${read.conversation.topic}`}\n${read.messages.length} messages, oldest first${read.more ? ` (older ones: before ${oldest})` : ""}:`
       return textResult(capText([head, ...read.messages.map((m) => formatSlackMessage(m))].join("\n\n")).text)
@@ -124,21 +143,30 @@ const slackFind = defineTool({
   available: slackConnected,
   idempotent: false,
   handler: (args) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const slack = yield* connector
       const found = yield* slack.find(args.query)
       const lines: Array<string> = []
       if (found.conversations.length > 0) {
         lines.push("Conversations:")
-        for (const c of found.conversations) lines.push(`- ${describeConversation(c)} (${c.id})${c.topic === undefined || c.topic === "" ? "" : ` — ${c.topic}`}`)
+        for (const c of found.conversations)
+          lines.push(
+            `- ${describeConversation(c)} (${c.id})${c.topic === undefined || c.topic === "" ? "" : ` — ${c.topic}`}`,
+          )
       }
       if (found.people.length > 0) {
         lines.push("People:")
         for (const person of found.people) {
-          lines.push(`- ${person.name}${person.handle === undefined ? "" : ` (@${person.handle})`} ${person.id}${person.title === undefined || person.title === "" ? "" : ` — ${person.title}`}`)
+          lines.push(
+            `- ${person.name}${person.handle === undefined ? "" : ` (@${person.handle})`} ${person.id}${person.title === undefined || person.title === "" ? "" : ` — ${person.title}`}`,
+          )
         }
       }
-      return textResult(lines.length === 0 ? `No channel or person in Slack matches ${JSON.stringify(args.query)}.` : capText(lines.join("\n")).text)
+      return textResult(
+        lines.length === 0
+          ? `No channel or person in Slack matches ${JSON.stringify(args.query)}.`
+          : capText(lines.join("\n")).text,
+      )
     }),
 })
 
@@ -148,16 +176,21 @@ const slackDraft = defineTool({
   description:
     "Write a Slack message for the owner to send: it appears in this chat as a draft they can edit, then send (it goes out as them) or discard. This is the only way to write in Slack; you are not told when they send it. `to` is a channel (#name or id), a person (@handle or name: a DM), several people separated by commas (a group DM), or a Slack message link (a reply in its thread). Mention people as @Name. Keep Slack's tone: short and plain, no headings. `files` attaches files you made (a video, an image, a PDF…; paths like send_file's, up to 10): they are uploaded with the message, which becomes their comment.",
   params: p.params({
-    to: p.text("#channel, a channel id, @person or their name, \"Alice, Bob\", or a Slack message link."),
+    to: p.text('#channel, a channel id, @person or their name, "Alice, Bob", or a Slack message link.'),
     text: p.string("The message, as the owner would write it (may be empty when files are attached)."),
     thread: p.optional(p.string("Reply in this thread: the ts of its first message, or a message link.")),
-    files: p.optional(p.array(p.text(), "Files to attach: relative to your workspace, absolute, or ~/… on the node (at most 10).", { minItems: 1, maxItems: 10 })),
+    files: p.optional(
+      p.array(p.text(), "Files to attach: relative to your workspace, absolute, or ~/… on the node (at most 10).", {
+        minItems: 1,
+        maxItems: 10,
+      }),
+    ),
     node: p.optional(p.text("Node id or name the files are on (see list_nodes). Default: your host node.")),
   }),
   annotations: { title: "Draft a Slack message", destructiveHint: false, openWorldHint: false },
   available: slackConnected,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const service = yield* Effect.serviceOption(SlackService)
       if (Option.isNone(service)) return yield* new ToolRefusal({ message: NOT_CONNECTED })
       const paths = args.files ?? []
@@ -165,15 +198,25 @@ const slackDraft = defineTool({
         const status = yield* (yield* connector).status
         if ((status.missingScopes ?? []).includes("files:write")) {
           return yield* new ToolRefusal({
-            message: "The owner's Slack app can't upload files yet: it needs an update (Connect apps › Slack shows how). Draft the text alone, or tell the owner.",
+            message:
+              "The owner's Slack app can't upload files yet: it needs an update (Connect apps › Slack shows how). Draft the text alone, or tell the owner.",
           })
         }
       }
       // the files come into OpenBot now (the draft shows them); Slack gets them when the owner sends it
-      const files = paths.length === 0 ? [] : yield* Effect.gen(function*() {
-        const target = yield* chooseNode(ctx, args.node, "fs")
-        return yield* (yield* Messaging).importFiles({ nodeId: target.nodeId, inv: target.inv, cwd: target.workspace, paths, progress: ctx.progress })
-      })
+      const files =
+        paths.length === 0
+          ? []
+          : yield* Effect.gen(function* () {
+              const target = yield* chooseNode(ctx, args.node, "fs")
+              return yield* (yield* Messaging).importFiles({
+                nodeId: target.nodeId,
+                inv: target.inv,
+                cwd: target.workspace,
+                paths,
+                progress: ctx.progress,
+              })
+            })
       const drafted = yield* service.value.draft(ctx.tool, {
         to: args.to,
         text: args.text,
@@ -186,4 +229,9 @@ const slackDraft = defineTool({
     }),
 })
 
-export const SlackToolkit: ReadonlyArray<AnyTool<Messaging | NodeDirectory | IdGen | DataDir>> = [slackSearch, slackRead, slackFind, slackDraft]
+export const SlackToolkit: ReadonlyArray<AnyTool<Messaging | NodeDirectory | IdGen | DataDir>> = [
+  slackSearch,
+  slackRead,
+  slackFind,
+  slackDraft,
+]

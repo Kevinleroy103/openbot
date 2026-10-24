@@ -54,13 +54,13 @@ const matches = (tokens: ReadonlyArray<string>, match: SearchMatch): number => {
 const byRefDesc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0)
 
 export const makeMemorySearchRepo = (index: MemorySearchIndex) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const conversations = yield* ConversationRepo
     const turns = yield* TurnRepo
 
     /** The docs a filter lets through (scope, chat, bot, sender, time, kind), before matching words. */
     const candidates = (filter: SearchFilter) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const all = yield* Effect.orDie(conversations.list())
         const existing = new Map(all.map((c) => [c.id as string, c]))
         const membersOf = (conversationId: ConversationId): ReadonlyArray<BotId> => {
@@ -70,7 +70,7 @@ export const makeMemorySearchRepo = (index: MemorySearchIndex) =>
         }
         const voice = new Map<string, boolean>()
         const hidden = (doc: SearchDoc) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             if (doc.turnId === undefined) return false
             if (!voice.has(doc.turnId)) {
               const turn = yield* Effect.orDie(turns.get(doc.turnId))
@@ -85,8 +85,11 @@ export const makeMemorySearchRepo = (index: MemorySearchIndex) =>
           if (doc.source === "task") return doc.authorBotId === bot && membersOf(doc.conversationId).includes(bot)
           if (doc.kind === "tool-call" && doc.authorBotId !== bot) return false
           if (membersOf(doc.conversationId).includes(bot)) return true
-          return doc.kind === "message" && (doc.authorBotId === bot || doc.toBotId === bot) &&
+          return (
+            doc.kind === "message" &&
+            (doc.authorBotId === bot || doc.toBotId === bot) &&
             existing.get(doc.conversationId)?.kind === "direct"
+          )
         }
         const kept: Array<SearchDoc> = []
         for (const doc of index.docs.values()) {
@@ -96,20 +99,28 @@ export const makeMemorySearchRepo = (index: MemorySearchIndex) =>
           if (
             filter.botIds !== undefined &&
             !filter.botIds.some((bot) => membersOf(doc.conversationId).includes(bot) || doc.authorBotId === bot)
-          ) continue
+          )
+            continue
           if (
             filter.senders !== undefined &&
             !filter.senders.some((sender) =>
-              sender === "owner" ? doc.authorKind === "user" : sender === "system" ? doc.authorKind === "system" : doc.authorBotId === sender
+              sender === "owner"
+                ? doc.authorKind === "user"
+                : sender === "system"
+                  ? doc.authorKind === "system"
+                  : doc.authorBotId === sender,
             )
-          ) continue
+          )
+            continue
           if (filter.exchangeWith !== undefined) {
             const me = filter.scope.kind === "bot" ? filter.scope.botId : undefined
             const peer = filter.exchangeWith
             if (
-              me === undefined || doc.kind !== "message" ||
+              me === undefined ||
+              doc.kind !== "message" ||
               !((doc.authorBotId === me && doc.toBotId === peer) || (doc.authorBotId === peer && doc.toBotId === me))
-            ) continue
+            )
+              continue
           }
           if (filter.from !== undefined && doc.createdAt < filter.from) continue
           if (filter.to !== undefined && doc.createdAt > filter.to) continue
@@ -121,7 +132,7 @@ export const makeMemorySearchRepo = (index: MemorySearchIndex) =>
 
     return SearchRepo.of({
       query: (query) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const scored: Array<SearchRepoHit> = []
           for (const doc of yield* candidates(query)) {
             const count = matches(tokenize(doc.text), query.match)
@@ -131,46 +142,64 @@ export const makeMemorySearchRepo = (index: MemorySearchIndex) =>
             query.sort === "relevance"
               ? a.rank - b.rank || b.createdAt - a.createdAt || byRefDesc(a.refId, b.refId)
               : query.sort === "newest"
-              ? b.createdAt - a.createdAt || byRefDesc(a.refId, b.refId)
-              : a.createdAt - b.createdAt || -byRefDesc(a.refId, b.refId)
+                ? b.createdAt - a.createdAt || byRefDesc(a.refId, b.refId)
+                : a.createdAt - b.createdAt || -byRefDesc(a.refId, b.refId)
           const key = (hit: SearchRepoHit) => ({ rank: hit.rank, createdAt: hit.doc.createdAt, refId: hit.doc.refId })
           scored.sort((a, b) => compare(key(a), key(b)))
           const after = query.after
-          const rest = after === undefined
-            ? scored
-            : scored.filter((hit) => compare(key(hit), { rank: after.sort === "relevance" ? after.rank : 0, createdAt: after.createdAt, refId: after.refId }) > 0)
+          const rest =
+            after === undefined
+              ? scored
+              : scored.filter(
+                  (hit) =>
+                    compare(key(hit), {
+                      rank: after.sort === "relevance" ? after.rank : 0,
+                      createdAt: after.createdAt,
+                      refId: after.refId,
+                    }) > 0,
+                )
           const size = Math.max(0, Math.floor(query.limit))
           const reportOf = (task: SearchDoc): EntryId | undefined => {
             const reports = [...index.docs.values()]
-              .filter((doc) =>
-                doc.source === "entry" && doc.kind === "message" && doc.conversationId === task.conversationId &&
-                doc.authorBotId === task.authorBotId && doc.createdAt >= task.createdAt
+              .filter(
+                (doc) =>
+                  doc.source === "entry" &&
+                  doc.kind === "message" &&
+                  doc.conversationId === task.conversationId &&
+                  doc.authorBotId === task.authorBotId &&
+                  doc.createdAt >= task.createdAt,
               )
               .sort((a, b) => a.createdAt - b.createdAt || -byRefDesc(a.refId, b.refId))
             return reports[0]?.refId as EntryId | undefined
           }
           const page = rest.slice(0, size).map((hit) => {
             const jumpEntryId = hit.doc.source === "task" ? reportOf(hit.doc) : undefined
-            return { ...hit, snippet: makeSnippet(hit.doc.text, query.match), ...(jumpEntryId === undefined ? {} : { jumpEntryId }) }
+            return {
+              ...hit,
+              snippet: makeSnippet(hit.doc.text, query.match),
+              ...(jumpEntryId === undefined ? {} : { jumpEntryId }),
+            }
           })
           const last = page[page.length - 1]
-          const next: SearchCursor | undefined = rest.length > size && last !== undefined
-            ? query.sort === "relevance"
-              ? { sort: "relevance", rank: last.rank, createdAt: last.doc.createdAt, refId: last.doc.refId }
-              : { sort: query.sort, createdAt: last.doc.createdAt, refId: last.doc.refId }
-            : undefined
+          const next: SearchCursor | undefined =
+            rest.length > size && last !== undefined
+              ? query.sort === "relevance"
+                ? { sort: "relevance", rank: last.rank, createdAt: last.doc.createdAt, refId: last.doc.refId }
+                : { sort: query.sort, createdAt: last.doc.createdAt, refId: last.doc.refId }
+              : undefined
           return { hits: page, next, total: Math.min(scored.length, query.totalCap ?? SEARCH_TOTAL_CAP) }
         }),
 
       positions: (query) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const found = (yield* candidates({ ...query, conversationIds: [query.conversationId] }))
             .filter((doc) => doc.source === "entry")
             .filter((doc) =>
               query.match !== undefined
                 ? matches(tokenize(doc.text), query.match) > 0
-                : query.substring !== undefined && query.substring !== "" &&
-                  doc.text.toLowerCase().includes(query.substring.toLowerCase())
+                : query.substring !== undefined &&
+                  query.substring !== "" &&
+                  doc.text.toLowerCase().includes(query.substring.toLowerCase()),
             )
             .sort((a, b) => a.createdAt - b.createdAt || -byRefDesc(a.refId, b.refId))
           const size = Math.max(0, Math.floor(query.limit))

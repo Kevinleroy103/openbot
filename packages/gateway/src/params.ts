@@ -39,7 +39,11 @@ export const string = (
   decode: (value, path) => {
     if (typeof value !== "string") return fail(`\`${path}\` must be a string`)
     if (options?.minLength !== undefined && value.length < options.minLength) {
-      return fail(options.minLength === 1 ? `\`${path}\` must not be empty` : `\`${path}\` must have at least ${options.minLength} characters`)
+      return fail(
+        options.minLength === 1
+          ? `\`${path}\` must not be empty`
+          : `\`${path}\` must have at least ${options.minLength} characters`,
+      )
     }
     if (options?.maxLength !== undefined && value.length > options.maxLength) {
       return fail(`\`${path}\` must have at most ${options.maxLength} characters`)
@@ -128,9 +132,9 @@ type RequiredKeys<F extends Fields> = Exclude<keyof F, OptionalKeys<F>>
 type ValueOf<P> = P extends Param<infer A, any> ? A : never
 
 /** Decoded arguments: required keys are present; optional keys may be absent (or filled from a default). */
-export type Infer<F extends Fields> =
-  & { readonly [K in RequiredKeys<F>]: ValueOf<F[K]> }
-  & { readonly [K in OptionalKeys<F>]?: ValueOf<F[K]> | undefined }
+export type Infer<F extends Fields> = { readonly [K in RequiredKeys<F>]: ValueOf<F[K]> } & {
+  readonly [K in OptionalKeys<F>]?: ValueOf<F[K]> | undefined
+}
 
 const objectJson = (fields: Fields, description?: string): JsonSchema => {
   const properties: Record<string, JsonSchema> = {}
@@ -182,7 +186,11 @@ export const optional = <A>(param: Param<A, boolean>, fallback?: A): Param<A, tr
 
 export interface ParamsSpec<A> {
   /** The MCP `inputSchema` (object root). */
-  readonly inputSchema: { readonly type: "object"; readonly properties: Record<string, JsonSchema>; readonly required?: ReadonlyArray<string> }
+  readonly inputSchema: {
+    readonly type: "object"
+    readonly properties: Record<string, JsonSchema>
+    readonly required?: ReadonlyArray<string>
+  }
   readonly decode: (args: unknown) => Decoded<A>
 }
 

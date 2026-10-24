@@ -22,7 +22,11 @@ const server = Bun.serve({
     const body = (await req.json()) as { code: string }
     requests.push(body)
     if (body.code !== "ABCDEFGH") return Response.json({ error: "invalid or expired pairing code" }, { status: 403 })
-    return Response.json({ nodeId: "nod_paired", brainPublicKey: brainKeys.publicKey, brainOrigin: "https://brain.example" })
+    return Response.json({
+      nodeId: "nod_paired",
+      brainPublicKey: brainKeys.publicKey,
+      brainOrigin: "https://brain.example",
+    })
   },
 })
 afterAll(() => server.stop(true))
@@ -34,7 +38,12 @@ describe("pairing and identity", () => {
         const dataDir = path.join(t.path, "node")
         const keyStore = makeKeyStore(dataDir)
         // code normalization: lower case, dash, I/L → 1, O → 0 are tolerated
-        const identity = yield* pairNode({ brainUrl: `http://127.0.0.1:${server.port}/base/`, code: "abcd-efgh", keyStore, hostname: "box" })
+        const identity = yield* pairNode({
+          brainUrl: `http://127.0.0.1:${server.port}/base/`,
+          code: "abcd-efgh",
+          keyStore,
+          hostname: "box",
+        })
         expect(identity.nodeId).toBe("nod_paired")
         expect(identity.brainPublicKey).toBe(brainKeys.publicKey)
         expect(identity.brainOrigin).toBe("https://brain.example")
@@ -43,7 +52,12 @@ describe("pairing and identity", () => {
         expect(yield* Effect.orDie(publicKeyFromPrivate(identity.privateKey))).toBe(identity.publicKey)
 
         const sent = Schema.decodeUnknownSync(PairRequest)(requests[requests.length - 1])
-        expect(sent).toMatchObject({ code: "ABCDEFGH", publicKey: identity.publicKey, hostname: "box", protocol: { min: 1, max: 1 } })
+        expect(sent).toMatchObject({
+          code: "ABCDEFGH",
+          publicKey: identity.publicKey,
+          hostname: "box",
+          protocol: { min: 1, max: 1 },
+        })
         // the private key never leaves the node
         expect(JSON.stringify(requests)).not.toContain(identity.privateKey)
 
@@ -61,10 +75,14 @@ describe("pairing and identity", () => {
       Effect.gen(function* () {
         const dataDir = path.join(t.path, "node-refused")
         const keyStore = makeKeyStore(dataDir)
-        const refused = yield* Effect.flip(pairNode({ brainUrl: `http://127.0.0.1:${server.port}/base`, code: "ZZZZ-ZZZZ", keyStore }))
+        const refused = yield* Effect.flip(
+          pairNode({ brainUrl: `http://127.0.0.1:${server.port}/base`, code: "ZZZZ-ZZZZ", keyStore }),
+        )
         expect(refused._tag).toBe("PairingError")
         expect(refused.message).toContain("403")
-        const malformed = yield* Effect.flip(pairNode({ brainUrl: `http://127.0.0.1:${server.port}/base`, code: "nope", keyStore }))
+        const malformed = yield* Effect.flip(
+          pairNode({ brainUrl: `http://127.0.0.1:${server.port}/base`, code: "nope", keyStore }),
+        )
         expect(malformed.message).toContain("pairing code")
         expect(Option.isNone(yield* keyStore.load)).toBe(true)
       }),
@@ -86,8 +104,22 @@ describe("AuditLog", () => {
         const forwarded: Array<unknown> = []
         const log = yield* makeAuditLog({ dir, forward: (e) => Effect.sync(() => void forwarded.push(e)) })
         const inv = { invocationId: "inv_1", botId: "bot_1", runId: "bot_1:conv_1" }
-        yield* log.record({ inv, action: "run-command", target: "echo secret-arg", decision: "allowed", by: "node", outcome: "ok", exitCode: 0 })
-        yield* log.record({ inv, action: "write-file", target: "x".repeat(400), decision: "refused", error: "PathDenied" })
+        yield* log.record({
+          inv,
+          action: "run-command",
+          target: "echo secret-arg",
+          decision: "allowed",
+          by: "node",
+          outcome: "ok",
+          exitCode: 0,
+        })
+        yield* log.record({
+          inv,
+          action: "write-file",
+          target: "x".repeat(400),
+          decision: "refused",
+          error: "PathDenied",
+        })
         const file = log.fileFor(Date.now())
         const lines = readFileSync(file, "utf8").trim().split("\n")
         expect(lines.length).toBe(2)
@@ -110,9 +142,17 @@ describe("AuditLog", () => {
     run(
       Effect.gen(function* () {
         const forwarded: Array<unknown> = []
-        const log = yield* makeAuditLog({ dir: path.join(t.path, "audit-unreadable"), forward: (e) => Effect.sync(() => void forwarded.push(e)) })
+        const log = yield* makeAuditLog({
+          dir: path.join(t.path, "audit-unreadable"),
+          forward: (e) => Effect.sync(() => void forwarded.push(e)),
+        })
         mkdirSync(log.fileFor(Date.now()), { recursive: true })
-        yield* log.record({ inv: { invocationId: "inv_1", botId: "bot_1" }, action: "read-file", target: "a", decision: "allowed" })
+        yield* log.record({
+          inv: { invocationId: "inv_1", botId: "bot_1" },
+          action: "read-file",
+          target: "a",
+          decision: "allowed",
+        })
         expect(forwarded.length).toBe(1)
       }),
     ))

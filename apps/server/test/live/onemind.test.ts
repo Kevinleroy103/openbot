@@ -17,29 +17,43 @@ describe.skipIf(!LIVE)("live: one mind per bot", () => {
     await brain?.close()
   }, 60_000)
 
-  test("claude: what it did in a group is remembered in its DM (same native session)", () =>
-    brain.run(Effect.gen(function*() {
-      const client = yield* connect(brain.server, brain.cookie)
-      const ada: Bot = yield* createBot(client, "Ada", "claude")
-      const bob: Bot = yield* client["bots.create"]({ name: "Bob", harness: { kind: "fake" }, clientNonce: `bob-${Date.now()}` })
-      const group = yield* client["conversations.createGroup"]({ title: "secret project", memberBotIds: [ada.id, bob.id], leadBotId: ada.id })
-      const inGroup = yield* converse(
-        client,
-        group.id,
-        "@Ada the project codeword is PERIWINKLE-42. Acknowledge with one short sentence.",
-        { timeout: 240_000 },
-      )
-      report("group", inGroup.entries, inGroup.turns)
-      expect(inGroup.turns.every((t) => t.status === "completed")).toBe(true)
-      const inDm = yield* converse(
-        client,
-        ada.directConversationId,
-        "What did you just do in the group chat, and what is the project codeword there? One sentence.",
-        { timeout: 240_000 },
-      )
-      report("dm", inDm.entries, inDm.turns)
-      expect(inDm.turns.every((t) => t.status === "completed")).toBe(true)
-      const answer = botTexts(inDm.entries, ada.id).join("\n")
-      expect(answer).toContain("PERIWINKLE")
-    })), 600_000)
+  test(
+    "claude: what it did in a group is remembered in its DM (same native session)",
+    () =>
+      brain.run(
+        Effect.gen(function* () {
+          const client = yield* connect(brain.server, brain.cookie)
+          const ada: Bot = yield* createBot(client, "Ada", "claude")
+          const bob: Bot = yield* client["bots.create"]({
+            name: "Bob",
+            harness: { kind: "fake" },
+            clientNonce: `bob-${Date.now()}`,
+          })
+          const group = yield* client["conversations.createGroup"]({
+            title: "secret project",
+            memberBotIds: [ada.id, bob.id],
+            leadBotId: ada.id,
+          })
+          const inGroup = yield* converse(
+            client,
+            group.id,
+            "@Ada the project codeword is PERIWINKLE-42. Acknowledge with one short sentence.",
+            { timeout: 240_000 },
+          )
+          report("group", inGroup.entries, inGroup.turns)
+          expect(inGroup.turns.every((t) => t.status === "completed")).toBe(true)
+          const inDm = yield* converse(
+            client,
+            ada.directConversationId,
+            "What did you just do in the group chat, and what is the project codeword there? One sentence.",
+            { timeout: 240_000 },
+          )
+          report("dm", inDm.entries, inDm.turns)
+          expect(inDm.turns.every((t) => t.status === "completed")).toBe(true)
+          const answer = botTexts(inDm.entries, ada.id).join("\n")
+          expect(answer).toContain("PERIWINKLE")
+        }),
+      ),
+    600_000,
+  )
 })

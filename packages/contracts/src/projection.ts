@@ -3,11 +3,27 @@
 // No Effect, no mutation of inputs: the same code backs atoms on the client and tests on the server.
 // Ported from vendor/scratch/contracts/src/projection.ts (ClientReplica -> immutable reducer).
 import type { BotId, ConversationId, EntryId, NodeId, RequestId, SectionId, TaskId, TurnId } from "./base.ts"
-import type { Bot, BotActivity, Conversation, ConversationSummary, NodeSummary, Notification, Section } from "./domain.ts"
+import type {
+  Bot,
+  BotActivity,
+  Conversation,
+  ConversationSummary,
+  NodeSummary,
+  Notification,
+  Section,
+} from "./domain.ts"
 import type { RuntimeRequest } from "./runtime-request.ts"
 import type { Settings } from "./settings.ts"
 import type { Task } from "./task.ts"
-import type { ConversationChange, ConversationStreamItem, KnownConversationChange, RosterChange, RosterStreamItem, StreamCursor, TranscriptPage } from "./stream.ts"
+import type {
+  ConversationChange,
+  ConversationStreamItem,
+  KnownConversationChange,
+  RosterChange,
+  RosterStreamItem,
+  StreamCursor,
+  TranscriptPage,
+} from "./stream.ts"
 import type { TranscriptEntry, Turn } from "./transcript.ts"
 
 // ---------------------------------------------------------------------------- shared constants & helpers
@@ -22,7 +38,11 @@ export const SNAPSHOT_TAIL_ENTRIES = 100
  * Replay only when the epoch matches, the cursor is not ahead of the head, the gap is at most
  * {@link MAX_REPLAY_GAP}, and every missed change is still buffered.
  */
-export const resumePlan = (after: StreamCursor | undefined, head: StreamCursor, oldestBuffered: number): "replay" | "snapshot" => {
+export const resumePlan = (
+  after: StreamCursor | undefined,
+  head: StreamCursor,
+  oldestBuffered: number,
+): "replay" | "snapshot" => {
   if (!after || after.epoch !== head.epoch) return "snapshot"
   if (after.sequence > head.sequence) return "snapshot"
   if (head.sequence - after.sequence > MAX_REPLAY_GAP) return "snapshot"
@@ -31,11 +51,14 @@ export const resumePlan = (after: StreamCursor | undefined, head: StreamCursor, 
 }
 
 /** Transcript order: createdAt, then id (ids are ULIDs, so ties keep allocation order). */
-export const compareEntries = (a: { readonly createdAt: number; readonly id: string }, b: { readonly createdAt: number; readonly id: string }): number =>
-  a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+export const compareEntries = (
+  a: { readonly createdAt: number; readonly id: string },
+  b: { readonly createdAt: number; readonly id: string },
+): number => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
 /** Upsert rule shared by server and client: an older revision never replaces a newer one. */
-export const shouldReplaceEntry = (prev: TranscriptEntry | undefined, next: TranscriptEntry): boolean => !prev || prev.revision <= next.revision
+export const shouldReplaceEntry = (prev: TranscriptEntry | undefined, next: TranscriptEntry): boolean =>
+  !prev || prev.revision <= next.revision
 
 const isStreamingUpsert = (entry: TranscriptEntry): boolean =>
   ((entry.kind === "message" || entry.kind === "reasoning") && entry.streaming) ||
@@ -70,7 +93,8 @@ const withDeleted = <K, V>(map: ReadonlyMap<K, V>, key: K): ReadonlyMap<K, V> =>
   next.delete(key)
   return next
 }
-const byKey = <K, V>(values: ReadonlyArray<V>, key: (v: V) => K): ReadonlyMap<K, V> => new Map(values.map((v) => [key(v), v] as const))
+const byKey = <K, V>(values: ReadonlyArray<V>, key: (v: V) => K): ReadonlyMap<K, V> =>
+  new Map(values.map((v) => [key(v), v] as const))
 
 // ---------------------------------------------------------------------------- conversation projection
 export interface ConversationState {
@@ -107,7 +131,9 @@ export const emptyConversationState: ConversationState = {
 export const applyConversationChange = (state: ConversationState, change: ConversationChange): ConversationState => {
   switch (change.type) {
     case "entry.upserted":
-      return shouldReplaceEntry(state.entries.get(change.entry.id), change.entry) ? { ...state, entries: withSet(state.entries, change.entry.id, change.entry) } : state
+      return shouldReplaceEntry(state.entries.get(change.entry.id), change.entry)
+        ? { ...state, entries: withSet(state.entries, change.entry.id, change.entry) }
+        : state
     case "entry.removed":
       return { ...state, entries: withDeleted(state.entries, change.entryId) }
     case "request.upserted":
@@ -122,7 +148,10 @@ export const applyConversationChange = (state: ConversationState, change: Conver
 }
 
 /** The client reducer for `conversations.subscribe`. */
-export const applyConversationStreamItem = (state: ConversationState, item: ConversationStreamItem): ConversationState => {
+export const applyConversationStreamItem = (
+  state: ConversationState,
+  item: ConversationStreamItem,
+): ConversationState => {
   switch (item.kind) {
     case "snapshot":
       return {
@@ -145,7 +174,11 @@ export const applyConversationStreamItem = (state: ConversationState, item: Conv
     case "reset":
       return { ...emptyConversationState, conversation: state.conversation, skippedUnknown: state.skippedUnknown }
     case "unknown":
-      return { ...state, skippedUnknown: state.skippedUnknown + 1, ...(item.cursor && follows(state.cursor, item.cursor) ? { cursor: item.cursor } : {}) }
+      return {
+        ...state,
+        skippedUnknown: state.skippedUnknown + 1,
+        ...(item.cursor && follows(state.cursor, item.cursor) ? { cursor: item.cursor } : {}),
+      }
   }
 }
 
@@ -157,7 +190,8 @@ export const prependHistory = (state: ConversationState, page: TranscriptPage): 
 }
 
 /** Entries in transcript order. */
-export const transcriptOf = (state: Pick<ConversationState, "entries">): TranscriptEntry[] => [...state.entries.values()].sort(compareEntries)
+export const transcriptOf = (state: Pick<ConversationState, "entries">): TranscriptEntry[] =>
+  [...state.entries.values()].sort(compareEntries)
 
 /** Pending requests, oldest first. */
 export const pendingRequestsOf = (state: Pick<ConversationState, "requests">): RuntimeRequest[] =>
@@ -223,7 +257,12 @@ export const applyRosterChange = (state: RosterState, change: RosterChange): Ros
       const gone = [...state.tasks.values()].filter((t) => t.botId === change.botId)
       let tasks = state.tasks
       for (const t of gone) tasks = withDeleted(tasks, t.id)
-      return { ...state, bots: withDeleted(state.bots, change.botId), activities: withDeleted(state.activities, change.botId), tasks }
+      return {
+        ...state,
+        bots: withDeleted(state.bots, change.botId),
+        activities: withDeleted(state.activities, change.botId),
+        tasks,
+      }
     }
     case "conversation.upserted":
       return { ...state, conversations: withSet(state.conversations, change.conversation.id, change.conversation) }
@@ -242,7 +281,10 @@ export const applyRosterChange = (state: RosterState, change: RosterChange): Ros
     case "settings.updated":
       return { ...state, settings: change.settings }
     case "notification":
-      return { ...state, notifications: [change.notification, ...state.notifications].slice(0, ROSTER_NOTIFICATIONS_KEPT) }
+      return {
+        ...state,
+        notifications: [change.notification, ...state.notifications].slice(0, ROSTER_NOTIFICATIONS_KEPT),
+      }
     case "task.upserted":
       return { ...state, tasks: withTask(state.tasks, change.task) }
     case "task.removed":
@@ -276,7 +318,11 @@ export const applyRosterStreamItem = (state: RosterState, item: RosterStreamItem
     case "synchronized":
       return { ...state, synchronized: true, cursor: state.cursor ?? item.cursor }
     case "unknown":
-      return { ...state, skippedUnknown: state.skippedUnknown + 1, ...(item.cursor && follows(state.cursor, item.cursor) ? { cursor: item.cursor } : {}) }
+      return {
+        ...state,
+        skippedUnknown: state.skippedUnknown + 1,
+        ...(item.cursor && follows(state.cursor, item.cursor) ? { cursor: item.cursor } : {}),
+      }
   }
 }
 

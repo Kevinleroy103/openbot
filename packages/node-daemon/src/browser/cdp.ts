@@ -48,7 +48,10 @@ export const connectCdp = (wsUrl: string): Effect.Effect<CdpClient, CdpError, Sc
           const ws = new WebSocket(wsUrl)
           let nextId = 1
           let open = false
-          const pending = new Map<number, { resolve: (v: any) => void; reject: (e: CdpError) => void; method: string }>()
+          const pending = new Map<
+            number,
+            { resolve: (v: any) => void; reject: (e: CdpError) => void; method: string }
+          >()
           const listeners = new Set<(e: CdpEvent) => void>()
           let markClosed: () => void = () => undefined
           const closed = new Promise<void>((r) => (markClosed = r))
@@ -63,7 +66,8 @@ export const connectCdp = (wsUrl: string): Effect.Effect<CdpClient, CdpError, Sc
               const p = pending.get(msg.id)
               if (!p) return
               pending.delete(msg.id)
-              if (msg.error) p.reject(new CdpError({ method: p.method, message: String(msg.error.message ?? "CDP error") }))
+              if (msg.error)
+                p.reject(new CdpError({ method: p.method, message: String(msg.error.message ?? "CDP error") }))
               else p.resolve(msg.result ?? {})
               return
             }
@@ -80,7 +84,8 @@ export const connectCdp = (wsUrl: string): Effect.Effect<CdpClient, CdpError, Sc
           })
           ws.addEventListener("close", () => {
             open = false
-            for (const p of pending.values()) p.reject(new CdpError({ method: p.method, message: "browser connection closed" }))
+            for (const p of pending.values())
+              p.reject(new CdpError({ method: p.method, message: "browser connection closed" }))
             pending.clear()
             markClosed()
           })
@@ -89,8 +94,12 @@ export const connectCdp = (wsUrl: string): Effect.Effect<CdpClient, CdpError, Sc
           })
           ws.addEventListener("open", () => {
             open = true
-            const rawSend = (id: number, method: string, params: Record<string, unknown> | undefined, sessionId: string | undefined) =>
-              ws.send(JSON.stringify({ id, method, params: params ?? {}, ...(sessionId ? { sessionId } : {}) }))
+            const rawSend = (
+              id: number,
+              method: string,
+              params: Record<string, unknown> | undefined,
+              sessionId: string | undefined,
+            ) => ws.send(JSON.stringify({ id, method, params: params ?? {}, ...(sessionId ? { sessionId } : {}) }))
             const client: CdpClient = {
               send: <T>(method: string, params?: Record<string, unknown>, sessionId?: string, timeoutMs?: number) =>
                 Effect.callback<T, CdpError>((resume) => {
@@ -111,7 +120,10 @@ export const connectCdp = (wsUrl: string): Effect.Effect<CdpClient, CdpError, Sc
                 }).pipe(
                   Effect.timeoutOrElse({
                     duration: timeoutMs ?? DEFAULT_TIMEOUT_MS,
-                    orElse: () => Effect.fail(new CdpError({ method, message: `timed out after ${timeoutMs ?? DEFAULT_TIMEOUT_MS} ms` })),
+                    orElse: () =>
+                      Effect.fail(
+                        new CdpError({ method, message: `timed out after ${timeoutMs ?? DEFAULT_TIMEOUT_MS} ms` }),
+                      ),
                   }),
                 ),
               sendUnsafe: (method, params, sessionId) => {

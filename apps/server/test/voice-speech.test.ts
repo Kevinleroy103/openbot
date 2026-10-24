@@ -4,9 +4,11 @@ import { SentenceChunker, speakable } from "../src/voice/speech.ts"
 
 describe("voice speech", () => {
   test("the Bot's written answer becomes something to say", () => {
-    expect(speakable("**Tomorrow** is light:\n- 9:00 reminder\n- 11:30 Devenders ([invite](https://cal.example/x))\n\nNothing after `that`")).toBe(
-      "Tomorrow is light: 9:00 reminder. 11:30 Devenders (invite). Nothing after that.",
-    )
+    expect(
+      speakable(
+        "**Tomorrow** is light:\n- 9:00 reminder\n- 11:30 Devenders ([invite](https://cal.example/x))\n\nNothing after `that`",
+      ),
+    ).toBe("Tomorrow is light: 9:00 reminder. 11:30 Devenders (invite). Nothing after that.")
   })
 
   test("sentences come out as soon as they end; a long first one starts at a comma", () => {
@@ -18,7 +20,11 @@ describe("voice speech", () => {
     expect(chunker.flush()).toBeUndefined()
 
     const long = new SentenceChunker()
-    expect(long.push("Anthony replied in the eng channel this afternoon, saying the plan looks good")).toEqual(["Anthony replied in the eng channel this afternoon,"])
-    expect(long.push(" but wants Karl's access kept. ")).toEqual(["saying the plan looks good but wants Karl's access kept."])
+    expect(long.push("Anthony replied in the eng channel this afternoon, saying the plan looks good")).toEqual([
+      "Anthony replied in the eng channel this afternoon,",
+    ])
+    expect(long.push(" but wants Karl's access kept. ")).toEqual([
+      "saying the plan looks good but wants Karl's access kept.",
+    ])
   })
 })

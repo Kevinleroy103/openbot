@@ -84,7 +84,7 @@ const toPersistenceError = (message: string) => (cause: unknown) =>
   new PersistenceError({ message: `${message}: ${describeCause(cause)}`, cause })
 
 /** Applies the connection PRAGMAs that the client does not set itself (WAL + busy_timeout are client options). */
-const configureConnection = Effect.gen(function*() {
+const configureConnection = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
   yield* sql`PRAGMA synchronous = NORMAL`
   yield* sql`PRAGMA foreign_keys = ON`
@@ -99,12 +99,15 @@ export const PersistenceSqlLive = (
   options?: Pick<PersistenceOptions, "filename">,
 ): Layer.Layer<SqlClient.SqlClient | SqliteClient.SqliteClient, PersistenceError> =>
   Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const dirs = makeDataDir(dataDir)
-      yield* ensureDirectory("Persistence.init", dirs.root).pipe(Effect.mapError(toPersistenceError("Cannot create the data dir")))
-      const client = yield* SqliteClient.make({ filename: options?.filename ?? dirs.database, busyTimeout: "5 seconds" }).pipe(
-        Effect.mapError(toPersistenceError("Cannot open the database")),
+      yield* ensureDirectory("Persistence.init", dirs.root).pipe(
+        Effect.mapError(toPersistenceError("Cannot create the data dir")),
       )
+      const client = yield* SqliteClient.make({
+        filename: options?.filename ?? dirs.database,
+        busyTimeout: "5 seconds",
+      }).pipe(Effect.mapError(toPersistenceError("Cannot open the database")))
       yield* configureConnection.pipe(
         Effect.provideService(SqlClient.SqlClient, client),
         Effect.mapError(toPersistenceError("Cannot configure the database")),
@@ -121,7 +124,7 @@ export const PersistenceSqlLive = (
 export const makeRepositories = (
   dirs: DataDirShape,
 ): Effect.Effect<Context.Context<RepositoryPorts>, RepoError, SqlClient.SqlClient | IdGen> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     yield* ensureDirectory("Persistence.init", dirs.attachments)
     yield* ensureDirectory("Persistence.init", dirs.skillsLib)
     const skills = yield* makeFileSkillStore(dirs)
@@ -156,7 +159,7 @@ export const makeBootRecovery = (
   repositories: Context.Context<RepositoryPorts>,
   options?: Pick<PersistenceOptions, "killProcessGroup">,
 ): Effect.Effect<BootRecovery["Service"], never, SqlClient.SqlClient> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
     const run: Effect.Effect<BootRecoveryReport, RepoError> = runBootRecovery({
       killProcessGroup: options?.killProcessGroup ?? defaultKillProcessGroup,
@@ -164,7 +167,9 @@ export const makeBootRecovery = (
       sql.withTransaction,
       Effect.provideContext(repositories),
       Effect.mapError((cause) =>
-        cause instanceof RepoError ? cause : new RepoError({ op: "BootRecovery.run", message: describeCause(cause), cause })
+        cause instanceof RepoError
+          ? cause
+          : new RepoError({ op: "BootRecovery.run", message: describeCause(cause), cause }),
       ),
       Effect.withSpan("BootRecovery.run"),
     )
@@ -177,7 +182,7 @@ export const PersistenceRepositoriesLive = (
   options?: Pick<PersistenceOptions, "killProcessGroup">,
 ): Layer.Layer<RepositoryPorts | BootRecovery, PersistenceError, SqlClient.SqlClient | IdGen> =>
   Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const repositories = yield* makeRepositories(makeDataDir(dataDir)).pipe(
         Effect.mapError(toPersistenceError("Cannot initialize the stores")),
       )

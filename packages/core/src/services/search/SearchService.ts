@@ -40,7 +40,13 @@ import {
   type SearchScope,
   TurnRepo,
 } from "../../ports/repos.ts"
-import { type BotChatRef, type BotReadPage, CANT_READ_MESSAGE, type SearchInput, SearchService } from "../../ports/services.ts"
+import {
+  type BotChatRef,
+  type BotReadPage,
+  CANT_READ_MESSAGE,
+  type SearchInput,
+  SearchService,
+} from "../../ports/services.ts"
 import { visiblePage, visiblePageAfter, voiceWork } from "../conversation/internal/summary.ts"
 import { compact, findBotByRef, isHousekeeping, orDie } from "../conversation/internal/util.ts"
 import { decodeSearchCursor, encodeSearchCursor, parseSearchQuery, parseSnippet } from "./text.ts"
@@ -60,7 +66,7 @@ export const SearchServiceLive: Layer.Layer<
   SearchRepo | ConversationRepo | BotRepo | EntryRepo | TurnRepo
 > = Layer.effect(
   SearchService,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const repo = yield* SearchRepo
     const conversations = yield* ConversationRepo
     const bots = yield* BotRepo
@@ -77,24 +83,28 @@ export const SearchServiceLive: Layer.Layer<
       const { doc } = hit
       const { snippet, highlights } = parseSnippet(hit.snippet)
       return compact<SearchHit>({
-        ref: doc.source === "task" ? { kind: "task", taskId: doc.refId as TaskId } : { kind: "entry", entryId: doc.refId as EntryId },
+        ref:
+          doc.source === "task"
+            ? { kind: "task", taskId: doc.refId as TaskId }
+            : { kind: "entry", entryId: doc.refId as EntryId },
         conversationId: doc.conversationId,
         kind: doc.kind,
-        author: doc.authorKind === "user"
-          ? { kind: "owner" }
-          : doc.authorKind === "bot" && doc.authorBotId !== undefined
-          ? { kind: "bot", botId: doc.authorBotId }
-          : { kind: "system" },
+        author:
+          doc.authorKind === "user"
+            ? { kind: "owner" }
+            : doc.authorKind === "bot" && doc.authorBotId !== undefined
+              ? { kind: "bot", botId: doc.authorBotId }
+              : { kind: "system" },
         toBotId: doc.toBotId,
         turnId: doc.turnId,
         createdAt: doc.createdAt as SearchHit["createdAt"],
         jumpEntryId: hit.jumpEntryId,
         snippet,
         highlights,
-        })
+      })
     }
 
-    const search = Effect.fn("SearchService.search")(function*(scope: SearchScope, input: SearchInput) {
+    const search = Effect.fn("SearchService.search")(function* (scope: SearchScope, input: SearchInput) {
       yield* checkQuery(input.query)
       if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > SEARCH_PAGE_MAX) {
         return yield* invalid(`limit must be between 1 and ${SEARCH_PAGE_MAX}.`)
@@ -109,25 +119,33 @@ export const SearchServiceLive: Layer.Layer<
       const match = parseSearchQuery(input.query)
       if (match === undefined) {
         return {
-          page: compact<SearchPage>({ hits: [], nextCursor: null, totalCapped: 0, terms: [], indexing: indexing || undefined }),
+          page: compact<SearchPage>({
+            hits: [],
+            nextCursor: null,
+            totalCapped: 0,
+            terms: [],
+            indexing: indexing || undefined,
+          }),
           hitCursors: [],
         }
       }
-      const page = yield* orDie(repo.query({
-        scope,
-        match,
-        kinds: input.kinds ?? DEFAULT_SEARCH_KINDS,
-        conversationIds: input.conversationIds,
-        botIds: input.botIds,
-        senders: input.senders,
-        exchangeWith: input.exchangeWith,
-        from: input.from,
-        to: input.to,
-        sort,
-        after,
-        limit: input.limit,
-        ...(scope.kind === "bot" ? { totalCap: BOT_SEARCH_TOTAL_CAP } : {}),
-      }))
+      const page = yield* orDie(
+        repo.query({
+          scope,
+          match,
+          kinds: input.kinds ?? DEFAULT_SEARCH_KINDS,
+          conversationIds: input.conversationIds,
+          botIds: input.botIds,
+          senders: input.senders,
+          exchangeWith: input.exchangeWith,
+          from: input.from,
+          to: input.to,
+          sort,
+          after,
+          limit: input.limit,
+          ...(scope.kind === "bot" ? { totalCap: BOT_SEARCH_TOTAL_CAP } : {}),
+        }),
+      )
       return {
         page: compact<SearchPage>({
           hits: page.hits.map(toHit),
@@ -142,7 +160,7 @@ export const SearchServiceLive: Layer.Layer<
             sort === "relevance"
               ? { sort, rank, createdAt: doc.createdAt, refId: doc.refId }
               : { sort, createdAt: doc.createdAt, refId: doc.refId },
-          )
+          ),
         ),
       }
     })
@@ -153,11 +171,13 @@ export const SearchServiceLive: Layer.Layer<
     const isMember = (botId: BotId, conversationId: ConversationId) =>
       orDie(conversations.members(conversationId)).pipe(Effect.map((members) => members.includes(botId)))
     const botOf = (botId: BotId) =>
-      orDie(bots.get(botId)).pipe(Effect.flatMap(Option.match({ onNone: () => Effect.fail(cantRead()), onSome: Effect.succeed })))
+      orDie(bots.get(botId)).pipe(
+        Effect.flatMap(Option.match({ onNone: () => Effect.fail(cantRead()), onSome: Effect.succeed })),
+      )
 
     /** The other bot of a bot-to-bot message of `botId` in a DM, if `entry` is one. */
     const peerOf = (botId: BotId, entry: TranscriptEntry) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (entry.kind !== "message" || entry.author.kind !== "bot" || entry.toBotId === undefined) return undefined
         const conversation = yield* orDie(conversations.get(entry.conversationId))
         if (Option.isNone(conversation) || conversation.value.kind !== "direct") return undefined
@@ -167,19 +187,21 @@ export const SearchServiceLive: Layer.Layer<
       })
 
     /** What a bot reads in a chat: no reasoning, audit or housekeeping lines; its own steps when asked. */
-    const shown = (botId: BotId, includeTools: boolean) => (entry: TranscriptEntry): boolean => {
-      switch (entry.kind) {
-        case "unknown":
-        case "reasoning":
-          return false
-        case "tool-call":
-          return includeTools && entry.author.kind === "bot" && entry.author.botId === botId
-        case "event":
-          return entry.event.type !== "auto-decided" && !isHousekeeping(entry)
-        default:
-          return true
+    const shown =
+      (botId: BotId, includeTools: boolean) =>
+      (entry: TranscriptEntry): boolean => {
+        switch (entry.kind) {
+          case "unknown":
+          case "reasoning":
+            return false
+          case "tool-call":
+            return includeTools && entry.author.kind === "bot" && entry.author.botId === botId
+          case "event":
+            return entry.event.type !== "auto-decided" && !isHousekeeping(entry)
+          default:
+            return true
+        }
       }
-    }
 
     interface Scan {
       readonly entries: ReadonlyArray<TranscriptEntry>
@@ -203,7 +225,7 @@ export const SearchServiceLive: Layer.Layer<
       want: number,
       keep: (entry: TranscriptEntry) => Effect.Effect<boolean>,
     ): Effect.Effect<Scan> =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (want <= 0) return { entries: [], more: true }
         const older = direction === "older"
         const size = Math.max(want * 2, 20)
@@ -215,24 +237,38 @@ export const SearchServiceLive: Layer.Layer<
         /** One slice from `at` towards `direction`, in order. */
         const slice = (at: EntryPosition | undefined): Effect.Effect<Scan> =>
           peer !== undefined
-            ? orDie(entries.listExchange({
-              botIds: [bot.id, peer.id],
-              conversationIds: [bot.directConversationId, peer.directConversationId],
-              direction,
-              from: at,
-              limit: size,
-            }))
+            ? orDie(
+                entries.listExchange({
+                  botIds: [bot.id, peer.id],
+                  conversationIds: [bot.directConversationId, peer.directConversationId],
+                  direction,
+                  from: at,
+                  limit: size,
+                }),
+              )
             : chat.kind === "exchange"
-            ? Effect.succeed({ entries: [], more: false })
-            : older
-            ? orDie(Effect.provide(
-              visiblePage({ conversationId: chat.conversationId, before: at === undefined ? undefined : cursorOf(at), limit: size }),
-              transcript,
-            )).pipe(Effect.map((page) => ({ entries: page.entries, more: page.hasMoreBefore })))
-            : orDie(Effect.provide(
-              visiblePageAfter({ conversationId: chat.conversationId, after: cursorOf(at ?? { createdAt: -1, id: "0" }), limit: size }),
-              transcript,
-            )).pipe(Effect.map((page) => ({ entries: page.entries, more: page.hasMoreAfter })))
+              ? Effect.succeed({ entries: [], more: false })
+              : older
+                ? orDie(
+                    Effect.provide(
+                      visiblePage({
+                        conversationId: chat.conversationId,
+                        before: at === undefined ? undefined : cursorOf(at),
+                        limit: size,
+                      }),
+                      transcript,
+                    ),
+                  ).pipe(Effect.map((page) => ({ entries: page.entries, more: page.hasMoreBefore })))
+                : orDie(
+                    Effect.provide(
+                      visiblePageAfter({
+                        conversationId: chat.conversationId,
+                        after: cursorOf(at ?? { createdAt: -1, id: "0" }),
+                        limit: size,
+                      }),
+                      transcript,
+                    ),
+                  ).pipe(Effect.map((page) => ({ entries: page.entries, more: page.hasMoreAfter })))
         const kept: Array<TranscriptEntry> = []
         let at = from
         while (true) {
@@ -252,19 +288,27 @@ export const SearchServiceLive: Layer.Layer<
         }
       })
 
-    const resolveForBot = Effect.fn("SearchService.resolveForBot")(function*(
+    const resolveForBot = Effect.fn("SearchService.resolveForBot")(function* (
       botId: BotId,
       current: ConversationId,
       ref: string | undefined,
       fallback: "all" | "current",
     ) {
       const bot = yield* botOf(botId)
-      const raw = (ref ?? "").trim().replace(/^["']|["']$/g, "").trim()
+      const raw = (ref ?? "")
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .trim()
       const key = raw.toLowerCase()
-      if (key === "") return fallback === "all" ? { kind: "all" } as const : { kind: "conversation", conversationId: current } as const
+      if (key === "")
+        return fallback === "all"
+          ? ({ kind: "all" } as const)
+          : ({ kind: "conversation", conversationId: current } as const)
       if (key === "all") return { kind: "all" } as const
-      if (key === "current" || key === "this" || key === "here") return { kind: "conversation", conversationId: current } as const
-      if (key === "owner" || key === "dm" || key === "my dm") return { kind: "conversation", conversationId: bot.directConversationId } as const
+      if (key === "current" || key === "this" || key === "here")
+        return { kind: "conversation", conversationId: current } as const
+      if (key === "owner" || key === "dm" || key === "my dm")
+        return { kind: "conversation", conversationId: bot.directConversationId } as const
       const team = yield* orDie(bots.list)
       const teammate = findBotByRef(team, raw)
       if (teammate !== undefined) {
@@ -285,14 +329,17 @@ export const SearchServiceLive: Layer.Layer<
       )
     })
 
-    const readForBot = Effect.fn("SearchService.readForBot")(function*(botId: BotId, input: {
-      readonly chat?: ReadChat | undefined
-      readonly around?: EntryId | undefined
-      readonly before?: EntryId | undefined
-      readonly after?: EntryId | undefined
-      readonly limit: number
-      readonly includeTools: boolean
-    }) {
+    const readForBot = Effect.fn("SearchService.readForBot")(function* (
+      botId: BotId,
+      input: {
+        readonly chat?: ReadChat | undefined
+        readonly around?: EntryId | undefined
+        readonly before?: EntryId | undefined
+        readonly after?: EntryId | undefined
+        readonly limit: number
+        readonly includeTools: boolean
+      },
+    ) {
       const { limit } = input
       if (!Number.isInteger(limit) || limit < 1 || limit > MAX_BOT_READ) {
         return yield* invalid(`limit must be between 1 and ${MAX_BOT_READ}.`)
@@ -305,7 +352,8 @@ export const SearchServiceLive: Layer.Layer<
       const anchor = anchorId === undefined ? undefined : Option.getOrUndefined(yield* orDie(entries.get(anchorId)))
       // An entry the bot may not see (another bot's step or reasoning, a voice call's work, a hidden
       // line) is refused as if it did not exist. Its own steps it may open without include_tools.
-      if (anchorId !== undefined && (anchor === undefined || !(yield* visible(botId, true)(anchor)))) return yield* cantRead()
+      if (anchorId !== undefined && (anchor === undefined || !(yield* visible(botId, true)(anchor))))
+        return yield* cantRead()
 
       // the chat: asked for, or the one the entry belongs to as this bot may read it
       let chat = input.chat
@@ -321,11 +369,15 @@ export const SearchServiceLive: Layer.Layer<
           chat.kind === "conversation"
             ? chat.conversationId !== anchor.conversationId
             : (yield* peerOf(botId, anchor)) !== chat.peerBotId
-        ) return yield* invalid("That message is not in that conversation.")
+        )
+          return yield* invalid("That message is not in that conversation.")
       }
       if (chat === undefined) return yield* invalid("Name the conversation to read.")
       if (chat.kind === "conversation" && !(yield* isMember(botId, chat.conversationId))) return yield* cantRead()
-      if (chat.kind === "exchange" && (chat.peerBotId === botId || Option.isNone(yield* orDie(bots.get(chat.peerBotId))))) {
+      if (
+        chat.kind === "exchange" &&
+        (chat.peerBotId === botId || Option.isNone(yield* orDie(bots.get(chat.peerBotId))))
+      ) {
         return yield* cantRead()
       }
 
@@ -364,17 +416,18 @@ export const SearchServiceLive: Layer.Layer<
       const page: BotReadPage = {
         chat,
         entries: list,
-        olderFrom: moreBefore ? first?.id ?? input.after : undefined,
-        newerFrom: moreAfter ? last?.id ?? input.before : undefined,
+        olderFrom: moreBefore ? (first?.id ?? input.after) : undefined,
+        newerFrom: moreAfter ? (last?.id ?? input.before) : undefined,
       }
       return page
     })
 
     return SearchService.of({
       query: (input) => Effect.map(search({ kind: "owner" }, input), ({ page }) => page),
-      forBot: (botId, input) => Effect.map(search({ kind: "bot", botId }, input), ({ page, hitCursors }) => ({ ...page, hitCursors })),
+      forBot: (botId, input) =>
+        Effect.map(search({ kind: "bot", botId }, input), ({ page, hitCursors }) => ({ ...page, hitCursors })),
 
-      inConversation: Effect.fn("SearchService.inConversation")(function*(input) {
+      inConversation: Effect.fn("SearchService.inConversation")(function* (input) {
         yield* checkQuery(input.query)
         if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > SEARCH_POSITIONS_MAX) {
           return yield* invalid(`limit must be between 1 and ${SEARCH_POSITIONS_MAX}.`)
@@ -405,7 +458,7 @@ export const SearchServiceLive: Layer.Layer<
       resolveForBot,
       readForBot,
       chats: (ids) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const found = new Map<ConversationId, Conversation>()
           for (const id of new Set(ids)) {
             const conversation = yield* orDie(conversations.get(id))

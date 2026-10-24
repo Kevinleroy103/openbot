@@ -91,7 +91,12 @@ export const parseKeyCombo = (combo: string): KeyEventParams | undefined => {
   const last = parts[parts.length - 1] ?? ""
   const lastAlias = MODIFIER_ALIASES[last.toLowerCase()]
   if (lastAlias) {
-    return { key: lastAlias, code: `${lastAlias}Left`, windowsVirtualKeyCode: { Alt: 18, Control: 17, Meta: 91, Shift: 16 }[lastAlias], modifiers: modifiers | Modifier[lastAlias] }
+    return {
+      key: lastAlias,
+      code: `${lastAlias}Left`,
+      windowsVirtualKeyCode: { Alt: 18, Control: 17, Meta: 91, Shift: 16 }[lastAlias],
+      modifiers: modifiers | Modifier[lastAlias],
+    }
   }
   const k = describeKey(last)
   if (!k) return undefined
@@ -107,5 +112,13 @@ export const parseKeyCombo = (combo: string): KeyEventParams | undefined => {
 }
 
 /** Modifier bits from a `{alt, ctrl, meta, shift}` object. */
-export const modifierBits = (m: { readonly alt?: boolean | undefined; readonly ctrl?: boolean | undefined; readonly meta?: boolean | undefined; readonly shift?: boolean | undefined } | undefined): number =>
-  m ? (m.alt ? 1 : 0) | (m.ctrl ? 2 : 0) | (m.meta ? 4 : 0) | (m.shift ? 8 : 0) : 0
+export const modifierBits = (
+  m:
+    | {
+        readonly alt?: boolean | undefined
+        readonly ctrl?: boolean | undefined
+        readonly meta?: boolean | undefined
+        readonly shift?: boolean | undefined
+      }
+    | undefined,
+): number => (m ? (m.alt ? 1 : 0) | (m.ctrl ? 2 : 0) | (m.meta ? 4 : 0) | (m.shift ? 8 : 0) : 0)

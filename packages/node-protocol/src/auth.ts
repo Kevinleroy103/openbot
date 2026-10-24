@@ -202,7 +202,10 @@ export const verifyUpgradeAuth = <E, R>(options: {
   Effect.gen(function* () {
     const p = parseUpgradeAuth(options.header)
     if (!p) {
-      return yield* new UpgradeAuthError({ reason: "malformed", message: "missing or malformed OpenBot-Node authorization" })
+      return yield* new UpgradeAuthError({
+        reason: "malformed",
+        message: "missing or malformed OpenBot-Node authorization",
+      })
     }
     const publicKey = yield* options.lookupKey(p.nodeId)
     if (!publicKey) {

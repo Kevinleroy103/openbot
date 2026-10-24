@@ -9,7 +9,17 @@ import { Effect } from "effect"
 import { mkdirSync } from "node:fs"
 import { deflateSync } from "node:zlib"
 import { join } from "node:path"
-import { CHEAP, connect, converse, createBot, LIVE, type LiveBrain, report, startLiveBrain, toolCalls } from "./support.ts"
+import {
+  CHEAP,
+  connect,
+  converse,
+  createBot,
+  LIVE,
+  type LiveBrain,
+  report,
+  startLiveBrain,
+  toolCalls,
+} from "./support.ts"
 
 let brain: LiveBrain
 
@@ -39,7 +49,12 @@ const png = (): Uint8Array => {
   new DataView(ihdr.buffer).setUint32(4, 64)
   ihdr.set([8, 2, 0, 0, 0], 8)
   const raw = new Uint8Array(64 * (64 * 3 + 1)).map((_, i) => (i % 193 === 0 ? 0 : 200))
-  const parts = [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", new Uint8Array())]
+  const parts = [
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", new Uint8Array()),
+  ]
   return new Uint8Array(parts.flatMap((p) => [...p]))
 }
 
@@ -51,23 +66,38 @@ describe.skipIf(!LIVE)("live: send_file", () => {
     await brain?.close()
   }, 60_000)
 
-  test("claude: shows the owner a PNG from its workspace with send_file", () =>
-    brain.run(Effect.gen(function*() {
-      const client = yield* connect(brain.server, brain.cookie)
-      const bot: Bot = yield* createBot(client, "Painter", "claude")
-      const out = join(brain.server.dataDir, "bots", bot.id, "workspace", "output")
-      mkdirSync(out, { recursive: true })
-      yield* Effect.promise(() => Bun.write(join(out, "swatch.png"), png()))
-      const result = yield* converse(
-        client,
-        bot.directConversationId,
-        "I rendered output/swatch.png in your workspace. Please show it to me here.",
-        { timeout: 240_000 },
-      )
-      report(`claude send_file (${CHEAP.claude.model})`, result.entries, result.turns)
-      expect(result.turns.every((t) => t.status === "completed")).toBe(true)
-      expect(toolCalls(result.entries).some((t) => t.kind === "tool-call" && t.name.includes("send_file"))).toBe(true)
-      const withFile = result.entries.find((e) => e.kind === "message" && e.role === "bot" && e.attachments.length > 0)
-      expect(withFile?.kind === "message" ? withFile.attachments[0] : undefined).toMatchObject({ name: "swatch.png", mime: "image/png", width: 64, height: 64 })
-    })), 300_000)
+  test(
+    "claude: shows the owner a PNG from its workspace with send_file",
+    () =>
+      brain.run(
+        Effect.gen(function* () {
+          const client = yield* connect(brain.server, brain.cookie)
+          const bot: Bot = yield* createBot(client, "Painter", "claude")
+          const out = join(brain.server.dataDir, "bots", bot.id, "workspace", "output")
+          mkdirSync(out, { recursive: true })
+          yield* Effect.promise(() => Bun.write(join(out, "swatch.png"), png()))
+          const result = yield* converse(
+            client,
+            bot.directConversationId,
+            "I rendered output/swatch.png in your workspace. Please show it to me here.",
+            { timeout: 240_000 },
+          )
+          report(`claude send_file (${CHEAP.claude.model})`, result.entries, result.turns)
+          expect(result.turns.every((t) => t.status === "completed")).toBe(true)
+          expect(toolCalls(result.entries).some((t) => t.kind === "tool-call" && t.name.includes("send_file"))).toBe(
+            true,
+          )
+          const withFile = result.entries.find(
+            (e) => e.kind === "message" && e.role === "bot" && e.attachments.length > 0,
+          )
+          expect(withFile?.kind === "message" ? withFile.attachments[0] : undefined).toMatchObject({
+            name: "swatch.png",
+            mime: "image/png",
+            width: 64,
+            height: 64,
+          })
+        }),
+      ),
+    300_000,
+  )
 })

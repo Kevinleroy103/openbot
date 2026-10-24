@@ -43,7 +43,8 @@ export const outboxAtom = Atom.family((conversationId: ConversationId) =>
 export const SEND_RETRY_TIMES = 4
 
 const describeError = (error: unknown): string => {
-  if (error instanceof RpcClientError.RpcClientError) return "Not connected to OpenBot. Check your connection and retry."
+  if (error instanceof RpcClientError.RpcClientError)
+    return "Not connected to OpenBot. Check your connection and retry."
   if (typeof error === "object" && error !== null) {
     const e = error as { _tag?: unknown; message?: unknown; reason?: unknown; entity?: unknown }
     if (typeof e.message === "string" && e.message.length > 0) return e.message
@@ -77,51 +78,52 @@ const nonceFor = (draft: SendDraft): string => {
   return fresh
 }
 
-export const sendMessageAtom = OpenBotClient.runtime.fn(
-  (draft: SendDraft) => once(draft, sendOnce(draft)),
-  { concurrent: true },
-)
+export const sendMessageAtom = OpenBotClient.runtime.fn((draft: SendDraft) => once(draft, sendOnce(draft)), {
+  concurrent: true,
+})
 
 const sendOnce = (draft: SendDraft) =>
-    Effect.gen(function* () {
-      const registry = yield* AtomRegistry.AtomRegistry
-      const client = yield* OpenBotClient
-      const clientNonce = nonceFor(draft)
-      const input = { ...draft, clientNonce } as SendInput
-      const outbox = outboxAtom(input.conversationId)
-      const existing = registry.get(outbox).find((o) => o.clientNonce === clientNonce)
-      const base: OutboxItem = { clientNonce, input, status: "sending", createdAt: existing?.createdAt ?? Date.now() }
-      registry.update(outbox, (items) => upsertItem(items, base))
+  Effect.gen(function* () {
+    const registry = yield* AtomRegistry.AtomRegistry
+    const client = yield* OpenBotClient
+    const clientNonce = nonceFor(draft)
+    const input = { ...draft, clientNonce } as SendInput
+    const outbox = outboxAtom(input.conversationId)
+    const existing = registry.get(outbox).find((o) => o.clientNonce === clientNonce)
+    const base: OutboxItem = { clientNonce, input, status: "sending", createdAt: existing?.createdAt ?? Date.now() }
+    registry.update(outbox, (items) => upsertItem(items, base))
 
-      return yield* client("messages.send", input).pipe(
-        Effect.retry({
-          while: (e) => e instanceof RpcClientError.RpcClientError,
-          schedule: Schedule.exponential("250 millis", 2),
-          times: SEND_RETRY_TIMES,
+    return yield* client("messages.send", input).pipe(
+      Effect.retry({
+        while: (e) => e instanceof RpcClientError.RpcClientError,
+        schedule: Schedule.exponential("250 millis", 2),
+        times: SEND_RETRY_TIMES,
+      }),
+      Effect.tap((result) =>
+        Effect.sync(() => {
+          // A duplicate means the entry already exists (and was already streamed): nothing to wait for.
+          if (result.disposition === "duplicate") {
+            registry.update(outbox, (items) => items.filter((o) => o.clientNonce !== clientNonce))
+            return
+          }
+          // The stream may already have delivered the entry and removed the item.
+          if (registry.get(outbox).some((o) => o.clientNonce === clientNonce)) {
+            registry.update(outbox, (items) => upsertItem(items, { ...base, status: "sent", result }))
+          }
         }),
-        Effect.tap((result) =>
-          Effect.sync(() => {
-            // A duplicate means the entry already exists (and was already streamed): nothing to wait for.
-            if (result.disposition === "duplicate") {
-              registry.update(outbox, (items) => items.filter((o) => o.clientNonce !== clientNonce))
-              return
-            }
-            // The stream may already have delivered the entry and removed the item.
-            if (registry.get(outbox).some((o) => o.clientNonce === clientNonce)) {
-              registry.update(outbox, (items) => upsertItem(items, { ...base, status: "sent", result }))
-            }
-          }),
-        ),
-        Effect.tapError((error) =>
-          Effect.sync(() => {
-            // Gone already = its entry arrived on the stream, so it was delivered after all.
-            if (registry.get(outbox).some((o) => o.clientNonce === clientNonce)) {
-              registry.update(outbox, (items) => upsertItem(items, { ...base, status: "failed", error: describeError(error) }))
-            }
-          }),
-        ),
-      )
-    })
+      ),
+      Effect.tapError((error) =>
+        Effect.sync(() => {
+          // Gone already = its entry arrived on the stream, so it was delivered after all.
+          if (registry.get(outbox).some((o) => o.clientNonce === clientNonce)) {
+            registry.update(outbox, (items) =>
+              upsertItem(items, { ...base, status: "failed", error: describeError(error) }),
+            )
+          }
+        }),
+      ),
+    )
+  })
 
 /** Re-sends a failed outbox item with its original nonce (idempotent). Set with `{conversationId, clientNonce}`. */
 export const retrySendAtom = Atom.writable(

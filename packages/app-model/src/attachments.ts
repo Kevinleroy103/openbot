@@ -57,7 +57,12 @@ export const formatBytes = (n: number | undefined): string => {
 /** Upper-case extension label for a file card ("MP4", "ZIP"); "" when there is none. */
 export const extensionLabel = (name: string): string => {
   const dot = name.lastIndexOf(".")
-  return dot <= 0 || dot === name.length - 1 ? "" : name.slice(dot + 1).toUpperCase().slice(0, 6)
+  return dot <= 0 || dot === name.length - 1
+    ? ""
+    : name
+        .slice(dot + 1)
+        .toUpperCase()
+        .slice(0, 6)
 }
 
 /** The URL that downloads instead of opening (`Content-Disposition: attachment`). */
@@ -82,12 +87,37 @@ export const previewTooLarge = (byteSize: number | undefined): boolean =>
   byteSize !== undefined && byteSize > MAX_PREVIEW_BYTES
 
 const CODE_EXTENSIONS = new Set([
-  "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "go", "sh", "bash", "zsh",
-  "css", "json", "jsonl", "ndjson", "yaml", "yml", "toml", "xml",
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "py",
+  "rs",
+  "go",
+  "sh",
+  "bash",
+  "zsh",
+  "css",
+  "json",
+  "jsonl",
+  "ndjson",
+  "yaml",
+  "yml",
+  "toml",
+  "xml",
 ])
 const CODE_MIMES = new Set([
-  "application/json", "application/x-ndjson", "application/yaml", "application/toml",
-  "application/xml", "application/x-sh", "text/javascript", "text/css", "text/x-python",
+  "application/json",
+  "application/x-ndjson",
+  "application/yaml",
+  "application/toml",
+  "application/xml",
+  "application/x-sh",
+  "text/javascript",
+  "text/css",
+  "text/x-python",
 ])
 
 /** Lower-case extension of a file name; "" when there is none (dotfiles included). */

@@ -12,20 +12,22 @@ import { openStreamWriter, readBytesFile, removePath, safeSegment, writeFileAtom
 const RecordJson = jsonCodec(AttachmentRecord, "attachment")
 
 export const makeFileAttachmentStore = (dataDir: DataDirShape) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
     const ids = yield* IdGen
 
     const getRecord = (op: string, id: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const rows = yield* sql<{ payload_json: string }>`SELECT payload_json FROM attachments WHERE id = ${id}`
         const row = rows[0]
-        return row === undefined ? Option.none<AttachmentRecord>() : Option.some(yield* RecordJson.decode(op, row.payload_json, id))
+        return row === undefined
+          ? Option.none<AttachmentRecord>()
+          : Option.some(yield* RecordJson.decode(op, row.payload_json, id))
       }).pipe(repoOp(op))
 
     return AttachmentStore.of({
       put: (input) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const id = yield* ids.attachmentId
           const path = joinPath(dataDir.attachments, yield* safeSegment("AttachmentStore.put", id))
           const createdAt = yield* Clock.currentTimeMillis
@@ -45,7 +47,7 @@ export const makeFileAttachmentStore = (dataDir: DataDirShape) =>
           return record
         }).pipe(repoOp("AttachmentStore.put")),
       putStream: (input) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const id = yield* ids.attachmentId
           const path = joinPath(dataDir.attachments, yield* safeSegment("AttachmentStore.putStream", id))
           // chunks go to a sibling temp file as they arrive; renamed into place once complete
@@ -74,27 +76,33 @@ export const makeFileAttachmentStore = (dataDir: DataDirShape) =>
         }),
       get: (id) => getRecord("AttachmentStore.get", id),
       read: (id) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const record = yield* getRecord("AttachmentStore.read", id)
           if (Option.isNone(record)) return Option.none()
           const bytes = yield* readBytesFile("AttachmentStore.read", record.value.path)
           return bytes === undefined ? Option.none() : Option.some(bytes)
         }),
       stream: (id) =>
-        Stream.unwrap(Effect.gen(function*() {
-          const record = yield* getRecord("AttachmentStore.stream", id)
-          if (Option.isNone(record)) {
-            return yield* Effect.fail(new RepoError({ op: "AttachmentStore.stream", message: `No attachment ${id}` }))
-          }
-          const path = record.value.path
-          return Stream.fromReadableStream({
-            evaluate: () => Bun.file(path).stream(),
-            onError: (cause) =>
-              new RepoError({ op: "AttachmentStore.stream", message: `Cannot read ${path}: ${cause instanceof Error ? cause.message : String(cause)}`, cause }),
-          })
-        })),
+        Stream.unwrap(
+          Effect.gen(function* () {
+            const record = yield* getRecord("AttachmentStore.stream", id)
+            if (Option.isNone(record)) {
+              return yield* Effect.fail(new RepoError({ op: "AttachmentStore.stream", message: `No attachment ${id}` }))
+            }
+            const path = record.value.path
+            return Stream.fromReadableStream({
+              evaluate: () => Bun.file(path).stream(),
+              onError: (cause) =>
+                new RepoError({
+                  op: "AttachmentStore.stream",
+                  message: `Cannot read ${path}: ${cause instanceof Error ? cause.message : String(cause)}`,
+                  cause,
+                }),
+            })
+          }),
+        ),
       delete: (id) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const record = yield* getRecord("AttachmentStore.delete", id)
           if (Option.isNone(record)) return false
           yield* sql`DELETE FROM attachments WHERE id = ${id}`.pipe(repoOp("AttachmentStore.delete"))

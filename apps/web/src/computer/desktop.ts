@@ -42,7 +42,8 @@ export interface CloseInfo {
 export type CloseVerdict = "lease-lost" | "asleep" | "retry"
 
 export const classifyClose = (c: CloseInfo): CloseVerdict => {
-  if (c.code === DesktopCloseCodes.controlRefused || c.code === 1008) return c.mode === "control" ? "lease-lost" : "retry"
+  if (c.code === DesktopCloseCodes.controlRefused || c.code === 1008)
+    return c.mode === "control" ? "lease-lost" : "retry"
   if (c.code === DesktopCloseCodes.released && c.mode === "control") return "lease-lost"
   if (c.code === DesktopCloseCodes.reset) return "asleep"
   return "retry"
@@ -93,11 +94,14 @@ export const UNREACHABLE_AFTER = 2
 export const desktopReducer = (state: DesktopConn, event: DesktopEvent): DesktopConn => {
   switch (event.type) {
     case "enable":
-      return state.phase === "idle" || state.phase === "asleep" ? { phase: "connecting", failures: 0, message: undefined } : state
+      return state.phase === "idle" || state.phase === "asleep"
+        ? { phase: "connecting", failures: 0, message: undefined }
+        : state
     case "disable":
       return state.phase === "idle" ? state : { ...state, phase: "idle" }
     case "attempt":
-      if (state.phase === "idle" || state.phase === "asleep") return { phase: "connecting", failures: 0, message: undefined }
+      if (state.phase === "idle" || state.phase === "asleep")
+        return { phase: "connecting", failures: 0, message: undefined }
       if (state.phase === "live") return { ...state, phase: "connecting" }
       return state
     case "connected":
@@ -129,7 +133,11 @@ export const desktopAspect = (status: Pick<ComputerStatus, "width" | "height"> |
 }
 
 /** Contain-fit a `w/h = aspect` box into `width × height` (letterboxing): the fitted size. */
-export const containFit = (width: number, height: number, aspect: number): { readonly width: number; readonly height: number } => {
+export const containFit = (
+  width: number,
+  height: number,
+  aspect: number,
+): { readonly width: number; readonly height: number } => {
   if (width <= 0 || height <= 0 || !(aspect > 0)) return { width: 0, height: 0 }
   const w = Math.min(width, height * aspect)
   return { width: Math.floor(w), height: Math.floor(w / aspect) }
@@ -173,7 +181,11 @@ export const keysymsOf = (text: string): ReadonlyArray<number> => {
 // ------------------------------------------------------------------------------- setup hints
 
 /** Packages per program a node needs for desktops (D1.7: Xvfb + window manager + dock + VNC + tools). */
-const PACKAGES: ReadonlyArray<{ readonly names: ReadonlyArray<string>; readonly arch: string; readonly debian: string }> = [
+const PACKAGES: ReadonlyArray<{
+  readonly names: ReadonlyArray<string>
+  readonly arch: string
+  readonly debian: string
+}> = [
   { names: ["xvfb"], arch: "xorg-server-xvfb", debian: "xvfb" },
   { names: ["x11vnc"], arch: "x11vnc", debian: "x11vnc" },
   { names: ["xdotool"], arch: "xdotool", debian: "xdotool" },
@@ -200,9 +212,14 @@ export interface InstallHint {
  * Copyable install commands for a node's platform (Linux only: desktops are X11). ImageMagick (for
  * screenshots) is added to the Arch line only when it is what's missing; it is usually installed.
  */
-export const desktopInstallHints = (platform: string | undefined, missing?: ReadonlyArray<string>): ReadonlyArray<InstallHint> => {
+export const desktopInstallHints = (
+  platform: string | undefined,
+  missing?: ReadonlyArray<string>,
+): ReadonlyArray<InstallHint> => {
   if (platform !== undefined && platform !== "linux") return []
-  const needsMagick = (missing ?? []).some((m) => ["import", "imagemagick", "magick", "convert"].includes(m.toLowerCase()))
+  const needsMagick = (missing ?? []).some((m) =>
+    ["import", "imagemagick", "magick", "convert"].includes(m.toLowerCase()),
+  )
   return [
     { label: "Arch", command: needsMagick ? `${DESKTOP_INSTALL.arch} imagemagick` : DESKTOP_INSTALL.arch },
     { label: "Debian / Ubuntu", command: DESKTOP_INSTALL.debian },
@@ -231,18 +248,35 @@ export const describeMissing = (missing: ReadonlyArray<string>): string => {
 
 /** "Full desktop needs Xvfb, x11vnc and xdotool on vps-1." */
 export const missingSentence = (missing: ReadonlyArray<string>, nodeName: string): string =>
-  missing.length === 0 ? `Full desktop isn't set up on ${nodeName}.` : `Full desktop needs ${describeMissing(missing)} on ${nodeName}.`
+  missing.length === 0
+    ? `Full desktop isn't set up on ${nodeName}.`
+    : `Full desktop needs ${describeMissing(missing)} on ${nodeName}.`
 
 // ------------------------------------------------------------------------------- nodes + hand-offs
 
 /** Full desktops on a node: on (effective `desktop@1`), declared but not approved, or not offered. */
-export const nodeDesktopState = (node: Pick<NodeSummary, "capabilities" | "declaredCapabilities">): "on" | "unapproved" | "off" =>
-  node.capabilities.includes(NodeCapabilities.desktop) ? "on" : node.declaredCapabilities.includes(NodeCapabilities.desktop) ? "unapproved" : "off"
+export const nodeDesktopState = (
+  node: Pick<NodeSummary, "capabilities" | "declaredCapabilities">,
+): "on" | "unapproved" | "off" =>
+  node.capabilities.includes(NodeCapabilities.desktop)
+    ? "on"
+    : node.declaredCapabilities.includes(NodeCapabilities.desktop)
+      ? "unapproved"
+      : "off"
 
 /** A Mac's own screen on a node: on (effective `screen@1`), declared but not approved, or not offered. */
-export const nodeScreenState = (node: Pick<NodeSummary, "capabilities" | "declaredCapabilities">): "on" | "unapproved" | "off" =>
-  node.capabilities.includes(NodeCapabilities.screen) ? "on" : node.declaredCapabilities.includes(NodeCapabilities.screen) ? "unapproved" : "off"
+export const nodeScreenState = (
+  node: Pick<NodeSummary, "capabilities" | "declaredCapabilities">,
+): "on" | "unapproved" | "off" =>
+  node.capabilities.includes(NodeCapabilities.screen)
+    ? "on"
+    : node.declaredCapabilities.includes(NodeCapabilities.screen)
+      ? "unapproved"
+      : "off"
 
 /** The bot's pending hand-off (`request_takeover`), if any. */
-export const pendingHandoffOf = (requests: ReadonlyArray<RuntimeRequest> | undefined, botId: string): RuntimeRequest | undefined =>
+export const pendingHandoffOf = (
+  requests: ReadonlyArray<RuntimeRequest> | undefined,
+  botId: string,
+): RuntimeRequest | undefined =>
   requests?.find((r) => r.kind === "handoff" && r.botId === botId && r.status === "pending")

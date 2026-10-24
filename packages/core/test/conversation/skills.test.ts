@@ -7,9 +7,11 @@ import { importedSkillName, safeSkillPath } from "../../src/services/automation/
 import { makeClaims, runTest, SkillDirectoryFake } from "../../src/testing/index.ts"
 import { appLayer, createBot, eventsOf, send, settled, TestDriver, transcript } from "./helpers.ts"
 
-const failsWith = (exit: Exit.Exit<unknown, unknown>, tag: string) => Exit.isFailure(exit) && JSON.stringify(exit.cause).includes(tag)
+const failsWith = (exit: Exit.Exit<unknown, unknown>, tag: string) =>
+  Exit.isFailure(exit) && JSON.stringify(exit.cause).includes(tag)
 
-const skillMd = (name: string, description: string, body = "Do the thing.") => `---\nname: ${name}\ndescription: ${description}\n---\n${body}\n`
+const skillMd = (name: string, description: string, body = "Do the thing.") =>
+  `---\nname: ${name}\ndescription: ${description}\n---\n${body}\n`
 
 const downloads = {
   "acme/skills/release-notes": {
@@ -19,20 +21,27 @@ const downloads = {
       { path: "scripts/collect.sh", contents: "git log --oneline\n" },
     ],
   },
-  "acme/skills/escape": { files: [{ path: "SKILL.md", contents: skillMd("escape", "x") }, { path: "../evil.sh", contents: "rm -rf /" }] },
+  "acme/skills/escape": {
+    files: [
+      { path: "SKILL.md", contents: skillMd("escape", "x") },
+      { path: "../evil.sh", contents: "rm -rf /" },
+    ],
+  },
   "acme/skills/empty": { files: [{ path: "README.md", contents: "no skill here" }] },
 }
 
 const layer = () =>
   SkillServiceLive.pipe(
-    Layer.provide(SkillDirectoryFake.layer({
-      results: [
-        { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 12 },
-        // hosted outside GitHub: not installable through skills.sh, so never offered
-        { id: "notes.example.com/release-notes", name: "release-notes", repo: "notes.example.com", installs: 3 },
-      ],
-      downloads,
-    })),
+    Layer.provide(
+      SkillDirectoryFake.layer({
+        results: [
+          { id: "acme/skills/release-notes", name: "release-notes", repo: "acme/skills", installs: 12 },
+          // hosted outside GitHub: not installable through skills.sh, so never offered
+          { id: "notes.example.com/release-notes", name: "release-notes", repo: "notes.example.com", installs: 3 },
+        ],
+        downloads,
+      }),
+    ),
     Layer.provideMerge(appLayer()),
   )
 
@@ -43,14 +52,22 @@ const plain = (names: ReadonlyArray<SkillName>): Array<string> => [...names]
 describe("SkillService (D5.5)", () => {
   test("owner skills: CRUD, validation, assign to exactly some Bots, delete takes it from every Bot", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const skills = yield* SkillService
         const bots = yield* BotService
         const ada = yield* createBot("Ada")
         const bob = yield* createBot("Bob")
-        const saved = yield* skills.upsert(userActor, { name: name("weekly-report"), description: "  Use for the Friday report ", body: "1. Collect" })
-        const badName = yield* Effect.exit(skills.upsert(userActor, { name: name("Bad Name"), description: "d", body: "b" }))
-        const noDescription = yield* Effect.exit(skills.upsert(userActor, { name: name("x"), description: " ", body: "b" }))
+        const saved = yield* skills.upsert(userActor, {
+          name: name("weekly-report"),
+          description: "  Use for the Friday report ",
+          body: "1. Collect",
+        })
+        const badName = yield* Effect.exit(
+          skills.upsert(userActor, { name: name("Bad Name"), description: "d", body: "b" }),
+        )
+        const noDescription = yield* Effect.exit(
+          skills.upsert(userActor, { name: name("x"), description: " ", body: "b" }),
+        )
         yield* skills.assign(saved.name, [ada.id, bob.id])
         const both = [plain((yield* bots.get(ada.id)).skills), plain((yield* bots.get(bob.id)).skills)]
         yield* skills.assign(saved.name, [bob.id])
@@ -61,7 +78,18 @@ describe("SkillService (D5.5)", () => {
         yield* skills.delete(saved.name)
         const afterDelete = plain((yield* bots.get(bob.id)).skills)
         const gone = yield* Effect.exit(skills.get(saved.name))
-        return { saved, badName, noDescription, both, onlyBob, unknownSkill, unknownBot, patchUnknown, afterDelete, gone }
+        return {
+          saved,
+          badName,
+          noDescription,
+          both,
+          onlyBob,
+          unknownSkill,
+          unknownBot,
+          patchUnknown,
+          afterDelete,
+          gone,
+        }
       }),
       layer(),
     )
@@ -79,7 +107,7 @@ describe("SkillService (D5.5)", () => {
 
   test("save_skill: the Bot gets its new skill and a skill-saved event; it may update its own, never someone else's", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const skills = yield* SkillService
         const bots = yield* BotService
         const ada = yield* createBot("Ada")
@@ -87,8 +115,14 @@ describe("SkillService (D5.5)", () => {
         const asAda = botActor({ claims: makeClaims({ botId: ada.id, conversationId: ada.directConversationId }) })
         const asBob = botActor({ claims: makeClaims({ botId: bob.id, conversationId: bob.directConversationId }) })
         yield* skills.upsert(asAda, { name: name("triage"), description: "Use when triaging bugs.", body: "v1" })
-        const updated = yield* skills.upsert(asAda, { name: name("triage"), description: "Use when triaging bugs.", body: "v2" })
-        const bobTakesOver = yield* Effect.exit(skills.upsert(asBob, { name: name("triage"), description: "mine now", body: "v3" }))
+        const updated = yield* skills.upsert(asAda, {
+          name: name("triage"),
+          description: "Use when triaging bugs.",
+          body: "v2",
+        })
+        const bobTakesOver = yield* Effect.exit(
+          skills.upsert(asBob, { name: name("triage"), description: "mine now", body: "v3" }),
+        )
         return {
           ada: plain((yield* bots.get(ada.id)).skills),
           bob: plain((yield* bots.get(bob.id)).skills),
@@ -103,12 +137,15 @@ describe("SkillService (D5.5)", () => {
     expect(out.bob).toEqual([])
     expect(out.updated.body).toBe("v2")
     expect(failsWith(out.bobTakesOver, "InvalidInput")).toBe(true)
-    expect(out.events).toEqual([{ type: "skill-saved", name: "triage" }, { type: "skill-saved", name: "triage" }])
+    expect(out.events).toEqual([
+      { type: "skill-saved", name: "triage" },
+      { type: "skill-saved", name: "triage" },
+    ])
   })
 
   test("skills.sh: search, preview (nothing written), install with its files and source; unsafe or empty skills are refused", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const skills = yield* SkillService
         const bots = yield* BotService
         const store = yield* SkillStore
@@ -159,7 +196,7 @@ describe("SkillService (D5.5)", () => {
 
   test("a change to a Bot's skills reopens its session on the next turn (resuming it)", async () => {
     const out = await runTest(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const skills = yield* SkillService
         const driver = yield* TestDriver
         const ada = yield* createBot("Ada")
@@ -173,7 +210,10 @@ describe("SkillService (D5.5)", () => {
       }),
       layer(),
     )
-    expect(out).toEqual([{ skills: [], resume: undefined }, { skills: ["triage"], resume: "native-1" }])
+    expect(out).toEqual([
+      { skills: [], resume: undefined },
+      { skills: ["triage"], resume: "native-1" },
+    ])
   })
 
   test("imported names and paths", () => {

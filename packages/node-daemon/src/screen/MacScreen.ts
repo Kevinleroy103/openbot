@@ -76,7 +76,9 @@ export interface HelperClient {
 
 /** The helper's command: this program's `screen-helper` when compiled, else Bun running ./helper.ts. */
 export const defaultHelperArgv = (): ReadonlyArray<string> =>
-  import.meta.url.includes("$bunfs") ? [process.execPath, "screen-helper"] : [process.execPath, fileURLToPath(new URL("./helper.ts", import.meta.url))]
+  import.meta.url.includes("$bunfs")
+    ? [process.execPath, "screen-helper"]
+    : [process.execPath, fileURLToPath(new URL("./helper.ts", import.meta.url))]
 
 /**
  * Runs the helper on demand (again after it exits); one JSON line per request. Each helper process
@@ -172,7 +174,10 @@ export const spawnHelper = (argv: ReadonlyArray<string>, timeoutMs = 15_000): He
 
 // ------------------------------------------------------------------ system (screenshots, cursor)
 export interface ScreenSystem {
-  readonly exec: (argv: ReadonlyArray<string>, timeoutMs: number) => Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }>
+  readonly exec: (
+    argv: ReadonlyArray<string>,
+    timeoutMs: number,
+  ) => Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }>
   readonly readFile: (path: string) => Promise<Uint8Array>
   readonly exists: (path: string) => boolean
   readonly remove: (path: string) => void
@@ -183,7 +188,11 @@ export const liveScreenSystem: ScreenSystem = {
   exec: async (argv, timeoutMs) => {
     const p = Bun.spawn([...argv], { stdout: "pipe", stderr: "pipe" })
     const timer = setTimeout(() => p.kill(), timeoutMs)
-    const [code, stdout, stderr] = await Promise.all([p.exited, new Response(p.stdout).text(), new Response(p.stderr).text()])
+    const [code, stdout, stderr] = await Promise.all([
+      p.exited,
+      new Response(p.stdout).text(),
+      new Response(p.stderr).text(),
+    ])
     clearTimeout(timer)
     return { code, stdout, stderr }
   },
@@ -197,7 +206,8 @@ export const liveScreenSystem: ScreenSystem = {
 const CURSOR_SCRIPT =
   'ObjC.import("AppKit"); var p = $.NSEvent.mouseLocation; var h = $.NSScreen.screens.objectAtIndex(0).frame.size.height; JSON.stringify({x: Math.round(p.x), y: Math.round(h - p.y)})'
 /** Shows macOS's Accessibility prompt for this program. */
-const ACCESSIBILITY_PROMPT_SCRIPT = 'ObjC.import("ApplicationServices"); $.AXIsProcessTrustedWithOptions($({AXTrustedCheckOptionPrompt: true}))'
+const ACCESSIBILITY_PROMPT_SCRIPT =
+  'ObjC.import("ApplicationServices"); $.AXIsProcessTrustedWithOptions($({AXTrustedCheckOptionPrompt: true}))'
 
 export const missingPermissions = (info: MacInfo): ReadonlyArray<string> => [
   ...(info.screenRecording ? [] : ["Screen Recording"]),
@@ -273,7 +283,10 @@ export const makeMacScreen = (input: {
     const first = yield* Effect.result(call<MacInfo>({ op: "info" }))
     if (first._tag === "Failure") {
       yield* Effect.logWarning("the Mac screen helper did not start", { reason: first.failure.message })
-      return { ...disabled, support: { missing: [`the screen helper (${first.failure.message})`], width: 0, height: 0 } }
+      return {
+        ...disabled,
+        support: { missing: [`the screen helper (${first.failure.message})`], width: 0, height: 0 },
+      }
     }
     let info = first.success
     let geometry = makeGeometry(info.width, info.height)
@@ -306,7 +319,9 @@ export const makeMacScreen = (input: {
         askedAt = now()
         if (!current.screenRecording) yield* Effect.ignore(call({ op: "requestScreenRecording" }))
         if (!current.accessibility) {
-          yield* Effect.promise(() => sys.exec([OSASCRIPT, "-l", "JavaScript", "-e", ACCESSIBILITY_PROMPT_SCRIPT], 10_000).catch(() => undefined))
+          yield* Effect.promise(() =>
+            sys.exec([OSASCRIPT, "-l", "JavaScript", "-e", ACCESSIBILITY_PROMPT_SCRIPT], 10_000).catch(() => undefined),
+          )
         }
       })
 
@@ -334,7 +349,21 @@ export const makeMacScreen = (input: {
             const shot = await sys.exec([SCREENCAPTURE, "-x", "-t", "jpg", ...region, raw], 15_000)
             if (shot.code !== 0 || !sys.exists(raw)) throw new Error(shot.stderr.trim() || "screencapture failed")
             const scaled = await sys.exec(
-              [SIPS, "-s", "format", "jpeg", "-s", "formatOptions", String(quality), "-z", String(height), String(width), raw, "--out", out],
+              [
+                SIPS,
+                "-s",
+                "format",
+                "jpeg",
+                "-s",
+                "formatOptions",
+                String(quality),
+                "-z",
+                String(height),
+                String(width),
+                raw,
+                "--out",
+                out,
+              ],
               15_000,
             )
             if (scaled.code !== 0 || !sys.exists(out)) throw new Error(scaled.stderr.trim() || "sips failed")
@@ -367,7 +396,10 @@ export const makeMacScreen = (input: {
 
     const held = (botId: string, reason: string) => new LeaseHeld({ botId, holder: "user", reason })
 
-    const act = (botId: string, action: ComputerAction): Effect.Effect<ComputerResult, DesktopUnavailable | LeaseHeld> =>
+    const act = (
+      botId: string,
+      action: ComputerAction,
+    ): Effect.Effect<ComputerResult, DesktopUnavailable | LeaseHeld> =>
       Effect.gen(function* () {
         yield* requirePermissions
         const plan = planAction(geometry, action, { mac: true })
@@ -376,11 +408,15 @@ export const makeMacScreen = (input: {
         if (typeof steps === "string") return { text: `ERROR: ${steps}` }
         return yield* lock.withPermits(1)(
           Effect.gen(function* () {
-            if (userHolds.size > 0) return yield* held(botId, "The owner is controlling this screen. Wait until they hand it back.")
+            if (userHolds.size > 0)
+              return yield* held(botId, "The owner is controlling this screen. Wait until they hand it back.")
             const idle = yield* call<MacIdle>({ op: "idle" })
             // input after this helper's last event came from someone at the Mac
             if (idle.idle < OWNER_ACTIVE_S && idle.idle + 0.5 < idle.sincePost) {
-              return yield* held(botId, "The owner is using this computer right now. Try again in a few minutes, or ask them in the chat.")
+              return yield* held(
+                botId,
+                "The owner is using this computer right now. Try again in a few minutes, or ask them in the chat.",
+              )
             }
             if (lastBot && lastBot.botId !== botId && now() - lastBot.at < BOT_EXCLUSIVE_MS) {
               return yield* held(botId, "Another Bot is using this screen right now. Try again in a minute.")

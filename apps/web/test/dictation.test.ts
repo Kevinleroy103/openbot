@@ -26,9 +26,12 @@ const loadTap = (): Tap => {
       },
     }
   }
-  new Function("registerProcessor", "AudioWorkletProcessor", DICTATION_TAP_MODULE)((_: string, registered: new () => Tap) => {
-    Processor = registered
-  }, AudioWorkletProcessor)
+  new Function("registerProcessor", "AudioWorkletProcessor", DICTATION_TAP_MODULE)(
+    (_: string, registered: new () => Tap) => {
+      Processor = registered
+    },
+    AudioWorkletProcessor,
+  )
   return new Processor!()
 }
 
@@ -58,7 +61,10 @@ describe("the microphone tap", () => {
   test("the page passes audio on and treats the flush confirmation as a signal, never as audio", () => {
     const received: Array<Float32Array> = []
     let flushed = 0
-    const handle = tapMessageHandler((samples) => received.push(samples), () => flushed++)
+    const handle = tapMessageHandler(
+      (samples) => received.push(samples),
+      () => flushed++,
+    )
     handle({ data: quantum(0.3) } as MessageEvent<Float32Array>)
     handle({ data: "flushed" } as MessageEvent<string>)
     handle({ data: "something else" } as MessageEvent<string>)

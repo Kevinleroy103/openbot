@@ -70,7 +70,11 @@ export const makeHelloGate = (handlers: NodeHandlerRecord, options: HelloGateOpt
             brainOrigin: options.brainOrigin,
             brainSig: req.brainSig,
           })
-          if (!ok) return yield* reject(CloseCodes.helloFailed, "the brain signature does not verify against the pinned brain key")
+          if (!ok)
+            return yield* reject(
+              CloseCodes.helloFailed,
+              "the brain signature does not verify against the pinned brain key",
+            )
           // the ungated handler negotiates the protocol (NotAuthenticated when no version is shared)
           const inner = yield* Effect.result(handler(request, rpcOptions) as Effect.Effect<NodeHello, NotAuthenticated>)
           if (inner._tag === "Failure") return yield* reject(CloseCodes.protocolMismatch, inner.failure.reason)
@@ -85,11 +89,17 @@ export const makeHelloGate = (handlers: NodeHandlerRecord, options: HelloGateOpt
       ? (payload, rpcOptions) =>
           Stream.unwrap(
             Effect.suspend(() =>
-              verified ? Effect.succeed(handler(payload, rpcOptions) as Stream.Stream<unknown, unknown>) : Effect.fail(notAuthenticated()),
+              verified
+                ? Effect.succeed(handler(payload, rpcOptions) as Stream.Stream<unknown, unknown>)
+                : Effect.fail(notAuthenticated()),
             ),
           )
       : (payload, rpcOptions) =>
-          Effect.suspend(() => (verified ? (handler(payload, rpcOptions) as Effect.Effect<unknown, unknown>) : Effect.fail(notAuthenticated())))
+          Effect.suspend(() =>
+            verified
+              ? (handler(payload, rpcOptions) as Effect.Effect<unknown, unknown>)
+              : Effect.fail(notAuthenticated()),
+          )
   }
   return { handlers: out as unknown as NodeHandlerRecord, isVerified: () => verified }
 }

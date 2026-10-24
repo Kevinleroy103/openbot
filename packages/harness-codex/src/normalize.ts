@@ -107,14 +107,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
 const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined)
-const num = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) ? value : undefined)
+const num = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined
 
 /** Caps `text` at `max` characters (head), with an ellipsis. */
 export const truncate = (text: string, max: number): string =>
   text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`
 
 /** Keeps the last `max` characters (command output is most useful at the end). */
-const tail = (text: string, max: number): string => (text.length <= max ? text : `…${text.slice(text.length - max + 1)}`)
+const tail = (text: string, max: number): string =>
+  text.length <= max ? text : `…${text.slice(text.length - max + 1)}`
 
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim()
 
@@ -129,17 +131,19 @@ export const stripShellWrapper = (command: string): string => {
 export const stableStringify = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`
   if (isRecord(value)) {
-    return `{${
-      Object.keys(value)
-        .sort()
-        .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
-        .join(",")
-    }}`
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`
   }
   return JSON.stringify(value) ?? "null"
 }
 
-const basename = (path: string): string => path.split(/[\\/]/).filter((part) => part !== "").pop() ?? path
+const basename = (path: string): string =>
+  path
+    .split(/[\\/]/)
+    .filter((part) => part !== "")
+    .pop() ?? path
 
 /** `message_bot` → `Message bot`. */
 const humanize = (name: string): string => {
@@ -164,7 +168,17 @@ const OPENBOT_TOOL_KIND: Readonly<Record<string, ToolKind>> = {
   ask_user: "question",
 }
 
-const NODE_TOOLS = new Set(["shell", "read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "browser", "computer"])
+const NODE_TOOLS = new Set([
+  "shell",
+  "read_file",
+  "write_file",
+  "edit_file",
+  "list_dir",
+  "glob",
+  "grep",
+  "browser",
+  "computer",
+])
 
 /**
  * Owner-visible activity phrases by tool kind: human and plumbing-free (D6.4). Native helpers and
@@ -186,11 +200,12 @@ const ACTIVITY_BY_KIND: Readonly<Partial<Record<ToolKind, string>>> = {
 
 const summarizeArgs = (tool: string, args: unknown): string => {
   if (isRecord(args)) {
-    const pick = tool === "shell"
-      ? str(args.command)
-      : tool === "grep" || tool === "glob"
-      ? str(args.pattern)
-      : str(args.path) ?? str(args.url) ?? str(args.to) ?? str(args.title) ?? str(args.query)
+    const pick =
+      tool === "shell"
+        ? str(args.command)
+        : tool === "grep" || tool === "glob"
+          ? str(args.pattern)
+          : (str(args.path) ?? str(args.url) ?? str(args.to) ?? str(args.title) ?? str(args.query))
     if (pick !== undefined) return truncate(oneLine(pick), 200)
     if (Object.keys(args).length === 0) return ""
   }
@@ -377,11 +392,12 @@ export class CodexNormalizer {
         const native = str(turn.id)
         if (!native) break
         const status = turn.status
-        const outcome: TurnOutcome = status === "interrupted"
-          ? { _tag: "interrupted" }
-          : status === "failed"
-          ? { _tag: "failed", error: turnErrorOf(turn.error ?? this.lastErrors.get(native)) }
-          : { _tag: "completed" }
+        const outcome: TurnOutcome =
+          status === "interrupted"
+            ? { _tag: "interrupted" }
+            : status === "failed"
+              ? { _tag: "failed", error: turnErrorOf(turn.error ?? this.lastErrors.get(native)) }
+              : { _tag: "completed" }
         this.lastErrors.delete(native)
         if (this.turnByNative.has(native)) {
           // An OpenBot turn (`resolveTurn` is undefined when it already ended locally).
@@ -488,14 +504,16 @@ export class CodexNormalizer {
       state.done = true
       if (state.kind === "message") {
         if (state.emitted || state.text !== "") {
-          out.push(this.upsert(state.key, turnId, {
-            _tag: "Message",
-            role: "bot",
-            text: state.text,
-            streaming: false,
-            ...(state.phase ? { phase: state.phase } : {}),
-            ...(outcome._tag === "interrupted" ? { aborted: true } : {}),
-          }))
+          out.push(
+            this.upsert(state.key, turnId, {
+              _tag: "Message",
+              role: "bot",
+              text: state.text,
+              streaming: false,
+              ...(state.phase ? { phase: state.phase } : {}),
+              ...(outcome._tag === "interrupted" ? { aborted: true } : {}),
+            }),
+          )
         }
       } else if (state.kind === "reasoning") {
         if (state.emitted) this.emitReasoning(state, out)
@@ -503,11 +521,12 @@ export class CodexNormalizer {
         state.item = {
           ...state.item,
           status: "failed",
-          error: outcome._tag === "interrupted"
-            ? "Interrupted"
-            : outcome._tag === "failed"
-            ? outcome.error.message
-            : "Codex did not report a result for this tool.",
+          error:
+            outcome._tag === "interrupted"
+              ? "Interrupted"
+              : outcome._tag === "failed"
+                ? outcome.error.message
+                : "Codex did not report a result for this tool.",
         }
         out.push(this.toolEvent(state))
       }
@@ -521,8 +540,8 @@ export class CodexNormalizer {
       outcome._tag === "completed"
         ? { _tag: "TurnCompleted", turnId }
         : outcome._tag === "interrupted"
-        ? { _tag: "TurnInterrupted", turnId }
-        : { _tag: "TurnFailed", turnId, error: outcome.error },
+          ? { _tag: "TurnInterrupted", turnId }
+          : { _tag: "TurnFailed", turnId, error: outcome.error },
     )
     this.finished.add(turnId)
     this.started.delete(turnId)
@@ -634,13 +653,15 @@ export class CodexNormalizer {
   private emitMessage(state: MessageState, out: Array<HarnessEvent>): void {
     if (state.text === "" && !state.emitted) return
     state.emitted = true
-    out.push(this.upsert(state.key, state.turnId, {
-      _tag: "Message",
-      role: "bot",
-      text: state.text,
-      streaming: !state.done,
-      ...(state.phase ? { phase: state.phase } : {}),
-    }))
+    out.push(
+      this.upsert(state.key, state.turnId, {
+        _tag: "Message",
+        role: "bot",
+        text: state.text,
+        streaming: !state.done,
+        ...(state.phase ? { phase: state.phase } : {}),
+      }),
+    )
   }
 
   private emitReasoning(state: ReasoningState, out: Array<HarnessEvent>): void {
@@ -649,12 +670,14 @@ export class CodexNormalizer {
     const text = summary.length > 0 ? summary.join("\n\n") : content.join("\n\n")
     if (text === "" && !state.emitted) return
     state.emitted = true
-    out.push(this.upsert(state.key, state.turnId, {
-      _tag: "Reasoning",
-      text,
-      streaming: !state.done,
-      source: summary.length > 0 || content.length === 0 ? "summary" : "thinking",
-    }))
+    out.push(
+      this.upsert(state.key, state.turnId, {
+        _tag: "Reasoning",
+        text,
+        streaming: !state.done,
+        source: summary.length > 0 || content.length === 0 ? "summary" : "thinking",
+      }),
+    )
   }
 
   private toolEvent(state: ToolState): HarnessEvent {
@@ -675,9 +698,10 @@ export class CodexNormalizer {
 
   private fileChangeSummary(changes: ReadonlyArray<FileChangeDraft>) {
     const first = changes[0]
-    const title = changes.length === 1 && first
-      ? `${first.kind === "add" ? "Create" : first.kind === "delete" ? "Delete" : "Edit"} ${basename(first.path)}`
-      : `Edit ${changes.length} files`
+    const title =
+      changes.length === 1 && first
+        ? `${first.kind === "add" ? "Create" : first.kind === "delete" ? "Delete" : "Edit"} ${basename(first.path)}`
+        : `Edit ${changes.length} files`
     return {
       title,
       inputSummary: truncate(changes.map((change) => change.path).join(", "), 200),
@@ -694,9 +718,10 @@ export class CodexNormalizer {
     if (existing?.done) return
     switch (type) {
       case "agentMessage": {
-        const state: MessageState = existing?.kind === "message"
-          ? existing
-          : { kind: "message", key, turnId, text: "", phase: undefined, emitted: false, done: false }
+        const state: MessageState =
+          existing?.kind === "message"
+            ? existing
+            : { kind: "message", key, turnId, text: "", phase: undefined, emitted: false, done: false }
         this.items.set(key, state)
         const phase = item.phase === "commentary" ? "commentary" : item.phase === "final_answer" ? "final" : undefined
         if (phase) state.phase = phase
@@ -713,11 +738,13 @@ export class CodexNormalizer {
         return
       }
       case "reasoning": {
-        const state: ReasoningState = existing?.kind === "reasoning"
-          ? existing
-          : { kind: "reasoning", key, turnId, summary: [], content: [], emitted: false, done: false }
+        const state: ReasoningState =
+          existing?.kind === "reasoning"
+            ? existing
+            : { kind: "reasoning", key, turnId, summary: [], content: [], emitted: false, done: false }
         this.items.set(key, state)
-        const strings = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [])
+        const strings = (value: unknown) =>
+          Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []
         if (done) {
           const summary = strings(item.summary)
           const content = strings(item.content)
@@ -732,12 +759,14 @@ export class CodexNormalizer {
       }
       case "contextCompaction":
         if (done) {
-          out.push(this.upsert(key, turnId, {
-            _tag: "Notice",
-            level: "info",
-            text: "Compacted the conversation to free up context.",
-            code: "compacted",
-          }))
+          out.push(
+            this.upsert(key, turnId, {
+              _tag: "Notice",
+              level: "info",
+              text: "Compacted the conversation to free up context.",
+              code: "compacted",
+            }),
+          )
         }
         return
       case "userMessage":
@@ -754,20 +783,21 @@ export class CodexNormalizer {
     }
     const draft = this.toolDraft(type, item, existing?.kind === "tool" ? existing : undefined, done)
     if (!draft) return
-    const state: ToolState = existing?.kind === "tool"
-      ? existing
-      : {
-        kind: "tool",
-        key,
-        turnId,
-        itemType: type,
-        item: draft.item,
-        output: "",
-        done: false,
-        server: draft.server,
-        tool: draft.tool,
-        args: draft.args,
-      }
+    const state: ToolState =
+      existing?.kind === "tool"
+        ? existing
+        : {
+            kind: "tool",
+            key,
+            turnId,
+            itemType: type,
+            item: draft.item,
+            output: "",
+            done: false,
+            server: draft.server,
+            tool: draft.tool,
+            args: draft.args,
+          }
     state.item = draft.item
     state.done = done
     this.items.set(key, state)
@@ -785,27 +815,25 @@ export class CodexNormalizer {
     done: boolean,
   ):
     | {
-      readonly item: ToolCallItem
-      readonly server?: string | undefined
-      readonly tool?: string | undefined
-      readonly args?: unknown
-      readonly activity?: string | undefined
-    }
-    | undefined
-  {
+        readonly item: ToolCallItem
+        readonly server?: string | undefined
+        readonly tool?: string | undefined
+        readonly args?: unknown
+        readonly activity?: string | undefined
+      }
+    | undefined {
     const hostNode = this.hostNodeId ? { nodeId: this.hostNodeId } : {}
     switch (type) {
       case "commandExecution": {
         const raw = str(item.command) ?? ""
         const actions = Array.isArray(item.commandActions) ? item.commandActions.filter(isRecord) : []
-        const display = actions.length === 1 && typeof actions[0]?.command === "string"
-          ? actions[0].command
-          : stripShellWrapper(raw)
+        const display =
+          actions.length === 1 && typeof actions[0]?.command === "string" ? actions[0].command : stripShellWrapper(raw)
         const cwd = str(item.cwd)
         const exitCode = num(item.exitCode)
         const aggregated = str(item.aggregatedOutput)
         const outputText = aggregated ?? previous?.output ?? ""
-        const status = toolStatus(done ? item.status : previous?.item.status ?? "running")
+        const status = toolStatus(done ? item.status : (previous?.item.status ?? "running"))
         return {
           item: {
             _tag: "ToolCall",
@@ -818,7 +846,12 @@ export class CodexNormalizer {
             command: { command: display, ...(cwd ? { cwd } : {}), ...(exitCode !== undefined ? { exitCode } : {}) },
             ...(outputText !== "" ? { outputPreview: tail(outputText, this.previewChars) } : {}),
             ...(done && aggregated !== undefined
-              ? { output: { text: tail(aggregated, 16_000), ...(aggregated.length > 16_000 ? { truncated: true } : {}) } }
+              ? {
+                  output: {
+                    text: tail(aggregated, 16_000),
+                    ...(aggregated.length > 16_000 ? { truncated: true } : {}),
+                  },
+                }
               : {}),
             ...(done && status === "failed" && exitCode !== undefined ? { error: `Exited with code ${exitCode}` } : {}),
             ...hostNode,
@@ -843,15 +876,14 @@ export class CodexNormalizer {
         const tool = str(item.tool) ?? "tool"
         const args = item.arguments
         const isOpenBot = server === OPENBOT_SERVER
-        const kind: ToolKind = isOpenBot ? OPENBOT_TOOL_KIND[tool] ?? "mcp" : "mcp"
+        const kind: ToolKind = isOpenBot ? (OPENBOT_TOOL_KIND[tool] ?? "mcp") : "mcp"
         const result = mcpText(item.result)
         const errorMessage = isRecord(item.error) ? str(item.error.message) : str(item.error)
         let status = toolStatus(done ? item.status : "running")
         if (done && status === "completed" && result.isError) status = "failed"
         const nodeArg = isRecord(args) ? str(args.node) : undefined
-        const nodeId = isOpenBot && NODE_TOOLS.has(tool)
-          ? (nodeArg as NodeId | undefined) ?? this.hostNodeId
-          : undefined
+        const nodeId =
+          isOpenBot && NODE_TOOLS.has(tool) ? ((nodeArg as NodeId | undefined) ?? this.hostNodeId) : undefined
         return {
           server,
           tool,
@@ -869,7 +901,12 @@ export class CodexNormalizer {
             mcp: { server, tool },
             ...(result.text !== "" ? { outputPreview: truncate(result.text, this.previewChars) } : {}),
             ...(done && result.text !== ""
-              ? { output: { text: truncate(result.text, 16_000), ...(result.text.length > 16_000 ? { truncated: true } : {}) } }
+              ? {
+                  output: {
+                    text: truncate(result.text, 16_000),
+                    ...(result.text.length > 16_000 ? { truncated: true } : {}),
+                  },
+                }
               : {}),
             ...(done && status === "failed" ? { error: errorMessage ?? (result.text || "The tool call failed.") } : {}),
             ...(nodeId ? { nodeId } : {}),
@@ -958,7 +995,7 @@ export class CodexNormalizer {
     if (!usage) return
     const total = breakdownOf(usage.total)
     const last = breakdownOf(usage.last)
-    const delta = total && this.lastTotal ? minus(total, this.lastTotal) : last ?? emptyBreakdown()
+    const delta = total && this.lastTotal ? minus(total, this.lastTotal) : (last ?? emptyBreakdown())
     if (total) this.lastTotal = total
     const native = str(params.turnId)
     const turnId = native ? this.turnByNative.get(native) : undefined

@@ -29,7 +29,9 @@ export function Avatar({
   const h = 22 * scale
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100" style={{ overflow: "visible" }}>
-      {outline && <Path d={body.d} fill={outline} stroke={outline} strokeWidth={(3 / size) * 200} strokeLinejoin="round" />}
+      {outline && (
+        <Path d={body.d} fill={outline} stroke={outline} strokeWidth={(3 / size) * 200} strokeLinejoin="round" />
+      )}
       <Path d={body.d} fill={avatarColor(a.color, theme.dark)} />
       <Rect x={cx - half - w / 2} y={cy - h / 2} width={w} height={h} rx={w / 2} fill="#ffffff" />
       <Rect x={cx + half - w / 2} y={cy - h / 2} width={w} height={h} rx={w / 2} fill="#ffffff" />

@@ -5,7 +5,9 @@ import { decodeBase64, edge, edgeStream } from "../src/rpc.ts"
 
 describe("RPC edge", () => {
   test("typed failures pass unchanged; defects become Internal; interrupts propagate", async () => {
-    const notFound = await Effect.runPromise(Effect.flip(edge("t", Effect.fail(new NotFound({ entity: "bot", id: "b" })))))
+    const notFound = await Effect.runPromise(
+      Effect.flip(edge("t", Effect.fail(new NotFound({ entity: "bot", id: "b" })))),
+    )
     expect(notFound).toMatchObject({ _tag: "NotFound", entity: "bot" })
     const internal = await Effect.runPromise(Effect.flip(edge("t", Effect.die(new Error("db is gone")))))
     expect(internal._tag).toBe("Internal")

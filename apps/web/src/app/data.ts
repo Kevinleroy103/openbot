@@ -8,9 +8,11 @@ import { emptyRosterState, type Bot, type BotId, type RosterState } from "@openb
 import { rosterAtom, sessionInfoAtom } from "@openbot/client"
 
 /** The success value of an AsyncResult, or `fallback` while initial/failed. */
-export const valueOr = <A, E>(result: AsyncResult.AsyncResult<A, E>, fallback: A): A => (AsyncResult.isSuccess(result) ? result.value : fallback)
+export const valueOr = <A, E>(result: AsyncResult.AsyncResult<A, E>, fallback: A): A =>
+  AsyncResult.isSuccess(result) ? result.value : fallback
 
-export const useResultValue = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>, fallback: A): A => valueOr(useAtomValue(atom), fallback)
+export const useResultValue = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>, fallback: A): A =>
+  valueOr(useAtomValue(atom), fallback)
 
 export interface RosterView {
   readonly state: RosterState

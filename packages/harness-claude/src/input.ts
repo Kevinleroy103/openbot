@@ -70,7 +70,10 @@ export const toUserMessage = async (
     }
   }
   if (images.length === 0) return { ...base, message: { role: "user", content: text } }
-  return { ...base, message: { role: "user", content: [...images, ...(text.length > 0 ? [{ type: "text", text }] : [])] } }
+  return {
+    ...base,
+    message: { role: "user", content: [...images, ...(text.length > 0 ? [{ type: "text", text }] : [])] },
+  }
 }
 
 /** A slash command (e.g. `/compact`) as streaming input. */

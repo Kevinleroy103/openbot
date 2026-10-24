@@ -38,7 +38,10 @@ const buildServer = (authorization: string | null) => {
       case "boom":
         return { content: [{ type: "text" as const, text: "ERROR: the boom tool always fails" }], isError: true }
       default:
-        return { content: [{ type: "text" as const, text: `ERROR: unknown tool ${request.params.name}` }], isError: true }
+        return {
+          content: [{ type: "text" as const, text: `ERROR: unknown tool ${request.params.name}` }],
+          isError: true,
+        }
     }
   })
   return server
@@ -59,7 +62,10 @@ beforeAll(() => {
       if (url.pathname !== "/mcp/bot_scout") return new Response("forbidden", { status: 403 })
       if (req.method === "GET") return new Response(null, { status: 405 })
       // Stateless JSON mode: a fresh server + transport per request.
-      const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      })
       await buildServer(authorization).connect(transport)
       return transport.handleRequest(req)
     },
@@ -79,69 +85,75 @@ const driver = () => makeFakeDriver({ chunkDelay: 0, toolTimeout: Duration.secon
 
 group("tool: directive", () => {
   test("calls the tool through MCP with the binding headers", () =>
-    run(Effect.gen(function*() {
-      const session = yield* driver().openSession(openInput({ mcp: [binding] }))
-      const c = yield* collect(session)
-      yield* session.startTurn(turn("trn_1", `tool: list_bots\ntool:message_bot {"to":"Echo","text":"hi there"}`))
-      const events = yield* c.turnEvents("trn_1")
-      expect(events.at(-1)?._tag).toBe("TurnCompleted")
+    run(
+      Effect.gen(function* () {
+        const session = yield* driver().openSession(openInput({ mcp: [binding] }))
+        const c = yield* collect(session)
+        yield* session.startTurn(turn("trn_1", `tool: list_bots\ntool:message_bot {"to":"Echo","text":"hi there"}`))
+        const events = yield* c.turnEvents("trn_1")
+        expect(events.at(-1)?._tag).toBe("TurnCompleted")
 
-      expect(calls.map((call) => call.name)).toEqual(["list_bots", "message_bot"])
-      expect(calls[1]?.args).toEqual({ to: "Echo", text: "hi there" })
-      expect(calls.every((call) => call.authorization === `Bearer ${TOKEN}`)).toBe(true)
-      expect(seen.length).toBeGreaterThan(0)
-      expect(seen.every((r) => r.authorization === `Bearer ${TOKEN}` && r.extra === "bot_scout:cnv_scout")).toBe(true)
+        expect(calls.map((call) => call.name)).toEqual(["list_bots", "message_bot"])
+        expect(calls[1]?.args).toEqual({ to: "Echo", text: "hi there" })
+        expect(calls.every((call) => call.authorization === `Bearer ${TOKEN}`)).toBe(true)
+        expect(seen.length).toBeGreaterThan(0)
+        expect(seen.every((r) => r.authorization === `Bearer ${TOKEN}` && r.extra === "bot_scout:cnv_scout")).toBe(true)
 
-      const tools = toolCalls(events)
-      expect(tools.map((t) => `${t.item.toolName}:${t.item.status}`)).toEqual([
-        "mcp__openbot__list_bots:running",
-        "mcp__openbot__list_bots:completed",
-        "mcp__openbot__message_bot:running",
-        "mcp__openbot__message_bot:completed",
-      ])
-      expect(tools[1]?.item).toMatchObject({
-        kind: "mcp",
-        mcp: { server: "openbot", tool: "list_bots" },
-        outputPreview: "Scout (fake), Echo (claude)",
-      })
-      expect(tools[3]?.item.outputPreview).toBe("Delivered to Echo: hi there")
-      const messages = finalMessages(events)
-      expect(messages[0]).toContain("Scout (fake), Echo (claude)")
-      expect(messages[1]).toContain("Delivered to Echo")
-      const activities = events.flatMap((e) => (e._tag === "Activity" ? [e] : []))
-      expect(activities.some((a) => a.label === "Thinking…" && a.toolKind === "mcp")).toBe(true)
-      expect(activities.some((a) => a.label === "Sending a message")).toBe(true)
-      expect(activities.some((a) => /_|list bots|message bot/i.test(a.label))).toBe(false)
-    })))
+        const tools = toolCalls(events)
+        expect(tools.map((t) => `${t.item.toolName}:${t.item.status}`)).toEqual([
+          "mcp__openbot__list_bots:running",
+          "mcp__openbot__list_bots:completed",
+          "mcp__openbot__message_bot:running",
+          "mcp__openbot__message_bot:completed",
+        ])
+        expect(tools[1]?.item).toMatchObject({
+          kind: "mcp",
+          mcp: { server: "openbot", tool: "list_bots" },
+          outputPreview: "Scout (fake), Echo (claude)",
+        })
+        expect(tools[3]?.item.outputPreview).toBe("Delivered to Echo: hi there")
+        const messages = finalMessages(events)
+        expect(messages[0]).toContain("Scout (fake), Echo (claude)")
+        expect(messages[1]).toContain("Delivered to Echo")
+        const activities = events.flatMap((e) => (e._tag === "Activity" ? [e] : []))
+        expect(activities.some((a) => a.label === "Thinking…" && a.toolKind === "mcp")).toBe(true)
+        expect(activities.some((a) => a.label === "Sending a message")).toBe(true)
+        expect(activities.some((a) => /_|list bots|message bot/i.test(a.label))).toBe(false)
+      }),
+    ))
 
   test("tool errors (isError) mark the tool call failed", () =>
-    run(Effect.gen(function*() {
-      const session = yield* driver().openSession(openInput({ mcp: [binding] }))
-      const c = yield* collect(session)
-      yield* session.startTurn(turn("trn_1", "tool: boom {}"))
-      const events = yield* c.turnEvents("trn_1")
-      const tools = toolCalls(events)
-      expect(tools.at(-1)?.item).toMatchObject({ status: "failed", error: "ERROR: the boom tool always fails" })
-      expect(events.at(-1)?._tag).toBe("TurnCompleted")
-    })))
+    run(
+      Effect.gen(function* () {
+        const session = yield* driver().openSession(openInput({ mcp: [binding] }))
+        const c = yield* collect(session)
+        yield* session.startTurn(turn("trn_1", "tool: boom {}"))
+        const events = yield* c.turnEvents("trn_1")
+        const tools = toolCalls(events)
+        expect(tools.at(-1)?.item).toMatchObject({ status: "failed", error: "ERROR: the boom tool always fails" })
+        expect(events.at(-1)?._tag).toBe("TurnCompleted")
+      }),
+    ))
 
   test("transport errors, a missing binding and invalid JSON fail the tool call, not the turn", () =>
-    run(Effect.gen(function*() {
-      const badToken: McpBinding = { ...binding, headers: { Authorization: "Bearer wrong" } }
-      const bad = yield* driver().openSession(openInput({ mcp: [badToken] }))
-      const c1 = yield* collect(bad)
-      yield* bad.startTurn(turn("trn_1", "tool: list_bots"))
-      const e1 = yield* c1.turnEvents("trn_1")
-      expect(toolCalls(e1).at(-1)?.item.status).toBe("failed")
-      expect(toolCalls(e1).at(-1)?.item.error).toStartWith("ERROR:")
-      expect(e1.at(-1)?._tag).toBe("TurnCompleted")
+    run(
+      Effect.gen(function* () {
+        const badToken: McpBinding = { ...binding, headers: { Authorization: "Bearer wrong" } }
+        const bad = yield* driver().openSession(openInput({ mcp: [badToken] }))
+        const c1 = yield* collect(bad)
+        yield* bad.startTurn(turn("trn_1", "tool: list_bots"))
+        const e1 = yield* c1.turnEvents("trn_1")
+        expect(toolCalls(e1).at(-1)?.item.status).toBe("failed")
+        expect(toolCalls(e1).at(-1)?.item.error).toStartWith("ERROR:")
+        expect(e1.at(-1)?._tag).toBe("TurnCompleted")
 
-      const none = yield* driver().openSession(openInput({ mcp: [] }))
-      const c2 = yield* collect(none)
-      yield* none.startTurn(turn("trn_2", "tool: list_bots\ntool: shell {oops"))
-      const e2 = yield* c2.turnEvents("trn_2")
-      const statuses = toolCalls(e2).map((t) => `${t.item.title}:${t.item.status}`)
-      expect(statuses).toEqual(["list_bots:running", "list_bots:failed", "shell:failed"])
-      expect(finalMessages(e2).every((m) => m.startsWith("ERROR:"))).toBe(true)
-    })))
+        const none = yield* driver().openSession(openInput({ mcp: [] }))
+        const c2 = yield* collect(none)
+        yield* none.startTurn(turn("trn_2", "tool: list_bots\ntool: shell {oops"))
+        const e2 = yield* c2.turnEvents("trn_2")
+        const statuses = toolCalls(e2).map((t) => `${t.item.title}:${t.item.status}`)
+        expect(statuses).toEqual(["list_bots:running", "list_bots:failed", "shell:failed"])
+        expect(finalMessages(e2).every((m) => m.startsWith("ERROR:"))).toBe(true)
+      }),
+    ))
 })

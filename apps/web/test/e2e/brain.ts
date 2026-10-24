@@ -62,7 +62,13 @@ const pump = (stream: ReadableStream<Uint8Array>, sink: { text: string }) => {
   })().catch(() => undefined)
 }
 
-const waitFor = async (sink: { text: string }, pattern: RegExp, timeoutMs: number, what: string, exited: () => boolean) => {
+const waitFor = async (
+  sink: { text: string },
+  pattern: RegExp,
+  timeoutMs: number,
+  what: string,
+  exited: () => boolean,
+) => {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const m = pattern.exec(sink.text)
@@ -86,13 +92,29 @@ export const startBrain = async (options?: {
   const dataDir = mkdtempSync(join(tmpdir(), "openbot-e2e-brain-"))
   options?.prepare?.(dataDir)
   const child = Bun.spawn(
-    [process.execPath, serverMain, "--data-dir", dataDir, "--port", "0", "--harness", options?.harnesses ?? "fake", ...(options?.args ?? [])],
+    [
+      process.execPath,
+      serverMain,
+      "--data-dir",
+      dataDir,
+      "--port",
+      "0",
+      "--harness",
+      options?.harnesses ?? "fake",
+      ...(options?.args ?? []),
+    ],
     { cwd: repoRoot, stdout: "pipe", stderr: "pipe", env: childEnv(options?.env) },
   )
   const sink = { text: "" }
   pump(child.stdout, sink)
   pump(child.stderr, sink)
-  const m = await waitFor(sink, /OpenBot is running → (\S+)/, 30_000, "the brain's login URL", () => child.exitCode !== null)
+  const m = await waitFor(
+    sink,
+    /OpenBot is running → (\S+)/,
+    30_000,
+    "the brain's login URL",
+    () => child.exitCode !== null,
+  )
   const loginUrl = m[1]!
   const url = new URL(loginUrl)
   return {
@@ -113,7 +135,8 @@ export const startBrain = async (options?: {
 
 // ---------------------------------------------------------------------------------- browser
 
-export const launchBrowser = (args?: ReadonlyArray<string>): Promise<Browser> => chromium.launch({ executablePath: chromiumPath, ...(args === undefined ? {} : { args: [...args] }) })
+export const launchBrowser = (args?: ReadonlyArray<string>): Promise<Browser> =>
+  chromium.launch({ executablePath: chromiumPath, ...(args === undefined ? {} : { args: [...args] }) })
 
 export interface AppPage {
   readonly page: Page
@@ -130,7 +153,12 @@ export const openApp = async (
   options?: { readonly theme?: "dark" | "light"; readonly route?: string; readonly context?: BrowserContextOptions },
 ): Promise<AppPage> => {
   const theme = options?.theme ?? "dark"
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, colorScheme: theme, ...options?.context })
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 1,
+    colorScheme: theme,
+    ...options?.context,
+  })
   const page = await context.newPage()
   page.setDefaultTimeout(15_000)
   const errors: Array<string> = []
@@ -185,10 +213,15 @@ export const connectRpc = async (brain: Brain): Promise<Rpc> => {
   const cookie = await login(brain.base, brain.token)
   const scope = Effect.runSync(Scope.make())
   const client = await Effect.runPromise(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const protocol = yield* Layer.build(
         RpcClient.layerProtocolSocket({ retryTransientErrors: false }).pipe(
-          Layer.provide(BunSocket.layerWebSocket(`${brain.base.replace(/^http/, "ws")}/rpc`, { headers: { cookie, origin: brain.base }, openTimeout: 5_000 })),
+          Layer.provide(
+            BunSocket.layerWebSocket(`${brain.base.replace(/^http/, "ws")}/rpc`, {
+              headers: { cookie, origin: brain.base },
+              openTimeout: 5_000,
+            }),
+          ),
           Layer.provide(RpcSerialization.layerJson),
         ),
       )
@@ -201,7 +234,7 @@ export const connectRpc = async (brain: Brain): Promise<Rpc> => {
     conversation: (id) =>
       Effect.runPromise(
         Effect.scoped(
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const state = yield* Ref.make<ConversationState>(emptyConversationState)
             const fiber = yield* client["conversations.subscribe"]({ conversationId: id }).pipe(
               Stream.runForEach((item) => Ref.update(state, (s) => applyConversationStreamItem(s, item))),
@@ -228,19 +261,28 @@ export const connectRpc = async (brain: Brain): Promise<Rpc> => {
             Effect.sync(() => {
               state = applyRosterStreamItem(state, item)
               const change = (item as { kind?: string; change?: { type?: string; activity?: BotActivity } }).change
-              if (item.kind === "change" && change?.type === "activity.updated" && change.activity) seen.push(change.activity)
-            })
+              if (item.kind === "change" && change?.type === "activity.updated" && change.activity)
+                seen.push(change.activity)
+            }),
           ),
         ),
       )
-      return { state: () => state, activities: () => seen, stop: () => Effect.runPromise(Fiber.interrupt(fiber)).then(() => undefined) }
+      return {
+        state: () => state,
+        activities: () => seen,
+        stop: () => Effect.runPromise(Fiber.interrupt(fiber)).then(() => undefined),
+      }
     },
     close: () => Effect.runPromise(Scope.close(scope, Exit.void)),
   }
 }
 
 /** Polls `read` until `predicate` holds. */
-export const eventually = async <A>(read: () => Promise<A>, predicate: (a: A) => boolean, options?: { readonly timeout?: number; readonly label?: string }): Promise<A> => {
+export const eventually = async <A>(
+  read: () => Promise<A>,
+  predicate: (a: A) => boolean,
+  options?: { readonly timeout?: number; readonly label?: string },
+): Promise<A> => {
   const deadline = Date.now() + (options?.timeout ?? 15_000)
   let last: A | undefined
   while (Date.now() < deadline) {
@@ -248,7 +290,9 @@ export const eventually = async <A>(read: () => Promise<A>, predicate: (a: A) =>
     if (predicate(last)) return last
     await Bun.sleep(100)
   }
-  throw new Error(`timed out waiting for ${options?.label ?? "condition"}; last: ${JSON.stringify(last)?.slice(0, 3000)}`)
+  throw new Error(
+    `timed out waiting for ${options?.label ?? "condition"}; last: ${JSON.stringify(last)?.slice(0, 3000)}`,
+  )
 }
 
 // ---------------------------------------------------------------------------------- UI helpers
@@ -258,7 +302,10 @@ export const createBotViaUi = async (page: Page, name: string) => {
   await page.keyboard.press("Control+n")
   const to = page.getByRole("combobox", { name: "To" })
   await to.fill(name)
-  await page.getByRole("option", { name: new RegExp(`Create .*${name}`) }).first().click()
+  await page
+    .getByRole("option", { name: new RegExp(`Create .*${name}`) })
+    .first()
+    .click()
   const form = page.getByTestId("new-bot-form")
   await form.waitFor()
   await form.getByTestId("harness-chip-fake").click()

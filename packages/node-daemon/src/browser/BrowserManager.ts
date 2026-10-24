@@ -81,7 +81,9 @@ export interface BrowserManagerShape {
   readonly cdpPort: () => number | undefined
 }
 
-export class BrowserManager extends Context.Service<BrowserManager, BrowserManagerShape>()("openbot/node-daemon/BrowserManager") {}
+export class BrowserManager extends Context.Service<BrowserManager, BrowserManagerShape>()(
+  "openbot/node-daemon/BrowserManager",
+) {}
 
 interface Tab {
   readonly targetId: string
@@ -186,7 +188,10 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
 
     const attach = (cdp: CdpClient, targetId: string) =>
       Effect.gen(function* () {
-        const { sessionId } = yield* cdp.send<{ sessionId: string }>("Target.attachToTarget", { targetId, flatten: true })
+        const { sessionId } = yield* cdp.send<{ sessionId: string }>("Target.attachToTarget", {
+          targetId,
+          flatten: true,
+        })
         yield* cdp.send("Page.enable", {}, sessionId)
         return { targetId, sessionId, refs: new Map<string, number>() } satisfies Tab
       })
@@ -231,54 +236,66 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       }
     }
 
-    const start = (key: string): Effect.Effect<Running, BrowserUnavailable> => Effect.gen(function* () {
-      const screen = onScreen && key !== "" ? yield* onScreen(key) : undefined
-      const scope = yield* Scope.make()
-      return yield* Effect.gen(function* () {
-        const launched = yield* Effect.acquireRelease(
-          screen
-            ? launchBrowser({ ...onScreenBrowserConfig(config, screen), debugPort: screen.debugPort }, {
-                env: screen.env,
-                cwd: screen.cwd,
-                logFile: path.join(screen.logDir, "browser.log"),
-                adopt: true,
-              })
-            : launchBrowser(config, { logFile: options?.logFile }),
-          (l) => terminateGroup(l.proc, 200),
+    const start = (key: string): Effect.Effect<Running, BrowserUnavailable> =>
+      Effect.gen(function* () {
+        const screen = onScreen && key !== "" ? yield* onScreen(key) : undefined
+        const scope = yield* Scope.make()
+        return yield* Effect.gen(function* () {
+          const launched = yield* Effect.acquireRelease(
+            screen
+              ? launchBrowser(
+                  { ...onScreenBrowserConfig(config, screen), debugPort: screen.debugPort },
+                  {
+                    env: screen.env,
+                    cwd: screen.cwd,
+                    logFile: path.join(screen.logDir, "browser.log"),
+                    adopt: true,
+                  },
+                )
+              : launchBrowser(config, { logFile: options?.logFile }),
+            (l) => terminateGroup(l.proc, 200),
+          )
+          const cdp = yield* connectCdp(launched.wsUrl).pipe(
+            Effect.mapError((e) => new BrowserUnavailable({ reason: `cannot connect to the browser: ${e.message}` })),
+          )
+          const r: Running = { key, launched, cdp, scope, bots: new Map(), closedListeners: new Set(), closing: false }
+          cdp.on(onEvent(r))
+          yield* cdp.send("Target.setDiscoverTargets", { discover: true }).pipe(Effect.ignore)
+          cdp.closed.then(() => {
+            if (instances.get(r.key) === r) instances.delete(r.key)
+            for (const w of r.bots.values()) {
+              notify(w.listeners)
+              emitClosed(w.botId, r.closing ? "the node closed the browser" : "the browser exited")
+            }
+            notify(r.closedListeners)
+          })
+          return r
+        }).pipe(
+          Scope.provide(scope),
+          Effect.onError(() => Scope.close(scope, Exit.void)),
         )
-        const cdp = yield* connectCdp(launched.wsUrl).pipe(
-          Effect.mapError((e) => new BrowserUnavailable({ reason: `cannot connect to the browser: ${e.message}` })),
-        )
-        const r: Running = { key, launched, cdp, scope, bots: new Map(), closedListeners: new Set(), closing: false }
-        cdp.on(onEvent(r))
-        yield* cdp.send("Target.setDiscoverTargets", { discover: true }).pipe(Effect.ignore)
-        cdp.closed.then(() => {
-          if (instances.get(r.key) === r) instances.delete(r.key)
-          for (const w of r.bots.values()) {
-            notify(w.listeners)
-            emitClosed(w.botId, r.closing ? "the node closed the browser" : "the browser exited")
-          }
-          notify(r.closedListeners)
-        })
-        return r
-      }).pipe(Scope.provide(scope), Effect.onError(() => Scope.close(scope, Exit.void)))
-    })
-
-    const getRunning = (key: string): Effect.Effect<Running, BrowserUnavailable> => Effect.suspend(() => {
-      if (!available) {
-        return Effect.fail(
-          new BrowserUnavailable({ reason: config.enabled ? "no Chromium or Chrome was found on this node" : "the browser is disabled on this node" }),
-        )
-      }
-      const current = instances.get(key)
-      if (current && current.cdp.isOpen() && !current.closing) return Effect.succeed(current)
-      return Effect.gen(function* () {
-        if (current) yield* stop(current)
-        const r = yield* start(key)
-        instances.set(key, r)
-        return r
       })
-    })
+
+    const getRunning = (key: string): Effect.Effect<Running, BrowserUnavailable> =>
+      Effect.suspend(() => {
+        if (!available) {
+          return Effect.fail(
+            new BrowserUnavailable({
+              reason: config.enabled
+                ? "no Chromium or Chrome was found on this node"
+                : "the browser is disabled on this node",
+            }),
+          )
+        }
+        const current = instances.get(key)
+        if (current && current.cdp.isOpen() && !current.closing) return Effect.succeed(current)
+        return Effect.gen(function* () {
+          if (current) yield* stop(current)
+          const r = yield* start(key)
+          instances.set(key, r)
+          return r
+        })
+      })
 
     const newTab = (r: Running, url: string, newWindow: boolean) =>
       Effect.gen(function* () {
@@ -299,10 +316,12 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         const w: BotWindow = existing ?? { botId, tabs: new Map(), active: "", listeners: new Set() }
         if (r.key !== "") {
           // the bot's own browser: its open pages (the startup window, or windows opened from the dock) are the bot's tabs
-          const pages = yield* r.cdp.send<{ targetInfos: ReadonlyArray<{ targetId: string; type: string; url: string }> }>("Target.getTargets").pipe(
-            Effect.map((res) => res.targetInfos.filter((t) => t.type === "page" && !t.url.startsWith("devtools://"))),
-            Effect.orElseSucceed(() => []),
-          )
+          const pages = yield* r.cdp
+            .send<{ targetInfos: ReadonlyArray<{ targetId: string; type: string; url: string }> }>("Target.getTargets")
+            .pipe(
+              Effect.map((res) => res.targetInfos.filter((t) => t.type === "page" && !t.url.startsWith("devtools://"))),
+              Effect.orElseSucceed(() => []),
+            )
           for (const p of pages) {
             if (w.tabs.has(p.targetId)) continue
             const tab = yield* attach(r.cdp, p.targetId).pipe(Effect.option)
@@ -348,8 +367,15 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       Effect.gen(function* () {
         const { r, w } = yield* windowFor(botId)
         const tab = w.tabs.get(w.active)!
-        const vp = yield* viewport(r, tab.sessionId).pipe(Effect.orElseSucceed(() => ({ width: config.width, height: config.height })))
-        return { windowTargetId: tab.targetId, cdpPort: r.launched.port, width: vp.width, height: vp.height } satisfies BrowserEnsureResult
+        const vp = yield* viewport(r, tab.sessionId).pipe(
+          Effect.orElseSucceed(() => ({ width: config.width, height: config.height })),
+        )
+        return {
+          windowTargetId: tab.targetId,
+          cdpPort: r.launched.port,
+          width: vp.width,
+          height: vp.height,
+        } satisfies BrowserEnsureResult
       })
 
     const lease = (botId: string): LeaseState => leases.get(botId)
@@ -368,7 +394,11 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
 
     const pageInfo = (r: Running, sid: string) =>
       r.cdp
-        .send<any>("Runtime.evaluate", { expression: "JSON.stringify([location.href, document.title])", returnByValue: true }, sid)
+        .send<any>(
+          "Runtime.evaluate",
+          { expression: "JSON.stringify([location.href, document.title])", returnByValue: true },
+          sid,
+        )
         .pipe(
           Effect.map((res) => {
             try {
@@ -388,7 +418,11 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         yield* r.cdp.send("DOM.scrollIntoViewIfNeeded", { backendNodeId }, sid).pipe(Effect.ignore)
         const box = yield* r.cdp
           .send<any>("DOM.getBoxModel", { backendNodeId }, sid)
-          .pipe(Effect.mapError(() => fail(action, `element ${ref} is not visible or no longer exists; take a new snapshot`)))
+          .pipe(
+            Effect.mapError(() =>
+              fail(action, `element ${ref} is not visible or no longer exists; take a new snapshot`),
+            ),
+          )
         const q: Array<number> = box.model?.content ?? box.model?.border ?? []
         if (q.length < 8) return yield* fail(action, `element ${ref} has no box`)
         const xs = [q[0]!, q[2]!, q[4]!, q[6]!]
@@ -400,8 +434,22 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
       Effect.gen(function* () {
         const k = parseKeyCombo(combo)
         if (!k) return yield* fail("key", `unknown key ${JSON.stringify(combo)}`)
-        const base = { key: k.key, code: k.code, windowsVirtualKeyCode: k.windowsVirtualKeyCode, nativeVirtualKeyCode: k.windowsVirtualKeyCode, modifiers: k.modifiers }
-        yield* r.cdp.send("Input.dispatchKeyEvent", { type: k.text ? "keyDown" : "rawKeyDown", ...base, ...(k.text ? { text: k.text, unmodifiedText: k.text } : {}) }, sid)
+        const base = {
+          key: k.key,
+          code: k.code,
+          windowsVirtualKeyCode: k.windowsVirtualKeyCode,
+          nativeVirtualKeyCode: k.windowsVirtualKeyCode,
+          modifiers: k.modifiers,
+        }
+        yield* r.cdp.send(
+          "Input.dispatchKeyEvent",
+          {
+            type: k.text ? "keyDown" : "rawKeyDown",
+            ...base,
+            ...(k.text ? { text: k.text, unmodifiedText: k.text } : {}),
+          },
+          sid,
+        )
         yield* r.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...base }, sid)
       })
 
@@ -410,15 +458,30 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
     const tabsOf = (r: Running, w: BotWindow) =>
       Effect.forEach([...w.tabs.values()], (t) =>
         r.cdp.send<any>("Target.getTargetInfo", { targetId: t.targetId }).pipe(
-          Effect.map((res): BrowserTab => ({ tabId: t.targetId, url: res.targetInfo?.url ?? "", title: res.targetInfo?.title ?? "", active: t.targetId === w.active })),
-          Effect.orElseSucceed((): BrowserTab => ({ tabId: t.targetId, url: "", title: "", active: t.targetId === w.active })),
+          Effect.map((res): BrowserTab => ({
+            tabId: t.targetId,
+            url: res.targetInfo?.url ?? "",
+            title: res.targetInfo?.title ?? "",
+            active: t.targetId === w.active,
+          })),
+          Effect.orElseSucceed((): BrowserTab => ({
+            tabId: t.targetId,
+            url: "",
+            title: "",
+            active: t.targetId === w.active,
+          })),
         ),
       )
 
     const tabsText = (tabs: ReadonlyArray<BrowserTab>) =>
-      tabs.length === 0 ? "No tabs." : tabs.map((t) => `${t.active ? "*" : "-"} [${t.tabId}] ${t.title || "(untitled)"} — ${t.url}`).join("\n")
+      tabs.length === 0
+        ? "No tabs."
+        : tabs.map((t) => `${t.active ? "*" : "-"} [${t.tabId}] ${t.title || "(untitled)"} — ${t.url}`).join("\n")
 
-    const doAction = (botId: string, action: BrowserAction): Effect.Effect<BrowserActionResult, BrowserUnavailable | BrowserActionFailed | CdpError> =>
+    const doAction = (
+      botId: string,
+      action: BrowserAction,
+    ): Effect.Effect<BrowserActionResult, BrowserUnavailable | BrowserActionFailed | CdpError> =>
       Effect.gen(function* () {
         const { r, w } = yield* windowFor(botId)
         const tabId = "tabId" in action && action.tabId ? action.tabId : w.active
@@ -439,7 +502,11 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
             tab.refs = new Map()
             const info = yield* pageInfo(r, sid)
             const loading = result.loaderId && !event ? " (still loading)" : ""
-            return { text: `Navigated to ${info.url || url}${loading}\nTitle: ${info.title || "(untitled)"}\nUse snapshot to read the page.`, url: info.url || url, title: info.title }
+            return {
+              text: `Navigated to ${info.url || url}${loading}\nTitle: ${info.title || "(untitled)"}\nUse snapshot to read the page.`,
+              url: info.url || url,
+              title: info.title,
+            }
           }
           case "snapshot": {
             yield* cdp.send("Accessibility.enable", {}, sid).pipe(Effect.ignore)
@@ -447,7 +514,11 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
             const snap = renderSnapshot(nodes)
             tab.refs = snap.refs
             const info = yield* pageInfo(r, sid)
-            return { text: `Page: ${info.title || "(untitled)"} — ${info.url}\n${snap.text || "(empty page)"}`, url: info.url, title: info.title }
+            return {
+              text: `Page: ${info.title || "(untitled)"} — ${info.url}\n${snap.text || "(empty page)"}`,
+              url: info.url,
+              title: info.title,
+            }
           }
           case "click": {
             const point =
@@ -458,21 +529,40 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
                   : yield* fail("click", "give a ref from the last snapshot, or x and y")
             const button = action.button ?? "left"
             const clickCount = Math.max(1, Math.floor(action.clickCount ?? 1))
-            yield* cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y, button: "none" }, sid)
+            yield* cdp.send(
+              "Input.dispatchMouseEvent",
+              { type: "mouseMoved", x: point.x, y: point.y, button: "none" },
+              sid,
+            )
             for (let i = 1; i <= clickCount; i++) {
-              yield* cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button, clickCount: i }, sid)
-              yield* cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button, clickCount: i }, sid)
+              yield* cdp.send(
+                "Input.dispatchMouseEvent",
+                { type: "mousePressed", x: point.x, y: point.y, button, clickCount: i },
+                sid,
+              )
+              yield* cdp.send(
+                "Input.dispatchMouseEvent",
+                { type: "mouseReleased", x: point.x, y: point.y, button, clickCount: i },
+                sid,
+              )
             }
             yield* settle
             const info = yield* pageInfo(r, sid)
             const what = action.ref ?? `(${Math.round(point.x)}, ${Math.round(point.y)})`
-            return { text: `Clicked ${what}${clickCount > 1 ? ` ×${clickCount}` : ""}.\nPage: ${info.title || "(untitled)"} — ${info.url}`, url: info.url, title: info.title }
+            return {
+              text: `Clicked ${what}${clickCount > 1 ? ` ×${clickCount}` : ""}.\nPage: ${info.title || "(untitled)"} — ${info.url}`,
+              url: info.url,
+              title: info.title,
+            }
           }
           case "type": {
             if (action.ref !== undefined) {
               const backendNodeId = tab.refs.get(action.ref)
-              if (backendNodeId === undefined) return yield* fail("type", `unknown ref ${action.ref}; take a new snapshot first`)
-              yield* cdp.send("DOM.focus", { backendNodeId }, sid).pipe(Effect.mapError(() => fail("type", `element ${action.ref} cannot be focused`)))
+              if (backendNodeId === undefined)
+                return yield* fail("type", `unknown ref ${action.ref}; take a new snapshot first`)
+              yield* cdp
+                .send("DOM.focus", { backendNodeId }, sid)
+                .pipe(Effect.mapError(() => fail("type", `element ${action.ref} cannot be focused`)))
             }
             if (action.clear) {
               yield* cdp.send(
@@ -508,7 +598,11 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
             const px = Math.round(Math.max(0.1, action.amount ?? 3) * 100)
             const dx = action.direction === "left" ? -px : action.direction === "right" ? px : 0
             const dy = action.direction === "up" ? -px : action.direction === "down" ? px : 0
-            yield* cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: point.x, y: point.y, deltaX: dx, deltaY: dy }, sid)
+            yield* cdp.send(
+              "Input.dispatchMouseEvent",
+              { type: "mouseWheel", x: point.x, y: point.y, deltaX: dx, deltaY: dy },
+              sid,
+            )
             yield* settle
             return { text: `Scrolled ${action.direction} by ${px}px.` }
           }
@@ -544,7 +638,8 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
                 break
               }
               case "select": {
-                if (!action.tabId || !w.tabs.has(action.tabId)) return yield* fail("tabs", `unknown tab ${action.tabId ?? "(none)"}`)
+                if (!action.tabId || !w.tabs.has(action.tabId))
+                  return yield* fail("tabs", `unknown tab ${action.tabId ?? "(none)"}`)
                 w.active = action.tabId
                 yield* cdp.send("Target.activateTarget", { targetId: action.tabId }).pipe(Effect.ignore)
                 notify(w.listeners)
@@ -564,10 +659,14 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
         }
       })
 
-    const action = (botId: string, a: BrowserAction): Effect.Effect<BrowserActionResult, BrowserUnavailable | BrowserActionFailed | LeaseHeld> =>
+    const action = (
+      botId: string,
+      a: BrowserAction,
+    ): Effect.Effect<BrowserActionResult, BrowserUnavailable | BrowserActionFailed | LeaseHeld> =>
       Effect.gen(function* () {
         const l = lease(botId)
-        if (l.holder === "user") return yield* new LeaseHeld({ botId, holder: "user", reason: "The user is controlling the browser" })
+        if (l.holder === "user")
+          return yield* new LeaseHeld({ botId, holder: "user", reason: "The user is controlling the browser" })
         return yield* doAction(botId, a).pipe(
           Effect.catchTag("CdpError", (e): Effect.Effect<never, BrowserActionFailed | BrowserUnavailable> =>
             instanceOf(botId)?.cdp.isOpen()
@@ -580,7 +679,8 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
     const input = (botId: string, event: BrowserInputEvent) =>
       Effect.gen(function* () {
         const l = lease(botId)
-        if (l.holder !== "user") return yield* new LeaseHeld({ botId, holder: "bot", reason: "take control before sending input" })
+        if (l.holder !== "user")
+          return yield* new LeaseHeld({ botId, holder: "bot", reason: "take control before sending input" })
         const { r, w } = yield* windowFor(botId)
         const tab = w.tabs.get(w.active)
         if (!tab) return yield* new BrowserUnavailable({ reason: "the bot has no open tab" })
@@ -589,7 +689,9 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
           r.cdp.send(method, params, sid).pipe(Effect.mapError((e) => new BrowserUnavailable({ reason: e.message })))
         switch (event._tag) {
           case "mouse": {
-            const type = { move: "mouseMoved", down: "mousePressed", up: "mouseReleased", wheel: "mouseWheel" }[event.type]
+            const type = { move: "mouseMoved", down: "mousePressed", up: "mouseReleased", wheel: "mouseWheel" }[
+              event.type
+            ]
             yield* send("Input.dispatchMouseEvent", {
               type,
               x: event.x,
@@ -658,14 +760,21 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
             w.listeners.add(onChange)
             r.closedListeners.add(onClosed)
             const result = yield* Effect.gen(function* () {
-              const { sessionId: sid } = yield* r.cdp.send<{ sessionId: string }>("Target.attachToTarget", { targetId: tab.targetId, flatten: true })
+              const { sessionId: sid } = yield* r.cdp.send<{ sessionId: string }>("Target.attachToTarget", {
+                targetId: tab.targetId,
+                flatten: true,
+              })
               yield* Effect.addFinalizer(() =>
                 Effect.gen(function* () {
                   yield* r.cdp.send("Page.stopScreencast", {}, sid).pipe(Effect.ignore)
                   yield* r.cdp.send("Target.detachFromTarget", { sessionId: sid }).pipe(Effect.ignore)
                 }),
               )
-              const pushFrame = (bytes: Uint8Array, meta: { deviceWidth?: number; deviceHeight?: number; timestamp?: number }, ack?: () => void) => {
+              const pushFrame = (
+                bytes: Uint8Array,
+                meta: { deviceWidth?: number; deviceHeight?: number; timestamp?: number },
+                ack?: () => void,
+              ) => {
                 const size = imageSize(bytes)
                 const frame = encodeScreencastFrame(
                   {
@@ -690,7 +799,11 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
                   pushFrame(Buffer.from(String(e.params.data), "base64"), e.params.metadata ?? {}, ack)
                 } else if (e.method === "Page.loadEventFired" || e.method === "Page.navigatedWithinDocument") {
                   runFork(
-                    pageInfo(r, sid).pipe(Effect.tap((info) => Effect.sync(() => notice({ _tag: "Url", url: info.url, title: info.title })))),
+                    pageInfo(r, sid).pipe(
+                      Effect.tap((info) =>
+                        Effect.sync(() => notice({ _tag: "Url", url: info.url, title: info.title })),
+                      ),
+                    ),
                   )
                 }
               })
@@ -700,11 +813,14 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
               const info = yield* pageInfo(r, sid)
               notice({ _tag: "Url", url: info.url, title: info.title })
               // idle pages do not repaint: push one still frame first
-              const vp = yield* viewport(r, sid).pipe(Effect.orElseSucceed(() => ({ width: config.width, height: config.height })))
+              const vp = yield* viewport(r, sid).pipe(
+                Effect.orElseSucceed(() => ({ width: config.width, height: config.height })),
+              )
               const still = yield* r.cdp
                 .send<{ data: string }>("Page.captureScreenshot", { format: "jpeg", quality: opts.quality ?? 60 }, sid)
                 .pipe(Effect.option)
-              if (still._tag === "Some") pushFrame(Buffer.from(still.value.data, "base64"), { deviceWidth: vp.width, deviceHeight: vp.height })
+              if (still._tag === "Some")
+                pushFrame(Buffer.from(still.value.data, "base64"), { deviceWidth: vp.width, deviceHeight: vp.height })
               yield* r.cdp.send(
                 "Page.startScreencast",
                 {
@@ -720,7 +836,10 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
                 started = true
                 yield* sc.onStarted(tab.targetId)
               }
-              return yield* Effect.raceFirst(Deferred.await(changed), Deferred.await(socketClosed).pipe(Effect.as("socket-closed" as const)))
+              return yield* Effect.raceFirst(
+                Deferred.await(changed),
+                Deferred.await(socketClosed).pipe(Effect.as("socket-closed" as const)),
+              )
             }).pipe(
               Effect.scoped,
               Effect.ensuring(
@@ -730,7 +849,9 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
                 }),
               ),
               Effect.catchTag("CdpError", (e) =>
-                r.cdp.isOpen() ? Effect.succeed("changed" as const) : Effect.fail(new BrowserUnavailable({ reason: e.message })),
+                r.cdp.isOpen()
+                  ? Effect.succeed("changed" as const)
+                  : Effect.fail(new BrowserUnavailable({ reason: e.message })),
               ),
             )
             if (result === "socket-closed") break
@@ -806,7 +927,11 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
     } satisfies BrowserManagerShape
   })
 
-export const BrowserManagerLive: Layer.Layer<BrowserManager, never, NodeConfig | BrainLink | LeaseBook | DesktopManager> = Layer.effect(
+export const BrowserManagerLive: Layer.Layer<
+  BrowserManager,
+  never,
+  NodeConfig | BrainLink | LeaseBook | DesktopManager
+> = Layer.effect(
   BrowserManager,
   Effect.gen(function* () {
     const config = yield* NodeConfig
@@ -820,7 +945,14 @@ export const BrowserManagerLive: Layer.Layer<BrowserManager, never, NodeConfig |
       // with desktops, every bot's browser runs on the bot's own screen
       onScreen:
         desktop.offered && config.browser.enabled && config.browser.executable !== undefined
-          ? (botId) => desktop.screen(botId).pipe(Effect.mapError((e) => new BrowserUnavailable({ reason: `the bot's screen is unavailable: ${e.message}` })))
+          ? (botId) =>
+              desktop
+                .screen(botId)
+                .pipe(
+                  Effect.mapError(
+                    (e) => new BrowserUnavailable({ reason: `the bot's screen is unavailable: ${e.message}` }),
+                  ),
+                )
           : undefined,
     })
     // a desktop reset closes the bot's browser first, so its cookies are saved

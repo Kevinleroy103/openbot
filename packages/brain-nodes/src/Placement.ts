@@ -46,8 +46,12 @@ export const placementPrompt = (
     lines.push("Your built-in file and shell tools are turned off; the openbot node tools act on that computer.")
   }
   if (others.length > 0 && plan.toolsets.includes("node")) {
-    const list = others.map((n) => `"${n.label}" (node: "${n.id}", ${n.platform}${n.status === "online" ? "" : ", offline"})`)
-    lines.push(`You can also reach ${list.join(", ")} by passing its id as the \`node\` parameter of the openbot node tools.`)
+    const list = others.map(
+      (n) => `"${n.label}" (node: "${n.id}", ${n.platform}${n.status === "online" ? "" : ", offline"})`,
+    )
+    lines.push(
+      `You can also reach ${list.join(", ")} by passing its id as the \`node\` parameter of the openbot node tools.`,
+    )
   }
   return lines.join("\n")
 }
@@ -55,7 +59,7 @@ export const placementPrompt = (
 /** How long placement waits for the host node to create the bot's workspace (best effort). */
 export const REMOTE_WORKSPACE_TIMEOUT_MS = 10_000
 
-export const makePlacementService = Effect.gen(function*() {
+export const makePlacementService = Effect.gen(function* () {
   const directory = yield* NodeDirectory
   const dataDir = yield* DataDir
   const relays = yield* RelayService
@@ -74,7 +78,7 @@ export const makePlacementService = Effect.gen(function*() {
    * on it for long; the tools then report the node's error themselves.
    */
   const ensureNodeDir = (nodeId: NodeId, botId: BotId, path: string) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const client = yield* directory.client(nodeId)
       const inv = { invocationId: yield* ids.next("inv"), botId, runId: `placement-${botId}` }
       yield* client["fs.mkdir"]({ inv, path, recursive: true })
@@ -85,13 +89,24 @@ export const makePlacementService = Effect.gen(function*() {
 
   return PlacementService.of({
     resolve: ({ bot, driver }) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const host = yield* directory.get(bot.hostNodeId).pipe(
-          Effect.mapError((e) =>
-            new PlacementError({ botId: bot.id, nodeId: bot.hostNodeId, reason: "node-unavailable", message: e.message })
+          Effect.mapError(
+            (e) =>
+              new PlacementError({
+                botId: bot.id,
+                nodeId: bot.hostNodeId,
+                reason: "node-unavailable",
+                message: e.message,
+              }),
           ),
         )
-        const planned = planPlacement({ bot, driverKind: driver.kind, capabilities: driver.capabilities, hostNode: host })
+        const planned = planPlacement({
+          bot,
+          driverKind: driver.kind,
+          capabilities: driver.capabilities,
+          hostNode: host,
+        })
         if (Result.isFailure(planned)) return yield* planned.failure
         const plan = planned.success
 
@@ -114,12 +129,14 @@ export const makePlacementService = Effect.gen(function*() {
 
         let codexEnvironment: ResolvedPlacement["codexEnvironment"]
         if (plan.mode === "codex-environment") {
-          const grant = yield* relays.grant({
-            nodeId: host.id,
-            botId: bot.id,
-            kind: "codex.exec-server",
-            cwd: workspacePath,
-          }).pipe(Scope.provide(releaseScope))
+          const grant = yield* relays
+            .grant({
+              nodeId: host.id,
+              botId: bot.id,
+              kind: "codex.exec-server",
+              cwd: workspacePath,
+            })
+            .pipe(Scope.provide(releaseScope))
           codexEnvironment = {
             environmentId: codexEnvironmentId(host.id, bot.id),
             execServerUrl: grant.url,
@@ -146,5 +163,8 @@ export const makePlacementService = Effect.gen(function*() {
   })
 })
 
-export const PlacementServiceLive: Layer.Layer<PlacementService, never, NodeDirectory | DataDir | RelayService | IdGen> =
-  Layer.effect(PlacementService, makePlacementService)
+export const PlacementServiceLive: Layer.Layer<
+  PlacementService,
+  never,
+  NodeDirectory | DataDir | RelayService | IdGen
+> = Layer.effect(PlacementService, makePlacementService)

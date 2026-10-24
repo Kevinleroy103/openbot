@@ -4,6 +4,12 @@
 @source "./";
 
 @layer base {
-  html, body, #root { height: 100%; }
-  body { overflow: hidden; }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    overflow: hidden;
+  }
 }

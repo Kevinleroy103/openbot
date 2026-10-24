@@ -47,24 +47,28 @@ const waitFor = (pred: () => boolean, ms = 5000) =>
     return pred()
   })
 
-test("interrupting a launch while it connects to the browser kills the browser", () =>
-  run(
-    Effect.gen(function* () {
-      const manager = yield* makeBrowserManager({
-        enabled: true,
-        executable: fakeChrome,
-        headless: true,
-        profileDir: path.join(t.path, "profile"),
-        width: 800,
-        height: 600,
-        extraArgs: [],
-        navigationTimeoutMs: 15_000,
-      })
-      const ensuring = yield* Effect.forkScoped(manager.ensure("bot_a"))
-      expect(yield* waitFor(() => existsSync(dialedFile))).toBe(true)
-      const pid = Number(readFileSync(pidFile, "utf8"))
-      expect(alive(pid)).toBe(true)
-      yield* Fiber.interrupt(ensuring)
-      expect(yield* waitFor(() => !alive(pid))).toBe(true)
-    }),
-  ), 15_000)
+test(
+  "interrupting a launch while it connects to the browser kills the browser",
+  () =>
+    run(
+      Effect.gen(function* () {
+        const manager = yield* makeBrowserManager({
+          enabled: true,
+          executable: fakeChrome,
+          headless: true,
+          profileDir: path.join(t.path, "profile"),
+          width: 800,
+          height: 600,
+          extraArgs: [],
+          navigationTimeoutMs: 15_000,
+        })
+        const ensuring = yield* Effect.forkScoped(manager.ensure("bot_a"))
+        expect(yield* waitFor(() => existsSync(dialedFile))).toBe(true)
+        const pid = Number(readFileSync(pidFile, "utf8"))
+        expect(alive(pid)).toBe(true)
+        yield* Fiber.interrupt(ensuring)
+        expect(yield* waitFor(() => !alive(pid))).toBe(true)
+      }),
+    ),
+  15_000,
+)

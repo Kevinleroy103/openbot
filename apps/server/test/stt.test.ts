@@ -22,7 +22,8 @@ const HANG_LEVEL = 0.7
 const CRASH_LEVEL = 0.95
 const FAKE_RECOGNIZER = fileURLToPath(new URL("./fixtures/fake-recognizer.ts", import.meta.url))
 
-const tone = (seconds: number, level = SPEECH_LEVEL) => Float32Array.from({ length: Math.round(seconds * RATE) }, (_, i) => level * Math.sin(i / 3))
+const tone = (seconds: number, level = SPEECH_LEVEL) =>
+  Float32Array.from({ length: Math.round(seconds * RATE) }, (_, i) => level * Math.sin(i / 3))
 const silence = (seconds: number) => new Float32Array(Math.round(seconds * RATE))
 const chunked = (samples: Float32Array, seconds: number) => {
   const size = Math.round(seconds * RATE)
@@ -63,12 +64,17 @@ const archive = (root: string, origin: string, file: string, ...folders: Readonl
   const packed = Bun.spawnSync(["tar", "-cjf", join(root, file), "-C", root, ...folders])
   if (packed.exitCode !== 0) throw new Error(packed.stderr.toString())
   const contents = readFileSync(join(root, file))
-  return { url: `${origin}/${file}`, sha256: createHash("sha256").update(contents).digest("hex"), bytes: contents.byteLength }
+  return {
+    url: `${origin}/${file}`,
+    sha256: createHash("sha256").update(contents).digest("hex"),
+    bytes: contents.byteLength,
+  }
 }
 
 const writeModel = (root: string, folder: string, misheard?: string) => {
   mkdirSync(join(root, folder, "test_wavs"), { recursive: true })
-  for (const name of ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"]) writeFileSync(join(root, folder, name), name)
+  for (const name of ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"])
+    writeFileSync(join(root, folder, name), name)
   writeFileSync(join(root, folder, "test_wavs", "en.wav"), wavBytes(tone(1)))
   if (misheard !== undefined) writeFileSync(join(root, folder, "misheard.txt"), misheard)
 }
@@ -110,7 +116,10 @@ const makeFixtures = (): Fixtures => {
   return fixtures
 }
 
-const manifestFor = (fixtures: Fixtures, parts?: { readonly runtime?: SttArchive | null; readonly model?: SttArchive }): SttManifest => {
+const manifestFor = (
+  fixtures: Fixtures,
+  parts?: { readonly runtime?: SttArchive | null; readonly model?: SttArchive },
+): SttManifest => {
   const platform = sttPlatformOf(process.platform, process.arch)
   const runtime = parts?.runtime === undefined ? fixtures.runtime : parts.runtime
   return {
@@ -129,16 +138,30 @@ const manifestFor = (fixtures: Fixtures, parts?: { readonly runtime?: SttArchive
   }
 }
 
-const startWithManifest = (manifest: SttManifest, extra?: Partial<SpeechToTextOptions> & { readonly dataDir?: string }) => {
+const startWithManifest = (
+  manifest: SttManifest,
+  extra?: Partial<SpeechToTextOptions> & { readonly dataDir?: string },
+) => {
   const dataDir = extra?.dataDir ?? mkdtempSync(join(tmpdir(), "openbot-server-test-"))
   return startServer({
     dataDir,
-    server: { speechToText: SpeechToTextLive({ dir: join(dataDir, "stt"), manifest, recognizerEntry: FAKE_RECOGNIZER, ...extra }) },
+    server: {
+      speechToText: SpeechToTextLive({
+        dir: join(dataDir, "stt"),
+        manifest,
+        recognizerEntry: FAKE_RECOGNIZER,
+        ...extra,
+      }),
+    },
   })
 }
 
 const recognizersRunningUnder = (dataDir: string) =>
-  Bun.spawnSync(["pgrep", "-f", join(dataDir, "stt", "model")]).stdout.toString().trim().split("\n").filter((line) => line.length > 0).length
+  Bun.spawnSync(["pgrep", "-f", join(dataDir, "stt", "model")])
+    .stdout.toString()
+    .trim()
+    .split("\n")
+    .filter((line) => line.length > 0).length
 
 const settled = (status: SttStatus) => status.state !== "installing"
 
@@ -153,11 +176,12 @@ const withClient = async <A>(server: TestServer, body: (client: OpenBotClient) =
   return server.run(Effect.flatMap(rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base }), body))
 }
 
-const installed = (client: OpenBotClient) => client["stt.install"]().pipe(Effect.andThen(eventually(client["stt.status"](), settled, { label: "install" })))
+const installed = (client: OpenBotClient) =>
+  client["stt.install"]().pipe(Effect.andThen(eventually(client["stt.status"](), settled, { label: "install" })))
 
 const recognizerLedgerEntries = (server: TestServer) =>
   server.run(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const entries = yield* (yield* ProcessLedger).list
       return entries.filter((entry) => entry.label === "speech recognizer")
     }),
@@ -217,7 +241,8 @@ describe("a dictation session", () => {
       return `part${decoded.length}`
     }, RATE)
     let text = ""
-    for (const chunk of chunked(joinChunks([silence(0.5), tone(1.2), silence(0.8), tone(1)]), 0.25)) text = await session.append(chunk)
+    for (const chunk of chunked(joinChunks([silence(0.5), tone(1.2), silence(0.8), tone(1)]), 0.25))
+      text = await session.append(chunk)
     const [firstSentence, secondSentence] = text.split(" ")
     expect(secondSentence).toBeDefined()
     const commitIndex = Number(firstSentence!.slice("part".length)) - 1
@@ -292,7 +317,10 @@ describe("the recognizer process", () => {
         sampleRate: RATE,
         decodeTimeoutMs: 5_000,
         startupTimeoutMs: 30_000,
-      }).then(() => undefined, (error: Error) => error.message)
+      }).then(
+        () => undefined,
+        (error: Error) => error.message,
+      )
       expect(failure).toContain("exited with code 1")
       expect(failure).toContain("Failed to open library")
       expect(Date.now() - startedAt).toBeLessThan(10_000)
@@ -308,8 +336,12 @@ describe("voice input over RPC", () => {
     const first = await startWithManifest(manifestFor(fixtures), { dataDir })
     try {
       await withClient(first, (client) =>
-        Effect.gen(function*() {
-          expect(yield* client["stt.status"]()).toEqual({ state: "absent", model: "Fake Parakeet", downloadBytes: fixtures.runtime.bytes + fixtures.model.bytes })
+        Effect.gen(function* () {
+          expect(yield* client["stt.status"]()).toEqual({
+            state: "absent",
+            model: "Fake Parakeet",
+            downloadBytes: fixtures.runtime.bytes + fixtures.model.bytes,
+          })
           expect(yield* Effect.flip(client["stt.open"]())).toMatchObject({ _tag: "Unavailable" })
           expect(yield* installed(client)).toEqual({ state: "ready", model: "Fake Parakeet" })
           expect(recognizersRunningUnder(dataDir)).toBe(0)
@@ -322,15 +354,24 @@ describe("voice input over RPC", () => {
           expect(live.some((text) => occurrences(text, "country") === 1)).toBe(true)
           const final = yield* client["stt.finish"]({ sessionId, pcmBase64: pcm(silence(0.1)) })
           expect(occurrences(final.text, "country")).toBe(2)
-          expect(yield* Effect.flip(client["stt.append"]({ sessionId, pcmBase64: "" }))).toMatchObject({ _tag: "NotFound" })
+          expect(yield* Effect.flip(client["stt.append"]({ sessionId, pcmBase64: "" }))).toMatchObject({
+            _tag: "NotFound",
+          })
 
           const other = yield* client["stt.open"]()
-          expect(yield* Effect.flip(client["stt.append"]({ sessionId: other.sessionId, pcmBase64: "A".repeat(3_000_000) }))).toMatchObject({ _tag: "InvalidInput" })
-          expect(yield* Effect.flip(client["stt.append"]({ sessionId: other.sessionId, pcmBase64: "%%%" }))).toMatchObject({ _tag: "InvalidInput" })
+          expect(
+            yield* Effect.flip(client["stt.append"]({ sessionId: other.sessionId, pcmBase64: "A".repeat(3_000_000) })),
+          ).toMatchObject({ _tag: "InvalidInput" })
+          expect(
+            yield* Effect.flip(client["stt.append"]({ sessionId: other.sessionId, pcmBase64: "%%%" })),
+          ).toMatchObject({ _tag: "InvalidInput" })
           yield* client["stt.discard"]({ sessionId: other.sessionId })
-          expect(yield* Effect.flip(client["stt.finish"]({ sessionId: other.sessionId, pcmBase64: "" }))).toMatchObject({ _tag: "NotFound" })
+          expect(yield* Effect.flip(client["stt.finish"]({ sessionId: other.sessionId, pcmBase64: "" }))).toMatchObject(
+            { _tag: "NotFound" },
+          )
           expect(recognizersRunningUnder(dataDir)).toBe(1)
-        }))
+        }),
+      )
       expect(await recognizerLedgerEntries(first)).toHaveLength(1)
     } finally {
       await first.close({ keepData: true })
@@ -340,13 +381,14 @@ describe("voice input over RPC", () => {
     const second = await startWithManifest(manifestFor(fixtures), { dataDir })
     try {
       await withClient(second, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           expect((yield* client["stt.status"]()).state).toBe("ready")
           yield* client["stt.open"]()
           expect(yield* client["stt.remove"]()).toMatchObject({ state: "absent", model: "Fake Parakeet" })
           expect(recognizersRunningUnder(dataDir)).toBe(0)
           expect(yield* Effect.flip(client["stt.open"]())).toMatchObject({ _tag: "Unavailable" })
-        }))
+        }),
+      )
       expect(await recognizerLedgerEntries(second)).toHaveLength(0)
     } finally {
       await second.close()
@@ -358,28 +400,40 @@ describe("voice input over RPC", () => {
     const server = await startWithManifest(manifestFor(fixtures), { dataDir, decodeTimeoutMs: 500 })
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* installed(client)
           const [a, b, c] = yield* Effect.all([client["stt.open"](), client["stt.open"](), client["stt.open"]()])
-          const crashed = yield* Effect.flip(client["stt.append"]({ sessionId: c.sessionId, pcmBase64: pcm(tone(1, CRASH_LEVEL)) }))
+          const crashed = yield* Effect.flip(
+            client["stt.append"]({ sessionId: c.sessionId, pcmBase64: pcm(tone(1, CRASH_LEVEL)) }),
+          )
           expect(crashed).toMatchObject({ _tag: "Unavailable", message: expect.stringContaining("log") })
           const both = yield* Effect.promise(() =>
             server.run(
-              Effect.gen(function*() {
+              Effect.gen(function* () {
                 const speech = yield* SpeechToText
-                return yield* Effect.all([a, b].map(({ sessionId }) => speech.finish(sessionId, encodePcm16(tone(1)))), { concurrency: "unbounded" })
+                return yield* Effect.all(
+                  [a, b].map(({ sessionId }) => speech.finish(sessionId, encodePcm16(tone(1)))),
+                  { concurrency: "unbounded" },
+                )
               }),
-            )
+            ),
           )
           expect(both.map(({ text }) => text)).toEqual(["country", "country"])
           expect(recognizersRunningUnder(dataDir)).toBe(1)
 
           const hung = yield* client["stt.open"]()
-          expect(yield* Effect.flip(client["stt.finish"]({ sessionId: hung.sessionId, pcmBase64: pcm(tone(1, HANG_LEVEL)) }))).toMatchObject({ _tag: "Unavailable" })
+          expect(
+            yield* Effect.flip(
+              client["stt.finish"]({ sessionId: hung.sessionId, pcmBase64: pcm(tone(1, HANG_LEVEL)) }),
+            ),
+          ).toMatchObject({ _tag: "Unavailable" })
           const after = yield* client["stt.open"]()
-          expect((yield* client["stt.finish"]({ sessionId: after.sessionId, pcmBase64: pcm(tone(1)) })).text).toBe("country")
+          expect((yield* client["stt.finish"]({ sessionId: after.sessionId, pcmBase64: pcm(tone(1)) })).text).toBe(
+            "country",
+          )
           expect(recognizersRunningUnder(dataDir)).toBe(1)
-        }))
+        }),
+      )
       expect(await recognizerLedgerEntries(server)).toHaveLength(1)
     } finally {
       await server.close()
@@ -389,22 +443,37 @@ describe("voice input over RPC", () => {
 
   test("the recognizer stops once every dictation has ended or been abandoned", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "openbot-server-test-"))
-    const server = await startWithManifest(manifestFor(fixtures), { dataDir, recognizerIdleMs: 300, sessionIdleMs: 200 })
+    const server = await startWithManifest(manifestFor(fixtures), {
+      dataDir,
+      recognizerIdleMs: 300,
+      sessionIdleMs: 200,
+    })
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* installed(client)
           const finished = yield* client["stt.open"]()
           yield* client["stt.finish"]({ sessionId: finished.sessionId, pcmBase64: pcm(tone(1)) })
           expect(recognizersRunningUnder(dataDir)).toBe(1)
-          yield* eventually(Effect.sync(() => recognizersRunningUnder(dataDir)), (running) => running === 0, { label: "idle stop" })
+          yield* eventually(
+            Effect.sync(() => recognizersRunningUnder(dataDir)),
+            (running) => running === 0,
+            { label: "idle stop" },
+          )
 
           const abandoned = yield* client["stt.open"]()
           yield* client["stt.append"]({ sessionId: abandoned.sessionId, pcmBase64: pcm(tone(1)) })
           expect(recognizersRunningUnder(dataDir)).toBe(1)
-          yield* eventually(Effect.sync(() => recognizersRunningUnder(dataDir)), (running) => running === 0, { label: "abandoned stop" })
-          expect(yield* Effect.flip(client["stt.append"]({ sessionId: abandoned.sessionId, pcmBase64: pcm(tone(1)) }))).toMatchObject({ _tag: "NotFound" })
-        }))
+          yield* eventually(
+            Effect.sync(() => recognizersRunningUnder(dataDir)),
+            (running) => running === 0,
+            { label: "abandoned stop" },
+          )
+          expect(
+            yield* Effect.flip(client["stt.append"]({ sessionId: abandoned.sessionId, pcmBase64: pcm(tone(1)) })),
+          ).toMatchObject({ _tag: "NotFound" })
+        }),
+      )
       expect(await recognizerLedgerEntries(server)).toHaveLength(0)
     } finally {
       await server.close()
@@ -415,23 +484,31 @@ describe("voice input over RPC", () => {
     const server = await startWithManifest(manifestFor(fixtures))
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* installed(client)
           const { sessionId } = yield* client["stt.open"]()
           const minute = pcm(silence(60))
-          for (let minutes = 1; minutes < MAX_DICTATION_SECONDS / 60; minutes++) yield* client["stt.append"]({ sessionId, pcmBase64: minute })
+          for (let minutes = 1; minutes < MAX_DICTATION_SECONDS / 60; minutes++)
+            yield* client["stt.append"]({ sessionId, pcmBase64: minute })
           yield* client["stt.append"]({ sessionId, pcmBase64: pcm(silence(59.5)) })
-          const crossingTheCap = yield* client["stt.append"]({ sessionId, pcmBase64: pcm(joinChunks([silence(0.5), tone(0.5)])) })
+          const crossingTheCap = yield* client["stt.append"]({
+            sessionId,
+            pcmBase64: pcm(joinChunks([silence(0.5), tone(0.5)])),
+          })
           expect(crossingTheCap.text).toBe("")
           const over = yield* Effect.flip(client["stt.append"]({ sessionId, pcmBase64: pcm(tone(0.1)) }))
           expect(over).toMatchObject({ _tag: "InvalidInput", message: expect.stringContaining("10 minutes") })
           expect(yield* client["stt.finish"]({ sessionId, pcmBase64: "" })).toEqual({ text: "" })
 
           const late = yield* client["stt.open"]()
-          for (let minutes = 1; minutes < MAX_DICTATION_SECONDS / 60; minutes++) yield* client["stt.append"]({ sessionId: late.sessionId, pcmBase64: minute })
+          for (let minutes = 1; minutes < MAX_DICTATION_SECONDS / 60; minutes++)
+            yield* client["stt.append"]({ sessionId: late.sessionId, pcmBase64: minute })
           yield* client["stt.append"]({ sessionId: late.sessionId, pcmBase64: pcm(joinChunks([silence(59), tone(1)])) })
-          expect(yield* client["stt.finish"]({ sessionId: late.sessionId, pcmBase64: pcm(tone(0.5)) })).toEqual({ text: "country" })
-        }))
+          expect(yield* client["stt.finish"]({ sessionId: late.sessionId, pcmBase64: pcm(tone(0.5)) })).toEqual({
+            text: "country",
+          })
+        }),
+      )
     } finally {
       await server.close()
     }
@@ -441,7 +518,11 @@ describe("voice input over RPC", () => {
     const failsWith = async (manifest: SttManifest, problem: string) => {
       const server = await startWithManifest(manifest)
       try {
-        await withClient(server, (client) => Effect.map(installed(client), (status) => expect(status).toMatchObject({ state: "failed", problem: expect.stringContaining(problem) })))
+        await withClient(server, (client) =>
+          Effect.map(installed(client), (status) =>
+            expect(status).toMatchObject({ state: "failed", problem: expect.stringContaining(problem) }),
+          ),
+        )
       } finally {
         await server.close()
       }
@@ -453,11 +534,12 @@ describe("voice input over RPC", () => {
     const retried = await startWithManifest(manifestFor(fixtures))
     try {
       await withClient(retried, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           fixtures.failNextDownload = true
           expect(yield* installed(client)).toMatchObject({ state: "failed", problem: expect.stringContaining("503") })
           expect(yield* installed(client)).toEqual({ state: "ready", model: "Fake Parakeet" })
-        }))
+        }),
+      )
     } finally {
       await retried.close()
     }
@@ -467,7 +549,13 @@ describe("voice input over RPC", () => {
     const server = await startWithManifest(manifestFor(fixtures, { runtime: fixtures.endlessRuntime }))
     try {
       await withClient(server, (client) =>
-        Effect.map(installed(client), (status) => expect(status).toMatchObject({ state: "failed", problem: expect.stringContaining("larger than its pinned 1000000 bytes") })))
+        Effect.map(installed(client), (status) =>
+          expect(status).toMatchObject({
+            state: "failed",
+            problem: expect.stringContaining("larger than its pinned 1000000 bytes"),
+          }),
+        ),
+      )
     } finally {
       await server.close()
     }
@@ -478,7 +566,9 @@ describe("voice input over RPC", () => {
       const dataDir = mkdtempSync(join(tmpdir(), "openbot-server-test-"))
       const server = await startWithManifest(manifest, { dataDir })
       try {
-        await withClient(server, (client) => Effect.map(installed(client), (status) => expect(status.state).toBe("failed")))
+        await withClient(server, (client) =>
+          Effect.map(installed(client), (status) => expect(status.state).toBe("failed")),
+        )
         expect(existsSync(join(dataDir, "stt"))).toBe(false)
       } finally {
         await server.close()
@@ -497,12 +587,16 @@ describe("voice input over RPC", () => {
     })
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           expect((yield* client["stt.install"]()).state).toBe("installing")
           expect(yield* Effect.flip(client["stt.remove"]())).toMatchObject({ _tag: "Conflict" })
           release()
-          expect(yield* eventually(client["stt.status"](), settled, { label: "install" })).toEqual({ state: "ready", model: "Fake Parakeet" })
-        }))
+          expect(yield* eventually(client["stt.status"](), settled, { label: "install" })).toEqual({
+            state: "ready",
+            model: "Fake Parakeet",
+          })
+        }),
+      )
     } finally {
       release()
       fixtures.holdDownloads = undefined
@@ -515,23 +609,30 @@ describe("voice input over RPC", () => {
     const server = await startWithManifest(manifestFor(fixtures), { dataDir, startupTimeoutMs: 300 })
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* installed(client)
           setModelMarker(dataDir, "fail-start", true)
           expect(yield* Effect.flip(client["stt.open"]())).toMatchObject({ _tag: "Unavailable" })
           setModelMarker(dataDir, "fail-start", false)
           const first = yield* client["stt.open"]()
-          expect((yield* client["stt.append"]({ sessionId: first.sessionId, pcmBase64: pcm(tone(1)) })).text).toBe("country")
+          expect((yield* client["stt.append"]({ sessionId: first.sessionId, pcmBase64: pcm(tone(1)) })).text).toBe(
+            "country",
+          )
           const pidAfterStart = yield* Effect.promise(() => recognizerPids(server))
           expect(pidAfterStart).toHaveLength(1)
 
           yield* Effect.sleep("800 millis")
-          const failed = yield* Effect.flip(client["stt.append"]({ sessionId: first.sessionId, pcmBase64: pcm(tone(1, DECODE_FAIL_LEVEL)) }))
+          const failed = yield* Effect.flip(
+            client["stt.append"]({ sessionId: first.sessionId, pcmBase64: pcm(tone(1, DECODE_FAIL_LEVEL)) }),
+          )
           expect(failed).toMatchObject({ _tag: "Unavailable" })
           const second = yield* client["stt.open"]()
-          expect((yield* client["stt.finish"]({ sessionId: second.sessionId, pcmBase64: pcm(tone(2)) })).text).toBe("country")
+          expect((yield* client["stt.finish"]({ sessionId: second.sessionId, pcmBase64: pcm(tone(2)) })).text).toBe(
+            "country",
+          )
           expect(yield* Effect.promise(() => recognizerPids(server))).toEqual(pidAfterStart)
-        }))
+        }),
+      )
     } finally {
       await server.close()
     }
@@ -542,12 +643,17 @@ describe("voice input over RPC", () => {
     const server = await startWithManifest(manifestFor(fixtures), { dataDir, startupTimeoutMs: 300 })
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* installed(client)
           setModelMarker(dataDir, "hang-start", true)
           expect(yield* Effect.flip(client["stt.open"]())).toMatchObject({ _tag: "Unavailable" })
-          yield* eventually(Effect.sync(() => recognizersRunningUnder(dataDir)), (running) => running === 0, { timeout: 3_000, label: "hung start killed" })
-        }))
+          yield* eventually(
+            Effect.sync(() => recognizersRunningUnder(dataDir)),
+            (running) => running === 0,
+            { timeout: 3_000, label: "hung start killed" },
+          )
+        }),
+      )
       expect(await recognizerLedgerEntries(server)).toHaveLength(0)
     } finally {
       await server.close()
@@ -559,7 +665,7 @@ describe("voice input over RPC", () => {
     const server = await startWithManifest(manifestFor(fixtures), { dataDir })
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* installed(client)
           setModelMarker(dataDir, "ignore-sigterm", true)
           yield* client["stt.open"]()
@@ -568,104 +674,148 @@ describe("voice input over RPC", () => {
           yield* client["stt.remove"]()
           expect(Date.now() - removingAt).toBeLessThan(3_500)
           expect(recognizersRunningUnder(dataDir)).toBe(0)
-        }))
+        }),
+      )
     } finally {
       await server.close()
     }
   }, 30_000)
 
-  test.each(["startup", "shutdown", "idle shutdown", "interrupted shutdown"] as const)("removal blocks dictation and installation during recognizer %s", async (stage) => {
-    const dataDir = mkdtempSync(join(tmpdir(), "openbot-server-test-"))
-    const entered = Effect.runSync(Deferred.make<void>())
-    const resume = Effect.runSync(Deferred.make<void>())
-    const pause = Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(resume)))
-    let held = false
-    const speech = SpeechToTextLive({ dir: join(dataDir, "stt"), manifest: manifestFor(fixtures), recognizerEntry: FAKE_RECOGNIZER, recognizerIdleMs: stage === "idle shutdown" ? 20 : undefined }).pipe(
-      Layer.provide(Layer.succeed(ProcessLedger, ProcessLedger.of({
-        record: () => Effect.suspend(() => held && stage === "startup" ? pause : Effect.void),
-        remove: () => Effect.suspend(() => held && stage !== "startup" ? pause : Effect.void),
-        list: Effect.succeed([]),
-        clear: Effect.void,
-      }))),
-    )
-    const server = await startServer({ dataDir, server: { speechToText: speech } })
-    try {
-      await withClient(server, (client) =>
-        Effect.gen(function*() {
-          yield* installed(client)
-          setModelMarker(dataDir, "ignore-sigterm", true)
-        }))
-      await server.run(Effect.gen(function*() {
-        const service = yield* SpeechToText
-        const initial = stage === "startup" ? undefined : yield* service.open
-        held = true
-        if (stage === "idle shutdown" && initial !== undefined) {
-          yield* service.discard(initial.sessionId)
-          yield* Deferred.await(entered)
-        }
-        const opening = stage === "startup"
-          ? yield* service.open.pipe(
-            Effect.match({ onFailure: (error) => error, onSuccess: () => undefined }),
-            Effect.forkScoped({ startImmediately: true }),
-          )
-          : undefined
-        if (stage === "startup") yield* Deferred.await(entered)
-        const removing = yield* service.remove.pipe(Effect.forkScoped({ startImmediately: true }))
-        if (stage === "shutdown" || stage === "interrupted shutdown") yield* Deferred.await(entered)
-        const interruption = stage === "interrupted shutdown"
-          ? yield* Fiber.interrupt(removing).pipe(Effect.forkScoped({ startImmediately: true }))
-          : undefined
-        yield* Effect.gen(function*() {
-          expect(existsSync(join(dataDir, "stt", "model"))).toBe(true)
-          yield* Effect.promise(() => withClient(server, (client) => Effect.gen(function*() {
-            expect(yield* Effect.flip(client["stt.open"]())).toMatchObject({ _tag: "Conflict" })
-            expect(yield* Effect.flip(client["stt.install"]())).toMatchObject({ _tag: "Conflict" })
-            expect(yield* Effect.flip(client["stt.remove"]())).toMatchObject({ _tag: "Conflict" })
-            expect(yield* Effect.flip(client["stt.append"]({ sessionId: "removed", pcmBase64: "" }))).toMatchObject({ _tag: "Conflict" })
-          })))
-        }).pipe(Effect.ensuring(Effect.sync(() => { held = false }).pipe(Effect.andThen(Deferred.succeed(resume, undefined)))))
-        if (interruption === undefined) expect((yield* Fiber.join(removing)).state).toBe("absent")
-        else {
-          yield* Fiber.join(interruption)
-          expect((yield* service.status).state).toBe("absent")
-        }
-        if (opening !== undefined) expect(yield* Fiber.join(opening)).toMatchObject({ _tag: "Conflict" })
-        expect(recognizersRunningUnder(dataDir)).toBe(0)
-        expect(existsSync(join(dataDir, "stt"))).toBe(false)
-        expect(yield* Effect.flip(service.open)).toMatchObject({ _tag: "Unavailable" })
-      }))
-      await withClient(server, (client) => Effect.gen(function*() {
-        expect((yield* installed(client)).state).toBe("ready")
-        yield* client["stt.open"]()
-        yield* client["stt.remove"]()
-        expect(recognizersRunningUnder(dataDir)).toBe(0)
-      }))
-    } finally {
-      held = false
-      Effect.runSync(Deferred.succeed(resume, undefined))
-      await server.close()
-    }
-  }, 30_000)
+  test.each(["startup", "shutdown", "idle shutdown", "interrupted shutdown"] as const)(
+    "removal blocks dictation and installation during recognizer %s",
+    async (stage) => {
+      const dataDir = mkdtempSync(join(tmpdir(), "openbot-server-test-"))
+      const entered = Effect.runSync(Deferred.make<void>())
+      const resume = Effect.runSync(Deferred.make<void>())
+      const pause = Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(resume)))
+      let held = false
+      const speech = SpeechToTextLive({
+        dir: join(dataDir, "stt"),
+        manifest: manifestFor(fixtures),
+        recognizerEntry: FAKE_RECOGNIZER,
+        recognizerIdleMs: stage === "idle shutdown" ? 20 : undefined,
+      }).pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProcessLedger,
+            ProcessLedger.of({
+              record: () => Effect.suspend(() => (held && stage === "startup" ? pause : Effect.void)),
+              remove: () => Effect.suspend(() => (held && stage !== "startup" ? pause : Effect.void)),
+              list: Effect.succeed([]),
+              clear: Effect.void,
+            }),
+          ),
+        ),
+      )
+      const server = await startServer({ dataDir, server: { speechToText: speech } })
+      try {
+        await withClient(server, (client) =>
+          Effect.gen(function* () {
+            yield* installed(client)
+            setModelMarker(dataDir, "ignore-sigterm", true)
+          }),
+        )
+        await server.run(
+          Effect.gen(function* () {
+            const service = yield* SpeechToText
+            const initial = stage === "startup" ? undefined : yield* service.open
+            held = true
+            if (stage === "idle shutdown" && initial !== undefined) {
+              yield* service.discard(initial.sessionId)
+              yield* Deferred.await(entered)
+            }
+            const opening =
+              stage === "startup"
+                ? yield* service.open.pipe(
+                    Effect.match({ onFailure: (error) => error, onSuccess: () => undefined }),
+                    Effect.forkScoped({ startImmediately: true }),
+                  )
+                : undefined
+            if (stage === "startup") yield* Deferred.await(entered)
+            const removing = yield* service.remove.pipe(Effect.forkScoped({ startImmediately: true }))
+            if (stage === "shutdown" || stage === "interrupted shutdown") yield* Deferred.await(entered)
+            const interruption =
+              stage === "interrupted shutdown"
+                ? yield* Fiber.interrupt(removing).pipe(Effect.forkScoped({ startImmediately: true }))
+                : undefined
+            yield* Effect.gen(function* () {
+              expect(existsSync(join(dataDir, "stt", "model"))).toBe(true)
+              yield* Effect.promise(() =>
+                withClient(server, (client) =>
+                  Effect.gen(function* () {
+                    expect(yield* Effect.flip(client["stt.open"]())).toMatchObject({ _tag: "Conflict" })
+                    expect(yield* Effect.flip(client["stt.install"]())).toMatchObject({ _tag: "Conflict" })
+                    expect(yield* Effect.flip(client["stt.remove"]())).toMatchObject({ _tag: "Conflict" })
+                    expect(
+                      yield* Effect.flip(client["stt.append"]({ sessionId: "removed", pcmBase64: "" })),
+                    ).toMatchObject({ _tag: "Conflict" })
+                  }),
+                ),
+              )
+            }).pipe(
+              Effect.ensuring(
+                Effect.sync(() => {
+                  held = false
+                }).pipe(Effect.andThen(Deferred.succeed(resume, undefined))),
+              ),
+            )
+            if (interruption === undefined) expect((yield* Fiber.join(removing)).state).toBe("absent")
+            else {
+              yield* Fiber.join(interruption)
+              expect((yield* service.status).state).toBe("absent")
+            }
+            if (opening !== undefined) expect(yield* Fiber.join(opening)).toMatchObject({ _tag: "Conflict" })
+            expect(recognizersRunningUnder(dataDir)).toBe(0)
+            expect(existsSync(join(dataDir, "stt"))).toBe(false)
+            expect(yield* Effect.flip(service.open)).toMatchObject({ _tag: "Unavailable" })
+          }),
+        )
+        await withClient(server, (client) =>
+          Effect.gen(function* () {
+            expect((yield* installed(client)).state).toBe("ready")
+            yield* client["stt.open"]()
+            yield* client["stt.remove"]()
+            expect(recognizersRunningUnder(dataDir)).toBe(0)
+          }),
+        )
+      } finally {
+        held = false
+        Effect.runSync(Deferred.succeed(resume, undefined))
+        await server.close()
+      }
+    },
+    30_000,
+  )
 
   test("a process ledger that fails does not break dictation or removal", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "openbot-server-test-"))
-    const speech = SpeechToTextLive({ dir: join(dataDir, "stt"), manifest: manifestFor(fixtures), recognizerEntry: FAKE_RECOGNIZER }).pipe(
-      Layer.provide(Layer.succeed(ProcessLedger, ProcessLedger.of({
-        record: () => Effect.die(new Error("SQLITE_BUSY: database is locked")),
-        remove: () => Effect.die(new Error("SQLITE_BUSY: database is locked")),
-        list: Effect.succeed([]),
-        clear: Effect.void,
-      }))),
+    const speech = SpeechToTextLive({
+      dir: join(dataDir, "stt"),
+      manifest: manifestFor(fixtures),
+      recognizerEntry: FAKE_RECOGNIZER,
+    }).pipe(
+      Layer.provide(
+        Layer.succeed(
+          ProcessLedger,
+          ProcessLedger.of({
+            record: () => Effect.die(new Error("SQLITE_BUSY: database is locked")),
+            remove: () => Effect.die(new Error("SQLITE_BUSY: database is locked")),
+            list: Effect.succeed([]),
+            clear: Effect.void,
+          }),
+        ),
+      ),
     )
     const server = await startServer({ dataDir, server: { speechToText: speech } })
     try {
       await withClient(server, (client) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* installed(client)
           yield* client["stt.open"]()
           yield* client["stt.remove"]()
           expect(recognizersRunningUnder(dataDir)).toBe(0)
-        }))
+        }),
+      )
     } finally {
       await server.close()
     }
@@ -676,22 +826,32 @@ describe("voice input over RPC", () => {
     const entered = Effect.runSync(Deferred.make<void>())
     const resume = Effect.runSync(Deferred.make<void>())
     const finish = DictationSession.prototype.finish
-    const paused = spyOn(DictationSession.prototype, "finish").mockImplementation(async function(this: DictationSession, samples: Float32Array) {
+    const paused = spyOn(DictationSession.prototype, "finish").mockImplementation(async function (
+      this: DictationSession,
+      samples: Float32Array,
+    ) {
       Effect.runSync(Deferred.succeed(entered, undefined))
       await Effect.runPromise(Deferred.await(resume))
       return finish.call(this, samples)
     })
     try {
       await withClient(server, installed)
-      await server.run(Effect.gen(function*() {
-        const service = yield* SpeechToText
-        const { sessionId } = yield* service.open
-        const finishing = yield* service.finish(sessionId, encodePcm16(tone(1))).pipe(Effect.flip, Effect.forkScoped({ startImmediately: true }))
-        yield* Deferred.await(entered)
-        yield* service.remove.pipe(Effect.ensuring(Deferred.succeed(resume, undefined)))
-        expect(yield* Fiber.join(finishing)).toMatchObject({ _tag: "Unavailable", message: expect.stringContaining("isn't set up") })
-        expect(recognizersRunningUnder(server.dataDir)).toBe(0)
-      }))
+      await server.run(
+        Effect.gen(function* () {
+          const service = yield* SpeechToText
+          const { sessionId } = yield* service.open
+          const finishing = yield* service
+            .finish(sessionId, encodePcm16(tone(1)))
+            .pipe(Effect.flip, Effect.forkScoped({ startImmediately: true }))
+          yield* Deferred.await(entered)
+          yield* service.remove.pipe(Effect.ensuring(Deferred.succeed(resume, undefined)))
+          expect(yield* Fiber.join(finishing)).toMatchObject({
+            _tag: "Unavailable",
+            message: expect.stringContaining("isn't set up"),
+          })
+          expect(recognizersRunningUnder(server.dataDir)).toBe(0)
+        }),
+      )
     } finally {
       Effect.runSync(Deferred.succeed(resume, undefined))
       paused.mockRestore()
@@ -702,7 +862,11 @@ describe("voice input over RPC", () => {
   test("a brain without a runtime build reports unsupported and installs nothing", async () => {
     const server = await startWithManifest(manifestFor(fixtures, { runtime: null }))
     try {
-      await withClient(server, (client) => Effect.map(client["stt.install"](), (status) => expect(status).toEqual({ state: "unsupported", model: "Fake Parakeet" })))
+      await withClient(server, (client) =>
+        Effect.map(client["stt.install"](), (status) =>
+          expect(status).toEqual({ state: "unsupported", model: "Fake Parakeet" }),
+        ),
+      )
     } finally {
       await server.close()
     }

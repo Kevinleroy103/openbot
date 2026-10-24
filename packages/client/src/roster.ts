@@ -71,7 +71,9 @@ const byName = (a: { readonly name: string }, b: { readonly name: string }) => a
 /** All bots, by name. */
 export const botsAtom = mapRoster((s): ReadonlyArray<Bot> => [...s.bots.values()].sort(byName))
 export const botAtom = Atom.family((botId: BotId) => mapRoster((s): Bot | undefined => s.bots.get(botId)))
-export const activityAtom = Atom.family((botId: BotId) => mapRoster((s): BotActivity | undefined => s.activities.get(botId)))
+export const activityAtom = Atom.family((botId: BotId) =>
+  mapRoster((s): BotActivity | undefined => s.activities.get(botId)),
+)
 /** Sidebar conversation rows, most recent activity first. */
 export const conversationSummariesAtom = mapRoster((s): ReadonlyArray<ConversationSummary> =>
   [...s.conversations.values()].sort((a, b) => b.lastActivityAt - a.lastActivityAt),
@@ -79,7 +81,11 @@ export const conversationSummariesAtom = mapRoster((s): ReadonlyArray<Conversati
 export const conversationSummaryAtom = Atom.family((conversationId: ConversationId) =>
   mapRoster((s): ConversationSummary | undefined => s.conversations.get(conversationId)),
 )
-export const nodesAtom = mapRoster((s): ReadonlyArray<NodeSummary> => [...s.nodes.values()].sort((a, b) => (a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === "local" ? -1 : 1)))
+export const nodesAtom = mapRoster((s): ReadonlyArray<NodeSummary> =>
+  [...s.nodes.values()].sort((a, b) =>
+    a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === "local" ? -1 : 1,
+  ),
+)
 export const sectionsAtom = mapRoster((s): ReadonlyArray<Section> => sectionsOf(s))
 /** Settings ride on the roster (`settings.updated`); defaults until the first snapshot. */
 export const settingsAtom = Atom.make((get): Settings => {
@@ -91,4 +97,6 @@ export const notificationsAtom = mapRoster((s): ReadonlyArray<Notification> => s
 /** Background tasks on the roster (D5.7): active ones plus recently finished ones, any bot. */
 export const rosterTasksAtom = mapRoster((s): ReadonlyArray<Task> => [...s.tasks.values()])
 /** A bot's queued and running tasks, oldest first ("Handling…"). */
-export const activeTasksAtom = Atom.family((botId: BotId) => mapRoster((s): ReadonlyArray<Task> => activeTasksOf(s, botId)))
+export const activeTasksAtom = Atom.family((botId: BotId) =>
+  mapRoster((s): ReadonlyArray<Task> => activeTasksOf(s, botId)),
+)

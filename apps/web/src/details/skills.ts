@@ -31,28 +31,45 @@ export const skillNameError = (input: string, library: ReadonlyArray<Pick<Skill,
 
 /** "48.2K installs", "1 install". */
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
-export const formatInstalls = (n: number): string => `${compact.format(Math.max(0, Math.round(n)))} ${Math.round(n) === 1 ? "install" : "installs"}`
+export const formatInstalls = (n: number): string =>
+  `${compact.format(Math.max(0, Math.round(n)))} ${Math.round(n) === 1 ? "install" : "installs"}`
 
 /** "812 B", "4.2 KB", "1.3 MB". */
 export const formatBytes = (n: number): string =>
-  n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`
+  n < 1024
+    ? `${n} B`
+    : n < 1024 * 1024
+      ? `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`
+      : `${(n / 1024 / 1024).toFixed(1)} MB`
 
 /** The skill's page on skills.sh (`owner/repo/skill`). */
-export const skillsShUrl = (id: string): string => `https://skills.sh/${id.split("/").map(encodeURIComponent).join("/")}`
+export const skillsShUrl = (id: string): string =>
+  `https://skills.sh/${id.split("/").map(encodeURIComponent).join("/")}`
 
 /** The Bots that have a skill, by name. */
-export const botsWithSkill = (bots: ReadonlyArray<Bot>, name: string): ReadonlyArray<Bot> => bots.filter((b) => b.skills.includes(name as SkillName))
+export const botsWithSkill = (bots: ReadonlyArray<Bot>, name: string): ReadonlyArray<Bot> =>
+  bots.filter((b) => b.skills.includes(name as SkillName))
 
 /** A Bot's skills with their library entries; a name the library doesn't list (yet) keeps a bare row. */
-export const skillsOfBot = (bot: Pick<Bot, "skills">, library: ReadonlyArray<Skill>): ReadonlyArray<Pick<Skill, "name" | "description"> & Partial<Skill>> =>
-  bot.skills.map((name) => library.find((s) => s.name === name) ?? { name, description: "" }).sort((a, b) => a.name.localeCompare(b.name))
+export const skillsOfBot = (
+  bot: Pick<Bot, "skills">,
+  library: ReadonlyArray<Skill>,
+): ReadonlyArray<Pick<Skill, "name" | "description"> & Partial<Skill>> =>
+  bot.skills
+    .map((name) => library.find((s) => s.name === name) ?? { name, description: "" })
+    .sort((a, b) => a.name.localeCompare(b.name))
 
 /** What deleting a skill does to the Bots that have it (the delete confirm). */
 export const loseText = (bots: ReadonlyArray<Pick<Bot, "name">>): string =>
-  bots.length === 0 ? "No Bot has it." : bots.length === 1 ? `${bots[0]!.name} will lose it.` : `${bots.length} Bots will lose it.`
+  bots.length === 0
+    ? "No Bot has it."
+    : bots.length === 1
+      ? `${bots[0]!.name} will lose it.`
+      : `${bots.length} Bots will lose it.`
 
 /** Same members, any order. */
-export const sameBots = (a: ReadonlyArray<BotId>, b: ReadonlyArray<BotId>): boolean => a.length === b.length && a.every((id) => b.includes(id))
+export const sameBots = (a: ReadonlyArray<BotId>, b: ReadonlyArray<BotId>): boolean =>
+  a.length === b.length && a.every((id) => b.includes(id))
 
 /** Human text for a failed skills.sh call; undefined for other errors (use `errorText`). */
 export const skillsShErrorText = (e: unknown): string | undefined => {

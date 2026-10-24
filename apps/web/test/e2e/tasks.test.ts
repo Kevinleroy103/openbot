@@ -8,7 +8,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import type { Browser, BrowserContext, Page } from "playwright-core"
 import type { Bot } from "@openbot/contracts"
-import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, send, shotsDir, startBrain, waitIdle } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  send,
+  shotsDir,
+  startBrain,
+  waitIdle,
+} from "./brain.ts"
 
 describe.skipIf(!hasChromium)("e2e: background work", () => {
   let brain: Brain
@@ -21,8 +34,13 @@ describe.skipIf(!hasChromium)("e2e: background work", () => {
     brain = await startBrain()
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
-    nova = await rpc.call((c) => c["bots.create"]({ name: "Nova", harness: { kind: "fake" }, clientNonce: "e2e-tasks-nova" }))
-    app = await openApp(browser, brain, { theme: "dark", route: `#/c/${encodeURIComponent(nova.directConversationId)}` })
+    nova = await rpc.call((c) =>
+      c["bots.create"]({ name: "Nova", harness: { kind: "fake" }, clientNonce: "e2e-tasks-nova" }),
+    )
+    app = await openApp(browser, brain, {
+      theme: "dark",
+      route: `#/c/${encodeURIComponent(nova.directConversationId)}`,
+    })
     await app.page.getByRole("textbox", { name: "Message Nova" }).waitFor()
   }, 60_000)
 
@@ -96,10 +114,16 @@ describe.skipIf(!hasChromium)("e2e: background work", () => {
   test("the result is reported by the bot; the work shows as done with its result", async () => {
     const { page } = app
     const transcript = page.getByTestId("transcript")
-    await transcript.getByText("Update on HN digest: Here is HN digest: everything checked out after 8s of work.", { exact: true }).waitFor({ timeout: 30_000 })
+    await transcript
+      .getByText("Update on HN digest: Here is HN digest: everything checked out after 8s of work.", { exact: true })
+      .waitFor({ timeout: 30_000 })
     await page.getByTestId("handling").waitFor({ state: "detached" })
     const row = page.getByTestId("details-pane").getByTestId("task-row").filter({ hasText: "HN digest" })
-    await eventually(() => row.getAttribute("data-status"), (s) => s === "succeeded", { label: "succeeded row" })
+    await eventually(
+      () => row.getAttribute("data-status"),
+      (s) => s === "succeeded",
+      { label: "succeeded row" },
+    )
     await row.getByTestId("task-result").getByText("everything checked out", { exact: false }).waitFor()
     await waitIdle(page)
     await app.shot("e2e-52-task-done")
@@ -115,11 +139,21 @@ describe.skipIf(!hasChromium)("e2e: background work", () => {
     await transcript.getByText("Sure — I'll get back to you about other one.", { exact: true }).waitFor()
     const pane = page.getByTestId("details-pane")
     const slow = pane.getByTestId("task-row").filter({ hasText: "slow one" })
-    await eventually(() => slow.getAttribute("data-status"), (s) => s === "running", { label: "slow running" })
+    await eventually(
+      () => slow.getAttribute("data-status"),
+      (s) => s === "running",
+      { label: "slow running" },
+    )
     await app.shot("e2e-53-two-running")
     await slow.getByTestId("task-stop").click()
-    await eventually(() => slow.getAttribute("data-status"), (s) => s === "cancelled", { label: "slow stopped" })
-    await transcript.getByText("Update on slow one: The owner stopped it before it finished.", { exact: false }).waitFor()
+    await eventually(
+      () => slow.getAttribute("data-status"),
+      (s) => s === "cancelled",
+      { label: "slow stopped" },
+    )
+    await transcript
+      .getByText("Update on slow one: The owner stopped it before it finished.", { exact: false })
+      .waitFor()
     const tasks = await rpc.call((c) => c["tasks.list"]({ botId: nova.id }))
     expect(tasks.find((t) => t.title === "other one")?.status).toBe("running")
     expect(tasks.find((t) => t.title === "slow one")).toMatchObject({ status: "cancelled", stoppedBy: "owner" })
@@ -150,9 +184,15 @@ describe.skipIf(!hasChromium)("e2e: background work", () => {
     await app.shot("e2e-57-task-update")
     // the running work took the change: its result has it, and the bot reports it
     await transcript
-      .getByText("Update on film: Here is film, now with your update (center the globe): everything checked out.", { exact: true })
+      .getByText("Update on film: Here is film, now with your update (center the globe): everything checked out.", {
+        exact: true,
+      })
       .waitFor({ timeout: 30_000 })
-    await eventually(() => row.getAttribute("data-status"), (st) => st === "succeeded", { label: "film done" })
+    await eventually(
+      () => row.getAttribute("data-status"),
+      (st) => st === "succeeded",
+      { label: "film done" },
+    )
     const tasks = await rpc.call((c) => c["tasks.list"]({ botId: nova.id }))
     expect(tasks.filter((t) => t.title === "film")).toHaveLength(1) // not started over
     expect(app.errors).toEqual([])
@@ -171,7 +211,9 @@ describe.skipIf(!hasChromium)("e2e: background work on a phone", () => {
     brain = await startBrain()
     browser = await launchBrowser()
     rpc = await connectRpc(brain)
-    const bot = await rpc.call((c) => c["bots.create"]({ name: "Pico", harness: { kind: "fake" }, clientNonce: "e2e-tasks-pico" }))
+    const bot = await rpc.call((c) =>
+      c["bots.create"]({ name: "Pico", harness: { kind: "fake" }, clientNonce: "e2e-tasks-pico" }),
+    )
     context = await browser.newContext({
       viewport: { width: 393, height: 852 },
       deviceScaleFactor: 3,
@@ -198,7 +240,10 @@ describe.skipIf(!hasChromium)("e2e: background work on a phone", () => {
     const box = page.getByRole("textbox", { name: "Message Pico" })
     await box.fill("bg: 30 phone digest")
     await page.getByRole("button", { name: "Send" }).click()
-    await page.getByTestId("transcript").getByText("Sure — I'll get back to you about phone digest.", { exact: true }).waitFor()
+    await page
+      .getByTestId("transcript")
+      .getByText("Sure — I'll get back to you about phone digest.", { exact: true })
+      .waitFor()
     await page.getByTestId("handling").waitFor()
     await page.waitForTimeout(300)
     await page.screenshot({ path: `${shotsDir}/e2e-55-phone-handling.png` })
@@ -212,7 +257,11 @@ describe.skipIf(!hasChromium)("e2e: background work on a phone", () => {
     await page.waitForTimeout(300)
     await page.screenshot({ path: `${shotsDir}/e2e-56-phone-tasks.png` })
     await row.getByTestId("task-stop").tap()
-    await eventually(() => row.getAttribute("data-status"), (s) => s === "cancelled", { label: "stopped" })
+    await eventually(
+      () => row.getAttribute("data-status"),
+      (s) => s === "cancelled",
+      { label: "stopped" },
+    )
     expect(errors).toEqual([])
   }, 60_000)
 })

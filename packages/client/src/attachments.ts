@@ -41,7 +41,8 @@ export type UploadError = InvalidInput | Internal | RpcClientError.RpcClientErro
 /** Uploads raw bytes. Fails with `InvalidInput` when the payload is too large or rejected by the brain. */
 export const uploadBytes = (input: UploadBytes): Effect.Effect<Attachment, UploadError, OpenBotClient> =>
   Effect.gen(function* () {
-    if (input.bytes.byteLength > MAX_ATTACHMENT_BYTES) return yield* Effect.fail(tooLarge(input.name, input.bytes.byteLength))
+    if (input.bytes.byteLength > MAX_ATTACHMENT_BYTES)
+      return yield* Effect.fail(tooLarge(input.name, input.bytes.byteLength))
     const client = yield* OpenBotClient
     return yield* client("attachments.upload", {
       name: input.name,
@@ -67,5 +68,7 @@ export const uploadFile = (file: UploadSource): Effect.Effect<Attachment, Upload
  * files while an upload runs cancels the previous batch.
  */
 export const uploadFilesAtom = Atom.family((_composerKey: string) =>
-  OpenBotClient.runtime.fn((files: ReadonlyArray<UploadSource>) => once(files, Effect.forEach(files, uploadFile, { concurrency: 1 }))),
+  OpenBotClient.runtime.fn((files: ReadonlyArray<UploadSource>) =>
+    once(files, Effect.forEach(files, uploadFile, { concurrency: 1 })),
+  ),
 )

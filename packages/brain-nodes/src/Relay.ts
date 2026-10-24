@@ -56,11 +56,13 @@ export interface RelayServiceShape {
   readonly activeGrants: Effect.Effect<number>
 }
 
-export class RelayService extends Context.Service<RelayService, RelayServiceShape>()("openbot/brain-nodes/RelayService") {}
+export class RelayService extends Context.Service<RelayService, RelayServiceShape>()(
+  "openbot/brain-nodes/RelayService",
+) {}
 
 const toWebSocketUrl = (httpUrl: string): string => httpUrl.replace(/^http(s?):\/\//, (_, s: string) => `ws${s}://`)
 
-export const makeRelayService = Effect.gen(function*() {
+export const makeRelayService = Effect.gen(function* () {
   const directory = yield* NodeDirectory
   const broker = yield* StreamBroker
   const internal = yield* InternalAddress
@@ -70,7 +72,7 @@ export const makeRelayService = Effect.gen(function*() {
   const keyOf = (nodeId: string, botId: string, kind: string) => `${nodeId}\u0000${botId}\u0000${kind}`
 
   const grant: RelayServiceShape["grant"] = ({ botId, cwd, kind, nodeId }) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const key = keyOf(nodeId, botId, kind)
       const url = `${toWebSocketUrl(yield* internal.baseUrl)}/relay/${encodeURIComponent(nodeId)}/${kind}`
       // taking a reference and registering its release are one uninterruptible step
@@ -106,7 +108,7 @@ export const makeRelayService = Effect.gen(function*() {
   /** One relayed connection: consumer socket ⇄ node tunnel. */
   const relay = (consumer: Socket.Socket, g: RelayGrant) =>
     Effect.scoped(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const local = yield* open(consumer)
         const client = yield* directory.client(g.nodeId)
         const inv = { invocationId: yield* ids.next("inv"), botId: g.botId, runId: `relay-${g.botId}` }
@@ -138,7 +140,7 @@ export const makeRelayService = Effect.gen(function*() {
     ).pipe(Effect.catchCause((cause) => Effect.logDebug("relay ended", { nodeId: g.nodeId, kind: g.kind, cause })))
 
   const handle: RelayServiceShape["handle"] = (nodeId, kind) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest
       const bearer = /^Bearer ([A-Za-z0-9_-]+)$/.exec(request.headers["authorization"] ?? "")?.[1]
       const g = isRelayKind(kind) ? findGrant(nodeId, kind, bearer) : undefined

@@ -63,7 +63,11 @@ export const conversationAtom = Atom.family((conversationId: ConversationId) =>
               if (item.kind !== "change") return Effect.void
               const change = item.change
               // A delivered message settles its optimistic outbox item (matched by clientNonce).
-              if (change.type === "entry.upserted" && change.entry.kind === "message" && change.entry.clientNonce !== undefined) {
+              if (
+                change.type === "entry.upserted" &&
+                change.entry.kind === "message" &&
+                change.entry.clientNonce !== undefined
+              ) {
                 const nonce = change.entry.clientNonce
                 const outbox = outboxAtom(conversationId)
                 if (registry.get(outbox).some((o) => o.clientNonce === nonce)) {
@@ -94,7 +98,9 @@ export const pendingRequestsAtom = Atom.family((conversationId: ConversationId) 
 /** Turns that are queued, running or waiting (drives the activity row and the stop button). */
 export const activeTurnsAtom = Atom.family((conversationId: ConversationId) =>
   mapConversation(conversationId, (s): ReadonlyArray<Turn> =>
-    [...s.turns.values()].filter((t) => t.status === "queued" || t.status === "running" || t.status === "waiting").sort((a, b) => a.startedAt - b.startedAt),
+    [...s.turns.values()]
+      .filter((t) => t.status === "queued" || t.status === "running" || t.status === "waiting")
+      .sort((a, b) => a.startedAt - b.startedAt),
   ),
 )
 

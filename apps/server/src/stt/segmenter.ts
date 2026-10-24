@@ -32,7 +32,8 @@ export const speechThreshold = (levelHistory: ReadonlyArray<number>): number => 
 }
 
 export const containsSpeech = (samples: Float32Array, sampleRate: number, threshold: number): boolean =>
-  samples.length >= sampleRate * MIN_DECODABLE_SECONDS && frameLevels(samples, sampleRate).some((level) => level >= threshold)
+  samples.length >= sampleRate * MIN_DECODABLE_SECONDS &&
+  frameLevels(samples, sampleRate).some((level) => level >= threshold)
 
 export const leadingSilenceToDrop = (samples: Float32Array, sampleRate: number, threshold: number): number => {
   const levels = frameLevels(samples, sampleRate)
@@ -62,7 +63,8 @@ export const findSegmentEnd = (samples: Float32Array, sampleRate: number, thresh
     }
     quietRun++
     const pauseMiddle = frame - Math.floor(pauseFrames / 2)
-    if (heardSpeech && quietRun === pauseFrames && pauseMiddle >= minSegmentFrames) return pauseMiddle * frameLength(sampleRate)
+    if (heardSpeech && quietRun === pauseFrames && pauseMiddle >= minSegmentFrames)
+      return pauseMiddle * frameLength(sampleRate)
   }
   if (levels.length < maxSegmentFrames) return undefined
   const searchFrom = maxSegmentFrames - Math.round(FORCED_SPLIT_SEARCH_SECONDS / FRAME_SECONDS)

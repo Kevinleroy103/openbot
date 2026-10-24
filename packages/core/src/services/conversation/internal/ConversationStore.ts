@@ -11,31 +11,44 @@
  */
 import type { Conversation, ConversationId, EntryId } from "@openbot/contracts"
 import { Context, Effect, Layer, Option, Semaphore } from "effect"
-import { ConversationRepo, conversationReplicaKey, EntryRepo, ReplicaLog, RequestRepo, TurnRepo } from "../../../ports/repos.ts"
+import {
+  ConversationRepo,
+  conversationReplicaKey,
+  EntryRepo,
+  ReplicaLog,
+  RequestRepo,
+  TurnRepo,
+} from "../../../ports/repos.ts"
 import { LiveHub } from "../../../ports/services.ts"
 import { summarize } from "./summary.ts"
 import { compact, orDie, required } from "./util.ts"
 import type { NotFound } from "@openbot/contracts"
 
-export class ConversationStore extends Context.Service<ConversationStore, {
-  readonly get: (id: ConversationId) => Effect.Effect<Conversation, NotFound>
-  /** Persists a new conversation and publishes it (conversation replica + roster). */
-  readonly create: (conversation: Conversation) => Effect.Effect<Conversation>
-  /**
-   * Locked read-modify-write. Unchanged results are not written. Publishes `conversation.updated`
-   * and the roster summary.
-   */
-  readonly update: (id: ConversationId, f: (current: Conversation) => Conversation) => Effect.Effect<Conversation, NotFound>
-  /** Re-publishes the roster row when it changed (preview, pending request count, …). */
-  readonly publishSummary: (id: ConversationId) => Effect.Effect<void>
-  /**
-   * Deletes a conversation with its entries, turns, requests and replica log; publishes roster
-   * `conversation.removed`.
-   */
-  readonly remove: (id: ConversationId) => Effect.Effect<void>
-  /** Serializes transcript entry read-modify-writes. */
-  readonly withEntryLock: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
-}>()("openbot/core/internal/ConversationStore") {}
+export class ConversationStore extends Context.Service<
+  ConversationStore,
+  {
+    readonly get: (id: ConversationId) => Effect.Effect<Conversation, NotFound>
+    /** Persists a new conversation and publishes it (conversation replica + roster). */
+    readonly create: (conversation: Conversation) => Effect.Effect<Conversation>
+    /**
+     * Locked read-modify-write. Unchanged results are not written. Publishes `conversation.updated`
+     * and the roster summary.
+     */
+    readonly update: (
+      id: ConversationId,
+      f: (current: Conversation) => Conversation,
+    ) => Effect.Effect<Conversation, NotFound>
+    /** Re-publishes the roster row when it changed (preview, pending request count, …). */
+    readonly publishSummary: (id: ConversationId) => Effect.Effect<void>
+    /**
+     * Deletes a conversation with its entries, turns, requests and replica log; publishes roster
+     * `conversation.removed`.
+     */
+    readonly remove: (id: ConversationId) => Effect.Effect<void>
+    /** Serializes transcript entry read-modify-writes. */
+    readonly withEntryLock: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
+  }
+>()("openbot/core/internal/ConversationStore") {}
 
 const stable = (value: unknown): string => JSON.stringify(value)
 
@@ -45,7 +58,7 @@ export const ConversationStoreLive: Layer.Layer<
   LiveHub | ConversationRepo | EntryRepo | RequestRepo | TurnRepo | ReplicaLog
 > = Layer.effect(
   ConversationStore,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const hub = yield* LiveHub
     const conversations = yield* ConversationRepo
     const entries = yield* EntryRepo
@@ -58,7 +71,7 @@ export const ConversationStoreLive: Layer.Layer<
     const published = new Map<ConversationId, string>()
 
     const publishSummaryOf = (conversation: Conversation) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const summary = yield* Effect.provide(summarize(conversation), repos)
         const key = stable(summary)
         if (published.get(conversation.id) === key) return
@@ -71,7 +84,7 @@ export const ConversationStoreLive: Layer.Layer<
     return ConversationStore.of({
       get,
       create: (conversation) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const value = compact(conversation)
           yield* orDie(conversations.upsert(value))
           yield* hub.publishConversation(value.id, { type: "conversation.updated", conversation: value })
@@ -80,7 +93,7 @@ export const ConversationStoreLive: Layer.Layer<
         }),
       update: (id, f) =>
         lock.withPermits(1)(
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const current = yield* get(id)
             const next = compact(f(current))
             if (stable(next) === stable(current)) return current
@@ -92,9 +105,10 @@ export const ConversationStoreLive: Layer.Layer<
         ),
       publishSummary: (id) =>
         Effect.flatMap(orDie(conversations.get(id)), (found) =>
-          Option.isSome(found) ? publishSummaryOf(found.value) : Effect.void),
+          Option.isSome(found) ? publishSummaryOf(found.value) : Effect.void,
+        ),
       remove: (id) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           // Entries first (paged from the tail), then turns, requests, the replica log and the record.
           for (;;) {
             const page = yield* orDie(entries.page({ conversationId: id, limit: 500 }))

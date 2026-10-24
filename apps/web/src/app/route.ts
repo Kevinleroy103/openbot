@@ -6,7 +6,15 @@
 //   URL so reload and Back restore them (defaults are left out);
 // - anything else (`#/`, settings, computer and device pages read at boot) is "other".
 import type { BotId, ConversationId, EntryId, SearchSender } from "@openbot/contracts"
-import { DEFAULT_SEARCH_TYPES, isDefaultTypes, normalizeTypes, SEARCH_TYPES, type SearchDate, type SearchFilters, type SearchType } from "@openbot/app-model"
+import {
+  DEFAULT_SEARCH_TYPES,
+  isDefaultTypes,
+  normalizeTypes,
+  SEARCH_TYPES,
+  type SearchDate,
+  type SearchFilters,
+  type SearchType,
+} from "@openbot/app-model"
 
 export type Route =
   | { readonly kind: "chat"; readonly conversationId: ConversationId; readonly entryId?: EntryId | undefined }
@@ -44,7 +52,13 @@ const parseDate = (value: string | null): SearchDate => {
 }
 
 const formatDate = (date: SearchDate): string | undefined =>
-  typeof date === "string" ? (date === "any" ? undefined : date) : date.from === undefined && date.to === undefined ? undefined : `${date.from ?? ""}~${date.to ?? ""}`
+  typeof date === "string"
+    ? date === "any"
+      ? undefined
+      : date
+    : date.from === undefined && date.to === undefined
+      ? undefined
+      : `${date.from ?? ""}~${date.to ?? ""}`
 
 export const parseSearch = (query: string): SearchFilters => {
   const params = new URLSearchParams(query)
@@ -82,7 +96,11 @@ export const parseRoute = (hash: string): Route => {
     const conversationId = decode(chat[1]!)
     const entryId = chat[2] === undefined ? undefined : decode(chat[2])
     if (conversationId === undefined || !ID.test(conversationId)) return { kind: "other" }
-    return { kind: "chat", conversationId: conversationId as ConversationId, ...(entryId !== undefined && ID.test(entryId) ? { entryId: entryId as EntryId } : {}) }
+    return {
+      kind: "chat",
+      conversationId: conversationId as ConversationId,
+      ...(entryId !== undefined && ID.test(entryId) ? { entryId: entryId as EntryId } : {}),
+    }
   }
   if (/^#\/new\b/.test(hash)) return { kind: "new" }
   const search = /^#\/search\/?(?:\?(.*))?$/.exec(hash)

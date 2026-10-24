@@ -37,8 +37,12 @@ const routes = <E, R>(
   Layer.effectDiscard(Effect.flatMap(HttpRouter.HttpRouter, add))
 
 /** `/node`, `/node/pair`, `/node/stream/:id` (public listener). */
-export const NodePublicRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter | NodeGateway | BrainNodesConfig | DataDir> = routes(
-  Effect.fnUntraced(function*(router) {
+export const NodePublicRoutes: Layer.Layer<
+  never,
+  never,
+  HttpRouter.HttpRouter | NodeGateway | BrainNodesConfig | DataDir
+> = routes(
+  Effect.fnUntraced(function* (router) {
     const gateway = yield* NodeGateway
     yield* router.add("GET", Routes.control, gateway.control)
     yield* router.add("POST", Routes.pair, gateway.pair)
@@ -53,7 +57,7 @@ export const NodePublicRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter |
 
 /** `/relay/:nodeId/:kind` (internal listener only: never expose it publicly). */
 export const NodeInternalRoutes: Layer.Layer<never, never, HttpRouter.HttpRouter | RelayService> = routes(
-  Effect.fnUntraced(function*(router) {
+  Effect.fnUntraced(function* (router) {
     const relays = yield* RelayService
     yield* router.add(
       "GET",
@@ -91,7 +95,7 @@ export const ViewerRoutes = <R>(
   authorize: ViewerAuthorizer<R>,
 ): Layer.Layer<never, never, HttpRouter.HttpRouter | ComputerService | R> =>
   routes(
-    Effect.fnUntraced(function*(router) {
+    Effect.fnUntraced(function* (router) {
       const computer = yield* ComputerService
       const context = yield* Effect.context<R>()
       const guard = (
@@ -101,7 +105,7 @@ export const ViewerRoutes = <R>(
           botId: string,
         ) => Effect.Effect<HttpServerResponse.HttpServerResponse, never, HttpServerRequest.HttpServerRequest>,
       ) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest
           const params = yield* HttpRouter.params
           const botId = params["botId"] ?? ""
@@ -138,5 +142,3 @@ export const ViewerRoutes = <R>(
 
 /** Test/dev helper: a `ViewerAuthorizer` that allows everything. Never use it on a real listener. */
 export const allowAllViewers: ViewerAuthorizer<never> = () => Effect.succeed(undefined)
-
-

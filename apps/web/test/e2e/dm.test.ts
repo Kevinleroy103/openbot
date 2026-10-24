@@ -6,7 +6,19 @@ import type { Browser } from "playwright-core"
 import type { BotId, ConversationId } from "@openbot/contracts"
 import { mkdirSync } from "node:fs"
 import { join } from "node:path"
-import { type AppPage, type Brain, connectRpc, eventually, hasChromium, launchBrowser, openApp, type Rpc, send, startBrain, waitIdle } from "./brain.ts"
+import {
+  type AppPage,
+  type Brain,
+  connectRpc,
+  eventually,
+  hasChromium,
+  launchBrowser,
+  openApp,
+  type Rpc,
+  send,
+  startBrain,
+  waitIdle,
+} from "./brain.ts"
 
 describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
   let brain: Brain
@@ -79,7 +91,7 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     await transcript.getByText("Hello from the e2e suite, streaming word by word", { exact: true }).waitFor()
     await waitIdle(page)
     // a tool turn gets the "1 step" disclosure (needs the entry's turnId + a terminal turn status)
-    await send(page, BOT, 'tool: list_bots {}')
+    await send(page, BOT, "tool: list_bots {}")
     await transcript.getByText("I called list_bots", { exact: false }).waitFor()
     await waitIdle(page)
     const steps = page.locator("[data-steps]").last()
@@ -97,7 +109,10 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     const session = state.conversation?.sessions?.find((s) => s.botId === botId)
     expect(session?.active).toBe(true)
     expect(session?.contextUsage?.windowTokens).toBeGreaterThan(0)
-    await page.getByLabel(/^Context \d+%/).first().waitFor()
+    await page
+      .getByLabel(/^Context \d+%/)
+      .first()
+      .waitFor()
     // sidebar preview: the last message
     const row = page.locator(`[data-row="${botId}"]`)
     await row.getByText("I called list_bots", { exact: false }).waitFor()
@@ -116,7 +131,8 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     const request = pending.find((r) => r.kind === "command-approval")
     expect(request).toBeDefined()
     expect(request!.responseCapability.type).toBe("decision")
-    const options = request!.responseCapability.type === "decision" ? request!.responseCapability.options.map((o) => o.id) : []
+    const options =
+      request!.responseCapability.type === "decision" ? request!.responseCapability.options.map((o) => o.id) : []
     expect(options).toContain("allow-once")
     expect(options).toContain("allow-always")
     expect(options).toContain("deny")
@@ -133,7 +149,11 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     await card.waitFor()
     await card.getByRole("button", { name: "Deny" }).click()
     await page.locator('[data-card="approval"][data-status="resolved"]').getByText("Denied").waitFor()
-    await transcript.getByText("I did not run `rm -rf build`", { exact: false }).or(transcript.getByText("I did not run rm -rf build", { exact: false })).first().waitFor()
+    await transcript
+      .getByText("I did not run `rm -rf build`", { exact: false })
+      .or(transcript.getByText("I did not run rm -rf build", { exact: false }))
+      .first()
+      .waitFor()
     await waitIdle(page)
 
     // Always allow → a rule
@@ -141,7 +161,9 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     card = page.locator('[data-card="approval"][data-status="pending"]')
     await card.waitFor()
     await card.getByRole("button", { name: "Always allow" }).click()
-    const resolved = page.locator('[data-card="approval"][data-status="resolved"]').filter({ hasText: "Always allowed" })
+    const resolved = page
+      .locator('[data-card="approval"][data-status="resolved"]')
+      .filter({ hasText: "Always allowed" })
     await resolved.waitFor()
     await resolved.getByText("Added to your Allow rules").waitFor()
     // the harness gets allow-once (the rule is the brain's business, ApprovalService)
@@ -162,7 +184,8 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     // every approval ran in its own turn (one step per turn)
     const st = await rpc.conversation(convId)
     const perTurn = new Map<string, number>()
-    for (const e of st.entries.values()) if (e.kind === "tool-call" && e.turnId) perTurn.set(e.turnId, (perTurn.get(e.turnId) ?? 0) + 1)
+    for (const e of st.entries.values())
+      if (e.kind === "tool-call" && e.turnId) perTurn.set(e.turnId, (perTurn.get(e.turnId) ?? 0) + 1)
     expect([...perTurn.values()].every((n) => n === 1)).toBe(true)
 
     // Settings › Permissions shows the rule
@@ -187,7 +210,11 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     await select.getByText("Ask first").waitFor()
     await select.click()
     await page.getByRole("menu", { name: "Autonomy" }).getByText("Auto in workspace", { exact: true }).click()
-    await eventually(() => rpc.call((c) => c["bots.get"]({ botId })), (b) => b.autonomy === "workspace", { label: "autonomy saved" })
+    await eventually(
+      () => rpc.call((c) => c["bots.get"]({ botId })),
+      (b) => b.autonomy === "workspace",
+      { label: "autonomy saved" },
+    )
     await pane.getByTestId("autonomy-hint").getByText("Works freely in its own workspace", { exact: false }).waitFor()
     await app.shot("e2e-08b-autonomy-workspace")
 
@@ -223,7 +250,11 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     await allowIn.click()
     const done = page.locator('[data-card="approval"][data-status="resolved"]').filter({ hasText: "Allowed in folder" })
     await done.getByTestId("allowed-in-folder").getByText(repo).waitFor()
-    await eventually(() => rpc.call((c) => c["bots.get"]({ botId })), (b) => b.projectFolders.includes(repo), { label: "folder added" })
+    await eventually(
+      () => rpc.call((c) => c["bots.get"]({ botId })),
+      (b) => b.projectFolders.includes(repo),
+      { label: "folder added" },
+    )
     await waitIdle(page)
     const folders = pane.getByTestId("bot-project-folders")
     await folders.scrollIntoViewIfNeeded()
@@ -236,22 +267,38 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     expect(await page.locator('[data-card="approval"]').count()).toBe(cardsBefore)
     // remove it again from Details › Brain
     await folders.getByRole("button", { name: `Remove ${repo}` }).click()
-    await eventually(() => rpc.call((c) => c["bots.get"]({ botId })), (b) => b.projectFolders.length === 0, { label: "folder removed" })
+    await eventually(
+      () => rpc.call((c) => c["bots.get"]({ botId })),
+      (b) => b.projectFolders.length === 0,
+      { label: "folder removed" },
+    )
     // and add one by hand (invalid input is refused in place)
     await folders.getByRole("textbox", { name: "Add a project folder" }).fill("~")
     await folders.getByRole("button", { name: "Add" }).click()
     await folders.getByRole("alert").waitFor()
     await folders.getByRole("textbox", { name: "Add a project folder" }).fill(`${repo}/`)
     await folders.getByRole("button", { name: "Add" }).click()
-    await eventually(() => rpc.call((c) => c["bots.get"]({ botId })), (b) => b.projectFolders.join() === repo, { label: "folder added by hand" })
+    await eventually(
+      () => rpc.call((c) => c["bots.get"]({ botId })),
+      (b) => b.projectFolders.join() === repo,
+      { label: "folder added by hand" },
+    )
     await app.shot("e2e-08e-brain-project-folders")
     await folders.getByRole("button", { name: `Remove ${repo}` }).click()
-    await eventually(() => rpc.call((c) => c["bots.get"]({ botId })), (b) => b.projectFolders.length === 0, { label: "folder removed again" })
+    await eventually(
+      () => rpc.call((c) => c["bots.get"]({ botId })),
+      (b) => b.projectFolders.length === 0,
+      { label: "folder removed again" },
+    )
 
     // back to Ask first for the rest of the suite
     await select.click()
     await page.getByRole("menu", { name: "Autonomy" }).getByText("Ask first", { exact: true }).click()
-    await eventually(() => rpc.call((c) => c["bots.get"]({ botId })), (b) => b.autonomy === "ask", { label: "autonomy back to ask" })
+    await eventually(
+      () => rpc.call((c) => c["bots.get"]({ botId })),
+      (b) => b.autonomy === "ask",
+      { label: "autonomy back to ask" },
+    )
     expect(app.errors).toEqual([])
   }, 90_000)
 
@@ -269,19 +316,38 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     await def.getByText("Auto in workspace").waitFor()
     await def.getByRole("button", { name: "Default for new Bots" }).click()
     await page.getByRole("menu", { name: "Default for new Bots" }).getByText("Ask first", { exact: true }).click()
-    await eventually(() => rpc.call((c) => c["settings.get"]()), (s) => s.defaultAutonomy === "ask", { label: "default autonomy saved" })
+    await eventually(
+      () => rpc.call((c) => c["settings.get"]()),
+      (s) => s.defaultAutonomy === "ask",
+      { label: "default autonomy saved" },
+    )
 
     const shared = settings.getByTestId("shared-project-folders")
     await shared.getByRole("textbox", { name: "Add a project folder" }).fill("~/projects/")
     await shared.getByRole("button", { name: "Add" }).click()
     await shared.locator('[data-folder="~/projects"]').waitFor()
-    await eventually(() => rpc.call((c) => c["settings.get"]()), (s) => s.sharedProjectFolders.join() === "~/projects", { label: "shared folder saved" })
+    await eventually(
+      () => rpc.call((c) => c["settings.get"]()),
+      (s) => s.sharedProjectFolders.join() === "~/projects",
+      { label: "shared folder saved" },
+    )
     await app.shot("e2e-08f-permissions-folders")
     await shared.getByRole("button", { name: "Remove ~/projects" }).click()
-    await eventually(() => rpc.call((c) => c["settings.get"]()), (s) => s.sharedProjectFolders.length === 0, { label: "shared folder removed" })
+    await eventually(
+      () => rpc.call((c) => c["settings.get"]()),
+      (s) => s.sharedProjectFolders.length === 0,
+      { label: "shared folder removed" },
+    )
     await def.getByRole("button", { name: "Default for new Bots" }).click()
-    await page.getByRole("menu", { name: "Default for new Bots" }).getByText("Auto in workspace", { exact: true }).click()
-    await eventually(() => rpc.call((c) => c["settings.get"]()), (s) => s.defaultAutonomy === "workspace", { label: "default autonomy restored" })
+    await page
+      .getByRole("menu", { name: "Default for new Bots" })
+      .getByText("Auto in workspace", { exact: true })
+      .click()
+    await eventually(
+      () => rpc.call((c) => c["settings.get"]()),
+      (s) => s.defaultAutonomy === "workspace",
+      { label: "default autonomy restored" },
+    )
     await page.keyboard.press("Escape")
     await settings.waitFor({ state: "detached" })
     expect(app.errors).toEqual([])
@@ -323,9 +389,13 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     await tray.getByText("the scripted failure").waitFor()
     await app.shot("e2e-11-error-tray")
     const userMessages = async () => (await rpc.conversation(convId)).entries
-    const countFails = async () => [...(await userMessages()).values()].filter((e) => e.kind === "message" && e.role === "user" && e.text === "fail: the scripted failure").length
+    const countFails = async () =>
+      [...(await userMessages()).values()].filter(
+        (e) => e.kind === "message" && e.role === "user" && e.text === "fail: the scripted failure",
+      ).length
     expect(await countFails()).toBe(1)
-    const failedTurns = async () => [...(await rpc.conversation(convId)).turns.values()].filter((t) => t.status === "failed").length
+    const failedTurns = async () =>
+      [...(await rpc.conversation(convId)).turns.values()].filter((t) => t.status === "failed").length
     await tray.getByRole("button", { name: "Retry" }).click()
     // the Bot tries the same message again; nothing new is posted
     await eventually(failedTurns, (n) => n === 2, { label: "the retried turn" })
@@ -345,8 +415,14 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     await app.shot("e2e-12-working")
     await stop.click()
     await stop.waitFor({ state: "detached" })
-    const state = await eventually(() => rpc.conversation(convId), (s) => [...s.turns.values()].some((t) => t.status === "interrupted"), { label: "an interrupted turn" })
-    const aborted = [...state.entries.values()].find((e) => e.kind === "message" && e.role === "bot" && e.text.startsWith("word0"))
+    const state = await eventually(
+      () => rpc.conversation(convId),
+      (s) => [...s.turns.values()].some((t) => t.status === "interrupted"),
+      { label: "an interrupted turn" },
+    )
+    const aborted = [...state.entries.values()].find(
+      (e) => e.kind === "message" && e.role === "bot" && e.text.startsWith("word0"),
+    )
     expect(aborted && aborted.kind === "message" ? aborted.streaming : true).toBe(false)
     await app.shot("e2e-13-interrupted")
     expect(app.errors).toEqual([])
@@ -360,8 +436,18 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     const before = await rpc.conversation(convId)
     expect(before.conversation?.unreadCount).toBe(0)
     const roster = rpc.watchRoster()
-    await rpc.call((c) => c["messages.send"]({ conversationId: convId, text: "slow: one two three four five six", clientNonce: `e2e-unread-${Date.now()}` }))
-    const after = await eventually(() => rpc.conversation(convId), (s) => (s.conversation?.unreadCount ?? 0) > 0 && [...s.turns.values()].every((t) => t.status !== "running"), { label: "an unread reply" })
+    await rpc.call((c) =>
+      c["messages.send"]({
+        conversationId: convId,
+        text: "slow: one two three four five six",
+        clientNonce: `e2e-unread-${Date.now()}`,
+      }),
+    )
+    const after = await eventually(
+      () => rpc.conversation(convId),
+      (s) => (s.conversation?.unreadCount ?? 0) > 0 && [...s.turns.values()].every((t) => t.status !== "running"),
+      { label: "an unread reply" },
+    )
     expect(after.conversation?.unreadBoundaryAt).toBeDefined()
     // while it worked, the roster activity named the conversation and had a label ("Typing…")
     const busy = roster.activities().filter((a) => a.botId === botId && a.state !== "idle")
@@ -374,14 +460,23 @@ describe.skipIf(!hasChromium)("e2e: onboarding and a direct chat", () => {
     expect(summary?.preview).toContain("one two three")
     await roster.stop()
     const row = page.locator(`[data-row="${botId}"]`)
-    await row.getByRole("status").or(row.locator("[aria-label='Unread']")).first().waitFor().catch(() => undefined)
+    await row
+      .getByRole("status")
+      .or(row.locator("[aria-label='Unread']"))
+      .first()
+      .waitFor()
+      .catch(() => undefined)
     await app.shot("e2e-14-unread-sidebar")
     await row.click()
     const divider = page.getByRole("separator", { name: "New messages" })
     await divider.waitFor()
     await app.shot("e2e-15-new-divider")
     // opening it marks it read on the server
-    await eventually(() => rpc.conversation(convId), (s) => s.conversation?.unreadCount === 0, { label: "markRead" })
+    await eventually(
+      () => rpc.conversation(convId),
+      (s) => s.conversation?.unreadCount === 0,
+      { label: "markRead" },
+    )
     expect(app.errors).toEqual([])
   }, 60_000)
 })

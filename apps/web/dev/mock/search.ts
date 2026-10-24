@@ -66,15 +66,36 @@ export const textOf = (e: KnownTranscriptEntry): { readonly kind: SearchKind; re
     case "message":
       return { kind: "message", text: [e.text, ...e.attachments.map((a) => a.name)].join("\n") }
     case "card": {
-      const c = e.card as { title?: string; summary?: string; command?: string; text?: string; question?: string; prompt?: string }
-      return { kind: "card", text: [c.title, c.summary, c.question, c.command, c.text, c.prompt].filter(Boolean).join("\n") }
+      const c = e.card as {
+        title?: string
+        summary?: string
+        command?: string
+        text?: string
+        question?: string
+        prompt?: string
+      }
+      return {
+        kind: "card",
+        text: [c.title, c.summary, c.question, c.command, c.text, c.prompt].filter(Boolean).join("\n"),
+      }
     }
     case "notice":
       return { kind: "notice", text: e.text }
     case "tool-call":
-      return { kind: "tool-call", text: [e.inputSummary, e.command?.command, e.output?.text, e.error].filter(Boolean).join("\n") }
+      return {
+        kind: "tool-call",
+        text: [e.inputSummary, e.command?.command, e.output?.text, e.error].filter(Boolean).join("\n"),
+      }
     case "event": {
-      const ev = e.event as { type: string; summary?: string; task?: string; title?: string; routineName?: string; to?: string; name?: string }
+      const ev = e.event as {
+        type: string
+        summary?: string
+        task?: string
+        title?: string
+        routineName?: string
+        to?: string
+        name?: string
+      }
       if (ev.type === "session-changed" || ev.type === "auto-decided") return undefined
       const text = [ev.summary, ev.task, ev.title, ev.routineName, ev.to, ev.name].filter(Boolean).join("\n")
       return text === "" ? undefined : { kind: "event", text }
@@ -102,10 +123,23 @@ const matchEntry = (entry: KnownTranscriptEntry, q: ParsedQuery): Match | undefi
   for (const term of q.must) {
     const at = occurrences(text, term, term === q.prefix)
     if (at.length === 0) return undefined
-    for (const a of at) ranges.push({ start: a, end: term === q.prefix ? a + term.length + (text.slice(a + term.length).match(/^[\p{L}\p{N}]*/u)?.[0].length ?? 0) : a + term.length })
+    for (const a of at)
+      ranges.push({
+        start: a,
+        end:
+          term === q.prefix
+            ? a + term.length + (text.slice(a + term.length).match(/^[\p{L}\p{N}]*/u)?.[0].length ?? 0)
+            : a + term.length,
+      })
   }
   for (const term of q.not) if (occurrences(text, term, false).length > 0) return undefined
-  return { entry, kind: doc.kind, text: doc.text, score: ranges.length, ranges: ranges.sort((a, b) => a.start - b.start) }
+  return {
+    entry,
+    kind: doc.kind,
+    text: doc.text,
+    score: ranges.length,
+    ranges: ranges.sort((a, b) => a.start - b.start),
+  }
 }
 
 /** ~140 characters around the first match, `…` where cut, ranges moved into it. */
@@ -125,7 +159,9 @@ const snippetOf = (m: Match): Pick<SearchHit, "snippet" | "highlights"> => {
   const end = Math.min(flat.length, start + 140)
   const lead = start > 0 ? "…" : ""
   const snippet = `${lead}${flat.slice(start, end)}${end < flat.length ? "…" : ""}`
-  const highlights = ranges.filter((r) => r.start >= start && r.end <= end).map((r) => ({ start: r.start - start + lead.length, end: r.end - start + lead.length }))
+  const highlights = ranges
+    .filter((r) => r.start >= start && r.end <= end)
+    .map((r) => ({ start: r.start - start + lead.length, end: r.end - start + lead.length }))
   return { snippet, highlights }
 }
 
@@ -139,7 +175,8 @@ export interface SearchSource {
   }>
 }
 
-const visible = (e: KnownTranscriptEntry, turns: ReadonlyMap<string, Turn>) => e.turnId === undefined || turns.get(e.turnId)?.voice !== true
+const visible = (e: KnownTranscriptEntry, turns: ReadonlyMap<string, Turn>) =>
+  e.turnId === undefined || turns.get(e.turnId)?.voice !== true
 
 export const search = (
   source: SearchSource,
@@ -181,7 +218,11 @@ export const search = (
   }
   const sort = input.sort ?? "relevance"
   matches.sort((a, b) =>
-    sort === "oldest" ? compareEntries(a.entry, b.entry) : sort === "newest" ? compareEntries(b.entry, a.entry) : b.score - a.score || compareEntries(b.entry, a.entry),
+    sort === "oldest"
+      ? compareEntries(a.entry, b.entry)
+      : sort === "newest"
+        ? compareEntries(b.entry, a.entry)
+        : b.score - a.score || compareEntries(b.entry, a.entry),
   )
   const offset = Number(input.cursor ?? 0) || 0
   const page = matches.slice(offset, offset + Math.min(input.limit, 50))
@@ -189,14 +230,24 @@ export const search = (
     ref: { kind: "entry", entryId: m.entry.id },
     conversationId: m.entry.conversationId,
     kind: m.kind,
-    author: m.entry.author.kind === "user" ? { kind: "owner" } : m.entry.author.kind === "bot" ? { kind: "bot", botId: m.entry.author.botId } : { kind: "system" },
+    author:
+      m.entry.author.kind === "user"
+        ? { kind: "owner" }
+        : m.entry.author.kind === "bot"
+          ? { kind: "bot", botId: m.entry.author.botId }
+          : { kind: "system" },
     ...(m.entry.kind === "message" && m.entry.toBotId !== undefined ? { toBotId: m.entry.toBotId } : {}),
     ...(m.entry.turnId !== undefined ? { turnId: m.entry.turnId } : {}),
     createdAt: m.entry.createdAt,
     ...snippetOf(m),
   }))
   const next = offset + page.length
-  return { hits, nextCursor: next < matches.length ? String(next) : null, totalCapped: Math.min(matches.length, SEARCH_TOTAL_CAP), terms }
+  return {
+    hits,
+    nextCursor: next < matches.length ? String(next) : null,
+    totalCapped: Math.min(matches.length, SEARCH_TOTAL_CAP),
+    terms,
+  }
 }
 
 export const positions = (
@@ -220,7 +271,8 @@ const cursorOf = (e: { readonly createdAt: number; readonly id: string }) => `${
 const positionOf = (c: string) => ({ createdAt: Number(c.slice(0, c.indexOf(":"))), id: c.slice(c.indexOf(":") + 1) })
 
 /** Entries the chat shows, oldest first (voice-call work left out, like the brain's pages). */
-const shown = (entries: ReadonlyArray<KnownTranscriptEntry>, turns: ReadonlyMap<string, Turn>) => [...entries].filter((e) => visible(e, turns)).sort(compareEntries)
+const shown = (entries: ReadonlyArray<KnownTranscriptEntry>, turns: ReadonlyMap<string, Turn>) =>
+  [...entries].filter((e) => visible(e, turns)).sort(compareEntries)
 
 const windowOf = (
   all: ReadonlyArray<KnownTranscriptEntry>,
@@ -245,12 +297,22 @@ const windowOf = (
 }
 
 export const around = (
-  conversation: { readonly entries: ReadonlyArray<KnownTranscriptEntry>; readonly turns: ReadonlyMap<string, Turn>; readonly requests: ReadonlyArray<RuntimeRequest> },
-  input: { readonly entryId?: string; readonly beforeCursor?: string; readonly afterCursor?: string; readonly limit: number },
+  conversation: {
+    readonly entries: ReadonlyArray<KnownTranscriptEntry>
+    readonly turns: ReadonlyMap<string, Turn>
+    readonly requests: ReadonlyArray<RuntimeRequest>
+  },
+  input: {
+    readonly entryId?: string
+    readonly beforeCursor?: string
+    readonly afterCursor?: string
+    readonly limit: number
+  },
 ): TranscriptWindow | undefined => {
   const all = shown(conversation.entries, conversation.turns)
   const limit = Math.max(1, Math.min(input.limit, 200))
-  const count = (c: string, inclusive: boolean) => all.filter((e) => compareEntries(e, positionOf(c)) < (inclusive ? 1 : 0)).length
+  const count = (c: string, inclusive: boolean) =>
+    all.filter((e) => compareEntries(e, positionOf(c)) < (inclusive ? 1 : 0)).length
   let start: number
   let end: number
   if (input.beforeCursor) {
@@ -273,7 +335,11 @@ export const around = (
 }
 
 /** `conversations.history`: the page before a cursor. */
-export const historyBefore = (conversation: { readonly entries: ReadonlyArray<KnownTranscriptEntry>; readonly turns: ReadonlyMap<string, Turn> }, beforeCursor: string, limit: number) => {
+export const historyBefore = (
+  conversation: { readonly entries: ReadonlyArray<KnownTranscriptEntry>; readonly turns: ReadonlyMap<string, Turn> },
+  beforeCursor: string,
+  limit: number,
+) => {
   const all = shown(conversation.entries, conversation.turns)
   const end = all.filter((e) => compareEntries(e, positionOf(beforeCursor)) < 0).length
   const start = Math.max(0, end - limit)

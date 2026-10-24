@@ -5,7 +5,21 @@
 //   PDFs   → a file card with "Open" (new tab) and Download,
 //   others → a file card (icon by type, name, size, Download).
 // Media is at most 360 px wide and never wider than the message column (85 % on phones).
-import { Download, ExternalLink, File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, X, ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  Download,
+  ExternalLink,
+  File,
+  FileArchive,
+  FileAudio,
+  FileCode,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FileVideo,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import type { Attachment } from "@openbot/contracts"
 import { Icon, Portal, cn } from "@openbot/ui"
@@ -34,10 +48,18 @@ const FAMILY_ICONS: Record<FileFamily, typeof File> = {
   other: File,
 }
 
-const metaLine = (a: Attachment): string => [extensionLabel(a.name), formatBytes(a.byteSize)].filter((s) => s !== "").join(" · ")
+const metaLine = (a: Attachment): string =>
+  [extensionLabel(a.name), formatBytes(a.byteSize)].filter((s) => s !== "").join(" · ")
 
 /** Small round icon link (download / open). */
-function IconLink({ href, label, icon, download, newTab, tone = "default" }: {
+function IconLink({
+  href,
+  label,
+  icon,
+  download,
+  newTab,
+  tone = "default",
+}: {
   readonly href: string
   readonly label: string
   readonly icon: typeof File
@@ -55,7 +77,9 @@ function IconLink({ href, label, icon, download, newTab, tone = "default" }: {
       onClick={(e) => e.stopPropagation()}
       className={cn(
         "inline-flex size-8 shrink-0 items-center justify-center rounded-full transition-colors",
-        tone === "inverse" ? "text-white/85 hover:bg-white/15 hover:text-white" : "text-icon-secondary hover:bg-secondary hover:text-icon",
+        tone === "inverse"
+          ? "text-white/85 hover:bg-white/15 hover:text-white"
+          : "text-icon-secondary hover:bg-secondary hover:text-icon",
       )}
     >
       <Icon icon={icon} size="md" />
@@ -63,7 +87,10 @@ function IconLink({ href, label, icon, download, newTab, tone = "default" }: {
   )
 }
 
-function FileCard({ attachment, onOpen }: {
+function FileCard({
+  attachment,
+  onOpen,
+}: {
   readonly attachment: Attachment
   readonly onOpen?: ((trigger: HTMLButtonElement) => void) | undefined
 }): ReactNode {
@@ -83,7 +110,10 @@ function FileCard({ attachment, onOpen }: {
       data-attachment={kind === "pdf" ? "pdf" : "file"}
       className="flex w-[320px] max-w-full items-center gap-3 rounded-2xl bg-elevated py-2.5 ps-3 pe-1.5 hairline border-line-secondary"
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-icon-secondary" aria-hidden>
+      <span
+        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-icon-secondary"
+        aria-hidden
+      >
         <Icon icon={FAMILY_ICONS[family]} size="lg" />
       </span>
       {previewable ? (
@@ -111,7 +141,12 @@ function FileCard({ attachment, onOpen }: {
           Open
         </a>
       )}
-      <IconLink href={downloadUrl(attachment.url)} download={attachment.name} label={`Download ${attachment.name}`} icon={Download} />
+      <IconLink
+        href={downloadUrl(attachment.url)}
+        download={attachment.name}
+        label={`Download ${attachment.name}`}
+        icon={Download}
+      />
     </div>
   )
 }
@@ -133,7 +168,12 @@ function VideoPlayer({ attachment }: { readonly attachment: Attachment }): React
           {attachment.name}
           {attachment.byteSize === undefined ? "" : ` · ${formatBytes(attachment.byteSize)}`}
         </span>
-        <IconLink href={downloadUrl(attachment.url)} download={attachment.name} label={`Download ${attachment.name}`} icon={Download} />
+        <IconLink
+          href={downloadUrl(attachment.url)}
+          download={attachment.name}
+          label={`Download ${attachment.name}`}
+          icon={Download}
+        />
       </div>
     </div>
   )
@@ -141,21 +181,35 @@ function VideoPlayer({ attachment }: { readonly attachment: Attachment }): React
 
 function AudioPlayer({ attachment }: { readonly attachment: Attachment }): ReactNode {
   return (
-    <div data-attachment="audio" className="flex w-[360px] max-w-full flex-col gap-2 rounded-2xl bg-elevated px-3 pt-2.5 pb-3 hairline border-line-secondary">
+    <div
+      data-attachment="audio"
+      className="flex w-[360px] max-w-full flex-col gap-2 rounded-2xl bg-elevated px-3 pt-2.5 pb-3 hairline border-line-secondary"
+    >
       <div className="flex min-w-0 items-center gap-2">
         <Icon icon={FileAudio} size="md" className="shrink-0 text-icon-secondary" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={attachment.name}>
           {attachment.name}
         </span>
         <span className="shrink-0 text-xs text-fg-tertiary">{formatBytes(attachment.byteSize)}</span>
-        <IconLink href={downloadUrl(attachment.url)} download={attachment.name} label={`Download ${attachment.name}`} icon={Download} />
+        <IconLink
+          href={downloadUrl(attachment.url)}
+          download={attachment.name}
+          label={`Download ${attachment.name}`}
+          icon={Download}
+        />
       </div>
       <audio src={attachment.url} controls preload="metadata" aria-label={attachment.name} className="w-full" />
     </div>
   )
 }
 
-function ImageThumb({ attachment, onOpen }: { readonly attachment: Attachment; readonly onOpen: () => void }): ReactNode {
+function ImageThumb({
+  attachment,
+  onOpen,
+}: {
+  readonly attachment: Attachment
+  readonly onOpen: () => void
+}): ReactNode {
   const known = attachment.width !== undefined && attachment.height !== undefined
   return (
     <button
@@ -165,7 +219,9 @@ function ImageThumb({ attachment, onOpen }: { readonly attachment: Attachment; r
       aria-label={`View ${attachment.name}`}
       title={attachment.name}
       className="block max-w-full cursor-zoom-in overflow-hidden rounded-2xl bg-secondary hairline border-line-tertiary focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={known ? { width: Math.min(360, attachment.width!), aspectRatio: aspectRatioOf(attachment, "1") } : undefined}
+      style={
+        known ? { width: Math.min(360, attachment.width!), aspectRatio: aspectRatioOf(attachment, "1") } : undefined
+      }
     >
       <img
         src={attachment.url}
@@ -173,14 +229,22 @@ function ImageThumb({ attachment, onOpen }: { readonly attachment: Attachment; r
         loading="lazy"
         decoding="async"
         draggable={false}
-        className={cn("block max-h-[360px] max-w-full object-cover", known ? "h-full w-full" : "h-auto w-auto max-w-[min(360px,100%)]")}
+        className={cn(
+          "block max-h-[360px] max-w-full object-cover",
+          known ? "h-full w-full" : "h-auto w-auto max-w-[min(360px,100%)]",
+        )}
       />
     </button>
   )
 }
 
 /** Full-screen image viewer: Escape / backdrop closes, ← → step through the message's images. */
-export function Lightbox({ images, index, onIndex, onClose }: {
+export function Lightbox({
+  images,
+  index,
+  onIndex,
+  onClose,
+}: {
   readonly images: ReadonlyArray<Attachment>
   readonly index: number
   readonly onIndex: (index: number) => void
@@ -188,9 +252,12 @@ export function Lightbox({ images, index, onIndex, onClose }: {
 }): ReactNode {
   const image = images[index]
   const closeRef = useRef<HTMLButtonElement>(null)
-  const step = useCallback((delta: number) => {
-    if (images.length > 1) onIndex((index + delta + images.length) % images.length)
-  }, [images.length, index, onIndex])
+  const step = useCallback(
+    (delta: number) => {
+      if (images.length > 1) onIndex((index + delta + images.length) % images.length)
+    },
+    [images.length, index, onIndex],
+  )
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     closeRef.current?.focus()
@@ -229,10 +296,18 @@ export function Lightbox({ images, index, onIndex, onClose }: {
           <div className="flex min-w-0 flex-1 flex-col ps-1">
             <span className="truncate text-sm font-medium">{image.name}</span>
             <span className="text-xs text-white/60">
-              {[formatBytes(image.byteSize), images.length > 1 ? `${index + 1} of ${images.length}` : ""].filter((s) => s !== "").join(" · ")}
+              {[formatBytes(image.byteSize), images.length > 1 ? `${index + 1} of ${images.length}` : ""]
+                .filter((s) => s !== "")
+                .join(" · ")}
             </span>
           </div>
-          <IconLink href={downloadUrl(image.url)} download={image.name} label={`Download ${image.name}`} icon={Download} tone="inverse" />
+          <IconLink
+            href={downloadUrl(image.url)}
+            download={image.name}
+            label={`Download ${image.name}`}
+            icon={Download}
+            tone="inverse"
+          />
           <IconLink href={image.url} newTab label="Open in a new tab" icon={ExternalLink} tone="inverse" />
           <button
             ref={closeRef}
@@ -251,13 +326,28 @@ export function Lightbox({ images, index, onIndex, onClose }: {
             if (e.target === e.currentTarget) onClose()
           }}
         >
-          <img src={image.url} alt={image.name} className="max-h-full max-w-full select-none object-contain" draggable={false} />
+          <img
+            src={image.url}
+            alt={image.name}
+            className="max-h-full max-w-full select-none object-contain"
+            draggable={false}
+          />
           {images.length > 1 && (
             <>
-              <button type="button" aria-label="Previous image" onClick={() => step(-1)} className="absolute start-3 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">
+              <button
+                type="button"
+                aria-label="Previous image"
+                onClick={() => step(-1)}
+                className="absolute start-3 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+              >
                 <Icon icon={ChevronLeft} size="lg" />
               </button>
-              <button type="button" aria-label="Next image" onClick={() => step(1)} className="absolute end-3 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">
+              <button
+                type="button"
+                aria-label="Next image"
+                onClick={() => step(1)}
+                className="absolute end-3 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+              >
                 <Icon icon={ChevronRight} size="lg" />
               </button>
             </>
@@ -268,7 +358,13 @@ export function Lightbox({ images, index, onIndex, onClose }: {
   )
 }
 
-export function Attachments({ items, side }: { readonly items: ReadonlyArray<Attachment>; readonly side: "user" | "bot" }): ReactNode {
+export function Attachments({
+  items,
+  side,
+}: {
+  readonly items: ReadonlyArray<Attachment>
+  readonly side: "user" | "bot"
+}): ReactNode {
   const [viewing, setViewing] = useState<number | undefined>(undefined)
   const [previewing, setPreviewing] = useState<Attachment | undefined>(undefined)
   // `Dialog` restores the element focused when it opened, but a mouse click does not always focus
@@ -293,16 +389,25 @@ export function Attachments({ items, side }: { readonly items: ReadonlyArray<Att
   return (
     <div
       data-testid="attachments"
-      className={cn("flex w-full max-w-[85%] flex-col gap-1.5 sm:max-w-[min(80%,560px)]", side === "user" ? "items-end self-end" : "items-start self-start")}
+      className={cn(
+        "flex w-full max-w-[85%] flex-col gap-1.5 sm:max-w-[min(80%,560px)]",
+        side === "user" ? "items-end self-end" : "items-start self-start",
+      )}
     >
       {images.length > 0 && (
         <div className={cn("flex max-w-full flex-wrap gap-1.5", side === "user" ? "justify-end" : "justify-start")}>
-          {images.map((a, i) => <ImageThumb key={a.id} attachment={a} onOpen={() => setViewing(i)} />)}
+          {images.map((a, i) => (
+            <ImageThumb key={a.id} attachment={a} onOpen={() => setViewing(i)} />
+          ))}
         </div>
       )}
       {others.map((a) => {
         const kind = attachmentKind(a)
-        return kind === "video" ? <VideoPlayer key={a.id} attachment={a} /> : kind === "audio" ? <AudioPlayer key={a.id} attachment={a} /> : (
+        return kind === "video" ? (
+          <VideoPlayer key={a.id} attachment={a} />
+        ) : kind === "audio" ? (
+          <AudioPlayer key={a.id} attachment={a} />
+        ) : (
           <FileCard
             key={a.id}
             attachment={a}
@@ -313,7 +418,9 @@ export function Attachments({ items, side }: { readonly items: ReadonlyArray<Att
           />
         )
       })}
-      {viewing !== undefined && <Lightbox images={images} index={viewing} onIndex={setViewing} onClose={() => setViewing(undefined)} />}
+      {viewing !== undefined && (
+        <Lightbox images={images} index={viewing} onIndex={setViewing} onClose={() => setViewing(undefined)} />
+      )}
       {previewing !== undefined && <FilePreview key={previewing.id} attachment={previewing} onClose={closePreview} />}
     </div>
   )

@@ -12,7 +12,14 @@
  *   (`acceptWithExecpolicyAmendment`, elicitation `persist: "always"`): a rule the user deletes in
  *   OpenBot must stop applying.
  */
-import type { HarnessApprovalRequest, HarnessDecisionSuggestion, HarnessRequest, HarnessRequestResolution, NodeId, Question } from "@openbot/contracts"
+import type {
+  HarnessApprovalRequest,
+  HarnessDecisionSuggestion,
+  HarnessRequest,
+  HarnessRequestResolution,
+  NodeId,
+  Question,
+} from "@openbot/contracts"
 import { isAnswersResolution } from "@openbot/contracts"
 import { RpcErrorCodes } from "./errors.ts"
 import { type CodexNormalizer, itemKeyOf, stripShellWrapper, truncate } from "./normalize.ts"
@@ -20,11 +27,11 @@ import type { RequestReply } from "./protocol.ts"
 
 export type MappedRequest =
   | {
-    readonly _tag: "Ask"
-    readonly request: HarnessRequest
-    /** Native result for the resolution (never throws). */
-    readonly reply: (resolution: HarnessRequestResolution) => unknown
-  }
+      readonly _tag: "Ask"
+      readonly request: HarnessRequest
+      /** Native result for the resolution (never throws). */
+      readonly reply: (resolution: HarnessRequestResolution) => unknown
+    }
   /** Answered without asking anyone. */
   | { readonly _tag: "Answer"; readonly reply: Exclude<RequestReply, symbol> }
 
@@ -48,7 +55,8 @@ const DEFAULT_DECISIONS = ["accept", "acceptForSession", "decline", "cancel"]
 /** Suggestions beyond allow-once / deny (which every approval card offers). */
 const suggestionsFor = (offered: ReadonlyArray<unknown>): ReadonlyArray<HarnessDecisionSuggestion> => {
   const suggestions: Array<HarnessDecisionSuggestion> = []
-  if (offered.includes("acceptForSession")) suggestions.push({ decision: "allow-session", label: "Allow for this chat" })
+  if (offered.includes("acceptForSession"))
+    suggestions.push({ decision: "allow-session", label: "Allow for this chat" })
   if (offered.includes("cancel")) suggestions.push({ decision: "cancel", label: "Deny and stop" })
   return suggestions
 }
@@ -78,7 +86,8 @@ const commandApproval = (id: string, params: Record<string, unknown>, ctx: Reque
   const itemId = str(params.itemId)
   const raw = str(params.command) ?? ""
   const actions = Array.isArray(params.commandActions) ? params.commandActions.filter(isRecord) : []
-  const display = actions.length === 1 && typeof actions[0]?.command === "string" ? actions[0].command : stripShellWrapper(raw)
+  const display =
+    actions.length === 1 && typeof actions[0]?.command === "string" ? actions[0].command : stripShellWrapper(raw)
   const offered = Array.isArray(params.availableDecisions) ? params.availableDecisions : DEFAULT_DECISIONS
   const cwd = str(params.cwd)
   const reason = str(params.reason)
@@ -106,7 +115,10 @@ const fileApproval = (id: string, params: Record<string, unknown>, ctx: RequestC
   const tool = native && itemId ? ctx.normalizer.toolInfo(native, itemId) : undefined
   const changes = tool?.fileChanges ?? []
   const paths = changes.map((change) => change.path)
-  const diff = changes.map((change) => change.diff ?? "").filter((d) => d !== "").join("\n")
+  const diff = changes
+    .map((change) => change.diff ?? "")
+    .filter((d) => d !== "")
+    .join("\n")
   const reason = str(params.reason)
   const grantRoot = str(params.grantRoot)
   const nodeId = ctx.nodeIdForEnvironment(undefined)
@@ -123,7 +135,11 @@ const fileApproval = (id: string, params: Record<string, unknown>, ctx: RequestC
     ...(nodeId ? { nodeId } : {}),
     suggestions: suggestionsFor(DEFAULT_DECISIONS),
   }
-  return { _tag: "Ask", request, reply: (resolution) => ({ decision: approvalDecision(resolution, DEFAULT_DECISIONS) }) }
+  return {
+    _tag: "Ask",
+    request,
+    reply: (resolution) => ({ decision: approvalDecision(resolution, DEFAULT_DECISIONS) }),
+  }
 }
 
 const permissionsApproval = (id: string, params: Record<string, unknown>, ctx: RequestContext): MappedRequest => {
@@ -187,9 +203,10 @@ const formQuestions = (schema: unknown): ReadonlyArray<Question & { readonly val
     const type = str(prop.type) ?? "string"
     const enumValues = Array.isArray(prop.enum) ? prop.enum.filter((v): v is string => typeof v === "string") : []
     const enumNames = Array.isArray(prop.enumNames) ? prop.enumNames : []
-    const options = type === "boolean"
-      ? [{ label: "Yes" }, { label: "No" }]
-      : enumValues.map((v, i) => ({ label: typeof enumNames[i] === "string" ? (enumNames[i] as string) : v }))
+    const options =
+      type === "boolean"
+        ? [{ label: "Yes" }, { label: "No" }]
+        : enumValues.map((v, i) => ({ label: typeof enumNames[i] === "string" ? (enumNames[i] as string) : v }))
     questions.push({
       id: key,
       ...(title ? { header: title } : {}),
@@ -203,7 +220,11 @@ const formQuestions = (schema: unknown): ReadonlyArray<Question & { readonly val
   return questions
 }
 
-const coerceAnswer = (question: { readonly valueType: string; readonly options: ReadonlyArray<{ readonly label: string }> }, answer: string, enumValues: ReadonlyArray<string>): unknown => {
+const coerceAnswer = (
+  question: { readonly valueType: string; readonly options: ReadonlyArray<{ readonly label: string }> },
+  answer: string,
+  enumValues: ReadonlyArray<string>,
+): unknown => {
   if (question.valueType === "boolean") return answer === "Yes" || answer === "true"
   if (question.valueType === "number" || question.valueType === "integer") {
     const n = Number(answer)
@@ -236,7 +257,9 @@ const elicitation = (id: string, params: Record<string, unknown>, ctx: RequestCo
       nativeRequestId: id,
       ...(running ? { toolKey: running.key } : {}),
       ...(toolParams !== undefined ? { input: toolParams } : {}),
-      ...(persist.includes("session") ? { suggestions: [{ decision: "allow-session", label: "Allow for this chat" }] } : {}),
+      ...(persist.includes("session")
+        ? { suggestions: [{ decision: "allow-session", label: "Allow for this chat" }] }
+        : {}),
     }
     return {
       _tag: "Ask",
@@ -277,7 +300,11 @@ const elicitation = (id: string, params: Record<string, unknown>, ctx: RequestCo
         request,
         reply: (resolution) => {
           const decision = decisionOf(resolution)
-          return decision === "deny" ? decline : decision === "cancel" ? cancel : { action: "accept", content: {}, _meta: null }
+          return decision === "deny"
+            ? decline
+            : decision === "cancel"
+              ? cancel
+              : { action: "accept", content: {}, _meta: null }
         },
       }
     }
@@ -293,7 +320,11 @@ const elicitation = (id: string, params: Record<string, unknown>, ctx: RequestCo
       reply: (resolution) => {
         if (!isAnswersResolution(resolution)) {
           const decision = resolution.decision
-          return decision === "cancel" ? cancel : decision === "deny" ? decline : { action: "accept", content: {}, _meta: null }
+          return decision === "cancel"
+            ? cancel
+            : decision === "deny"
+              ? decline
+              : { action: "accept", content: {}, _meta: null }
         }
         const content: Record<string, unknown> = {}
         for (const question of questions) {
@@ -302,7 +333,10 @@ const elicitation = (id: string, params: Record<string, unknown>, ctx: RequestCo
           const first = Array.isArray(answer) ? answer[0] : answer
           if (first === undefined) continue
           const prop = properties[question.id]
-          const enumValues = isRecord(prop) && Array.isArray(prop.enum) ? prop.enum.filter((v): v is string => typeof v === "string") : []
+          const enumValues =
+            isRecord(prop) && Array.isArray(prop.enum)
+              ? prop.enum.filter((v): v is string => typeof v === "string")
+              : []
           content[question.id] = coerceAnswer(question, first, enumValues)
         }
         return { action: "accept", content, _meta: null }
@@ -327,7 +361,11 @@ const elicitation = (id: string, params: Record<string, unknown>, ctx: RequestCo
       request,
       reply: (resolution) => {
         const decision = decisionOf(resolution)
-        return decision === "deny" ? decline : decision === "cancel" ? cancel : { action: "accept", content: null, _meta: null }
+        return decision === "deny"
+          ? decline
+          : decision === "cancel"
+            ? cancel
+            : { action: "accept", content: null, _meta: null }
       },
     }
   }
@@ -346,7 +384,10 @@ const userInput = (id: string, params: Record<string, unknown>): MappedRequest =
     if (!questionId) continue
     const options = (Array.isArray(q.options) ? q.options.filter(isRecord) : [])
       .filter((o) => typeof o.label === "string")
-      .map((o) => ({ label: o.label as string, ...(str(o.description) ? { description: o.description as string } : {}) }))
+      .map((o) => ({
+        label: o.label as string,
+        ...(str(o.description) ? { description: o.description as string } : {}),
+      }))
     const header = str(q.header)
     questions.push({
       id: questionId,
@@ -361,7 +402,7 @@ const userInput = (id: string, params: Record<string, unknown>): MappedRequest =
   const first = questions[0]
   const request: HarnessRequest = {
     kind: "question",
-    title: questions.length === 1 && first ? first.header ?? "Question" : "Questions",
+    title: questions.length === 1 && first ? (first.header ?? "Question") : "Questions",
     nativeRequestId: id,
     ...(native && itemId ? { toolKey: itemKeyOf(native, itemId) } : {}),
     questions,
@@ -407,7 +448,9 @@ export const mapServerRequest = (
         _tag: "Answer",
         reply: {
           result: {
-            contentItems: [{ type: "inputText", text: "ERROR: OpenBot does not provide this tool. Use the openbot MCP tools." }],
+            contentItems: [
+              { type: "inputText", text: "ERROR: OpenBot does not provide this tool. Use the openbot MCP tools." },
+            ],
             success: false,
           },
         },

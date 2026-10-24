@@ -12,7 +12,10 @@ const INSET = 84
  * The row that shows `entryId`: its own (`data-entry`) or the "N messages with" line holding it
  * (`data-entries`, `exchange: true`).
  */
-export const rowOf = (root: HTMLElement, entryId: string): { readonly element: HTMLElement; readonly exchange: boolean } | null => {
+export const rowOf = (
+  root: HTMLElement,
+  entryId: string,
+): { readonly element: HTMLElement; readonly exchange: boolean } | null => {
   const id = CSS.escape(entryId)
   const own = root.querySelector<HTMLElement>(`[data-entry="${id}"]`)
   if (own) return { element: own, exchange: false }
@@ -92,7 +95,12 @@ export interface HighlightIn {
 const CHAT: HighlightIn = { attribute: "data-entry", name: "ob-find" }
 
 /** Highlights `terms` in the hits under `root` (the current hit in its own color); redone on `deps`. */
-export const useTermHighlights = (root: RefObject<HTMLElement | null>, highlighted: Highlighted | undefined, rows: unknown, where: HighlightIn = CHAT): void => {
+export const useTermHighlights = (
+  root: RefObject<HTMLElement | null>,
+  highlighted: Highlighted | undefined,
+  rows: unknown,
+  where: HighlightIn = CHAT,
+): void => {
   const { attribute, name } = where
   useEffect(() => {
     const reg = registry()

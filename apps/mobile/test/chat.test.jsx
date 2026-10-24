@@ -31,7 +31,8 @@ const Container = ({ children }) => createElement("div", null, children)
 mock.module("react-native", () => ({
   ActionSheetIOS: {},
   Alert: { alert },
-  FlatList: ({ data, ListEmptyComponent }) => createElement("div", null, data.length === 0 ? ListEmptyComponent : "Transcript"),
+  FlatList: ({ data, ListEmptyComponent }) =>
+    createElement("div", null, data.length === 0 ? ListEmptyComponent : "Transcript"),
   KeyboardAvoidingView: Container,
   Platform: { OS: "ios" },
   Pressable: Container,

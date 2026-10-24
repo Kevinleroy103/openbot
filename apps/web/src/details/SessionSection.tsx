@@ -5,7 +5,17 @@ import type { Bot, BotNotify } from "@openbot/contracts"
 import { PillButton, Select, cn } from "@openbot/ui"
 import { Archive, RotateCcw, Trash2 } from "lucide-react"
 import { type ReactNode, useState } from "react"
-import { ConfirmDialog, ErrorLine, Section, SectionSheet, SheetLine, formatTokens, formatUsd, useCommand, useQuery } from "./kit.tsx"
+import {
+  ConfirmDialog,
+  ErrorLine,
+  Section,
+  SectionSheet,
+  SheetLine,
+  formatTokens,
+  formatUsd,
+  useCommand,
+  useQuery,
+} from "./kit.tsx"
 import { useAtomValue } from "@effect/atom-react"
 import { AsyncResult } from "effect/reactivity"
 
@@ -42,9 +52,12 @@ const WEEK = 7 * 86_400_000
 
 export function SessionSection({ bot }: { readonly bot: Bot }): ReactNode {
   const conv = useAtomValue(conversationAtom(bot.directConversationId))
-  const session = AsyncResult.isSuccess(conv) ? conv.value.conversation?.sessions?.find((s) => s.botId === bot.id) : undefined
+  const session = AsyncResult.isSuccess(conv)
+    ? conv.value.conversation?.sessions?.find((s) => s.botId === bot.id)
+    : undefined
   const ctx = session?.contextUsage
-  const pct = ctx && ctx.windowTokens > 0 ? Math.min(100, Math.round((ctx.usedTokens / ctx.windowTokens) * 100)) : undefined
+  const pct =
+    ctx && ctx.windowTokens > 0 ? Math.min(100, Math.round((ctx.usedTokens / ctx.windowTokens) * 100)) : undefined
   const statuses = useQuery(harnessStatusAtom)
   const caps = statuses.value?.find((s) => s.kind === bot.harness.kind)?.capabilities
   const canCompact = caps?.compact ?? true
@@ -62,16 +75,26 @@ export function SessionSection({ bot }: { readonly bot: Bot }): ReactNode {
   const fill = pct === undefined ? "" : pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warn" : "bg-fg-secondary"
 
   return (
-    <Section title="Session" id="details-session" trailing={<span className="text-xs text-fg-tertiary">All of {bot.name}'s chats</span>}>
+    <Section
+      title="Session"
+      id="details-session"
+      trailing={<span className="text-xs text-fg-tertiary">All of {bot.name}'s chats</span>}
+    >
       <SectionSheet>
         <div className="flex flex-col gap-2 px-2 py-2">
           <div className="flex items-center gap-2">
             <span className="flex-1 text-sm text-fg">Context</span>
             <span className="text-sm text-fg-secondary tabular-nums" data-testid="context-usage">
-              {pct !== undefined && ctx ? `${pct} % · ${formatTokens(ctx.usedTokens)} / ${formatTokens(ctx.windowTokens)}` : session?.active === false ? "New session" : "Not reported yet"}
+              {pct !== undefined && ctx
+                ? `${pct} % · ${formatTokens(ctx.usedTokens)} / ${formatTokens(ctx.windowTokens)}`
+                : session?.active === false
+                  ? "New session"
+                  : "Not reported yet"}
             </span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-secondary">{pct !== undefined && <div className={cn("h-full rounded-full", fill)} style={{ width: `${pct}%` }} />}</div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+            {pct !== undefined && <div className={cn("h-full rounded-full", fill)} style={{ width: `${pct}%` }} />}
+          </div>
           <div className="flex items-center gap-2 pt-1">
             <PillButton
               size="md"
@@ -88,21 +111,37 @@ export function SessionSection({ bot }: { readonly bot: Bot }): ReactNode {
             >
               {compact.pending ? "Compacting…" : "Compact"}
             </PillButton>
-            <PillButton size="md" variant="ghost" leadingIcon={RotateCcw} className="ms-auto" onClick={() => setConfirmNew(true)} data-testid="new-session">
+            <PillButton
+              size="md"
+              variant="ghost"
+              leadingIcon={RotateCcw}
+              className="ms-auto"
+              onClick={() => setConfirmNew(true)}
+              data-testid="new-session"
+            >
               New session
             </PillButton>
           </div>
         </div>
-        <SheetLine label="This week" hint={mine ? `${mine.turnCount} turn${mine.turnCount === 1 ? "" : "s"}` : undefined}>
+        <SheetLine
+          label="This week"
+          hint={mine ? `${mine.turnCount} turn${mine.turnCount === 1 ? "" : "s"}` : undefined}
+        >
           <span className="text-sm text-fg-secondary tabular-nums">
-            {mine ? `${mine.usage.costUsd !== undefined ? `${formatUsd(mine.usage.costUsd)} · ` : ""}${formatTokens(tokens)} tokens` : usage.loading ? "…" : "No usage"}
+            {mine
+              ? `${mine.usage.costUsd !== undefined ? `${formatUsd(mine.usage.costUsd)} · ` : ""}${formatTokens(tokens)} tokens`
+              : usage.loading
+                ? "…"
+                : "No usage"}
           </span>
         </SheetLine>
       </SectionSheet>
       {(compact.error ?? fresh.error) && <ErrorLine>{compact.error ?? fresh.error}</ErrorLine>}
       {done && <p className="px-3 text-xs text-success-fg">{done}</p>}
       <p className="px-3 text-2xs text-fg-quaternary" data-testid="session-scope">
-        {bot.name} has one session for all of its chats (this DM, its groups and routines), so it remembers what it did in each. Compacting keeps a summary; a new session starts empty for all of them. {bot.name}'s memory and files stay.
+        {bot.name} has one session for all of its chats (this DM, its groups and routines), so it remembers what it did
+        in each. Compacting keeps a summary; a new session starts empty for all of them. {bot.name}'s memory and files
+        stay.
       </p>
       <ConfirmDialog
         open={confirmNew}
@@ -129,7 +168,13 @@ export function DangerSection({ bot, onDeleted }: { readonly bot: Bot; readonly 
   const [confirm, setConfirm] = useState(false)
   return (
     <div className="flex flex-col items-center gap-2 px-3 pt-2">
-      <PillButton variant="danger-soft" size="md" leadingIcon={Trash2} onClick={() => setConfirm(true)} data-testid="delete-bot">
+      <PillButton
+        variant="danger-soft"
+        size="md"
+        leadingIcon={Trash2}
+        onClick={() => setConfirm(true)}
+        data-testid="delete-bot"
+      >
         Delete {bot.name}
       </PillButton>
       <ConfirmDialog

@@ -45,7 +45,8 @@ export interface QuickSendPrefill {
   readonly to?: string
 }
 
-export const desktopApp = (): DesktopBridge | undefined => (globalThis as { openbotDesktop?: DesktopBridge }).openbotDesktop
+export const desktopApp = (): DesktopBridge | undefined =>
+  (globalThis as { openbotDesktop?: DesktopBridge }).openbotDesktop
 
 const KEY = "openbot.notifications"
 const listeners = new Set<() => void>()
@@ -81,7 +82,10 @@ export function useSystemNotifications(): void {
   const roster = useRoster()
   const { conversationId, select } = useSelection()
   const seen = useRef<Set<string> | undefined>(undefined)
-  const view = useRef<{ readonly conversationId: ConversationId | null; readonly select: (id: ConversationId) => void }>({ conversationId, select })
+  const view = useRef<{
+    readonly conversationId: ConversationId | null
+    readonly select: (id: ConversationId) => void
+  }>({ conversationId, select })
   useEffect(() => {
     view.current = { conversationId, select }
   }, [conversationId, select])
@@ -98,12 +102,19 @@ export function useSystemNotifications(): void {
       if (seen.current.has(n.id)) continue
       seen.current.add(n.id)
       if (!notificationsEnabled()) continue
-      const looking = document.visibilityState === "visible" && document.hasFocus() && n.conversationId !== undefined &&
+      const looking =
+        document.visibilityState === "visible" &&
+        document.hasFocus() &&
+        n.conversationId !== undefined &&
         n.conversationId === view.current.conversationId
       if (looking) continue
       const bot = n.botId === undefined ? undefined : roster.botById(n.botId)
       void (bot === undefined ? Promise.resolve(undefined) : botIconUrl(bot.avatar)).then((icon) => {
-        const shown = new Notification(n.title, { body: n.body, tag: n.conversationId ?? n.id, ...(icon === undefined ? {} : { icon }) })
+        const shown = new Notification(n.title, {
+          body: n.body,
+          tag: n.conversationId ?? n.id,
+          ...(icon === undefined ? {} : { icon }),
+        })
         shown.onclick = () => {
           desktopApp()?.focus()
           window.focus()
@@ -114,7 +125,9 @@ export function useSystemNotifications(): void {
     }
   }, [notifications, roster])
 
-  const unread = [...roster.state.conversations.values()].filter((c) => !c.hiddenFromSidebar && c.unreadCount > 0).length
+  const unread = [...roster.state.conversations.values()].filter(
+    (c) => !c.hiddenFromSidebar && c.unreadCount > 0,
+  ).length
   useEffect(() => {
     desktopApp()?.setBadgeCount(unread)
   }, [unread])

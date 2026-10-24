@@ -15,45 +15,71 @@ describe("boot", () => {
     try {
       const first = await startServer({ dataDir })
       const cookie = await login(first.base, first.ownerToken)
-      const { botId, conversationId } = await first.run(Effect.gen(function*() {
-        const client = yield* rpcClient(`${first.wsBase}/rpc`, { cookie, origin: first.base })
-        const bot = yield* client["bots.create"]({ name: "Sleeper", harness: { kind: "fake" }, autonomy: "ask", clientNonce: "boot-1" })
-        const convo = yield* watchConversation(client, bot.directConversationId)
-        yield* client["messages.send"]({ conversationId: bot.directConversationId, text: "approve: deploy", clientNonce: "b1" })
-        yield* eventually(Ref.get(convo.state), (s) => pendingRequestsOf(s).length === 1, { label: "pending approval" })
-        return { botId: bot.id, conversationId: bot.directConversationId }
-      }))
+      const { botId, conversationId } = await first.run(
+        Effect.gen(function* () {
+          const client = yield* rpcClient(`${first.wsBase}/rpc`, { cookie, origin: first.base })
+          const bot = yield* client["bots.create"]({
+            name: "Sleeper",
+            harness: { kind: "fake" },
+            autonomy: "ask",
+            clientNonce: "boot-1",
+          })
+          const convo = yield* watchConversation(client, bot.directConversationId)
+          yield* client["messages.send"]({
+            conversationId: bot.directConversationId,
+            text: "approve: deploy",
+            clientNonce: "b1",
+          })
+          yield* eventually(Ref.get(convo.state), (s) => pendingRequestsOf(s).length === 1, {
+            label: "pending approval",
+          })
+          return { botId: bot.id, conversationId: bot.directConversationId }
+        }),
+      )
       await first.close({ keepData: true })
 
       const second = await startServer({ dataDir })
       try {
         // same owner token, and the cookie from before the restart is still a session
         expect(second.ownerToken).toBe(first.ownerToken)
-        expect(await (await fetch(`${second.base}/api/auth/status`, { headers: { cookie } })).json()).toEqual({ authenticated: true })
-        await second.run(Effect.gen(function*() {
-          const client = yield* rpcClient(`${second.wsBase}/rpc`, { cookie, origin: second.base })
-          expect((yield* client["bots.get"]({ botId })).name).toBe("Sleeper")
-          const convo = yield* watchConversation(client, conversationId)
-          const state = yield* eventually(Ref.get(convo.state), (s) => s.synchronized, { label: "synchronized" })
-          const requests: Array<RuntimeRequest> = [...state.requests.values()]
-          expect(pendingRequestsOf(state)).toHaveLength(0)
-          expect(requests.some((r) => r.status === "expired" || r.status === "cancelled")).toBe(true)
-          const turns: Array<Turn> = [...state.turns.values()]
-          expect(turns.filter((t) => t.trigger === "user").map((t) => t.status)).toEqual(["interrupted"])
-          // the cut-off bot continues where it was (a system turn), then is idle again
-          yield* eventually(Ref.get(convo.state), (s) => {
-            const all = [...s.turns.values()]
-            return all.some((t) => t.trigger === "system" && t.status === "completed") &&
-              all.every((t) => !["queued", "running", "waiting"].includes(t.status))
-          }, { label: "resumed" })
-          // the bot works again after the restart
-          yield* client["messages.send"]({ conversationId, text: "echo: back again", clientNonce: "b2" })
-          yield* eventually(
-            Ref.get(convo.state),
-            (s) => [...s.entries.values()].some((e) => e.kind === "message" && e.role === "bot" && e.text.includes("back again")),
-            { label: "reply after restart" },
-          )
-        }))
+        expect(await (await fetch(`${second.base}/api/auth/status`, { headers: { cookie } })).json()).toEqual({
+          authenticated: true,
+        })
+        await second.run(
+          Effect.gen(function* () {
+            const client = yield* rpcClient(`${second.wsBase}/rpc`, { cookie, origin: second.base })
+            expect((yield* client["bots.get"]({ botId })).name).toBe("Sleeper")
+            const convo = yield* watchConversation(client, conversationId)
+            const state = yield* eventually(Ref.get(convo.state), (s) => s.synchronized, { label: "synchronized" })
+            const requests: Array<RuntimeRequest> = [...state.requests.values()]
+            expect(pendingRequestsOf(state)).toHaveLength(0)
+            expect(requests.some((r) => r.status === "expired" || r.status === "cancelled")).toBe(true)
+            const turns: Array<Turn> = [...state.turns.values()]
+            expect(turns.filter((t) => t.trigger === "user").map((t) => t.status)).toEqual(["interrupted"])
+            // the cut-off bot continues where it was (a system turn), then is idle again
+            yield* eventually(
+              Ref.get(convo.state),
+              (s) => {
+                const all = [...s.turns.values()]
+                return (
+                  all.some((t) => t.trigger === "system" && t.status === "completed") &&
+                  all.every((t) => !["queued", "running", "waiting"].includes(t.status))
+                )
+              },
+              { label: "resumed" },
+            )
+            // the bot works again after the restart
+            yield* client["messages.send"]({ conversationId, text: "echo: back again", clientNonce: "b2" })
+            yield* eventually(
+              Ref.get(convo.state),
+              (s) =>
+                [...s.entries.values()].some(
+                  (e) => e.kind === "message" && e.role === "bot" && e.text.includes("back again"),
+                ),
+              { label: "reply after restart" },
+            )
+          }),
+        )
       } finally {
         await second.close({ keepData: true })
       }
@@ -101,11 +127,13 @@ describe("boot", () => {
     const server = await startServer({ config: { localNode: false } })
     try {
       const cookie = await login(server.base, server.ownerToken)
-      await server.run(Effect.gen(function*() {
-        const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
-        const nodes = yield* client["nodes.list"]()
-        expect(nodes.some((n) => n.id === LOCAL_NODE_ID)).toBe(false)
-      }))
+      await server.run(
+        Effect.gen(function* () {
+          const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base })
+          const nodes = yield* client["nodes.list"]()
+          expect(nodes.some((n) => n.id === LOCAL_NODE_ID)).toBe(false)
+        }),
+      )
     } finally {
       await server.close()
     }
@@ -117,37 +145,43 @@ describe("boot", () => {
     const clientScope = Effect.runSync(Scope.make())
     const machine = mkdtempSync(join(tmpdir(), "openbot-shutdown-node-"))
     try {
-      await server.run(Effect.gen(function*() {
-        const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base }).pipe(
-          Effect.provideService(Scope.Scope, clientScope),
-        )
-        yield* client["roster.subscribe"]({}).pipe(Stream.runDrain, Effect.forkIn(clientScope))
-        const pairing = yield* client["nodes.createPairingCode"]()
-        mkdirSync(join(machine, "root"), { recursive: true })
-        const identity = yield* pairNode({
-          brainUrl: server.base,
-          code: pairing.code,
-          keyStore: makeKeyStore(join(machine, "data")),
-          hostname: "box",
-        })
-        yield* Layer.buildWithScope(
-          RemoteNodeLive({
-            node: {
-              nodeId: identity.nodeId,
-              dataDir: join(machine, "data"),
-              roots: [join(machine, "root")],
-              detectBinaries: false,
-              browser: { enabled: false },
-              forwardAudit: false,
+      await server.run(
+        Effect.gen(function* () {
+          const client = yield* rpcClient(`${server.wsBase}/rpc`, { cookie, origin: server.base }).pipe(
+            Effect.provideService(Scope.Scope, clientScope),
+          )
+          yield* client["roster.subscribe"]({}).pipe(Stream.runDrain, Effect.forkIn(clientScope))
+          const pairing = yield* client["nodes.createPairingCode"]()
+          mkdirSync(join(machine, "root"), { recursive: true })
+          const identity = yield* pairNode({
+            brainUrl: server.base,
+            code: pairing.code,
+            keyStore: makeKeyStore(join(machine, "data")),
+            hostname: "box",
+          })
+          yield* Layer.buildWithScope(
+            RemoteNodeLive({
+              node: {
+                nodeId: identity.nodeId,
+                dataDir: join(machine, "data"),
+                roots: [join(machine, "root")],
+                detectBinaries: false,
+                browser: { enabled: false },
+                forwardAudit: false,
+              },
+              dial: { identity, heartbeatMs: 0 },
+            }),
+            clientScope,
+          )
+          yield* eventually(
+            client["nodes.list"](),
+            (all) => all.some((n) => n.id === identity.nodeId && n.status === "online"),
+            {
+              label: "node online",
             },
-            dial: { identity, heartbeatMs: 0 },
-          }),
-          clientScope,
-        )
-        yield* eventually(client["nodes.list"](), (all) => all.some((n) => n.id === identity.nodeId && n.status === "online"), {
-          label: "node online",
-        })
-      }))
+          )
+        }),
+      )
       const started = Date.now()
       await server.close()
       expect(Date.now() - started).toBeLessThan(5_000)

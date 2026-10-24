@@ -23,7 +23,9 @@ import { useSystemNotifications } from "./notifications.ts"
 import { parseRoute } from "./route.ts"
 
 import { CallBar } from "../voice/CallBar.tsx"
-const ConnectAppsDialog = lazy(() => import("../connections/ConnectAppsDialog.tsx").then((m) => ({ default: m.ConnectAppsDialog })))
+const ConnectAppsDialog = lazy(() =>
+  import("../connections/ConnectAppsDialog.tsx").then((m) => ({ default: m.ConnectAppsDialog })),
+)
 import {
   findBarAtom,
   isNewChatHash,
@@ -72,7 +74,10 @@ function ConnectionBanner(): ReactNode {
   const secs = conn.nextRetryAt ? Math.max(0, Math.ceil((conn.nextRetryAt - now) / 1000)) : 0
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[calc(12px+env(safe-area-inset-top))] z-[3500] flex justify-center">
-      <div role="status" className="pointer-events-auto flex animate-rise-in items-center gap-2 rounded-full bg-elevated py-1 ps-3 pe-1 text-sm text-fg hairline border-line-secondary shadow-popover">
+      <div
+        role="status"
+        className="pointer-events-auto flex animate-rise-in items-center gap-2 rounded-full bg-elevated py-1 ps-3 pe-1 text-sm text-fg hairline border-line-secondary shadow-popover"
+      >
         <Icon icon={WifiOff} size="sm" className="text-warn-fg" />
         {secs > 0 ? `Offline. Reconnecting in ${secs}s` : "Reconnecting…"}
         <PillButton size="xs" onClick={() => reconnect(undefined)}>
@@ -144,7 +149,8 @@ export function App(): ReactNode {
   useEffect(() => {
     if (booted.current || !roster.loaded) return
     booted.current = true
-    const deepLink = (conversationId !== null && roster.state.conversations.has(conversationId)) || isNewChatHash() || search !== null
+    const deepLink =
+      (conversationId !== null && roster.state.conversations.has(conversationId)) || isNewChatHash() || search !== null
     if (isPhoneNow()) {
       if (deepLink && !nav.home) {
         const hash = location.hash
@@ -158,7 +164,9 @@ export function App(): ReactNode {
     }
     if (deepLink) return
     const firstPinned = roster.bots.find((b) => b.pinned && !b.hidden)
-    const recent = [...roster.state.conversations.values()].filter((c) => !c.hiddenFromSidebar).sort((a, b) => b.lastActivityAt - a.lastActivityAt)[0]
+    const recent = [...roster.state.conversations.values()]
+      .filter((c) => !c.hiddenFromSidebar)
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt)[0]
     const target = firstPinned?.directConversationId ?? recent?.id
     if (target) select(target)
   }, [roster.loaded, roster.bots, roster.state.conversations, conversationId, select, nav, search])
@@ -185,7 +193,10 @@ export function App(): ReactNode {
         const recent = [...roster.state.conversations.values()]
           .filter((c) => !c.hiddenFromSidebar)
           .sort((a, b) => b.lastActivityAt - a.lastActivityAt)[0]
-        const back = previous !== null && previous !== conversationId && roster.state.conversations.has(previous) ? previous : recent?.id
+        const back =
+          previous !== null && previous !== conversationId && roster.state.conversations.has(previous)
+            ? previous
+            : recent?.id
         select(back ?? null)
       }, 600)
       return () => clearTimeout(t)
@@ -216,7 +227,16 @@ export function App(): ReactNode {
       const key = e.key.toLowerCase()
       if (mod && !e.shiftKey && !e.altKey && key === "f") {
         // Only while a chat is the main view and nothing covers it; elsewhere the browser finds.
-        if (!chatOnScreen || conversationId === null || dialogs.dialog || settings.open || connectApps.open || computer.botId || document.querySelector(OVERLAYS)) return
+        if (
+          !chatOnScreen ||
+          conversationId === null ||
+          dialogs.dialog ||
+          settings.open ||
+          connectApps.open ||
+          computer.botId ||
+          document.querySelector(OVERLAYS)
+        )
+          return
         e.preventDefault()
         setFindBar({ conversationId, nonce: (findBar?.nonce ?? 0) + 1 })
       } else if (mod && !e.shiftKey && !e.altKey && key === "k") {
@@ -244,7 +264,23 @@ export function App(): ReactNode {
     }
     window.addEventListener("keydown", on)
     return () => window.removeEventListener("keydown", on)
-  }, [dialogs, select, setCompact, compact, settings, computer, details, conversationId, previous, chatOnScreen, connectApps.open, findBar, setFindBar, search, closeSearch])
+  }, [
+    dialogs,
+    select,
+    setCompact,
+    compact,
+    settings,
+    computer,
+    details,
+    conversationId,
+    previous,
+    chatOnScreen,
+    connectApps.open,
+    findBar,
+    setFindBar,
+    search,
+    closeSearch,
+  ])
 
   // Phone sheets own a history entry: Back / swipe-back closes them (nav.ts).
   const dialog = dialogs.dialog
@@ -254,9 +290,12 @@ export function App(): ReactNode {
 
   const summary = conversationId ? roster.state.conversations.get(conversationId) : undefined
   // A group's pane shows the group, unless a member bot was asked for (its "Handling…" line → Tasks).
-  const detailsBotId = details.botId !== undefined && summary?.botIds.includes(details.botId)
-    ? details.botId
-    : summary && summary.kind !== "group" ? (summary.botIds[0] as BotId | undefined) : undefined
+  const detailsBotId =
+    details.botId !== undefined && summary?.botIds.includes(details.botId)
+      ? details.botId
+      : summary && summary.kind !== "group"
+        ? (summary.botIds[0] as BotId | undefined)
+        : undefined
 
   // Onboarding is sticky: once shown it stays until onDone, even after it creates the first Bot.
   const firstRun = valueOr(info, undefined)?.firstRun === true
@@ -275,7 +314,9 @@ export function App(): ReactNode {
               pendingBot.current = botId
               return
             }
-            const recent = [...roster.state.conversations.values()].sort((a, b) => b.lastActivityAt - a.lastActivityAt)[0]
+            const recent = [...roster.state.conversations.values()].sort(
+              (a, b) => b.lastActivityAt - a.lastActivityAt,
+            )[0]
             if (recent) select(recent.id)
           }}
         />
@@ -292,7 +333,12 @@ export function App(): ReactNode {
         home={nav.home}
         onCloseDetails={details.hide}
         sidebar={({ compact: c, toggleCompact }) => (
-          <Sidebar compact={c} onToggleCompact={toggleCompact} onSearch={() => dialogs.show({ kind: "search" })} onNewChat={() => select(null)} />
+          <Sidebar
+            compact={c}
+            onToggleCompact={toggleCompact}
+            onSearch={() => dialogs.show({ kind: "search" })}
+            onNewChat={() => select(null)}
+          />
         )}
         chat={
           <>
@@ -309,7 +355,13 @@ export function App(): ReactNode {
         details={
           details.open && conversationId && search === null ? (
             <Suspense fallback={<PaneLoading />}>
-              <DetailsPane key={conversationId} {...(detailsBotId ? { botId: detailsBotId } : {})} conversationId={conversationId} tab={details.tab} onClose={details.hide} />
+              <DetailsPane
+                key={conversationId}
+                {...(detailsBotId ? { botId: detailsBotId } : {})}
+                conversationId={conversationId}
+                tab={details.tab}
+                onClose={details.hide}
+              />
             </Suspense>
           ) : null
         }
@@ -321,9 +373,21 @@ export function App(): ReactNode {
           ) : undefined
         }
       />
-      {connectCode !== undefined && <ConnectDeviceDialog code={connectCode} onClose={() => setConnectCode(undefined)} />}
-      <SearchPalette open={dialog?.kind === "search"} onOpenChange={(o) => (o ? dialogs.show({ kind: "search" }) : dialogs.hide())} onToggleCompact={() => setCompact(!compact)} />
-      <Dialog open={dialog?.kind === "new-bot"} onOpenChange={(o) => !o && dialogs.hide()} width={480} label="New Bot" className="ob-phone-full">
+      {connectCode !== undefined && (
+        <ConnectDeviceDialog code={connectCode} onClose={() => setConnectCode(undefined)} />
+      )}
+      <SearchPalette
+        open={dialog?.kind === "search"}
+        onOpenChange={(o) => (o ? dialogs.show({ kind: "search" }) : dialogs.hide())}
+        onToggleCompact={() => setCompact(!compact)}
+      />
+      <Dialog
+        open={dialog?.kind === "new-bot"}
+        onOpenChange={(o) => !o && dialogs.hide()}
+        width={480}
+        label="New Bot"
+        className="ob-phone-full"
+      >
         <DialogHeader title="New Bot" onClose={dialogs.hide} />
         {dialog?.kind === "new-bot" && (
           <Suspense fallback={<PaneLoading className="h-40" />}>
@@ -340,7 +404,13 @@ export function App(): ReactNode {
           </Suspense>
         )}
       </Dialog>
-      <Dialog open={dialog?.kind === "new-group"} onOpenChange={(o) => !o && dialogs.hide()} width={480} label="New group chat" className="ob-phone-full">
+      <Dialog
+        open={dialog?.kind === "new-group"}
+        onOpenChange={(o) => !o && dialogs.hide()}
+        width={480}
+        label="New group chat"
+        className="ob-phone-full"
+      >
         <DialogHeader title="New group chat" onClose={dialogs.hide} />
         {dialog?.kind === "new-group" && (
           <Suspense fallback={<PaneLoading className="h-40" />}>
@@ -362,7 +432,12 @@ export function App(): ReactNode {
       )}
       {connectApps.open && (
         <Suspense fallback={null}>
-          <ConnectAppsDialog key={JSON.stringify(connectApps.view)} open view={connectApps.view} onClose={connectApps.hide} />
+          <ConnectAppsDialog
+            key={JSON.stringify(connectApps.view)}
+            open
+            view={connectApps.view}
+            onClose={connectApps.hide}
+          />
         </Suspense>
       )}
       <ConnectionBanner />

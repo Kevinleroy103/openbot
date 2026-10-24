@@ -25,7 +25,10 @@ const reply = (message: RecognizerReply) => process.send?.(message)
 const sherpa = dlopen(launch.library, {
   SherpaOnnxCreateOfflineRecognizer: { args: [FFIType.ptr], returns: FFIType.ptr },
   SherpaOnnxCreateOfflineStream: { args: [FFIType.ptr], returns: FFIType.ptr },
-  SherpaOnnxAcceptWaveformOffline: { args: [FFIType.ptr, FFIType.i32, FFIType.ptr, FFIType.i32], returns: FFIType.void },
+  SherpaOnnxAcceptWaveformOffline: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.ptr, FFIType.i32],
+    returns: FFIType.void,
+  },
   SherpaOnnxDecodeOfflineStream: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
   SherpaOnnxGetOfflineStreamResultAsJson: { args: [FFIType.ptr], returns: FFIType.ptr },
   SherpaOnnxDestroyOfflineStreamResultJson: { args: [FFIType.ptr], returns: FFIType.void },

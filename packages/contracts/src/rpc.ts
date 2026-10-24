@@ -24,7 +24,20 @@ import {
   TurnId,
   Usage,
 } from "./base.ts"
-import { Bot, BotAvatar, BotHarness, BotNotify, Conversation, NodeSummary, PairingCode, Routine, RoutineOutput, RoutineRun, RoutineTriggerInput, Section } from "./domain.ts"
+import {
+  Bot,
+  BotAvatar,
+  BotHarness,
+  BotNotify,
+  Conversation,
+  NodeSummary,
+  PairingCode,
+  Routine,
+  RoutineOutput,
+  RoutineRun,
+  RoutineTriggerInput,
+  Section,
+} from "./domain.ts"
 import { HarnessProfile, HarnessProfileCandidate, HarnessStatus, ModelInfo } from "./harness.ts"
 import { BotMemory, MemoryFact, MemoryFactId, MemoryFactInput } from "./memory.ts"
 import { ApprovalRule, ApprovalRuleInput, BotAutonomy, ProjectFolders } from "./policy.ts"
@@ -36,19 +49,38 @@ import { SttSession, SttStatus, SttTranscription } from "./stt.ts"
 import { VoiceCallStatus, VoicePreview } from "./voice.ts"
 import { HarkSends, HarkStatus } from "./hark.ts"
 import { SearchKind, SearchPage, SearchPositions, SearchSender, SearchSort } from "./search.ts"
-import { ConversationStreamItem, ExchangePage, RosterStreamItem, StreamCursor, TranscriptPage, TranscriptWindow } from "./stream.ts"
+import {
+  ConversationStreamItem,
+  ExchangePage,
+  RosterStreamItem,
+  StreamCursor,
+  TranscriptPage,
+  TranscriptWindow,
+} from "./stream.ts"
 import { Task, TaskDetail } from "./task.ts"
 import { Attachment, MessageDelivery, Turn } from "./transcript.ts"
 
 // ---------------------------------------------------------------------------- errors (architecture §6)
-export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", { entity: Schema.String, id: Schema.String }) {}
+export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", {
+  entity: Schema.String,
+  id: Schema.String,
+}) {}
 export class InvalidInput extends Schema.TaggedError<InvalidInput>()("InvalidInput", { message: Schema.String }) {}
 export class Conflict extends Schema.TaggedError<Conflict>()("Conflict", { reason: Schema.String }) {}
 export class Forbidden extends Schema.TaggedError<Forbidden>()("Forbidden", { reason: Schema.String }) {}
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()("Unauthorized", { reason: Schema.String }) {}
-export class HarnessUnavailable extends Schema.TaggedError<HarnessUnavailable>()("HarnessUnavailable", { harness: HarnessKindName, message: Schema.String }) {}
-export class RequestNotPending extends Schema.TaggedError<RequestNotPending>()("RequestNotPending", { requestId: RequestId, status: Schema.String }) {}
-export class NodeUnavailable extends Schema.TaggedError<NodeUnavailable>()("NodeUnavailable", { nodeId: NodeId, message: Schema.String }) {}
+export class HarnessUnavailable extends Schema.TaggedError<HarnessUnavailable>()("HarnessUnavailable", {
+  harness: HarnessKindName,
+  message: Schema.String,
+}) {}
+export class RequestNotPending extends Schema.TaggedError<RequestNotPending>()("RequestNotPending", {
+  requestId: RequestId,
+  status: Schema.String,
+}) {}
+export class NodeUnavailable extends Schema.TaggedError<NodeUnavailable>()("NodeUnavailable", {
+  nodeId: NodeId,
+  message: Schema.String,
+}) {}
 /** A defect or repository failure, logged with its cause on the brain; the message is safe to show. */
 export class Internal extends Schema.TaggedError<Internal>()("Internal", { message: Schema.String }) {}
 /** An outside service (skills.sh) did not answer or failed. */
@@ -211,7 +243,11 @@ export type BotUsage = typeof BotUsage.Type
 // ---------------------------------------------------------------------------- RPCs
 /** Standalone definitions so tests and sub-groups can reuse them. */
 export const ConversationsSubscribe = Rpc.make("conversations.subscribe", {
-  payload: { conversationId: ConversationId, after: Schema.optionalKey(StreamCursor), tailLimit: Schema.optionalKey(NonNegativeInt) },
+  payload: {
+    conversationId: ConversationId,
+    after: Schema.optionalKey(StreamCursor),
+    tailLimit: Schema.optionalKey(NonNegativeInt),
+  },
   success: ConversationStreamItem,
   error: Missing,
   stream: true,
@@ -237,7 +273,11 @@ export class OpenBotRpcs extends RpcGroup.make(
   RosterSubscribe,
 
   // bots
-  Rpc.make("bots.create", { payload: BotCreateInput, success: Bot, error: errors(NotFound, InvalidInput, Conflict, HarnessUnavailable) }),
+  Rpc.make("bots.create", {
+    payload: BotCreateInput,
+    success: Bot,
+    error: errors(NotFound, InvalidInput, Conflict, HarnessUnavailable),
+  }),
   Rpc.make("bots.update", { payload: { botId: BotId, patch: BotPatch }, success: Bot, error: Common }),
   Rpc.make("bots.delete", { payload: { botId: BotId }, error: Missing }),
   Rpc.make("bots.get", { payload: { botId: BotId }, success: Bot, error: Missing }),
@@ -249,16 +289,27 @@ export class OpenBotRpcs extends RpcGroup.make(
   // sections (a bot's section is set with bots.update {patch: {sectionId}})
   Rpc.make("sections.list", { success: Schema.Array(Section), error: errors() }),
   Rpc.make("sections.create", { payload: { name: NonEmptyString }, success: Section, error: errors(InvalidInput) }),
-  Rpc.make("sections.rename", { payload: { sectionId: SectionId, name: NonEmptyString }, success: Section, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("sections.rename", {
+    payload: { sectionId: SectionId, name: NonEmptyString },
+    success: Section,
+    error: errors(NotFound, InvalidInput),
+  }),
   /** Bots in the section move to Unassigned. */
   Rpc.make("sections.delete", { payload: { sectionId: SectionId }, error: Missing }),
   /** Full desired order; returns the sections with their new `order`. */
-  Rpc.make("sections.reorder", { payload: { sectionIds: Schema.Array(SectionId) }, success: Schema.Array(Section), error: Common }),
+  Rpc.make("sections.reorder", {
+    payload: { sectionIds: Schema.Array(SectionId) },
+    success: Schema.Array(Section),
+    error: Common,
+  }),
   /**
    * A chat dragged in the sidebar: `items` is the new order of everything at `place`; each goes there
    * and keeps that position (Bots pinned or in a section, group chats in a section or Group chats).
    */
-  Rpc.make("sidebar.arrange", { payload: { place: SidebarPlace, items: Schema.Array(SidebarItemRef) }, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("sidebar.arrange", {
+    payload: { place: SidebarPlace, items: Schema.Array(SidebarItemRef) },
+    error: errors(NotFound, InvalidInput),
+  }),
 
   // conversations
   ConversationsSubscribe,
@@ -301,53 +352,129 @@ export class OpenBotRpcs extends RpcGroup.make(
     error: errors(NotFound, InvalidInput),
   }),
   Rpc.make("conversations.createGroup", {
-    payload: { title: Schema.String, memberBotIds: Schema.Array(BotId), leadBotId: Schema.optionalKey(BotId), clientNonce: Schema.optionalKey(NonEmptyString) },
+    payload: {
+      title: Schema.String,
+      memberBotIds: Schema.Array(BotId),
+      leadBotId: Schema.optionalKey(BotId),
+      clientNonce: Schema.optionalKey(NonEmptyString),
+    },
     success: Conversation,
     error: Common,
   }),
   Rpc.make("conversations.setMembers", {
-    payload: { conversationId: ConversationId, memberBotIds: Schema.Array(BotId), leadBotId: Schema.optionalKey(Schema.NullOr(BotId)) },
+    payload: {
+      conversationId: ConversationId,
+      memberBotIds: Schema.Array(BotId),
+      leadBotId: Schema.optionalKey(Schema.NullOr(BotId)),
+    },
     success: Conversation,
     error: Common,
   }),
-  Rpc.make("conversations.rename", { payload: { conversationId: ConversationId, title: Schema.String }, success: Conversation, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("conversations.rename", {
+    payload: { conversationId: ConversationId, title: Schema.String },
+    success: Conversation,
+    error: errors(NotFound, InvalidInput),
+  }),
   /** `unread: true` = "Mark as Unread"; `at` moves the unread boundary. */
-  Rpc.make("conversations.markRead", { payload: { conversationId: ConversationId, unread: Schema.optionalKey(Schema.Boolean), at: Schema.optionalKey(Millis) }, error: Missing }),
-  Rpc.make("conversations.setHidden", { payload: { conversationId: ConversationId, hidden: Schema.Boolean }, error: Missing }),
+  Rpc.make("conversations.markRead", {
+    payload: {
+      conversationId: ConversationId,
+      unread: Schema.optionalKey(Schema.Boolean),
+      at: Schema.optionalKey(Millis),
+    },
+    error: Missing,
+  }),
+  Rpc.make("conversations.setHidden", {
+    payload: { conversationId: ConversationId, hidden: Schema.Boolean },
+    error: Missing,
+  }),
   /** Deletes a GROUP chat (its transcript, turns and requests; member bots stay). Direct chats go with their bot → InvalidInput. */
-  Rpc.make("conversations.delete", { payload: { conversationId: ConversationId }, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("conversations.delete", {
+    payload: { conversationId: ConversationId },
+    error: errors(NotFound, InvalidInput),
+  }),
 
   // messages + turns
-  Rpc.make("messages.send", { payload: SendInput, success: SendResult, error: errors(NotFound, InvalidInput, HarnessUnavailable) }),
-  Rpc.make("messages.lookupSend", { payload: { conversationId: ConversationId, clientNonce: NonEmptyString }, success: SendLookup, error: Missing }),
+  Rpc.make("messages.send", {
+    payload: SendInput,
+    success: SendResult,
+    error: errors(NotFound, InvalidInput, HarnessUnavailable),
+  }),
+  Rpc.make("messages.lookupSend", {
+    payload: { conversationId: ConversationId, clientNonce: NonEmptyString },
+    success: SendLookup,
+    error: Missing,
+  }),
   /** Toggles the owner's reaction. */
-  Rpc.make("messages.react", { payload: { conversationId: ConversationId, entryId: EntryId, emoji: NonEmptyString }, error: Missing }),
+  Rpc.make("messages.react", {
+    payload: { conversationId: ConversationId, entryId: EntryId, emoji: NonEmptyString },
+    error: Missing,
+  }),
   /** Interrupt the running turn (all bots' turns in a group when `turnId` is absent). */
-  Rpc.make("turns.interrupt", { payload: { conversationId: ConversationId, turnId: Schema.optionalKey(TurnId) }, success: Schema.Array(Turn), error: Missing }),
+  Rpc.make("turns.interrupt", {
+    payload: { conversationId: ConversationId, turnId: Schema.optionalKey(TurnId) },
+    success: Schema.Array(Turn),
+    error: Missing,
+  }),
   /** A failed turn's Bot tries again on the messages it was answering (no new message is posted). */
-  Rpc.make("turns.retry", { payload: { conversationId: ConversationId, turnId: TurnId }, error: errors(NotFound, InvalidInput, HarnessUnavailable) }),
-  Rpc.make("attachments.upload", { payload: { name: Schema.String, mime: Schema.String, bytesBase64: Schema.String }, success: Attachment, error: errors(InvalidInput) }),
+  Rpc.make("turns.retry", {
+    payload: { conversationId: ConversationId, turnId: TurnId },
+    error: errors(NotFound, InvalidInput, HarnessUnavailable),
+  }),
+  Rpc.make("attachments.upload", {
+    payload: { name: Schema.String, mime: Schema.String, bytesBase64: Schema.String },
+    success: Attachment,
+    error: errors(InvalidInput),
+  }),
 
   // runtime requests
   RequestsRespond,
-  Rpc.make("requests.listPending", { payload: { conversationId: Schema.optionalKey(ConversationId) }, success: Schema.Array(RuntimeRequest), error: errors() }),
+  Rpc.make("requests.listPending", {
+    payload: { conversationId: Schema.optionalKey(ConversationId) },
+    success: Schema.Array(RuntimeRequest),
+    error: errors(),
+  }),
 
   // routines
-  Rpc.make("routines.list", { payload: { botId: Schema.optionalKey(BotId) }, success: Schema.Array(Routine), error: errors() }),
+  Rpc.make("routines.list", {
+    payload: { botId: Schema.optionalKey(BotId) },
+    success: Schema.Array(Routine),
+    error: errors(),
+  }),
   Rpc.make("routines.create", { payload: { botId: BotId, spec: RoutineSpec }, success: Routine, error: Common }),
-  Rpc.make("routines.update", { payload: { routineId: RoutineId, spec: RoutineSpec }, success: Routine, error: Common }),
-  Rpc.make("routines.setEnabled", { payload: { routineId: RoutineId, enabled: Schema.Boolean }, success: Routine, error: Missing }),
+  Rpc.make("routines.update", {
+    payload: { routineId: RoutineId, spec: RoutineSpec },
+    success: Routine,
+    error: Common,
+  }),
+  Rpc.make("routines.setEnabled", {
+    payload: { routineId: RoutineId, enabled: Schema.Boolean },
+    success: Routine,
+    error: Missing,
+  }),
   Rpc.make("routines.delete", { payload: { routineId: RoutineId }, error: Missing }),
   /** "Test run": fires now regardless of the trigger; returns the run (turn id filled in later). */
-  Rpc.make("routines.runNow", { payload: { routineId: RoutineId }, success: RoutineRun, error: errors(NotFound, Conflict, HarnessUnavailable) }),
+  Rpc.make("routines.runNow", {
+    payload: { routineId: RoutineId },
+    success: RoutineRun,
+    error: errors(NotFound, Conflict, HarnessUnavailable),
+  }),
   /** Most recent first (at most 20 kept). */
   Rpc.make("routines.runs", { payload: { routineId: RoutineId }, success: Schema.Array(RoutineRun), error: Missing }),
 
   // memory
   Rpc.make("memory.get", { payload: { botId: BotId }, success: BotMemory, error: Missing }),
-  Rpc.make("memory.putFact", { payload: { botId: BotId, fact: MemoryFactInput }, success: MemoryFact, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("memory.putFact", {
+    payload: { botId: BotId, fact: MemoryFactInput },
+    success: MemoryFact,
+    error: errors(NotFound, InvalidInput),
+  }),
   Rpc.make("memory.deleteFact", { payload: { botId: BotId, factId: MemoryFactId }, error: Missing }),
-  Rpc.make("memory.setIndex", { payload: { botId: BotId, index: Schema.String }, success: BotMemory, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("memory.setIndex", {
+    payload: { botId: BotId, index: Schema.String },
+    success: BotMemory,
+    error: errors(NotFound, InvalidInput),
+  }),
 
   // skills (D5.5): the library, which Bots have which skill, skills.sh import
   Rpc.make("skills.list", { success: Schema.Array(Skill), error: errors() }),
@@ -355,9 +482,20 @@ export class OpenBotRpcs extends RpcGroup.make(
   /** Removes it from the library and from every Bot. */
   Rpc.make("skills.delete", { payload: { name: SkillName }, error: Missing }),
   /** Exactly these Bots have the skill afterwards. */
-  Rpc.make("skills.assign", { payload: { name: SkillName, botIds: Schema.Array(BotId) }, error: errors(NotFound, InvalidInput) }),
-  Rpc.make("skills.search", { payload: { query: Schema.String }, success: Schema.Array(SkillSearchResult), error: errors(InvalidInput, Unavailable) }),
-  Rpc.make("skills.preview", { payload: { id: Schema.String }, success: SkillPreview, error: errors(NotFound, InvalidInput, Unavailable) }),
+  Rpc.make("skills.assign", {
+    payload: { name: SkillName, botIds: Schema.Array(BotId) },
+    error: errors(NotFound, InvalidInput),
+  }),
+  Rpc.make("skills.search", {
+    payload: { query: Schema.String },
+    success: Schema.Array(SkillSearchResult),
+    error: errors(InvalidInput, Unavailable),
+  }),
+  Rpc.make("skills.preview", {
+    payload: { id: Schema.String },
+    success: SkillPreview,
+    error: errors(NotFound, InvalidInput, Unavailable),
+  }),
   /** Downloads a skills.sh skill into the library (replacing a same-named one) and gives it to `botIds`. */
   Rpc.make("skills.install", {
     payload: { id: Schema.String, botIds: Schema.Array(BotId) },
@@ -375,7 +513,11 @@ export class OpenBotRpcs extends RpcGroup.make(
     error: errors(HarnessUnavailable),
   }),
   /** Harness accounts (profiles), the built-in default of each enabled harness first. */
-  Rpc.make("harnesses.profiles", { payload: { kind: Schema.optionalKey(HarnessKindName) }, success: Schema.Array(HarnessProfile), error: errors() }),
+  Rpc.make("harnesses.profiles", {
+    payload: { kind: Schema.optionalKey(HarnessKindName) },
+    success: Schema.Array(HarnessProfile),
+    error: errors(),
+  }),
   /** Adds an account: `configDir` is an existing dir on the brain machine (`~/` is expanded). */
   Rpc.make("harnesses.addProfile", {
     payload: { kind: HarnessKindName, label: Schema.String, configDir: Schema.String },
@@ -383,32 +525,67 @@ export class OpenBotRpcs extends RpcGroup.make(
     error: errors(InvalidInput, Conflict),
   }),
   /** Removes an account. Refused (Conflict) while bots use it; the default cannot be removed (Forbidden). */
-  Rpc.make("harnesses.removeProfile", { payload: { profileId: NonEmptyString }, error: errors(NotFound, Conflict, Forbidden) }),
+  Rpc.make("harnesses.removeProfile", {
+    payload: { profileId: NonEmptyString },
+    error: errors(NotFound, Conflict, Forbidden),
+  }),
   /** Config dirs on the brain machine that look like logins of `kind` and are not accounts yet. */
-  Rpc.make("harnesses.discover", { payload: { kind: HarnessKindName }, success: Schema.Array(HarnessProfileCandidate), error: errors() }),
+  Rpc.make("harnesses.discover", {
+    payload: { kind: HarnessKindName },
+    success: Schema.Array(HarnessProfileCandidate),
+    error: errors(),
+  }),
 
   // nodes
   Rpc.make("nodes.list", { success: Schema.Array(NodeSummary), error: errors() }),
   Rpc.make("nodes.createPairingCode", { success: PairingCode, error: errors() }),
-  Rpc.make("nodes.rename", { payload: { nodeId: NodeId, label: NonEmptyString }, success: NodeSummary, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("nodes.rename", {
+    payload: { nodeId: NodeId, label: NonEmptyString },
+    success: NodeSummary,
+    error: errors(NotFound, InvalidInput),
+  }),
   /** Revoking closes the node's socket with 4401 (D1.3). The local node cannot be revoked. */
   Rpc.make("nodes.revoke", { payload: { nodeId: NodeId }, error: errors(NotFound, Forbidden) }),
-  Rpc.make("nodes.setCapabilities", { payload: { nodeId: NodeId, approved: Schema.Array(Schema.String) }, success: NodeSummary, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("nodes.setCapabilities", {
+    payload: { nodeId: NodeId, approved: Schema.Array(Schema.String) },
+    success: NodeSummary,
+    error: errors(NotFound, InvalidInput),
+  }),
 
   // computer (live view, D1.7)
   Rpc.make("computer.status", { payload: { botId: BotId }, success: ComputerStatus, error: Missing }),
   /** Start (or reuse) the bot's browser window on its host node. */
-  Rpc.make("computer.ensure", { payload: { botId: BotId }, success: ComputerStatus, error: errors(NotFound, NodeUnavailable) }),
+  Rpc.make("computer.ensure", {
+    payload: { botId: BotId },
+    success: ComputerStatus,
+    error: errors(NotFound, NodeUnavailable),
+  }),
   /** take=true: the owner takes control (bot browser actions then fail); false: hand back. */
-  Rpc.make("computer.lease", { payload: { botId: BotId, take: Schema.Boolean }, success: ComputerStatus, error: errors(NotFound, NodeUnavailable, Conflict) }),
+  Rpc.make("computer.lease", {
+    payload: { botId: BotId, take: Schema.Boolean },
+    success: ComputerStatus,
+    error: errors(NotFound, NodeUnavailable, Conflict),
+  }),
   /** "Reset": stops the bot's desktop and everything on it; the next use starts a fresh one. */
-  Rpc.make("computer.reset", { payload: { botId: BotId }, success: ComputerStatus, error: errors(NotFound, NodeUnavailable) }),
+  Rpc.make("computer.reset", {
+    payload: { botId: BotId },
+    success: ComputerStatus,
+    error: errors(NotFound, NodeUnavailable),
+  }),
 
   // settings + approval rules
   Rpc.make("settings.get", { success: Settings, error: errors() }),
   Rpc.make("settings.update", { payload: { patch: SettingsPatch }, success: Settings, error: errors(InvalidInput) }),
-  Rpc.make("rules.list", { payload: { botId: Schema.optionalKey(BotId) }, success: Schema.Array(ApprovalRule), error: errors() }),
-  Rpc.make("rules.upsert", { payload: { rule: ApprovalRuleInput }, success: ApprovalRule, error: errors(NotFound, InvalidInput) }),
+  Rpc.make("rules.list", {
+    payload: { botId: Schema.optionalKey(BotId) },
+    success: Schema.Array(ApprovalRule),
+    error: errors(),
+  }),
+  Rpc.make("rules.upsert", {
+    payload: { rule: ApprovalRuleInput },
+    success: ApprovalRule,
+    error: errors(NotFound, InvalidInput),
+  }),
   Rpc.make("rules.delete", { payload: { ruleId: ApprovalRuleId }, error: Missing }),
 
   // message search
@@ -447,7 +624,11 @@ export class OpenBotRpcs extends RpcGroup.make(
 
   // background tasks (D5.7)
   /** A bot's tasks, newest first (`limit` default 50). */
-  Rpc.make("tasks.list", { payload: { botId: BotId, limit: Schema.optionalKey(NonNegativeInt) }, success: Schema.Array(Task), error: Missing }),
+  Rpc.make("tasks.list", {
+    payload: { botId: BotId, limit: Schema.optionalKey(NonNegativeInt) },
+    success: Schema.Array(Task),
+    error: Missing,
+  }),
   /** One task with its steps (tool calls, reasoning, messages), oldest first. */
   Rpc.make("tasks.get", { payload: { taskId: TaskId }, success: TaskDetail, error: Missing }),
   /** The owner stops a queued or running task (only that one); a finished task is returned unchanged. */
@@ -456,7 +637,11 @@ export class OpenBotRpcs extends RpcGroup.make(
   // Slack (D3.4)
   Rpc.make("slack.status", { success: SlackStatus, error: errors() }),
   /** Checks the tokens with Slack, keeps them on the brain and starts listening. */
-  Rpc.make("slack.connect", { payload: SlackConnectInput, success: SlackStatus, error: errors(InvalidInput, Unavailable) }),
+  Rpc.make("slack.connect", {
+    payload: SlackConnectInput,
+    success: SlackStatus,
+    error: errors(InvalidInput, Unavailable),
+  }),
   /** Forgets the tokens (the app stays installed in Slack until the owner removes it). */
   Rpc.make("slack.disconnect", { success: SlackStatus, error: errors() }),
   /** Sends a Bot's pending draft as the owner, with their edits. */
@@ -470,8 +655,16 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("stt.install", { success: SttStatus, error: errors(Conflict) }),
   Rpc.make("stt.remove", { success: SttStatus, error: errors(Conflict) }),
   Rpc.make("stt.open", { success: SttSession, error: errors(Unavailable, Conflict) }),
-  Rpc.make("stt.append", { payload: { sessionId: Schema.String, pcmBase64: Schema.String }, success: SttTranscription, error: errors(NotFound, InvalidInput, Unavailable, Conflict) }),
-  Rpc.make("stt.finish", { payload: { sessionId: Schema.String, pcmBase64: Schema.String }, success: SttTranscription, error: errors(NotFound, InvalidInput, Unavailable, Conflict) }),
+  Rpc.make("stt.append", {
+    payload: { sessionId: Schema.String, pcmBase64: Schema.String },
+    success: SttTranscription,
+    error: errors(NotFound, InvalidInput, Unavailable, Conflict),
+  }),
+  Rpc.make("stt.finish", {
+    payload: { sessionId: Schema.String, pcmBase64: Schema.String },
+    success: SttTranscription,
+    error: errors(NotFound, InvalidInput, Unavailable, Conflict),
+  }),
   Rpc.make("stt.discard", { payload: { sessionId: Schema.String }, error: errors() }),
 
   // Voice calls (experiment): the call itself runs over /ws/voice/:botId
@@ -479,18 +672,30 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("voice.install", { success: VoiceCallStatus, error: errors(Conflict) }),
   Rpc.make("voice.remove", { success: VoiceCallStatus, error: errors(Conflict) }),
   /** A short sample of a voice ("Hi, I'm …"), as 24 kHz PCM16. */
-  Rpc.make("voice.preview", { payload: { voice: Schema.String, text: Schema.String }, success: VoicePreview, error: errors(InvalidInput, Unavailable) }),
+  Rpc.make("voice.preview", {
+    payload: { voice: Schema.String, text: Schema.String },
+    success: VoicePreview,
+    error: errors(InvalidInput, Unavailable),
+  }),
 
   // Hark: iPhone notifications (D3.5)
   Rpc.make("hark.status", { success: HarkStatus, error: errors() }),
   /** Checks the webhook by sending a test notification, then keeps it on the brain. */
-  Rpc.make("hark.connect", { payload: { webhook: Schema.String }, success: HarkStatus, error: errors(InvalidInput, Unavailable) }),
+  Rpc.make("hark.connect", {
+    payload: { webhook: Schema.String },
+    success: HarkStatus,
+    error: errors(InvalidInput, Unavailable),
+  }),
   Rpc.make("hark.disconnect", { success: HarkStatus, error: errors() }),
   Rpc.make("hark.test", { success: HarkStatus, error: errors(InvalidInput, Unavailable) }),
   Rpc.make("hark.setSends", { payload: { sends: HarkSends }, success: HarkStatus, error: errors(InvalidInput) }),
 
   // usage
-  Rpc.make("usage.byBot", { payload: { sinceMs: Schema.optionalKey(Millis) }, success: Schema.Array(BotUsage), error: errors() }),
+  Rpc.make("usage.byBot", {
+    payload: { sinceMs: Schema.optionalKey(Millis) },
+    success: Schema.Array(BotUsage),
+    error: errors(),
+  }),
 ) {}
 
 /** Every RPC tag in `OpenBotRpcs` (handy for exhaustiveness checks in the server). */

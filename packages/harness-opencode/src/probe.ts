@@ -26,7 +26,7 @@ export interface ProbeInput {
 }
 
 export const probeOpenCode = (input: ProbeInput): Effect.Effect<HarnessStatus> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const checkedAt = yield* Clock.currentTimeMillis
     const base = { kind: "opencode", displayName: DISPLAY_NAME, capabilities: input.capabilities, checkedAt } as const
     if (!input.binaryFound) {
@@ -34,38 +34,45 @@ export const probeOpenCode = (input: ProbeInput): Effect.Effect<HarnessStatus> =
         ...base,
         installed: false,
         auth: { state: "unknown" },
-        problems: ["The opencode CLI was not found on PATH. Install OpenCode 2 (https://opencode.ai) and restart OpenBot."],
+        problems: [
+          "The opencode CLI was not found on PATH. Install OpenCode 2 (https://opencode.ai) and restart OpenBot.",
+        ],
       } satisfies HarnessStatus
     }
-    const status = Effect.gen(function*() {
+    const status = Effect.gen(function* () {
       const conn = yield* input.host.connection
       const models = yield* input.host.models(input.directory).pipe(Effect.result)
       const integrations = yield* Effect.tryPromise({
         try: (signal) => conn.client.integration.list({ location: { directory: input.directory } }, { signal }),
         catch: (cause) => cause,
       }).pipe(Effect.option)
-      const connected = integrations._tag === "Some"
-        ? integrations.value.data.filter((i) => i.connections.length > 0).map((i) => i.name)
-        : undefined
-      const usable = models._tag === "Success" ? models.success.filter((m) => m.enabled && m.status !== "deprecated") : undefined
+      const connected =
+        integrations._tag === "Some"
+          ? integrations.value.data.filter((i) => i.connections.length > 0).map((i) => i.name)
+          : undefined
+      const usable =
+        models._tag === "Success" ? models.success.filter((m) => m.enabled && m.status !== "deprecated") : undefined
       // Providers configured outside OpenCode's credential store (API keys in the environment).
       const external = [...new Set((usable ?? []).map((m) => m.providerID).filter((p) => p !== FREE_PROVIDER_ID))]
       const problems: Array<string> = []
       if (models._tag === "Failure") problems.push(models.failure.message)
       else if (usable !== undefined && usable.length === 0) {
-        problems.push("OpenCode lists no usable models. Connect a provider in OpenCode (or set a provider API key) and refresh.")
+        problems.push(
+          "OpenCode lists no usable models. Connect a provider in OpenCode (or set a provider API key) and refresh.",
+        )
       }
       return {
         ...base,
         installed: true,
         version: conn.version,
-        auth: connected !== undefined && connected.length > 0
-          ? { state: "signed-in", label: connected.join(", ") }
-          : external.length > 0
-          ? { state: "signed-in", label: `${external.join(", ")} (from the environment)` }
-          : connected !== undefined
-          ? { state: "signed-out", label: "No provider connected (free OpenCode models only)" }
-          : { state: "unknown" },
+        auth:
+          connected !== undefined && connected.length > 0
+            ? { state: "signed-in", label: connected.join(", ") }
+            : external.length > 0
+              ? { state: "signed-in", label: `${external.join(", ")} (from the environment)` }
+              : connected !== undefined
+                ? { state: "signed-out", label: "No provider connected (free OpenCode models only)" }
+                : { state: "unknown" },
         problems,
       } satisfies HarnessStatus
     })
@@ -80,7 +87,7 @@ export const probeOpenCode = (input: ProbeInput): Effect.Effect<HarnessStatus> =
           installed: !("code" in error && error.code === "not-installed"),
           auth: { state: "unknown" },
           problems: [error.message],
-        } satisfies HarnessStatus)
+        } satisfies HarnessStatus),
       ),
     )
   }).pipe(
@@ -92,7 +99,7 @@ export const probeOpenCode = (input: ProbeInput): Effect.Effect<HarnessStatus> =
         auth: { state: "unknown" },
         problems: [`OpenCode probe failed: ${describeClientError(cause)}`],
         capabilities: input.capabilities,
-      } satisfies HarnessStatus)
+      } satisfies HarnessStatus),
     ),
   )
 
@@ -101,7 +108,7 @@ export const listOpenCodeModels = (
   host: OpenCodeHost,
   directory: string,
 ): Effect.Effect<ReadonlyArray<ModelInfo>, HarnessError> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const models = yield* host.models(directory)
     const conn = yield* host.connection
     const fallback = yield* Effect.tryPromise({

@@ -44,7 +44,11 @@ export function VoiceChatLine({ durationMs, lines }: VoiceChatLineProps): ReactN
     )
   }
   return (
-    <div ref={card} className="mx-auto my-2 w-full max-w-[720px] rounded-3xl bg-elevated hairline border-line-tertiary" data-testid="voice-chat">
+    <div
+      ref={card}
+      className="mx-auto my-2 w-full max-w-[720px] rounded-3xl bg-elevated hairline border-line-tertiary"
+      data-testid="voice-chat"
+    >
       <div className="relative flex h-12 items-center justify-center border-b-[0.5px] border-line-secondary text-sm text-fg-secondary">
         {title}
         <IconButton icon={X} label="Close" size={28} className="absolute end-3" onClick={() => setOpen(false)} />

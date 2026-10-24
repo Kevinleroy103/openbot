@@ -3,7 +3,14 @@
 // current-turn substitution, `taskId` on calls and approvals).
 import { afterEach, describe, expect, test } from "bun:test"
 import { LOCAL_NODE_ID, type Task, type TaskId } from "@openbot/contracts"
-import { BackgroundTasksFake, conversationId, makeTask, makeTurn, OrchestratorFake, turnId } from "@openbot/core/testing"
+import {
+  BackgroundTasksFake,
+  conversationId,
+  makeTask,
+  makeTurn,
+  OrchestratorFake,
+  turnId,
+} from "@openbot/core/testing"
 import type { ExecEvent } from "@openbot/node-protocol"
 import { Effect, Stream } from "effect"
 import { describeTask, formatSpan } from "../src/toolkits/tasks.ts"
@@ -26,7 +33,11 @@ describe("task tools in the bot's main session", () => {
     h = await startHarness()
     // the bot's running turn is in a group: the work's origin is that group
     const group = conversationId("cnv_group")
-    await h.run(Effect.flatMap(OrchestratorFake, (fake) => fake.setActiveTurn(BOT_A, makeTurn({ id: turnId("trn_g"), conversationId: group, botId: BOT_A }))))
+    await h.run(
+      Effect.flatMap(OrchestratorFake, (fake) =>
+        fake.setActiveTurn(BOT_A, makeTurn({ id: turnId("trn_g"), conversationId: group, botId: BOT_A })),
+      ),
+    )
     const client = await h.connect((await h.issue({ toolsets: ["bot"] })).binding)
     const names = (await client.listTools()).tools.map((t) => t.name)
     expect(names).toEqual(expect.arrayContaining(["start_task", "list_tasks", "check_task", "cancel_task", "ask_user"]))
@@ -53,11 +64,54 @@ describe("task tools in the bot's main session", () => {
   test("list_tasks, check_task and cancel_task (by title) — only that work stops", async () => {
     h = await startHarness()
     const now = Date.now()
-    await putTask(makeTask({ id: "tsk_a" as TaskId, botId: BOT_A, title: "HN digest", status: "running", startedAt: now - 125_000, createdAt: 2, progress: "Reading the front page", stepCount: 4 }), [
-      { id: "ent_m" as never, conversationId: conversationId("cnv_x"), revision: 0, createdAt: 1, updatedAt: 1, author: { kind: "bot", botId: BOT_A }, kind: "message", role: "bot", text: "Found 7 stories so far", attachments: [], streaming: true },
-    ])
-    await putTask(makeTask({ id: "tsk_b" as TaskId, botId: BOT_A, title: "Release notes", status: "running", startedAt: now, createdAt: 1 }))
-    await putTask(makeTask({ id: "tsk_c" as TaskId, botId: BOT_A, title: "Old report", status: "succeeded", result: "All green.", endedAt: now - 60_000, createdAt: 0 }))
+    await putTask(
+      makeTask({
+        id: "tsk_a" as TaskId,
+        botId: BOT_A,
+        title: "HN digest",
+        status: "running",
+        startedAt: now - 125_000,
+        createdAt: 2,
+        progress: "Reading the front page",
+        stepCount: 4,
+      }),
+      [
+        {
+          id: "ent_m" as never,
+          conversationId: conversationId("cnv_x"),
+          revision: 0,
+          createdAt: 1,
+          updatedAt: 1,
+          author: { kind: "bot", botId: BOT_A },
+          kind: "message",
+          role: "bot",
+          text: "Found 7 stories so far",
+          attachments: [],
+          streaming: true,
+        },
+      ],
+    )
+    await putTask(
+      makeTask({
+        id: "tsk_b" as TaskId,
+        botId: BOT_A,
+        title: "Release notes",
+        status: "running",
+        startedAt: now,
+        createdAt: 1,
+      }),
+    )
+    await putTask(
+      makeTask({
+        id: "tsk_c" as TaskId,
+        botId: BOT_A,
+        title: "Old report",
+        status: "succeeded",
+        result: "All green.",
+        endedAt: now - 60_000,
+        createdAt: 0,
+      }),
+    )
     const client = await h.connect((await h.issue({ toolsets: ["bot"] })).binding)
 
     const list = textOf(await client.callTool({ name: "list_tasks", arguments: {} }))
@@ -100,21 +154,53 @@ describe("task tools in the bot's main session", () => {
   test("update_task passes a change on to running work; work that is over says so plainly", async () => {
     h = await startHarness()
     const now = Date.now()
-    await putTask(makeTask({ id: "tsk_r" as TaskId, botId: BOT_A, title: "Architecture film", status: "running", startedAt: now - 60_000, createdAt: 3 }))
-    await putTask(makeTask({ id: "tsk_q" as TaskId, botId: BOT_A, title: "Release notes", status: "queued", createdAt: 2 }))
-    await putTask(makeTask({ id: "tsk_d" as TaskId, botId: BOT_A, title: "Old report", status: "succeeded", result: "All green.", endedAt: now - 60_000, createdAt: 1 }))
+    await putTask(
+      makeTask({
+        id: "tsk_r" as TaskId,
+        botId: BOT_A,
+        title: "Architecture film",
+        status: "running",
+        startedAt: now - 60_000,
+        createdAt: 3,
+      }),
+    )
+    await putTask(
+      makeTask({ id: "tsk_q" as TaskId, botId: BOT_A, title: "Release notes", status: "queued", createdAt: 2 }),
+    )
+    await putTask(
+      makeTask({
+        id: "tsk_d" as TaskId,
+        botId: BOT_A,
+        title: "Old report",
+        status: "succeeded",
+        result: "All green.",
+        endedAt: now - 60_000,
+        createdAt: 1,
+      }),
+    )
     const client = await h.connect((await h.issue({ toolsets: ["bot"] })).binding)
     const tool = (await client.listTools()).tools.find((t) => t.name === "update_task")
     expect(tool?.description).toContain("instead of waiting for it to finish or starting it again")
 
-    const running = await client.callTool({ name: "update_task", arguments: { task: "architecture film", message: "The globe at the start is off screen; center it." } })
+    const running = await client.callTool({
+      name: "update_task",
+      arguments: { task: "architecture film", message: "The globe at the start is off screen; center it." },
+    })
     expect(running.isError).toBeFalsy()
     expect(textOf(running)).toContain('"Architecture film" has your update')
     expect(textOf(running)).not.toMatch(PLUMBING)
-    const queued = textOf(await client.callTool({ name: "update_task", arguments: { task: "Release notes", message: "Mention the new sidebar." } }))
+    const queued = textOf(
+      await client.callTool({
+        name: "update_task",
+        arguments: { task: "Release notes", message: "Mention the new sidebar." },
+      }),
+    )
     expect(queued).toContain("it will start with your update")
     expect(queued).not.toMatch(PLUMBING)
-    const over = await client.callTool({ name: "update_task", arguments: { task: "Old report", message: "Add charts." } })
+    const over = await client.callTool({
+      name: "update_task",
+      arguments: { task: "Old report", message: "Add charts." },
+    })
     expect(over.isError).toBeFalsy()
     expect(textOf(over)).toContain('"Old report" is already over (finished 1 min ago), so it cannot take this update')
     expect(textOf(over)).toContain("start the work again")
@@ -135,15 +221,34 @@ describe("a task's own session", () => {
     h = await startHarness()
     const origin = conversationId("cnv_origin")
     // the bot's MAIN session is busy elsewhere: a task call must not follow it
-    await h.run(Effect.flatMap(OrchestratorFake, (fake) => fake.setActiveTurn(BOT_A, makeTurn({ id: turnId("trn_main"), conversationId: conversationId("cnv_elsewhere"), botId: BOT_A }))))
-    const client = await h.connect((await h.issue({
-      toolsets: ["bot", "node"],
-      conversationId: origin,
-      sessionKey: `${BOT_A}:${origin}`,
-      taskId: "tsk_42" as TaskId,
-    })).binding)
+    await h.run(
+      Effect.flatMap(OrchestratorFake, (fake) =>
+        fake.setActiveTurn(
+          BOT_A,
+          makeTurn({ id: turnId("trn_main"), conversationId: conversationId("cnv_elsewhere"), botId: BOT_A }),
+        ),
+      ),
+    )
+    const client = await h.connect(
+      (
+        await h.issue({
+          toolsets: ["bot", "node"],
+          conversationId: origin,
+          sessionKey: `${BOT_A}:${origin}`,
+          taskId: "tsk_42" as TaskId,
+        })
+      ).binding,
+    )
     const names = (await client.listTools()).tools.map((t) => t.name)
-    for (const hidden of ["start_task", "list_tasks", "check_task", "cancel_task", "update_task", "ask_user", "request_approval"]) {
+    for (const hidden of [
+      "start_task",
+      "list_tasks",
+      "check_task",
+      "cancel_task",
+      "update_task",
+      "ask_user",
+      "request_approval",
+    ]) {
       expect(names).not.toContain(hidden)
     }
     expect(names).toEqual(expect.arrayContaining(["message_bot", "send_file", "shell", "remember"]))
@@ -170,7 +275,13 @@ test("formatting helpers", () => {
   expect(formatSpan(65 * 60_000)).toBe("1 h 5 min")
   const now = 10_000_000
   expect(describeTask(makeTask({ status: "queued" }), now)).toContain("waiting to start")
-  expect(describeTask(makeTask({ status: "running", startedAt: now - 5_000, waiting: true }), now)).toContain("waiting for the owner's approval")
-  expect(describeTask(makeTask({ status: "failed", error: "boom", endedAt: now }), now)).toContain("could not be finished 0 s ago: boom")
-  expect(describeTask(makeTask({ status: "cancelled", stoppedBy: "owner", endedAt: now }), now)).toContain("stopped 0 s ago by the owner")
+  expect(describeTask(makeTask({ status: "running", startedAt: now - 5_000, waiting: true }), now)).toContain(
+    "waiting for the owner's approval",
+  )
+  expect(describeTask(makeTask({ status: "failed", error: "boom", endedAt: now }), now)).toContain(
+    "could not be finished 0 s ago: boom",
+  )
+  expect(describeTask(makeTask({ status: "cancelled", stoppedBy: "owner", endedAt: now }), now)).toContain(
+    "stopped 0 s ago by the owner",
+  )
 })

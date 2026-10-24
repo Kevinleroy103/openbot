@@ -3,14 +3,26 @@
 // Mirrors what a server-side ingestor does (t3code ProviderEventIngestor + IdAllocator):
 // allocate stable app ids for native keys, keep the full current entity, bump `revision`, and
 // re-emit the WHOLE entity on every change. Research scratch.
-import type { Author, BotId, ConversationId, EntryId, HarnessKind, RequestId, TurnId, UserId } from "../../../src/index.ts"
+import type {
+  Author,
+  BotId,
+  ConversationId,
+  EntryId,
+  HarnessKind,
+  RequestId,
+  TurnId,
+  UserId,
+} from "../../../src/index.ts"
 import type { RuntimeRequest } from "../../../src/index.ts"
 import type { KnownConversationChange } from "../../../src/index.ts"
 import type { KnownTranscriptEntry, ToolKind, Turn } from "../../../src/index.ts"
 
 export type Frame = { readonly seq: number; readonly t: number; readonly source: string; readonly payload: any }
 export const readFixture = async (path: string): Promise<Frame[]> =>
-  (await Bun.file(path).text()).split("\n").filter((l) => l.trim().length > 0).map((l) => JSON.parse(l) as Frame)
+  (await Bun.file(path).text())
+    .split("\n")
+    .filter((l) => l.trim().length > 0)
+    .map((l) => JSON.parse(l) as Frame)
 
 /** How a native event was handled. `elsewhere` = belongs to another replica/API, not the conversation. */
 export type Disposition = "mapped" | "state" | "elsewhere" | "no-home"
@@ -24,7 +36,10 @@ export class Ledger {
     } else this.rows.set(key, { disposition, count: 1, note })
   }
   keys(d: Disposition): string[] {
-    return [...this.rows].filter(([, r]) => r.disposition === d).map(([k]) => k).sort()
+    return [...this.rows]
+      .filter(([, r]) => r.disposition === d)
+      .map(([k]) => k)
+      .sort()
   }
 }
 const rank = (d: Disposition) => ({ "no-home": 0, elsewhere: 1, state: 2, mapped: 3 })[d]
@@ -126,7 +141,11 @@ export class Emitter {
     return next
   }
 
-  upsertRequest(frame: Frame, nativeKey: string, build: (prev: RuntimeRequest | undefined, id: RequestId) => RuntimeRequest): RuntimeRequest {
+  upsertRequest(
+    frame: Frame,
+    nativeKey: string,
+    build: (prev: RuntimeRequest | undefined, id: RequestId) => RuntimeRequest,
+  ): RuntimeRequest {
     const id = this.requestId(nativeKey)
     const next = build(this.requests.get(id), id)
     void frame
@@ -148,10 +167,26 @@ export class Emitter {
     for (const e of [...this.entries.values()]) {
       if (e.turnId !== turnId) continue
       if ((e.kind === "message" || e.kind === "reasoning") && e.streaming) {
-        this.upsertEntryById(frame, e.id, (prev) => ({ ...prev, streaming: false, ...(aborted && prev.kind === "message" ? { aborted: true } : {}) }) as KnownTranscriptEntry)
+        this.upsertEntryById(
+          frame,
+          e.id,
+          (prev) =>
+            ({
+              ...prev,
+              streaming: false,
+              ...(aborted && prev.kind === "message" ? { aborted: true } : {}),
+            }) as KnownTranscriptEntry,
+        )
       }
-      if (e.kind === "tool-call" && (e.status === "pending" || e.status === "running" || e.status === "awaiting-approval")) {
-        this.upsertEntryById(frame, e.id, (prev) => ({ ...prev, status: "interrupted", completedAt: this.at(frame) }) as KnownTranscriptEntry)
+      if (
+        e.kind === "tool-call" &&
+        (e.status === "pending" || e.status === "running" || e.status === "awaiting-approval")
+      ) {
+        this.upsertEntryById(
+          frame,
+          e.id,
+          (prev) => ({ ...prev, status: "interrupted", completedAt: this.at(frame) }) as KnownTranscriptEntry,
+        )
       }
     }
   }
@@ -169,7 +204,15 @@ export const toolKindFor = (name: string, mcpServers: ReadonlyArray<string> = []
   if (n === "bash" || n === "shell" || n === "exec_command" || n === "commandexecution") return "shell"
   if (n === "read" || n === "read_file") return "file-read"
   if (n === "write") return "file-write"
-  if (n === "edit" || n === "multiedit" || n === "notebookedit" || n === "patch" || n === "apply_patch" || n === "filechange") return "file-edit"
+  if (
+    n === "edit" ||
+    n === "multiedit" ||
+    n === "notebookedit" ||
+    n === "patch" ||
+    n === "apply_patch" ||
+    n === "filechange"
+  )
+    return "file-edit"
   if (n === "glob" || n === "grep" || n === "ls") return "search"
   if (n === "webfetch" || n === "websearch" || n === "web_search") return "web"
   if (n === "askuserquestion" || n === "question" || n === "request_user_input") return "question"
@@ -185,7 +228,16 @@ export const openbotSend = (em: Emitter, frame: Frame, turnKey: string, text: st
   const userEntry = em.upsertEntry<"message">(
     frame,
     `user:${clientNonce}`,
-    () => ({ kind: "message", role: "user", text, attachments: [], streaming: false, clientNonce, delivery: "accepted", turnId: em.turnId(turnKey) }),
+    () => ({
+      kind: "message",
+      role: "user",
+      text,
+      attachments: [],
+      streaming: false,
+      clientNonce,
+      delivery: "accepted",
+      turnId: em.turnId(turnKey),
+    }),
     em.userAuthor,
   )
   em.upsertTurn(turnKey, (_prev, id) => ({

@@ -140,13 +140,40 @@ describe("imageSrc", () => {
   })
 
   test("http, data and other schemes never load", () => {
-    for (const src of ["http://cdn.example/a.png", "HTTP://cdn.example/a.png", "data:image/png;base64,iVBORw0KGgo=", "javascript:alert(1)", "blob:https://x/uuid", "file:///etc/passwd", "mailto:a@b.c", "#frag", "https:", "https:/cdn.example/a.png"]) {
+    for (const src of [
+      "http://cdn.example/a.png",
+      "HTTP://cdn.example/a.png",
+      "data:image/png;base64,iVBORw0KGgo=",
+      "javascript:alert(1)",
+      "blob:https://x/uuid",
+      "file:///etc/passwd",
+      "mailto:a@b.c",
+      "#frag",
+      "https:",
+      "https:/cdn.example/a.png",
+    ]) {
       expect(imageSrc(src)).toBeUndefined()
     }
   })
 
   test("no other relative path: no cookie-bearing GET to a brain route", () => {
-    for (const src of ["/", "/logout", "/api/conversations", "/api/attachments", "/api/attachments/", "/api/attachments/att_1/raw", "/api/attachments/att_1?download=1", "/api/attachments/att_1#x", "/api/attachments/../logout", "/api/attachments/%2e%2e", "//evil.example/a.png", "/\\evil.example/a.png", "a.png", "./a.png", "../a.png"]) {
+    for (const src of [
+      "/",
+      "/logout",
+      "/api/conversations",
+      "/api/attachments",
+      "/api/attachments/",
+      "/api/attachments/att_1/raw",
+      "/api/attachments/att_1?download=1",
+      "/api/attachments/att_1#x",
+      "/api/attachments/../logout",
+      "/api/attachments/%2e%2e",
+      "//evil.example/a.png",
+      "/\\evil.example/a.png",
+      "a.png",
+      "./a.png",
+      "../a.png",
+    ]) {
       expect(imageSrc(src)).toBeUndefined()
     }
   })

@@ -6,7 +6,14 @@
  * when it is provided (CLI pids for boot recovery, D2.5).
  */
 import type { HarnessCapabilities, HarnessStatus, ModelInfo } from "@openbot/contracts"
-import { type DataDirShape, HarnessError, type HarnessDriver, HarnessRegistry, joinPath, ProcessLedger } from "@openbot/core"
+import {
+  type DataDirShape,
+  HarnessError,
+  type HarnessDriver,
+  HarnessRegistry,
+  joinPath,
+  ProcessLedger,
+} from "@openbot/core"
 import { botSkillsPlugin } from "./skillsPlugin.ts"
 import { DataDir } from "@openbot/core"
 import { mkdir } from "node:fs/promises"
@@ -90,22 +97,26 @@ export interface DriverDeps {
 
 /** Builds the driver (pure construction; no process is started until `probe`/`openSession`). */
 export const makeClaudeDriver = (config: ClaudeHarnessConfig, deps: DriverDeps): Effect.Effect<HarnessDriver> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const query = config.query ?? defaultQuery
     const executable = resolveExecutable(config.executable)
     const env = profileEnv(cleanEnv(config.env ?? process.env, {}, config.clientApp), config.profile, config.home)
     const profile = config.profile
     /** Stamps the profile on the probe's status (the server overlays the owner's label too). */
     const stamp = (status: HarnessStatus): HarnessStatus =>
-      profile === undefined ? status : {
-        ...status,
-        profileId: profile.id,
-        ...(profile.label !== undefined ? { profileLabel: profile.label } : {}),
-        configDir: profile.configDir,
-      }
-    const ensureDirectory = config.ensureDirectory ?? (async (path: string) => {
-      await mkdir(path, { recursive: true })
-    })
+      profile === undefined
+        ? status
+        : {
+            ...status,
+            profileId: profile.id,
+            ...(profile.label !== undefined ? { profileLabel: profile.label } : {}),
+            configDir: profile.configDir,
+          }
+    const ensureDirectory =
+      config.ensureDirectory ??
+      (async (path: string) => {
+        await mkdir(path, { recursive: true })
+      })
     const models = yield* Ref.make<ReadonlyArray<ModelInfo> | undefined>(undefined)
 
     const probeOnce = runProbe({
@@ -123,7 +134,7 @@ export const makeClaudeDriver = (config: ClaudeHarnessConfig, deps: DriverDeps):
       displayName: "Claude",
       capabilities: CLAUDE_CAPABILITIES,
       probe: Effect.map(probeOnce, (result) => stamp(result.status)),
-      listModels: Effect.gen(function*() {
+      listModels: Effect.gen(function* () {
         const cached = yield* Ref.get(models)
         if (cached) return cached
         const result = yield* probeOnce
@@ -139,13 +150,14 @@ export const makeClaudeDriver = (config: ClaudeHarnessConfig, deps: DriverDeps):
       openSession: (input) => {
         let skillsLibrary: string | undefined
         try {
-          skillsLibrary = (config.skills ?? true)
-            ? botSkillsPlugin({
-              root: joinPath(deps.dataDir.botDir(input.bot.id), "skills-plugin"),
-              library: deps.dataDir.skillsLib,
-              skills: input.bot.skills,
-            })
-            : undefined
+          skillsLibrary =
+            (config.skills ?? true)
+              ? botSkillsPlugin({
+                  root: joinPath(deps.dataDir.botDir(input.bot.id), "skills-plugin"),
+                  library: deps.dataDir.skillsLib,
+                  skills: input.bot.skills,
+                })
+              : undefined
         } catch {
           // without its skills the Bot still works; the next session open retries
           skillsLibrary = undefined
@@ -176,7 +188,7 @@ export const makeClaudeDriver = (config: ClaudeHarnessConfig, deps: DriverDeps):
 
 /** The driver with its dependencies taken from the context (`DataDir`, optional `ProcessLedger`). */
 export const claudeDriver = (config: ClaudeHarnessConfig = {}): Effect.Effect<HarnessDriver, never, DataDir> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const dataDir = yield* DataDir
     const ledger = yield* Effect.serviceOption(ProcessLedger)
     return yield* makeClaudeDriver(config, {

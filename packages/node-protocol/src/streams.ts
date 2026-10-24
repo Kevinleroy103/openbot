@@ -14,7 +14,10 @@ export const mintStreamTicket = (): StreamTicket => ({ streamId: randomToken(12)
 //                node -> brain {"exit":0,"signal":null}
 export const PtyResize = Schema.Struct({ resize: Schema.Struct({ cols: Schema.Number, rows: Schema.Number }) })
 export type PtyResize = typeof PtyResize.Type
-export const PtyExit = Schema.Struct({ exit: Schema.NullOr(Schema.Number), signal: Schema.optional(Schema.NullOr(Schema.String)) })
+export const PtyExit = Schema.Struct({
+  exit: Schema.NullOr(Schema.Number),
+  signal: Schema.optional(Schema.NullOr(Schema.String)),
+})
 export type PtyExit = typeof PtyExit.Type
 export const PtyControl = Schema.Union([PtyResize, PtyExit])
 export type PtyControl = typeof PtyControl.Type

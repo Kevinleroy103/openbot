@@ -22,7 +22,14 @@ import {
   type SlackStatus,
   Unavailable,
 } from "@openbot/contracts"
-import { SlackConnector, type SlackConversation, type SlackEvent, type SlackMessage, type SlackPerson, type SlackShortcut } from "@openbot/core"
+import {
+  SlackConnector,
+  type SlackConversation,
+  type SlackEvent,
+  type SlackMessage,
+  type SlackPerson,
+  type SlackShortcut,
+} from "@openbot/core"
 import { Effect, Layer, PubSub, Stream } from "effect"
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
@@ -92,7 +99,8 @@ const toUser = (raw: Record<string, any>): User => {
 const readSaved = (file: string): Saved | undefined => {
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8")) as Partial<Saved>
-    if (parsed.version !== 1 || typeof parsed.userToken !== "string" || typeof parsed.userId !== "string") return undefined
+    if (parsed.version !== 1 || typeof parsed.userToken !== "string" || typeof parsed.userId !== "string")
+      return undefined
     return parsed as Saved
   } catch {
     return undefined
@@ -108,7 +116,9 @@ const writeSaved = (file: string, saved: Saved): void => {
 }
 
 /** `https://x.slack.com/archives/C1/p1729340000123456?thread_ts=1729340000.000100` → its parts. */
-export const parseSlackLink = (text: string): { readonly channelId: string; readonly ts: string; readonly threadTs?: string } | undefined => {
+export const parseSlackLink = (
+  text: string,
+): { readonly channelId: string; readonly ts: string; readonly threadTs?: string } | undefined => {
   const match = /\/archives\/([A-Z0-9_]+)\/p(\d{10})(\d{6})(?:\?([^\s#]*))?/.exec(text.trim())
   if (match === null) return undefined
   const threadTs = new URLSearchParams(match[4] ?? "").get("thread_ts") ?? undefined
@@ -124,7 +134,7 @@ const isTs = (text: string): boolean => /^\d{10}\.\d{6}$/.test(text.trim())
 const isConversationId = (text: string): boolean => /^[CDG][A-Z0-9_]{6,}$/.test(text.trim())
 
 export const makeSlackConnector = (options: SlackConnectorOptions) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const closing = new AbortController()
     const api: SlackApi = makeSlackApi({ baseUrl: options.apiUrl, fetch: options.fetch, signal: closing.signal })
     const events = yield* PubSub.unbounded<SlackEvent>()
@@ -165,7 +175,8 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       return result
     }
     /** A Web API call as the owner. */
-    const call = (method: string, args?: SlackArgs): Promise<Record<string, any>> => api.call(token(), method, args).then(noteScopes)
+    const call = (method: string, args?: SlackArgs): Promise<Record<string, any>> =>
+      api.call(token(), method, args).then(noteScopes)
 
     // ---------------------------------------------------------------- caches
 
@@ -199,7 +210,8 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
         let pages = 0
         do {
           const page = await call("users.list", { limit: 200, cursor })
-          for (const member of (page.members ?? []) as Array<Record<string, any>>) next.set(String(member.id), toUser(member))
+          for (const member of (page.members ?? []) as Array<Record<string, any>>)
+            next.set(String(member.id), toUser(member))
           cursor = page.response_metadata?.next_cursor || undefined
         } while (cursor !== undefined && ++pages < MAX_PAGES)
         users = next
@@ -214,14 +226,16 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     const ensureUsers = async (ids: Iterable<string>): Promise<void> => {
       await loadUsers()
       const unknown = [...new Set(ids)].filter((id) => !users.has(id)).slice(0, 20)
-      await Promise.all(unknown.map(async (id) => {
-        try {
-          const found = await call("users.info", { user: id })
-          users.set(id, toUser(found.user ?? { id }))
-        } catch {
-          // a name we cannot get stays "someone"
-        }
-      }))
+      await Promise.all(
+        unknown.map(async (id) => {
+          try {
+            const found = await call("users.info", { user: id })
+            users.set(id, toUser(found.user ?? { id }))
+          } catch {
+            // a name we cannot get stays "someone"
+          }
+        }),
+      )
     }
 
     const nameOf = (id: string | undefined): string | undefined => (id === undefined ? undefined : users.get(id)?.name)
@@ -233,8 +247,14 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
         let cursor: string | undefined
         let pages = 0
         do {
-          const page = await call("users.conversations", { types: CONVERSATION_TYPES, exclude_archived: true, limit: 200, cursor })
-          for (const channel of (page.channels ?? []) as Array<Record<string, any>>) next.set(String(channel.id), channel)
+          const page = await call("users.conversations", {
+            types: CONVERSATION_TYPES,
+            exclude_archived: true,
+            limit: 200,
+            cursor,
+          })
+          for (const channel of (page.channels ?? []) as Array<Record<string, any>>)
+            next.set(String(channel.id), channel)
           cursor = page.response_metadata?.next_cursor || undefined
         } while (cursor !== undefined && ++pages < MAX_PAGES)
         mine = next
@@ -260,9 +280,14 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
 
     const groupLabel = (raw: Record<string, any>): string => {
       // "mpdm-alice--bob--carol-1": the handles of everyone in it
-      const handles = String(raw.name ?? "").replace(/^mpdm-/, "").replace(/-\d+$/, "").split("--")
+      const handles = String(raw.name ?? "")
+        .replace(/^mpdm-/, "")
+        .replace(/-\d+$/, "")
+        .split("--")
       const byHandle = new Map([...users.values()].map((u) => [u.handle, u.name]))
-      const names = handles.filter((h) => h !== "" && h !== users.get(saved?.userId ?? "")?.handle).map((h) => byHandle.get(h) ?? h)
+      const names = handles
+        .filter((h) => h !== "" && h !== users.get(saved?.userId ?? "")?.handle)
+        .map((h) => byHandle.get(h) ?? h)
       return names.join(", ") || "a group"
     }
 
@@ -295,9 +320,11 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     }
 
     /** A conversation itself (where a message without a ts yet went). */
-    const placeLinkOf = (channelId: string): string => `${(saved?.teamUrl ?? "https://slack.com/").replace(/\/?$/, "/")}archives/${channelId}`
+    const placeLinkOf = (channelId: string): string =>
+      `${(saved?.teamUrl ?? "https://slack.com/").replace(/\/?$/, "/")}archives/${channelId}`
 
-    const mentionedIds = (text: string): Array<string> => [...text.matchAll(/<@([UW][A-Z0-9_]+)(?:\|[^>]*)?>/g)].map((m) => m[1]!)
+    const mentionedIds = (text: string): Array<string> =>
+      [...text.matchAll(/<@([UW][A-Z0-9_]+)(?:\|[^>]*)?>/g)].map((m) => m[1]!)
 
     const textOf = (raw: Record<string, any>): string => {
       const own = String(raw.text ?? "")
@@ -308,8 +335,13 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       return attached.join("\n")
     }
 
-    const toMessages = async (raws: ReadonlyArray<Record<string, any>>, channelId: string): Promise<Array<SlackMessage>> => {
-      await ensureUsers(raws.flatMap((raw) => [...(raw.user === undefined ? [] : [String(raw.user)]), ...mentionedIds(textOf(raw))]))
+    const toMessages = async (
+      raws: ReadonlyArray<Record<string, any>>,
+      channelId: string,
+    ): Promise<Array<SlackMessage>> => {
+      await ensureUsers(
+        raws.flatMap((raw) => [...(raw.user === undefined ? [] : [String(raw.user)]), ...mentionedIds(textOf(raw))]),
+      )
       const names = { user: (id: string) => nameOf(id), channel: channelName }
       return raws.map((raw): SlackMessage => {
         const ts = String(raw.ts)
@@ -348,7 +380,8 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     const onePerson = (query: string): User => {
       const found = matchPeople(query)
       if (found.length === 1) return found[0]!
-      if (found.length === 0) throw new InvalidInput({ message: `Nobody in Slack is called "${query.trim()}" (slack_find looks people up).` })
+      if (found.length === 0)
+        throw new InvalidInput({ message: `Nobody in Slack is called "${query.trim()}" (slack_find looks people up).` })
       throw new InvalidInput({
         message: `"${query.trim()}" matches several people: ${found.slice(0, 6).map(describePerson).join(", ")}. Use their @handle.`,
       })
@@ -358,24 +391,35 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       String((await call("conversations.open", { users: ids.join(",") })).channel?.id)
 
     /** Where `spec` points: a link (with its message), an id, `#name`, people, or a person. */
-    const place = async (spec: string): Promise<{ readonly id: string; readonly ts?: string; readonly threadTs?: string }> => {
+    const place = async (
+      spec: string,
+    ): Promise<{ readonly id: string; readonly ts?: string; readonly threadTs?: string }> => {
       const text = spec.trim()
       const link = parseSlackLink(text)
-      if (link !== undefined) return { id: link.channelId, ts: link.ts, ...(link.threadTs === undefined ? {} : { threadTs: link.threadTs }) }
+      if (link !== undefined)
+        return { id: link.channelId, ts: link.ts, ...(link.threadTs === undefined ? {} : { threadTs: link.threadTs }) }
       if (isConversationId(text)) return { id: text }
       await Promise.all([loadUsers(), loadMine()])
       const channelNamed = (name: string) =>
-        [...mine.values()].find((c) => c.is_im !== true && c.is_mpim !== true && String(c.name).toLowerCase() === name.toLowerCase())
+        [...mine.values()].find(
+          (c) => c.is_im !== true && c.is_mpim !== true && String(c.name).toLowerCase() === name.toLowerCase(),
+        )
       if (text.startsWith("#")) {
         const found = channelNamed(text.slice(1))
-        if (found === undefined) throw new InvalidInput({ message: `The owner isn't in a channel called ${text} (slack_find lists them).` })
+        if (found === undefined)
+          throw new InvalidInput({ message: `The owner isn't in a channel called ${text} (slack_find lists them).` })
         return { id: String(found.id) }
       }
       if (text.includes(",")) {
-        const ids = text.split(",").map((part) => part.trim()).filter((part) => part !== "").map((part) => onePerson(part).id)
+        const ids = text
+          .split(",")
+          .map((part) => part.trim())
+          .filter((part) => part !== "")
+          .map((part) => onePerson(part).id)
         return { id: await openDm(ids.filter((id) => id !== saved?.userId)) }
       }
-      if (matchPeople(text).length === 0 && channelNamed(text) !== undefined) return { id: String(channelNamed(text)!.id) }
+      if (matchPeople(text).length === 0 && channelNamed(text) !== undefined)
+        return { id: String(channelNamed(text)!.id) }
       const person = onePerson(text)
       if (person.id === saved?.userId) throw new InvalidInput({ message: "That's the owner themselves." })
       return { id: await openDm([person.id]) }
@@ -425,28 +469,51 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     const forwardMention = async (event: Record<string, any>) => {
       const channelId = String(event.channel)
       const [where, messages] = await Promise.all([conversation(channelId), toMessages([event], channelId)])
-      PubSub.publishUnsafe(shortcuts, { via: "mention" as const, conversation: where, message: messages[0]!, reply: () => Effect.void })
+      PubSub.publishUnsafe(shortcuts, {
+        via: "mention" as const,
+        conversation: where,
+        message: messages[0]!,
+        reply: () => Effect.void,
+      })
     }
 
     /** "Send to OpenBot" on a message: the owner's click becomes a shortcut; anyone else is told no. */
     const handleShortcut = async (payload: Record<string, any> | undefined) => {
       const current = saved
-      if (current === undefined || payload?.type !== "message_action" || payload.callback_id !== SLACK_SHORTCUT_CALLBACK_ID) return
+      if (
+        current === undefined ||
+        payload?.type !== "message_action" ||
+        payload.callback_id !== SLACK_SHORTCUT_CALLBACK_ID
+      )
+        return
       const responseUrl = typeof payload.response_url === "string" ? payload.response_url : undefined
       const reply = (text: string): Promise<void> =>
-        responseUrl === undefined ? Promise.resolve() : (options.fetch ?? fetch)(responseUrl, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ response_type: "ephemeral", text }),
-          signal: AbortSignal.timeout(10_000),
-        }).then(() => undefined, (error) => console.warn("[slack] shortcut reply failed:", error))
+        responseUrl === undefined
+          ? Promise.resolve()
+          : (options.fetch ?? fetch)(responseUrl, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ response_type: "ephemeral", text }),
+              signal: AbortSignal.timeout(10_000),
+            }).then(
+              () => undefined,
+              (error) => console.warn("[slack] shortcut reply failed:", error),
+            )
       if (payload.user?.id !== current.userId) {
         await reply(`${SLACK_SHORTCUT_NAME} belongs to ${current.userName}'s OpenBot.`)
         return
       }
       const channelId = String(payload.channel?.id ?? "")
-      const [where, messages] = await Promise.all([conversation(channelId), toMessages([payload.message ?? {}], channelId)])
-      PubSub.publishUnsafe(shortcuts, { via: "click" as const, conversation: where, message: messages[0]!, reply: (text) => Effect.promise(() => reply(text)) })
+      const [where, messages] = await Promise.all([
+        conversation(channelId),
+        toMessages([payload.message ?? {}], channelId),
+      ])
+      PubSub.publishUnsafe(shortcuts, {
+        via: "click" as const,
+        conversation: where,
+        message: messages[0]!,
+        reply: (text) => Effect.promise(() => reply(text)),
+      })
     }
 
     const listen = (appToken: string, owner: Saved) => {
@@ -473,7 +540,10 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
         } catch (error) {
           const code = error instanceof SlackApiError ? error.code : "unreachable"
           if (code === "invalid_auth" || code === "not_authed" || code === "token_revoked") {
-            live("failed", "Slack rejected the app-level token: make a new one (Basic Information › App-Level Tokens) and connect again.")
+            live(
+              "failed",
+              "Slack rejected the app-level token: make a new one (Basic Information › App-Level Tokens) and connect again.",
+            )
             return
           }
           return retry(`Couldn't reach Slack's live messages (${code}); trying again.`)
@@ -556,7 +626,7 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       Effect.sync(() => {
         closing.abort()
         listener?.stop()
-      })
+      }),
     )
 
     // ---------------------------------------------------------------- the port
@@ -564,7 +634,8 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     const run = <A>(work: () => Promise<A>) =>
       Effect.tryPromise({
         try: work,
-        catch: (error) => (error instanceof InvalidInput || error instanceof Unavailable ? error : describeSlackError(error)),
+        catch: (error) =>
+          error instanceof InvalidInput || error instanceof Unavailable ? error : describeSlackError(error),
       })
 
     const connect = (input: SlackConnectInput) =>
@@ -573,11 +644,17 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
         const appToken = input.appToken?.trim() || saved?.appToken || undefined
         if (userToken === "") throw new InvalidInput({ message: "Paste the User OAuth Token (xoxp-…)." })
         if (userToken.startsWith("xoxb-")) {
-          throw new InvalidInput({ message: "That's the app's bot token (xoxb-…). Paste the User OAuth Token (xoxp-…) from OAuth & Permissions." })
+          throw new InvalidInput({
+            message:
+              "That's the app's bot token (xoxb-…). Paste the User OAuth Token (xoxp-…) from OAuth & Permissions.",
+          })
         }
-        if (!userToken.startsWith("xoxp-")) throw new InvalidInput({ message: "Paste the User OAuth Token: it starts with xoxp-." })
+        if (!userToken.startsWith("xoxp-"))
+          throw new InvalidInput({ message: "Paste the User OAuth Token: it starts with xoxp-." })
         if (appToken !== undefined && !appToken.startsWith("xapp-")) {
-          throw new InvalidInput({ message: "The app-level token starts with xapp- (Basic Information › App-Level Tokens)." })
+          throw new InvalidInput({
+            message: "The app-level token starts with xapp- (Basic Information › App-Level Tokens).",
+          })
         }
         let auth: Record<string, any>
         try {
@@ -604,13 +681,18 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
               throw new InvalidInput({ message: "Slack didn't accept that app-level token." })
             }
             if (error instanceof SlackApiError && error.code === "not_allowed_token_type") {
-              throw new InvalidInput({ message: "Turn on Socket Mode for the app (Settings › Socket Mode), then connect again." })
+              throw new InvalidInput({
+                message: "Turn on Socket Mode for the app (Settings › Socket Mode), then connect again.",
+              })
             }
             throw error
           }
         }
         const userId = String(auth.user_id)
-        const me = await api.call(userToken, "users.info", { user: userId }).then((r) => toUser(r.user ?? { id: userId })).catch(() => undefined)
+        const me = await api
+          .call(userToken, "users.info", { user: userId })
+          .then((r) => toUser(r.user ?? { id: userId }))
+          .catch(() => undefined)
         const next: Saved = {
           version: 1,
           userToken,
@@ -638,32 +720,58 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
 
     const search = (input: { readonly query: string; readonly limit: number }) =>
       run(async () => {
-        const found = await call("search.messages", { query: input.query, count: input.limit, sort: "timestamp", sort_dir: "desc" })
+        const found = await call("search.messages", {
+          query: input.query,
+          count: input.limit,
+          sort: "timestamp",
+          sort_dir: "desc",
+        })
         const matches = (found.messages?.matches ?? []) as Array<Record<string, any>>
-        await ensureUsers(matches.flatMap((m) => (m.channel?.is_im === true && typeof m.channel?.user === "string" ? [m.channel.user] : [])))
-        const messages = await Promise.all(matches.map(async (m) => {
-          const channel = (m.channel ?? {}) as Record<string, any>
-          const threadTs = typeof m.permalink === "string" ? parseSlackLink(m.permalink)?.threadTs : undefined
-          const [message] = await toMessages([{ ...m, ...(threadTs === undefined ? {} : { thread_ts: threadTs }) }], String(channel.id))
-          const where = channel.is_im === true
-            ? `DM with ${nameOf(channel.user) ?? "someone"}`
-            : channel.is_mpim === true
-            ? "a group DM"
-            : `#${String(channel.name ?? channel.id)}`
-          return { ...message!, where }
-        }))
+        await ensureUsers(
+          matches.flatMap((m) =>
+            m.channel?.is_im === true && typeof m.channel?.user === "string" ? [m.channel.user] : [],
+          ),
+        )
+        const messages = await Promise.all(
+          matches.map(async (m) => {
+            const channel = (m.channel ?? {}) as Record<string, any>
+            const threadTs = typeof m.permalink === "string" ? parseSlackLink(m.permalink)?.threadTs : undefined
+            const [message] = await toMessages(
+              [{ ...m, ...(threadTs === undefined ? {} : { thread_ts: threadTs }) }],
+              String(channel.id),
+            )
+            const where =
+              channel.is_im === true
+                ? `DM with ${nameOf(channel.user) ?? "someone"}`
+                : channel.is_mpim === true
+                  ? "a group DM"
+                  : `#${String(channel.name ?? channel.id)}`
+            return { ...message!, where }
+          }),
+        )
         return { total: Number(found.messages?.total ?? messages.length), messages }
       })
 
-    const read = (input: { readonly conversation: string; readonly thread?: string | undefined; readonly limit: number; readonly before?: string | undefined }) =>
+    const read = (input: {
+      readonly conversation: string
+      readonly thread?: string | undefined
+      readonly limit: number
+      readonly before?: string | undefined
+    }) =>
       run(async () => {
         const target = await place(input.conversation)
         const where = await conversation(target.id)
-        const thread = input.thread === undefined
-          ? (target.ts === undefined ? undefined : target.threadTs ?? target.ts)
-          : (parseSlackLink(input.thread)?.threadTs ?? parseSlackLink(input.thread)?.ts ?? input.thread)
+        const thread =
+          input.thread === undefined
+            ? target.ts === undefined
+              ? undefined
+              : (target.threadTs ?? target.ts)
+            : (parseSlackLink(input.thread)?.threadTs ?? parseSlackLink(input.thread)?.ts ?? input.thread)
         if (thread !== undefined) {
-          if (!isTs(thread)) throw new InvalidInput({ message: `"${thread}" is not a Slack message ts (like 1729340000.123456) or link.` })
+          if (!isTs(thread))
+            throw new InvalidInput({
+              message: `"${thread}" is not a Slack message ts (like 1729340000.123456) or link.`,
+            })
           const page = await call("conversations.replies", { channel: target.id, ts: thread, limit: input.limit })
           const raws = (page.messages ?? []) as Array<Record<string, any>>
           return { conversation: where, messages: await toMessages(raws, target.id), more: page.has_more === true }
@@ -689,25 +797,41 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
         const found: Array<SlackPerson> = matchPeople(q)
           .filter((u) => !u.bot)
           .slice(0, 15)
-          .map((u) => ({ id: u.id, name: u.name, ...(u.handle === "" ? {} : { handle: u.handle }), ...(u.title === "" ? {} : { title: u.title }) }))
+          .map((u) => ({
+            id: u.id,
+            name: u.name,
+            ...(u.handle === "" ? {} : { handle: u.handle }),
+            ...(u.title === "" ? {} : { title: u.title }),
+          }))
         return { conversations, people: found }
-      }).pipe(Effect.mapError((error) => (error._tag === "Unavailable" ? error : new Unavailable({ message: error.message }))))
+      }).pipe(
+        Effect.mapError((error) =>
+          error._tag === "Unavailable" ? error : new Unavailable({ message: error.message }),
+        ),
+      )
 
     const resolve = (input: { readonly to: string; readonly thread?: string | undefined }) =>
       run(async () => {
         const target = await place(input.to)
         const where = await conversation(target.id)
-        const threadSpec = input.thread === undefined
-          ? (target.ts === undefined ? undefined : target.threadTs ?? target.ts)
-          : (parseSlackLink(input.thread)?.threadTs ?? parseSlackLink(input.thread)?.ts ?? input.thread.trim())
+        const threadSpec =
+          input.thread === undefined
+            ? target.ts === undefined
+              ? undefined
+              : (target.threadTs ?? target.ts)
+            : (parseSlackLink(input.thread)?.threadTs ?? parseSlackLink(input.thread)?.ts ?? input.thread.trim())
         if (threadSpec === undefined) return { conversation: where }
-        if (!isTs(threadSpec)) throw new InvalidInput({ message: `"${threadSpec}" is not a Slack message ts (like 1729340000.123456) or link.` })
+        if (!isTs(threadSpec))
+          throw new InvalidInput({
+            message: `"${threadSpec}" is not a Slack message ts (like 1729340000.123456) or link.`,
+          })
         return { conversation: where, thread: await firstMessage(target.id, threadSpec) }
       })
 
     /** Uploads go to a one-time URL Slack hands out; the owner's token only goes to Slack itself. */
     const apiOrigin = new URL(options.apiUrl ?? "https://slack.com/api").origin
-    const isSlackHost = (url: URL) => url.origin === apiOrigin || url.hostname === "slack.com" || url.hostname.endsWith(".slack.com")
+    const isSlackHost = (url: URL) =>
+      url.origin === apiOrigin || url.hostname === "slack.com" || url.hostname.endsWith(".slack.com")
 
     /** One file's bytes to Slack (`files.getUploadURLExternal`, then a POST to its upload URL): its file id. */
     const upload = async (file: SlackUpload): Promise<string> => {
@@ -729,10 +853,18 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
       return String(target.file_id)
     }
 
-    const send = (input: { readonly channelId: string; readonly text: string; readonly threadTs?: string | undefined; readonly files?: ReadonlyArray<SlackUpload> | undefined }) =>
+    const send = (input: {
+      readonly channelId: string
+      readonly text: string
+      readonly threadTs?: string | undefined
+      readonly files?: ReadonlyArray<SlackUpload> | undefined
+    }) =>
       run(async () => {
         await loadUsers()
-        const text = slackText(input.text, people().map((u) => ({ id: u.id, names: [u.name, u.realName, u.handle] })))
+        const text = slackText(
+          input.text,
+          people().map((u) => ({ id: u.id, names: [u.name, u.realName, u.handle] })),
+        )
         const files = input.files ?? []
         if (files.length === 0) {
           const posted = await call("chat.postMessage", {
@@ -752,7 +884,10 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
           ...(text.trim() === "" ? {} : { initial_comment: text }),
           ...(input.threadTs === undefined ? {} : { thread_ts: input.threadTs }),
         })
-        return { permalink: input.threadTs === undefined ? placeLinkOf(input.channelId) : permalinkOf(input.channelId, input.threadTs) }
+        return {
+          permalink:
+            input.threadTs === undefined ? placeLinkOf(input.channelId) : permalinkOf(input.channelId, input.threadTs),
+        }
       })
 
     return SlackConnector.of({

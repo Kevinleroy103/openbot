@@ -80,7 +80,9 @@ export const originsFor = (input: {
   const local = [`http://127.0.0.1:${input.port}`, `http://localhost:${input.port}`]
   const bound = isWildcard(host) || isLoopback(host) ? undefined : `http://${hostForUrl(host)}:${input.port}`
   const selfBase = bound ?? `http://127.0.0.1:${input.port}`
-  const allowed = [...new Set([...input.publicOrigins.map((o) => o.toLowerCase()), ...local, ...(bound ? [bound] : [])])]
+  const allowed = [
+    ...new Set([...input.publicOrigins.map((o) => o.toLowerCase()), ...local, ...(bound ? [bound] : [])]),
+  ]
   return {
     selfBase,
     loginBase: selfBase,
@@ -91,7 +93,7 @@ export const originsFor = (input: {
 
 export const PublicListenerLive: Layer.Layer<PublicListener, HttpServerError.ServeError, ServerConfig> = Layer.effect(
   PublicListener,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const config = yield* ServerConfig
     const web = planWeb({ dev: config.dev, cwd: process.cwd() })
     const server = yield* BunHttpServer.make({
@@ -120,7 +122,7 @@ export const PublicListenerLive: Layer.Layer<PublicListener, HttpServerError.Ser
 
 export const InternalListenerLive: Layer.Layer<InternalListener, HttpServerError.ServeError> = Layer.effect(
   InternalListener,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const server = yield* BunHttpServer.make({
       hostname: "127.0.0.1",
       port: 0,

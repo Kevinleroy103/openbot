@@ -236,7 +236,12 @@ export const PathPolicyLive: Layer.Layer<PathPolicy, never, NodeConfig> = Layer.
   Effect.gen(function* () {
     const config = yield* NodeConfig
     return PathPolicy.of(
-      makePathPolicy({ roots: config.roots, dataDir: config.dataDir, denyGlobs: config.denyGlobs, extraRoots: config.extraRoots }),
+      makePathPolicy({
+        roots: config.roots,
+        dataDir: config.dataDir,
+        denyGlobs: config.denyGlobs,
+        extraRoots: config.extraRoots,
+      }),
     )
   }),
 )

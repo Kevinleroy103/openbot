@@ -81,10 +81,13 @@ export interface BootRecoveryReport {
   readonly interruptedTasks: ReadonlyArray<Task>
 }
 
-export class BootRecovery extends Context.Service<BootRecovery, {
-  /** Runs once at boot, before any runner or listener starts. Also revokes every MCP token. */
-  readonly run: Effect.Effect<BootRecoveryReport, RepoError>
-}>()("openbot/core/BootRecovery") {}
+export class BootRecovery extends Context.Service<
+  BootRecovery,
+  {
+    /** Runs once at boot, before any runner or listener starts. Also revokes every MCP token. */
+    readonly run: Effect.Effect<BootRecoveryReport, RepoError>
+  }
+>()("openbot/core/BootRecovery") {}
 
 export const BOOT_RECOVERY_STOP_REASON = "brain-restart"
 export const BOOT_RECOVERY_REQUEST_REASON = "not_resumable"
@@ -111,7 +114,7 @@ export const runBootRecovery = (options: {
   RepoError,
   ProcessLedger | TurnRepo | EntryRepo | RequestRepo | RoutineRepo | TaskRepo | McpTokenRepo
 > =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const ledger = yield* ProcessLedger
     const turns = yield* TurnRepo
     const entries = yield* EntryRepo
@@ -129,7 +132,7 @@ export const runBootRecovery = (options: {
     yield* ledger.clear
 
     const updatedEntries: Array<TranscriptEntry> = []
-    const rewrite = Effect.fn("BootRecovery.rewrite")(function*(entry: TranscriptEntry) {
+    const rewrite = Effect.fn("BootRecovery.rewrite")(function* (entry: TranscriptEntry) {
       if (entry.kind === "unknown") return
       let next: TranscriptEntry | undefined
       if (entry.kind === "message" && entry.streaming) {
@@ -202,7 +205,8 @@ export const runBootRecovery = (options: {
       for (const step of yield* tasks.steps(task.id)) {
         if (step.kind === "unknown") continue
         let done: TranscriptEntry | undefined
-        if ((step.kind === "message" || step.kind === "reasoning") && step.streaming) done = { ...step, streaming: false }
+        if ((step.kind === "message" || step.kind === "reasoning") && step.streaming)
+          done = { ...step, streaming: false }
         else if (step.kind === "tool-call" && UNFINISHED_TOOL_STATUSES.includes(step.status)) {
           done = { ...step, status: "interrupted", completedAt: now }
         }
@@ -215,5 +219,13 @@ export const runBootRecovery = (options: {
     // 6. MCP tokens
     yield* tokens.revokeAll()
 
-    return { killedProcesses, interruptedTurns, cutOffTurns, expiredRequests, updatedEntries, interruptedRuns, interruptedTasks }
+    return {
+      killedProcesses,
+      interruptedTurns,
+      cutOffTurns,
+      expiredRequests,
+      updatedEntries,
+      interruptedRuns,
+      interruptedTasks,
+    }
   })

@@ -8,7 +8,16 @@
  * quoted text (information, not instructions), at most ~10 KB, paged instead of spilled to files.
  * Offered while Settings › "Bots can search their chats" is on (`botSearch`).
  */
-import type { Bot, BotId, Conversation, ConversationId, EntryId, RuntimeResponse, SearchKind, TranscriptEntry } from "@openbot/contracts"
+import type {
+  Bot,
+  BotId,
+  Conversation,
+  ConversationId,
+  EntryId,
+  RuntimeResponse,
+  SearchKind,
+  TranscriptEntry,
+} from "@openbot/contracts"
 import { BOT_SEARCH_TOTAL_CAP } from "@openbot/contracts"
 import { type BotChatRef, BotService, type BotReadPage, SearchService, SettingsService } from "@openbot/core"
 import { Clock, Effect, Option } from "effect"
@@ -24,11 +33,15 @@ const SEARCH_OFF = "The owner has turned off searching chats for Bots."
 
 /** Refuses when the owner turned the tools off after the session started. */
 const ensureOn = Effect.serviceOption(SettingsService).pipe(
-  Effect.flatMap(Option.match({
-    onNone: () => Effect.void,
-    onSome: (settings) =>
-      Effect.flatMap(settings.get, (s) => (s.botSearch ? Effect.void : Effect.fail(new ToolRefusal({ message: SEARCH_OFF })))),
-  })),
+  Effect.flatMap(
+    Option.match({
+      onNone: () => Effect.void,
+      onSome: (settings) =>
+        Effect.flatMap(settings.get, (s) =>
+          s.botSearch ? Effect.void : Effect.fail(new ToolRefusal({ message: SEARCH_OFF })),
+        ),
+    }),
+  ),
 )
 
 /** Results stay under this many bytes (the gateway caps at 10,000). */
@@ -51,7 +64,10 @@ export const searchTime = (ms: number): string => {
  * Applied to a whole result: none of the tools' own lines opens with one of these tags.
  */
 export const neutralizeQuoted = (text: string): string =>
-  text.replace(/\[(?=(?:Group chat|Direct message from|DM with the owner|Routine run|Result of|Update to this work|The brief)\b|Attachments:)/g, "(")
+  text.replace(
+    /\[(?=(?:Group chat|Direct message from|DM with the owner|Routine run|Result of|Update to this work|The brief)\b|Attachments:)/g,
+    "(",
+  )
 
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
 
@@ -78,7 +94,12 @@ const botName = (names: Names, id: BotId | undefined): string =>
   id === undefined ? "a Bot" : id === names.me ? "You" : `@${names.bots.get(id)?.name ?? id}`
 
 /** Where a hit is, as the bot knows its chats. */
-const placeOf = (names: Names, conversationId: ConversationId, authorBotId: BotId | undefined, toBotId: BotId | undefined): string => {
+const placeOf = (
+  names: Names,
+  conversationId: ConversationId,
+  authorBotId: BotId | undefined,
+  toBotId: BotId | undefined,
+): string => {
   if (conversationId === names.ownDm) return "your DM with the owner"
   const chat = names.chats.get(conversationId)
   if (chat?.kind === "group") return `group "${chat.title}" (${chat.id})`
@@ -88,7 +109,7 @@ const placeOf = (names: Names, conversationId: ConversationId, authorBotId: BotI
 }
 
 const namesFor = (ctx: ToolCallContext, conversationIds: ReadonlyArray<ConversationId>) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const team = yield* (yield* BotService).list
     const me = team.find((bot) => bot.id === ctx.claims.botId)
     return {
@@ -100,7 +121,10 @@ const namesFor = (ctx: ToolCallContext, conversationIds: ReadonlyArray<Conversat
   })
 
 /** Bold the matched words of a snippet. */
-const marked = (snippet: string, highlights: ReadonlyArray<{ readonly start: number; readonly end: number }>): string => {
+const marked = (
+  snippet: string,
+  highlights: ReadonlyArray<{ readonly start: number; readonly end: number }>,
+): string => {
   let out = ""
   let at = 0
   for (const h of highlights) {
@@ -124,18 +148,22 @@ const searchMessages = defineTool({
   description:
     "Search your past conversations (what was said in your chats, as stored, not your memory of it): your DM with the owner, your group chats (their whole history), your routine runs, your messages with other Bots, and the briefs and results of your own work. Use it when you need exact detail from before (what someone said or decided, a name, a path, a number, a link), especially from before your context was compacted. Each hit has its time, chat, author and id; read around a hit with read_conversation.",
   params: p.params({
-    query: p.text("Words to find (all must match), \"an exact phrase\", -word to leave out."),
-    conversation: p.optional(p.string(
-      "Where to look: \"all\" (default), \"current\" (this conversation), \"owner\" (your DM with the owner), a group's title or id, or @Name (your messages with that Bot).",
-    )),
-    sender: p.optional(p.string("Only from: \"owner\", \"me\", or @Name.")),
-    since: p.optional(p.string("Only after: an ISO date or date-time, or back from now (\"2h\", \"3d\", \"1w\").")),
+    query: p.text('Words to find (all must match), "an exact phrase", -word to leave out.'),
+    conversation: p.optional(
+      p.string(
+        'Where to look: "all" (default), "current" (this conversation), "owner" (your DM with the owner), a group\'s title or id, or @Name (your messages with that Bot).',
+      ),
+    ),
+    sender: p.optional(p.string('Only from: "owner", "me", or @Name.')),
+    since: p.optional(p.string('Only after: an ISO date or date-time, or back from now ("2h", "3d", "1w").')),
     until: p.optional(p.string("Only before: like since.")),
-    include: p.optional(p.array(
-      p.literals(["messages", "tools", "tasks"]),
-      "What to search: messages (chat messages, cards, event lines), tasks (your own work's brief and result), tools (your own tool steps). Default: messages and tasks.",
-      { minItems: 1, maxItems: 3 },
-    )),
+    include: p.optional(
+      p.array(
+        p.literals(["messages", "tools", "tasks"]),
+        "What to search: messages (chat messages, cards, event lines), tasks (your own work's brief and result), tools (your own tool steps). Default: messages and tasks.",
+        { minItems: 1, maxItems: 3 },
+      ),
+    ),
     sort: p.optional(p.literals(["relevance", "newest", "oldest"], "Order of the hits (default relevance).")),
     limit: p.optional(p.number("How many hits (default 10, at most 25).", { integer: true, min: 1, max: 25 })),
     before: p.optional(p.string("Paging: the `before` value the previous call returned.")),
@@ -144,7 +172,7 @@ const searchMessages = defineTool({
   available: searchOn,
   idempotent: false,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       yield* ensureOn
       const search = yield* SearchService
       const me = ctx.claims.botId
@@ -158,7 +186,8 @@ const searchMessages = defineTool({
         else if (key === "me" || key === "you") senders = [me]
         else {
           const who = yield* (yield* BotService).resolve(sender).pipe(Effect.option)
-          if (Option.isNone(who)) return yield* new ToolRefusal({ message: `No teammate is called ${sender}. Use "owner", "me" or @Name.` })
+          if (Option.isNone(who))
+            return yield* new ToolRefusal({ message: `No teammate is called ${sender}. Use "owner", "me" or @Name.` })
           senders = [who.value.id]
         }
       }
@@ -166,7 +195,11 @@ const searchMessages = defineTool({
         if (value === undefined || value.trim() === "") return Effect.succeed(undefined)
         const ms = parseWhen(value, now)
         return ms === undefined
-          ? Effect.fail(new ToolRefusal({ message: `\`${name}\` must be an ISO date or date-time, or a span like "2h", "3d", "1w".` }))
+          ? Effect.fail(
+              new ToolRefusal({
+                message: `\`${name}\` must be an ISO date or date-time, or a span like "2h", "3d", "1w".`,
+              }),
+            )
           : Effect.succeed(ms)
       }
       const from = yield* when(args.since, "since")
@@ -186,10 +219,15 @@ const searchMessages = defineTool({
         limit,
         ...(args.before === undefined || args.before.trim() === "" ? {} : { cursor: args.before.trim() }),
       })
-      const indexing = page.indexing === true ? " The search index is still being built, so some older messages may be missing." : ""
-      if (page.hits.length === 0) return textResult(`Nothing in your conversations matches ${JSON.stringify(args.query)}.${indexing}`)
+      const indexing =
+        page.indexing === true ? " The search index is still being built, so some older messages may be missing." : ""
+      if (page.hits.length === 0)
+        return textResult(`Nothing in your conversations matches ${JSON.stringify(args.query)}.${indexing}`)
 
-      const names = yield* namesFor(ctx, page.hits.map((hit) => hit.conversationId))
+      const names = yield* namesFor(
+        ctx,
+        page.hits.map((hit) => hit.conversationId),
+      )
       const order = sort === "relevance" ? "most relevant first" : sort === "newest" ? "newest first" : "oldest first"
       const total = page.totalCapped >= BOT_SEARCH_TOTAL_CAP ? `${BOT_SEARCH_TOTAL_CAP}+` : String(page.totalCapped)
       const heading = (shown: number) =>
@@ -199,9 +237,15 @@ const searchMessages = defineTool({
       const blocks: Array<string> = []
       let size = utf8Length(heading(page.hits.length)) + 400
       for (const hit of page.hits) {
-        const author = hit.author.kind === "owner" ? "Owner" : hit.author.kind === "system" ? "System" : botName(names, hit.author.botId)
+        const author =
+          hit.author.kind === "owner"
+            ? "Owner"
+            : hit.author.kind === "system"
+              ? "System"
+              : botName(names, hit.author.botId)
         const to = hit.toBotId === undefined ? "" : ` → ${botName(names, hit.toBotId)}`
-        const what = hit.kind === "task" ? "your work's brief and result" : hit.kind === "tool-call" ? "your tool step" : undefined
+        const what =
+          hit.kind === "task" ? "your work's brief and result" : hit.kind === "tool-call" ? "your tool step" : undefined
         // a task hit is read from the reply after it ended; one still running has only its own id (check_task)
         const id = hit.ref.kind === "entry" ? hit.ref.entryId : hit.jumpEntryId
         const workId = hit.ref.kind === "task" && id === undefined ? hit.ref.taskId : undefined
@@ -214,17 +258,26 @@ const searchMessages = defineTool({
           ...(workId === undefined ? [] : [`work ${workId}`]),
         ]
         const text = hit.snippet.length > SNIPPET_CHARS ? `${hit.snippet.slice(0, SNIPPET_CHARS)}…` : hit.snippet
-        const block = `- ${facts.join(" · ")}\n  ${oneLine(marked(neutralizeQuoted(text), hit.highlights.filter((h) => h.end <= SNIPPET_CHARS)))}`
+        const block = `- ${facts.join(" · ")}\n  ${oneLine(
+          marked(
+            neutralizeQuoted(text),
+            hit.highlights.filter((h) => h.end <= SNIPPET_CHARS),
+          ),
+        )}`
         size += utf8Length(block) + 1
         if (size > RESULT_BUDGET && blocks.length > 0) break
         blocks.push(block)
       }
       // over budget: the next page starts at the first hit not shown
-      const next = blocks.length < page.hits.length ? page.hitCursors[blocks.length - 1] ?? null : page.nextCursor
+      const next = blocks.length < page.hits.length ? (page.hitCursors[blocks.length - 1] ?? null) : page.nextCursor
       const more = next === null ? [] : [`More: call again with before=${JSON.stringify(next)}.`]
-      return textResult(neutralizeQuoted(
-        [heading(blocks.length), ...blocks, ...more, "Read around a hit with read_conversation around=<id>."].join("\n"),
-      ))
+      return textResult(
+        neutralizeQuoted(
+          [heading(blocks.length), ...blocks, ...more, "Read around a hit with read_conversation around=<id>."].join(
+            "\n",
+          ),
+        ),
+      )
     }),
 })
 
@@ -244,7 +297,11 @@ const answerOf = (response: RuntimeResponse): string => {
     case "decision":
       return response.decision === "deny" || response.decision === "cancel" ? "denied" : "allowed"
     case "answers":
-      return `answered: ${oneLine(Object.values(response.answers).map((values) => values.join(", ")).join(" / ")).slice(0, 300)}`
+      return `answered: ${oneLine(
+        Object.values(response.answers)
+          .map((values) => values.join(", "))
+          .join(" / "),
+      ).slice(0, 300)}`
     case "form":
       return "submitted"
     case "secret":
@@ -261,20 +318,25 @@ const lineOf = (names: Names, entry: TranscriptEntry, full: boolean): string | u
   const time = `[${searchTime(entry.createdAt)}]`
   switch (entry.kind) {
     case "message": {
-      const files = entry.attachments.length === 0 ? "" : ` (attached: ${entry.attachments.map((a) => a.name).join(", ")})`
+      const files =
+        entry.attachments.length === 0 ? "" : ` (attached: ${entry.attachments.map((a) => a.name).join(", ")})`
       const cap = full ? RESULT_BUDGET - 600 : MESSAGE_CHARS
       const text = entry.text
-      const cut = text.length > cap
-        ? `${text.slice(0, cap)} [cut; read_conversation around=${entry.id} limit=1 shows it whole]`
-        : text
+      const cut =
+        text.length > cap
+          ? `${text.slice(0, cap)} [cut; read_conversation around=${entry.id} limit=1 shows it whole]`
+          : text
       return `${time} [${authorOf(names, entry)}]: ${cut}${files}`
     }
     case "card": {
       const card = entry.card
       const response = entry.state.response
-      const state = response !== undefined
-        ? ` → ${answerOf(response)}`
-        : entry.state.status === "info" ? "" : ` · ${entry.state.status}`
+      const state =
+        response !== undefined
+          ? ` → ${answerOf(response)}`
+          : entry.state.status === "info"
+            ? ""
+            : ` · ${entry.state.status}`
       switch (card.type) {
         case "approval":
           return `${time} [Approval: ${oneLine(card.title)}${card.command === undefined ? "" : ` (${oneLine(card.command).slice(0, 200)})`}${state}]`
@@ -341,9 +403,11 @@ const readConversation = defineTool({
   name: "read_conversation",
   toolset: "bot",
   description:
-    "Read one of your conversations as it was said, oldest first: the newest messages, the messages around one (e.g. a search_messages hit, by its id), or the page before or after one. A long message is cut; read it whole with around=<its id> limit=1. Conversations: \"current\" (default), \"owner\" (your DM with the owner), a group's title or id, or @Name (your messages with that Bot).",
+    'Read one of your conversations as it was said, oldest first: the newest messages, the messages around one (e.g. a search_messages hit, by its id), or the page before or after one. A long message is cut; read it whole with around=<its id> limit=1. Conversations: "current" (default), "owner" (your DM with the owner), a group\'s title or id, or @Name (your messages with that Bot).',
   params: p.params({
-    conversation: p.optional(p.string("Which conversation (default: the current one; with `around`, the message's own).")),
+    conversation: p.optional(
+      p.string("Which conversation (default: the current one; with `around`, the message's own)."),
+    ),
     around: p.optional(p.string("A message id: the messages before and after it.")),
     before: p.optional(p.string("A message id: the page of older messages before it.")),
     after: p.optional(p.string("A message id: the page of newer messages after it.")),
@@ -354,7 +418,7 @@ const readConversation = defineTool({
   available: searchOn,
   idempotent: false,
   handler: (args, ctx) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       yield* ensureOn
       const search = yield* SearchService
       const me = ctx.claims.botId
@@ -362,7 +426,8 @@ const readConversation = defineTool({
       let chat: BotChatRef | undefined
       if (args.conversation !== undefined && args.conversation.trim() !== "") {
         chat = yield* search.resolveForBot(me, ctx.claims.conversationId, args.conversation, "current")
-        if (chat.kind === "all") return yield* new ToolRefusal({ message: "Name one conversation to read (\"all\" is for search_messages)." })
+        if (chat.kind === "all")
+          return yield* new ToolRefusal({ message: 'Name one conversation to read ("all" is for search_messages).' })
       } else if (anchor === undefined) chat = { kind: "conversation", conversationId: ctx.claims.conversationId }
       const limit = args.limit ?? 20
       const page = yield* search.readForBot(me, {
@@ -387,7 +452,12 @@ const readConversation = defineTool({
       const bytes = () => utf8Length(head) + 300 + kept.reduce((n, l) => n + utf8Length(l.line) + 1, 0)
       while (kept.length > 1 && bytes() > RESULT_BUDGET) {
         const centre = kept.findIndex((l) => l.entry.id === anchor)
-        const dropOldest = args.after !== undefined ? false : args.before !== undefined || anchor === undefined ? true : centre >= kept.length - 1 - centre
+        const dropOldest =
+          args.after !== undefined
+            ? false
+            : args.before !== undefined || anchor === undefined
+              ? true
+              : centre >= kept.length - 1 - centre
         if (dropOldest) {
           kept = kept.slice(1)
           olderFrom = kept[0]!.entry.id
@@ -396,14 +466,22 @@ const readConversation = defineTool({
           newerFrom = kept[kept.length - 1]!.entry.id
         }
       }
-      if (kept.length === 0) return textResult(neutralizeQuoted(`${head}\nNothing to read there${anchor === undefined ? " yet" : ""}.`))
+      if (kept.length === 0)
+        return textResult(neutralizeQuoted(`${head}\nNothing to read there${anchor === undefined ? " yet" : ""}.`))
       // an exchange keeps its view (its messages also belong to a DM the bot may read whole)
-      const view = page.chat.kind === "exchange" ? ` conversation=@${names.bots.get(page.chat.peerBotId)?.name ?? page.chat.peerBotId}` : ""
+      const view =
+        page.chat.kind === "exchange"
+          ? ` conversation=@${names.bots.get(page.chat.peerBotId)?.name ?? page.chat.peerBotId}`
+          : ""
       const paging = [
         ...(olderFrom === undefined ? [] : [`Older: read_conversation${view} before=${olderFrom}`]),
         ...(newerFrom === undefined ? [] : [`Newer: read_conversation${view} after=${newerFrom}`]),
       ]
-      return textResult(neutralizeQuoted([head, ...kept.map((l) => l.line), ...(paging.length === 0 ? [] : [paging.join(" · ")])].join("\n")))
+      return textResult(
+        neutralizeQuoted(
+          [head, ...kept.map((l) => l.line), ...(paging.length === 0 ? [] : [paging.join(" · ")])].join("\n"),
+        ),
+      )
     }),
 })
 

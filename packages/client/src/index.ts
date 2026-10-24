@@ -2,11 +2,7 @@
 // over one `/rpc` WebSocket; live roster and conversation replicas with cursor resume; a connection
 // supervisor; command atoms for every unary RPC; optimistic sends; attachment upload. No UI.
 export * from "./config.ts"
-export {
-  type ConnectionState,
-  type ConnectionStatus,
-  initialConnectionState,
-} from "./connection.ts"
+export { type ConnectionState, type ConnectionStatus, initialConnectionState } from "./connection.ts"
 export * from "./rpc.ts"
 export * from "./supervisor.ts"
 export * from "./keys.ts"

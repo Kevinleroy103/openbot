@@ -16,7 +16,10 @@ const attempt = <A>(op: string, message: string, run: () => Promise<A>): Effect.
   })
 
 const isMissing = (cause: unknown) =>
-  typeof cause === "object" && cause !== null && "code" in cause && (cause.code === "ENOENT" || cause.code === "ENOTDIR")
+  typeof cause === "object" &&
+  cause !== null &&
+  "code" in cause &&
+  (cause.code === "ENOENT" || cause.code === "ENOTDIR")
 
 let tempCounter = 0
 
@@ -152,7 +155,11 @@ export const ensureDirectory = (op: string, path: string): Effect.Effect<void, R
 
 /** Ids used as single path segments must not escape their directory. */
 export const safeSegment = (op: string, value: string): Effect.Effect<string, RepoError> =>
-  value.length === 0 || value === "." || value === ".." || value.includes("/") || value.includes("\\") ||
-    value.includes("\u0000")
+  value.length === 0 ||
+  value === "." ||
+  value === ".." ||
+  value.includes("/") ||
+  value.includes("\\") ||
+  value.includes("\u0000")
     ? Effect.fail(new RepoError({ op, message: `Unsafe path segment: ${JSON.stringify(value)}` }))
     : Effect.succeed(value)

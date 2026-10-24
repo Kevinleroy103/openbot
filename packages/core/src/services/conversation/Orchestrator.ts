@@ -62,7 +62,13 @@ import {
 } from "../../ports/services.ts"
 import { AttachmentStore, CarryoverStore, EMPTY_CARRYOVER } from "../../ports/stores.ts"
 import { toAttachment } from "./AttachmentService.ts"
-import { DEFAULT_RUNNER_OPTIONS, type DeliveryOutcomes, makeRunner, type Runner, type RunnerOptions } from "./BotRunner.ts"
+import {
+  DEFAULT_RUNNER_OPTIONS,
+  type DeliveryOutcomes,
+  makeRunner,
+  type Runner,
+  type RunnerOptions,
+} from "./BotRunner.ts"
 import { routeOwnerMessage } from "./GroupRouter.ts"
 import { ConversationStore, ConversationStoreLive } from "./internal/ConversationStore.ts"
 import { compact, conversationBotIds, orDie, required } from "./internal/util.ts"
@@ -79,7 +85,7 @@ const RUNNER_ATTEMPTS = 3
 const denyAll: HarnessRequestResolution = { decision: "deny" }
 
 const makeOrchestrator = (options: RunnerOptions) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const scope = yield* Effect.scope
     const hub = yield* LiveHub
     const conversationService = yield* ConversationService
@@ -109,7 +115,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
     const resolvedOrder: Array<string> = []
 
     const outcomeFor = (deliveryId: string) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const existing = outcomes.get(deliveryId)
         if (existing !== undefined) return existing
         const created = yield* Deferred.make<DeliveryOutcome>()
@@ -120,7 +126,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
     const deliveryOutcomes: DeliveryOutcomes = {
       register: (deliveryId) => Effect.asVoid(outcomeFor(deliveryId)),
       resolve: (deliveryId, outcome) =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const deferred = yield* outcomeFor(deliveryId)
           const completed = yield* Deferred.succeed(deferred, compact({ ...outcome, deliveryId }))
           if (!completed) return
@@ -171,7 +177,9 @@ const makeOrchestrator = (options: RunnerOptions) =>
       outcomes: deliveryOutcomes,
       followUp: (input: DeliveryInput) =>
         deliverRef(input).pipe(
-          Effect.catch((error) => Effect.logWarning(`Orchestrator: follow-up delivery to ${input.botId} failed`, error)),
+          Effect.catch((error) =>
+            Effect.logWarning(`Orchestrator: follow-up delivery to ${input.botId} failed`, error),
+          ),
           Effect.asVoid,
         ),
       onEvicted: forget,
@@ -183,13 +191,15 @@ const makeOrchestrator = (options: RunnerOptions) =>
 
     /** The bot's one runner (created on demand). */
     const runnerFor = (botId: BotId) =>
-      runnerLock.withPermits(1)(Effect.gen(function*() {
-        const existing = runners.get(botId)
-        if (existing !== undefined) return existing
-        const runner = yield* makeRunner(runnerDeps, botId)
-        runners.set(botId, runner)
-        return runner
-      }))
+      runnerLock.withPermits(1)(
+        Effect.gen(function* () {
+          const existing = runners.get(botId)
+          if (existing !== undefined) return existing
+          const runner = yield* makeRunner(runnerDeps, botId)
+          runners.set(botId, runner)
+          return runner
+        }),
+      )
 
     const existingRunner = (botId: BotId) => Effect.sync(() => Option.fromNullishOr(runners.get(botId)))
 
@@ -203,14 +213,14 @@ const makeOrchestrator = (options: RunnerOptions) =>
         : Effect.fail(new NotFound({ entity: "conversation-member", id: `${botId} in ${conversation.id}` }))
 
     const publishTurn = (turn: Turn) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         yield* orDie(turns.upsert(turn))
         yield* hub.publishConversation(turn.conversationId, { type: "turn.upserted", turn })
       })
 
     // ------------------------------------------------------------------ deliver
 
-    const deliver = Effect.fn("Orchestrator.deliver")(function*(input: DeliveryInput) {
+    const deliver = Effect.fn("Orchestrator.deliver")(function* (input: DeliveryInput) {
       const conversation = yield* store.get(input.conversationId)
       const bot = yield* getBot(input.botId)
       yield* requireMember(conversation, bot.id)
@@ -229,7 +239,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
         const receipt: DeliveryReceipt = { deliveryId: id, disposition: "queued" }
         return receipt
       }
-      for (let attempt = 0;; attempt++) {
+      for (let attempt = 0; ; attempt++) {
         const runner = yield* runnerFor(bot.id)
         const receipt = yield* runner.deliver(delivery, driver.capabilities)
         if (receipt !== "closed") return receipt
@@ -246,12 +256,13 @@ const makeOrchestrator = (options: RunnerOptions) =>
     const sendLock = yield* Semaphore.make(1)
 
     const resolveTargets = (conversation: Conversation, input: SendInput, replyTo: TranscriptEntry | undefined) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         if (conversation.kind !== "group") {
           return { botIds: [conversation.botId] as ReadonlyArray<BotId>, addressed: undefined }
         }
-        const members = (yield* Effect.forEach(conversation.memberBotIds, (id) => orDie(bots.get(id))))
-          .flatMap((b): Array<Bot> => (Option.isSome(b) ? [b.value] : []))
+        const members = (yield* Effect.forEach(conversation.memberBotIds, (id) => orDie(bots.get(id)))).flatMap(
+          (b): Array<Bot> => (Option.isSome(b) ? [b.value] : []),
+        )
         const route = routeOwnerMessage({
           group: conversation,
           members,
@@ -266,7 +277,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
         }
       })
 
-    const send = Effect.fn("Orchestrator.send")(function*(input: SendInput) {
+    const send = Effect.fn("Orchestrator.send")(function* (input: SendInput) {
       const conversation = yield* store.get(input.conversationId)
       const attachmentIds = input.attachmentIds ?? []
       if (input.text.trim() === "" && attachmentIds.length === 0) {
@@ -276,48 +287,51 @@ const makeOrchestrator = (options: RunnerOptions) =>
         return yield* new InvalidInput({ message: `Messages are limited to ${MAX_MESSAGE_CHARS} characters.` })
       }
       if (attachmentIds.length > MAX_MESSAGE_ATTACHMENTS) {
-        return yield* new InvalidInput({ message: `A message can carry at most ${MAX_MESSAGE_ATTACHMENTS} attachments.` })
+        return yield* new InvalidInput({
+          message: `A message can carry at most ${MAX_MESSAGE_ATTACHMENTS} attachments.`,
+        })
       }
 
-      const accepted = yield* sendLock.withPermits(1)(Effect.gen(function*() {
-        const duplicate = yield* orDie(entries.findByClientNonce(conversation.id, input.clientNonce))
-        if (Option.isSome(duplicate)) {
-          return { _tag: "duplicate" as const, entryId: duplicate.value.id }
-        }
-        const files = yield* Effect.forEach(
-          attachmentIds,
-          (id) => Effect.map(required(attachments.get(id), "attachment", id), toAttachment),
-        )
-        let replyTo: TranscriptEntry | undefined
-        if (input.replyToId !== undefined) {
-          const found = yield* orDie(entries.get(input.replyToId))
-          if (Option.isNone(found) || found.value.conversationId !== conversation.id) {
-            return yield* new NotFound({ entity: "entry", id: input.replyToId })
+      const accepted = yield* sendLock.withPermits(1)(
+        Effect.gen(function* () {
+          const duplicate = yield* orDie(entries.findByClientNonce(conversation.id, input.clientNonce))
+          if (Option.isSome(duplicate)) {
+            return { _tag: "duplicate" as const, entryId: duplicate.value.id }
           }
-          replyTo = found.value
-        }
-        const targets = yield* resolveTargets(conversation, input, replyTo)
-        // Fail before persisting when a target bot cannot run at all.
-        for (const botId of targets.botIds) {
-          const bot = yield* getBot(botId)
-          yield* registry.get(bot.harness.kind, bot.harness.profileId)
-        }
-        const draft: EntryDraft = compact({
-          kind: "message" as const,
-          conversationId: conversation.id,
-          author: { kind: "user" as const, userId: OWNER_USER_ID },
-          role: "user" as const,
-          text: input.text,
-          attachments: files,
-          streaming: false,
-          clientNonce: input.clientNonce,
-          delivery: "accepted" as const,
-          replyToId: input.replyToId,
-          addressedBotIds: targets.addressed,
-        })
-        const entry = yield* conversationService.appendEntry(draft)
-        return { _tag: "accepted" as const, entryId: entry.id as EntryId, targets: targets.botIds }
-      }))
+          const files = yield* Effect.forEach(attachmentIds, (id) =>
+            Effect.map(required(attachments.get(id), "attachment", id), toAttachment),
+          )
+          let replyTo: TranscriptEntry | undefined
+          if (input.replyToId !== undefined) {
+            const found = yield* orDie(entries.get(input.replyToId))
+            if (Option.isNone(found) || found.value.conversationId !== conversation.id) {
+              return yield* new NotFound({ entity: "entry", id: input.replyToId })
+            }
+            replyTo = found.value
+          }
+          const targets = yield* resolveTargets(conversation, input, replyTo)
+          // Fail before persisting when a target bot cannot run at all.
+          for (const botId of targets.botIds) {
+            const bot = yield* getBot(botId)
+            yield* registry.get(bot.harness.kind, bot.harness.profileId)
+          }
+          const draft: EntryDraft = compact({
+            kind: "message" as const,
+            conversationId: conversation.id,
+            author: { kind: "user" as const, userId: OWNER_USER_ID },
+            role: "user" as const,
+            text: input.text,
+            attachments: files,
+            streaming: false,
+            clientNonce: input.clientNonce,
+            delivery: "accepted" as const,
+            replyToId: input.replyToId,
+            addressedBotIds: targets.addressed,
+          })
+          const entry = yield* conversationService.appendEntry(draft)
+          return { _tag: "accepted" as const, entryId: entry.id as EntryId, targets: targets.botIds }
+        }),
+      )
 
       if (accepted._tag === "duplicate") {
         const result: SendResult = { entryId: accepted.entryId, turnIds: [], disposition: "duplicate" }
@@ -339,37 +353,42 @@ const makeOrchestrator = (options: RunnerOptions) =>
       const receipts: Array<DeliveryReceipt> = []
       let firstError: NotFound | HarnessUnavailable | undefined
       for (const botId of accepted.targets) {
-        const receipt = yield* Effect.result(deliver({
-          conversationId: conversation.id,
-          botId,
-          kind: "user-message",
-          text: input.text,
-          attachmentIds,
-          sourceEntryId: accepted.entryId,
-          urgency: "urgent",
-          mode: input.mode ?? "auto",
-        }))
+        const receipt = yield* Effect.result(
+          deliver({
+            conversationId: conversation.id,
+            botId,
+            kind: "user-message",
+            text: input.text,
+            attachmentIds,
+            sourceEntryId: accepted.entryId,
+            urgency: "urgent",
+            mode: input.mode ?? "auto",
+          }),
+        )
         if (receipt._tag === "Success") receipts.push(receipt.success)
         else firstError ??= receipt.failure
       }
       if (receipts.length === 0 && firstError !== undefined) {
-        yield* Effect.ignore(conversationService.updateEntry(accepted.entryId, (entry) =>
-          entry.kind === "message" ? { ...entry, delivery: "failed" } : entry))
+        yield* Effect.ignore(
+          conversationService.updateEntry(accepted.entryId, (entry) =>
+            entry.kind === "message" ? { ...entry, delivery: "failed" } : entry,
+          ),
+        )
         return yield* firstError
       }
       const turnIds = receipts.flatMap((r): Array<TurnId> => (r.turnId === undefined ? [] : [r.turnId]))
       const disposition: SendResult["disposition"] = receipts.some((r) => r.disposition === "started")
         ? "started"
         : receipts.length > 0 && receipts.every((r) => r.disposition === "steered")
-        ? "steered"
-        : "queued"
+          ? "steered"
+          : "queued"
       const result: SendResult = { entryId: accepted.entryId, turnIds, disposition }
       return result
     })
 
     // ------------------------------------------------------------------ interrupt
 
-    const interrupt = Effect.fn("Orchestrator.interrupt")(function*(input: {
+    const interrupt = Effect.fn("Orchestrator.interrupt")(function* (input: {
       readonly conversationId: ConversationId
       readonly turnId?: TurnId | undefined
     }) {
@@ -394,7 +413,12 @@ const makeOrchestrator = (options: RunnerOptions) =>
       }
       if (isTerminalTurnStatus(turn.status)) return []
       // A stale active turn with nobody running it (should only follow a crash): close it.
-      const closed: Turn = { ...turn, status: "interrupted", endedAt: yield* Clock.currentTimeMillis, stopReason: "interrupted" }
+      const closed: Turn = {
+        ...turn,
+        status: "interrupted",
+        endedAt: yield* Clock.currentTimeMillis,
+        stopReason: "interrupted",
+      }
       yield* publishTurn(closed)
       return [closed]
     })
@@ -409,7 +433,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
      * every message it has not seen, and what a turn that died midway was given is in its session.
      */
     const retrySource = (turn: Turn) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const sources = turn.sourceEntryIds ?? (turn.inputEntryId !== undefined ? [turn.inputEntryId] : [])
         for (const id of [...sources].reverse()) {
           const entry = yield* orDie(entries.get(id))
@@ -417,14 +441,20 @@ const makeOrchestrator = (options: RunnerOptions) =>
         }
         // Turns failed before sources were recorded: the latest message from someone else.
         const recent = (yield* orDie(entries.page({ conversationId: turn.conversationId, limit: 40 }))).entries
-        return Option.fromNullishOr(recent.filter(isMessage).findLast((entry) =>
-          !entry.streaming && entry.author.kind !== "system" &&
-          !(entry.author.kind === "bot" && entry.author.botId === turn.botId) &&
-          (entry.text.trim() !== "" || entry.attachments.length > 0)
-        ))
+        return Option.fromNullishOr(
+          recent
+            .filter(isMessage)
+            .findLast(
+              (entry) =>
+                !entry.streaming &&
+                entry.author.kind !== "system" &&
+                !(entry.author.kind === "bot" && entry.author.botId === turn.botId) &&
+                (entry.text.trim() !== "" || entry.attachments.length > 0),
+            ),
+        )
       })
 
-    const retry = Effect.fn("Orchestrator.retry")(function*(input: {
+    const retry = Effect.fn("Orchestrator.retry")(function* (input: {
       readonly conversationId: ConversationId
       readonly turnId: TurnId
     }) {
@@ -433,7 +463,8 @@ const makeOrchestrator = (options: RunnerOptions) =>
       if (turn.conversationId !== input.conversationId) {
         return yield* new NotFound({ entity: "turn", id: input.turnId })
       }
-      if (turn.status !== "failed") return yield* new InvalidInput({ message: "Only a reply that failed can be retried." })
+      if (turn.status !== "failed")
+        return yield* new InvalidInput({ message: "Only a reply that failed can be retried." })
       const source = yield* retrySource(turn)
       if (Option.isNone(source)) {
         return yield* new InvalidInput({ message: "There is nothing to retry here. Send a new message instead." })
@@ -442,7 +473,9 @@ const makeOrchestrator = (options: RunnerOptions) =>
       yield* deliver({
         conversationId: turn.conversationId,
         botId: turn.botId,
-        ...(entry.author.kind === "bot" ? { kind: "bot-message", fromBotId: entry.author.botId } : { kind: "user-message" }),
+        ...(entry.author.kind === "bot"
+          ? { kind: "bot-message", fromBotId: entry.author.botId }
+          : { kind: "user-message" }),
         text: entry.text,
         attachmentIds: entry.attachments.map((attachment) => attachment.id),
         sourceEntryId: entry.id,
@@ -452,33 +485,45 @@ const makeOrchestrator = (options: RunnerOptions) =>
 
     // ------------------------------------------------------------------ deploys: drain, hand-off, resume
 
-    const handOff = Effect.gen(function*() {
+    const handOff = Effect.gen(function* () {
       holding = true
       handedOff = true
       const live = [...runners.values()]
       const taken = yield* Effect.forEach(live, (runner) => runner.takeOver)
       const carried = { deliveries: taken.flatMap((t) => t.deliveries), cutOff: taken.flatMap((t) => t.cutOff) }
       if (carried.deliveries.length > 0 || carried.cutOff.length > 0) {
-        yield* carryover.save(carried).pipe(
-          Effect.catch((error) => Effect.logError("Orchestrator: could not save the work for the next boot", error)),
-        )
-        yield* Effect.logInfo("handed off to the next boot", { deliveries: carried.deliveries.length, cutOff: carried.cutOff.length })
+        yield* carryover
+          .save(carried)
+          .pipe(
+            Effect.catch((error) => Effect.logError("Orchestrator: could not save the work for the next boot", error)),
+          )
+        yield* Effect.logInfo("handed off to the next boot", {
+          deliveries: carried.deliveries.length,
+          cutOff: carried.cutOff.length,
+        })
       }
       // together: shutdown gives this a few seconds, and a task must be interrupted before the drivers close
-      yield* Effect.all([
-        Effect.forEach(live, (runner) => runner.stop("restart"), { concurrency: "unbounded", discard: true }),
-        tasks.handOff,
-      ], { concurrency: "unbounded", discard: true })
+      yield* Effect.all(
+        [
+          Effect.forEach(live, (runner) => runner.stop("restart"), { concurrency: "unbounded", discard: true }),
+          tasks.handOff,
+        ],
+        { concurrency: "unbounded", discard: true },
+      )
     })
 
-    const drain = Effect.fn("Orchestrator.drain")(function*(input: { readonly graceMs: number }) {
+    const drain = Effect.fn("Orchestrator.drain")(function* (input: { readonly graceMs: number }) {
       if (holding) return
       holding = true
       yield* tasks.hold
       const deadline = (yield* Clock.currentTimeMillis) + input.graceMs
-      yield* Effect.logInfo("draining: no new turns or tasks start; waiting for running ones", { graceMs: input.graceMs })
+      yield* Effect.logInfo("draining: no new turns or tasks start; waiting for running ones", {
+        graceMs: input.graceMs,
+      })
       for (;;) {
-        const working = (yield* Effect.forEach([...runners.values()], (runner) => runner.isWorking)).filter(Boolean).length
+        const working = (yield* Effect.forEach([...runners.values()], (runner) => runner.isWorking)).filter(
+          Boolean,
+        ).length
         const running = yield* tasks.running
         if (working === 0 && running === 0) break
         if ((yield* Clock.currentTimeMillis) >= deadline) {
@@ -494,9 +539,11 @@ const makeOrchestrator = (options: RunnerOptions) =>
     const RESUME_TEXT =
       "[Your last turn here was cut off before you finished: OpenBot restarted. Continue where you left off. A command that was still running was stopped, so check its result or run it again. Don't mention the restart.]"
 
-    const resume = Effect.fn("Orchestrator.resume")(function*(report: BootRecoveryReport) {
+    const resume = Effect.fn("Orchestrator.resume")(function* (report: BootRecoveryReport) {
       const carried = yield* carryover.take.pipe(
-        Effect.catch((error) => Effect.logError("Orchestrator: could not read the carried work", error).pipe(Effect.as(EMPTY_CARRYOVER))),
+        Effect.catch((error) =>
+          Effect.logError("Orchestrator: could not read the carried work", error).pipe(Effect.as(EMPTY_CARRYOVER)),
+        ),
       )
       const redeliver = (input: DeliveryInput) =>
         deliver(input).pipe(
@@ -528,41 +575,56 @@ const makeOrchestrator = (options: RunnerOptions) =>
       const cutOff = new Map<string, { readonly botId: BotId; readonly conversationId: ConversationId }>()
       for (const c of [...carried.cutOff, ...report.cutOffTurns]) cutOff.set(`${c.botId} ${c.conversationId}`, c)
       for (const c of cutOff.values()) {
-        yield* redeliver({ conversationId: c.conversationId, botId: c.botId, kind: "system-resume", text: RESUME_TEXT, urgency: "urgent" })
+        yield* redeliver({
+          conversationId: c.conversationId,
+          botId: c.botId,
+          kind: "system-resume",
+          text: RESUME_TEXT,
+          urgency: "urgent",
+        })
       }
       if (carried.deliveries.length + cutOff.size > 0) {
-        yield* Effect.logInfo("resumed work cut off by the restart", { deliveries: carried.deliveries.length, cutOff: cutOff.size })
+        yield* Effect.logInfo("resumed work cut off by the restart", {
+          deliveries: carried.deliveries.length,
+          cutOff: cutOff.size,
+        })
       }
     })
 
     // ------------------------------------------------------------------ sessions (one per bot)
 
-    const newSession = Effect.fn("Orchestrator.newSession")(function*(input: { readonly botId: BotId }) {
+    const newSession = Effect.fn("Orchestrator.newSession")(function* (input: { readonly botId: BotId }) {
       const bot = yield* getBot(input.botId)
       const home = bot.directConversationId
-      const afterDrop = Effect.gen(function*() {
+      const afterDrop = Effect.gen(function* () {
         yield* orDie(bots.clearSession(bot.id))
         const epoch = yield* hub.resetConversation(home, "new-session")
         const now = yield* Clock.currentTimeMillis
-        yield* Effect.ignore(store.update(home, (c) => {
-          const rows = c.sessions ?? []
-          const others = rows.filter((r) => r.botId !== bot.id)
-          return { ...c, epoch, sessions: [...others, { botId: bot.id, active: false, updatedAt: now }] }
-        }))
-        yield* Effect.ignore(conversationService.appendEvent({
-          conversationId: home,
-          event: { type: "session-changed", botId: bot.id, action: "new-session" },
-        }))
+        yield* Effect.ignore(
+          store.update(home, (c) => {
+            const rows = c.sessions ?? []
+            const others = rows.filter((r) => r.botId !== bot.id)
+            return { ...c, epoch, sessions: [...others, { botId: bot.id, active: false, updatedAt: now }] }
+          }),
+        )
+        yield* Effect.ignore(
+          conversationService.appendEvent({
+            conversationId: home,
+            event: { type: "session-changed", botId: bot.id, action: "new-session" },
+          }),
+        )
       })
       // Hold the registry lock so no runner for this bot is created while the session is reset.
-      yield* runnerLock.withPermits(1)(Effect.gen(function*() {
-        const runner = runners.get(bot.id)
-        if (runner === undefined) yield* afterDrop
-        else yield* runner.resetSession(afterDrop)
-      }))
+      yield* runnerLock.withPermits(1)(
+        Effect.gen(function* () {
+          const runner = runners.get(bot.id)
+          if (runner === undefined) yield* afterDrop
+          else yield* runner.resetSession(afterDrop)
+        }),
+      )
     })
 
-    const compactSession = Effect.fn("Orchestrator.compact")(function*(input: { readonly botId: BotId }) {
+    const compactSession = Effect.fn("Orchestrator.compact")(function* (input: { readonly botId: BotId }) {
       const bot = yield* getBot(input.botId)
       const driver = yield* registry.get(bot.harness.kind, bot.harness.profileId)
       if (!driver.capabilities.compact) {
@@ -573,15 +635,17 @@ const makeOrchestrator = (options: RunnerOptions) =>
       }
       const runner = yield* runnerFor(bot.id)
       yield* runner.compact
-      yield* Effect.ignore(conversationService.appendEvent({
-        conversationId: bot.directConversationId,
-        event: { type: "session-changed", botId: bot.id, action: "compacted" },
-      }))
+      yield* Effect.ignore(
+        conversationService.appendEvent({
+          conversationId: bot.directConversationId,
+          event: { type: "session-changed", botId: bot.id, action: "compacted" },
+        }),
+      )
     })
 
     // ------------------------------------------------------------------ delete a group
 
-    const deleteConversation = Effect.fn("Orchestrator.deleteConversation")(function*(conversationId: ConversationId) {
+    const deleteConversation = Effect.fn("Orchestrator.deleteConversation")(function* (conversationId: ConversationId) {
       const conversation = yield* store.get(conversationId)
       if (conversation.kind !== "group") {
         return yield* new InvalidInput({
@@ -590,10 +654,14 @@ const makeOrchestrator = (options: RunnerOptions) =>
       }
       // Members stop working here (their running turn in this group, their queued turns for it).
       const members = new Set(conversation.memberBotIds)
-      yield* Effect.forEach(runnersOf((r) => members.has(r.botId)), (runner) => runner.cancelConversation(conversationId), {
-        discard: true,
-        concurrency: "unbounded",
-      })
+      yield* Effect.forEach(
+        runnersOf((r) => members.has(r.botId)),
+        (runner) => runner.cancelConversation(conversationId),
+        {
+          discard: true,
+          concurrency: "unbounded",
+        },
+      )
       // Background work started there stops too (nobody is told: the group is gone).
       yield* tasks.cancelForConversation(conversationId)
       yield* approvals.cancelPending({ conversationId, reason: "conversation-deleted" })
@@ -603,7 +671,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
     // ------------------------------------------------------------------ approvals of gateway tools
 
     const approveToolCall = (tool: ToolContext, request: HarnessApprovalRequest) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const { botId, conversationId } = tool.claims
         // The workspace the gateway session was issued for (host node), for autonomy "workspace".
         const workspace = { nodeId: tool.claims.hostNodeId, path: tool.claims.workspacePath }
@@ -620,14 +688,14 @@ const makeOrchestrator = (options: RunnerOptions) =>
         )
       }).pipe(
         Effect.catchCause((cause) =>
-          Effect.logError("Orchestrator.approveToolCall failed; denying", cause).pipe(Effect.as(denyAll))
+          Effect.logError("Orchestrator.approveToolCall failed; denying", cause).pipe(Effect.as(denyAll)),
         ),
       )
 
     // ------------------------------------------------------------------ boot recovery
 
     const recover = (report: BootRecoveryReport) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const touched = new Set<ConversationId>()
         for (const turn of report.interruptedTurns) {
           yield* hub.publishConversation(turn.conversationId, { type: "turn.upserted", turn })
@@ -639,7 +707,10 @@ const makeOrchestrator = (options: RunnerOptions) =>
         }
         for (const entry of report.updatedEntries) {
           if (entry.kind === "unknown") continue
-          yield* hub.publishConversation(entry.conversationId, { type: "entry.upserted", entry: entry as KnownTranscriptEntry })
+          yield* hub.publishConversation(entry.conversationId, {
+            type: "entry.upserted",
+            entry: entry as KnownTranscriptEntry,
+          })
           touched.add(entry.conversationId)
         }
         for (const conversationId of touched) yield* store.publishSummary(conversationId)
@@ -657,11 +728,12 @@ const makeOrchestrator = (options: RunnerOptions) =>
           Effect.catch((error) => Effect.logWarning(`Orchestrator: answer for ${input.botId} not delivered`, error)),
           Effect.catchDefect((defect) => Effect.logError("Orchestrator: answer delivery failed", defect)),
           Effect.asVoid,
-        )).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("Orchestrator: asyncAnswers ended", cause)
-          ),
         ),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("Orchestrator: asyncAnswers ended", cause),
+        ),
+      ),
       { startImmediately: true },
     )
 
@@ -669,14 +741,17 @@ const makeOrchestrator = (options: RunnerOptions) =>
     yield* Effect.forkScoped(
       Stream.runForEach(tasks.results, (input) =>
         deliver(input).pipe(
-          Effect.catch((error) => Effect.logWarning(`Orchestrator: task result for ${input.botId} not delivered`, error)),
+          Effect.catch((error) =>
+            Effect.logWarning(`Orchestrator: task result for ${input.botId} not delivered`, error),
+          ),
           Effect.catchDefect((defect) => Effect.logError("Orchestrator: task result delivery failed", defect)),
           Effect.asVoid,
-        )).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("Orchestrator: task results ended", cause)
-          ),
         ),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logError("Orchestrator: task results ended", cause),
+        ),
+      ),
       { startImmediately: true },
     )
 
@@ -684,12 +759,12 @@ const makeOrchestrator = (options: RunnerOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.forEach([...runners.values()], (runner) => runner.stop("shutting down"), { discard: true }).pipe(
         Effect.catchCause((cause) => Effect.logWarning("Orchestrator: shutdown", cause)),
-      )
+      ),
     )
 
     return Orchestrator.of({
       send,
-      lookupSend: Effect.fn("Orchestrator.lookupSend")(function*(input) {
+      lookupSend: Effect.fn("Orchestrator.lookupSend")(function* (input) {
         yield* store.get(input.conversationId)
         const found = yield* orDie(entries.findByClientNonce(input.conversationId, input.clientNonce))
         if (Option.isNone(found)) return { outcome: "not-found" as const }
@@ -697,10 +772,10 @@ const makeOrchestrator = (options: RunnerOptions) =>
         return {
           outcome: "found" as const,
           entryId: entry.id,
-          delivery: entry.kind === "message" ? entry.delivery ?? "accepted" : "accepted",
+          delivery: entry.kind === "message" ? (entry.delivery ?? "accepted") : "accepted",
         }
       }),
-      react: Effect.fn("Orchestrator.react")(function*(input) {
+      react: Effect.fn("Orchestrator.react")(function* (input) {
         yield* store.get(input.conversationId)
         const found = yield* orDie(entries.get(input.entryId))
         if (Option.isNone(found) || found.value.conversationId !== input.conversationId) {
@@ -744,19 +819,24 @@ const makeOrchestrator = (options: RunnerOptions) =>
         ),
       noteGroupAddress: ({ botId, conversationId, ...note }) =>
         Effect.flatMap(existingRunner(botId), (runner) =>
-          Option.isSome(runner) ? runner.value.noteAddress({ ...note, conversationId }) : Effect.succeed(false)),
+          Option.isSome(runner) ? runner.value.noteAddress({ ...note, conversationId }) : Effect.succeed(false),
+        ),
       currentChain: (botId) =>
         Effect.flatMap(existingRunner(botId), (runner) =>
-          Option.isSome(runner) ? runner.value.currentChain : Effect.succeed(Option.none())),
+          Option.isSome(runner) ? runner.value.currentChain : Effect.succeed(Option.none()),
+        ),
       activeTurn: (botId) =>
         Effect.flatMap(existingRunner(botId), (runner) =>
-          Option.isSome(runner) ? runner.value.activeTurn : Effect.succeed(Option.none())),
+          Option.isSome(runner) ? runner.value.activeTurn : Effect.succeed(Option.none()),
+        ),
       recover,
     })
   })
 
 /** The Orchestrator layer with custom runner timings (tests); `OrchestratorLive` uses the defaults. */
-export const makeOrchestratorLayer = (options?: Partial<RunnerOptions>): Layer.Layer<
+export const makeOrchestratorLayer = (
+  options?: Partial<RunnerOptions>,
+): Layer.Layer<
   Orchestrator,
   never,
   | LiveHub

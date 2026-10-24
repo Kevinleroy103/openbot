@@ -37,7 +37,12 @@
 export { LiveHubLive } from "./LiveHub.ts"
 export { ConversationServiceLive, groupTitleFor, MAX_AROUND_LIMIT, MAX_HISTORY_LIMIT } from "./ConversationService.ts"
 export { NotifierLive } from "./Notifier.ts"
-export { AttachmentServiceLive, MAX_ATTACHMENT_BYTES, storeAttachmentStream, toAttachment } from "./AttachmentService.ts"
+export {
+  AttachmentServiceLive,
+  MAX_ATTACHMENT_BYTES,
+  storeAttachmentStream,
+  toAttachment,
+} from "./AttachmentService.ts"
 export { detectMime, extensionOf, formatBytes, imageDimensions, sniffMime } from "./files.ts"
 export { InstructionRendererLive } from "./InstructionRenderer.ts"
 export {
@@ -57,5 +62,11 @@ export {
 } from "./BackgroundTasks.ts"
 export { makeOrchestratorLayer, MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_CHARS, OrchestratorLive } from "./Orchestrator.ts"
 export { DEFAULT_RUNNER_OPTIONS, type RunnerOptions } from "./BotRunner.ts"
-export { describeSendFailure, HOP_LIMIT_MESSAGE, MAX_BOT_MESSAGE_CHARS, MESSAGING_DISABLED, MessagingLive } from "./Messaging.ts"
+export {
+  describeSendFailure,
+  HOP_LIMIT_MESSAGE,
+  MAX_BOT_MESSAGE_CHARS,
+  MESSAGING_DISABLED,
+  MessagingLive,
+} from "./Messaging.ts"
 export { BotServiceLive, MAX_BOT_NAME_LENGTH, MAX_SECTION_NAME_LENGTH } from "./BotService.ts"

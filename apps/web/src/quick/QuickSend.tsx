@@ -32,7 +32,14 @@ interface Draft {
   readonly to: string | undefined
 }
 
-const emptyDraft = (id = 0): Draft => ({ id, link: undefined, shared: undefined, copied: undefined, images: [], to: undefined })
+const emptyDraft = (id = 0): Draft => ({
+  id,
+  link: undefined,
+  shared: undefined,
+  copied: undefined,
+  images: [],
+  to: undefined,
+})
 
 const draftOf = (p: QuickSendPrefill): Draft => ({
   id: p.id,
@@ -56,13 +63,22 @@ const draftOfHash = (): Draft => {
   }
 }
 
-const quote = (text: string) => text.split("\n").map((line) => `> ${line}`).join("\n")
+const quote = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n")
 
 /** The message: the note, then the page, then what was shared or copied (quoted). */
 export const composeQuickSend = (note: string, draft: Pick<Draft, "link" | "shared" | "copied">): string => {
   const parts: Array<string> = []
   if (note.trim() !== "") parts.push(note.trim())
-  if (draft.link) parts.push(draft.link.title && draft.link.title !== draft.link.url ? `${draft.link.title}\n${draft.link.url}` : draft.link.url)
+  if (draft.link)
+    parts.push(
+      draft.link.title && draft.link.title !== draft.link.url
+        ? `${draft.link.title}\n${draft.link.url}`
+        : draft.link.url,
+    )
   for (const text of [draft.shared, draft.copied]) if (text) parts.push(quote(text))
   return parts.join("\n\n")
 }
@@ -75,7 +91,17 @@ const hostOf = (url: string) => {
   }
 }
 
-function Chip({ icon, children, onRemove, label }: { readonly icon: typeof Link2; readonly children: ReactNode; readonly onRemove: () => void; readonly label: string }): ReactNode {
+function Chip({
+  icon,
+  children,
+  onRemove,
+  label,
+}: {
+  readonly icon: typeof Link2
+  readonly children: ReactNode
+  readonly onRemove: () => void
+  readonly label: string
+}): ReactNode {
   return (
     <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-elevated-hover py-1 ps-2.5 pe-1 text-xs text-fg-secondary">
       <Icon icon={icon} size="xs" className="shrink-0 text-fg-tertiary" />
@@ -94,7 +120,9 @@ export function QuickSend(): ReactNode {
   const [targetId, setTargetId] = useState<string | undefined>(() => localStorage.getItem(LAST_KEY) ?? undefined)
   const [picking, setPicking] = useState(false)
   const [filter, setFilter] = useState("")
-  const [status, setStatus] = useState<{ readonly kind: "idle" | "sending" | "sent" } | { readonly kind: "error"; readonly message: string }>({ kind: "idle" })
+  const [status, setStatus] = useState<
+    { readonly kind: "idle" | "sending" | "sent" } | { readonly kind: "error"; readonly message: string }
+  >({ kind: "idle" })
   const [canShoot, setCanShoot] = useState(false)
   const card = useRef<HTMLDivElement>(null)
   /** The panel opening shown now (`QuickSendPrefill.id`). */
@@ -108,16 +136,25 @@ export function QuickSend(): ReactNode {
     for (const bot of roster.bots) {
       if (bot.hidden) continue
       const summary = roster.state.conversations.get(bot.directConversationId)
-      list.push({ id: bot.directConversationId, name: bot.name, kind: "bot", avatar: bot.avatar, lastActivityAt: summary?.lastActivityAt ?? 0 })
+      list.push({
+        id: bot.directConversationId,
+        name: bot.name,
+        kind: "bot",
+        avatar: bot.avatar,
+        lastActivityAt: summary?.lastActivityAt ?? 0,
+      })
     }
     for (const c of roster.state.conversations.values()) {
-      if (c.kind === "group" && !c.hiddenFromSidebar) list.push({ id: c.id, name: c.title || "Group", kind: "group", lastActivityAt: c.lastActivityAt })
+      if (c.kind === "group" && !c.hiddenFromSidebar)
+        list.push({ id: c.id, name: c.title || "Group", kind: "group", lastActivityAt: c.lastActivityAt })
     }
     return list.sort((a, b) => b.lastActivityAt - a.lastActivityAt)
   }, [roster.bots, roster.state.conversations])
 
   // A Bot or group named by the link wins; then the last one used here; then the most recent.
-  const byName = draft.to ? targets.find((t) => t.name.toLowerCase() === draft.to!.replace(/^@/, "").toLowerCase()) : undefined
+  const byName = draft.to
+    ? targets.find((t) => t.name.toLowerCase() === draft.to!.replace(/^@/, "").toLowerCase())
+    : undefined
   const target = byName ?? targets.find((t) => t.id === targetId) ?? targets[0]
 
   // the desktop panel: every opening fills it in afresh
@@ -163,10 +200,14 @@ export function QuickSend(): ReactNode {
     setStatus({ kind: "sending" })
     let attachmentIds: ReadonlyArray<AttachmentId> = []
     if (draft.images.length > 0) {
-      const files = await Promise.all(draft.images.map(async (img, i) => {
-        const blob = await (await fetch(img.src)).blob()
-        return new File([blob], `${img.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}.png`, { type: blob.type || "image/png" })
-      }))
+      const files = await Promise.all(
+        draft.images.map(async (img, i) => {
+          const blob = await (await fetch(img.src)).blob()
+          return new File([blob], `${img.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}.png`, {
+            type: blob.type || "image/png",
+          })
+        }),
+      )
       const uploaded = await upload(files)
       if (Exit.isFailure(uploaded)) return setStatus({ kind: "error", message: describeFailure(uploaded) })
       attachmentIds = uploaded.value.map((a) => a.id)
@@ -215,9 +256,11 @@ export function QuickSend(): ReactNode {
             aria-expanded={picking}
             data-testid="quick-send-to"
           >
-            {target?.kind === "bot" && target.avatar
-              ? <Avatar shape={target.avatar.shape} color={target.avatar.color} size={24} />
-              : <Icon icon={Users} size="sm" className="text-fg-tertiary" />}
+            {target?.kind === "bot" && target.avatar ? (
+              <Avatar shape={target.avatar.shape} color={target.avatar.color} size={24} />
+            ) : (
+              <Icon icon={Users} size="sm" className="text-fg-tertiary" />
+            )}
             <span className="truncate">{target?.name ?? "No Bots yet"}</span>
             <Icon icon={ChevronDown} size="xs" className="text-fg-tertiary" />
           </button>
@@ -226,7 +269,11 @@ export function QuickSend(): ReactNode {
         </div>
 
         {picking && (
-          <div className="flex flex-col gap-1 rounded-2xl bg-elevated p-1.5" role="listbox" aria-label="Bots and groups">
+          <div
+            className="flex flex-col gap-1 rounded-2xl bg-elevated p-1.5"
+            role="listbox"
+            aria-label="Bots and groups"
+          >
             <input
               autoFocus
               value={filter}
@@ -250,7 +297,10 @@ export function QuickSend(): ReactNode {
                 type="button"
                 role="option"
                 aria-selected={t.id === target?.id}
-                className={cn("flex items-center gap-2 rounded-xl px-2 py-1.5 text-start text-sm text-fg hover:bg-elevated-hover", t.id === target?.id && "bg-elevated-hover")}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl px-2 py-1.5 text-start text-sm text-fg hover:bg-elevated-hover",
+                  t.id === target?.id && "bg-elevated-hover",
+                )}
                 onClick={() => {
                   setTargetId(t.id)
                   setDraft((d) => ({ ...d, to: undefined }))
@@ -259,9 +309,11 @@ export function QuickSend(): ReactNode {
                   input.current?.focus()
                 }}
               >
-                {t.kind === "bot" && t.avatar
-                  ? <Avatar shape={t.avatar.shape} color={t.avatar.color} size={22} />
-                  : <Icon icon={Users} size="sm" className="text-fg-tertiary" />}
+                {t.kind === "bot" && t.avatar ? (
+                  <Avatar shape={t.avatar.shape} color={t.avatar.color} size={22} />
+                ) : (
+                  <Icon icon={Users} size="sm" className="text-fg-tertiary" />
+                )}
                 <span className="truncate">{t.name}</span>
               </button>
             ))}
@@ -294,20 +346,37 @@ export function QuickSend(): ReactNode {
               </Chip>
             )}
             {draft.shared && (
-              <Chip icon={Quote} label="the shared text" onRemove={() => setDraft((d) => ({ ...d, shared: undefined }))}>
+              <Chip
+                icon={Quote}
+                label="the shared text"
+                onRemove={() => setDraft((d) => ({ ...d, shared: undefined }))}
+              >
                 {draft.shared.replace(/\s+/g, " ")}
               </Chip>
             )}
             {draft.copied && (
-              <Chip icon={ClipboardList} label="the copied text" onRemove={() => setDraft((d) => ({ ...d, copied: undefined }))}>
+              <Chip
+                icon={ClipboardList}
+                label="the copied text"
+                onRemove={() => setDraft((d) => ({ ...d, copied: undefined }))}
+              >
                 {draft.copied.replace(/\s+/g, " ")}
               </Chip>
             )}
             {draft.images.map((img) => (
               <span key={img.key} className="relative inline-flex">
-                <img src={img.src} alt={img.label} className="h-14 rounded-xl border-[0.5px] border-line-tertiary object-cover" />
+                <img
+                  src={img.src}
+                  alt={img.label}
+                  className="h-14 rounded-xl border-[0.5px] border-line-tertiary object-cover"
+                />
                 <span className="absolute -end-1.5 -top-1.5 rounded-full bg-chrome">
-                  <IconButton icon={X} label={`Remove ${img.label.toLowerCase()}`} size={20} onClick={() => setDraft((d) => ({ ...d, images: d.images.filter((i) => i.key !== img.key) }))} />
+                  <IconButton
+                    icon={X}
+                    label={`Remove ${img.label.toLowerCase()}`}
+                    size={20}
+                    onClick={() => setDraft((d) => ({ ...d, images: d.images.filter((i) => i.key !== img.key) }))}
+                  />
                 </span>
               </span>
             ))}

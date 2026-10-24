@@ -56,14 +56,17 @@ export const remoteNodeSummary = (id: string, overrides?: Partial<NodeSummary>):
 
 // ============================================================================ NodeDirectory fake
 
-export class NodeDirectoryFake extends Context.Service<NodeDirectoryFake, {
-  /** Insert or replace a node (publishes `node.upserted` on `changes`). */
-  readonly upsert: (node: NodeSummary) => Effect.Effect<void>
-  /** Removes a node (publishes `node.removed` on `changes`). */
-  readonly remove: (nodeId: NodeId) => Effect.Effect<void>
-  /** Sets the RPC client returned by `NodeDirectory.client` (tests usually pass a partial cast). */
-  readonly setClient: (nodeId: NodeId, client: NodeClient) => Effect.Effect<void>
-}>()("openbot/core/testing/NodeDirectoryFake") {
+export class NodeDirectoryFake extends Context.Service<
+  NodeDirectoryFake,
+  {
+    /** Insert or replace a node (publishes `node.upserted` on `changes`). */
+    readonly upsert: (node: NodeSummary) => Effect.Effect<void>
+    /** Removes a node (publishes `node.removed` on `changes`). */
+    readonly remove: (nodeId: NodeId) => Effect.Effect<void>
+    /** Sets the RPC client returned by `NodeDirectory.client` (tests usually pass a partial cast). */
+    readonly setClient: (nodeId: NodeId, client: NodeClient) => Effect.Effect<void>
+  }
+>()("openbot/core/testing/NodeDirectoryFake") {
   /**
    * `NodeDirectory` over a mutable map. `client(id)` fails with `NodeUnavailable` when the node is
    * unknown, not online, or has no client set.
@@ -73,7 +76,7 @@ export class NodeDirectoryFake extends Context.Service<NodeDirectoryFake, {
     readonly clients?: ReadonlyArray<readonly [NodeId, NodeClient]>
   }): Layer.Layer<NodeDirectory | NodeDirectoryFake> =>
     Layer.effectContext(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const nodes = yield* Ref.make<ReadonlyMap<NodeId, NodeSummary>>(
           new Map((options?.nodes ?? [localNodeSummary()]).map((n) => [n.id, n] as const)),
         )
@@ -92,7 +95,8 @@ export class NodeDirectoryFake extends Context.Service<NodeDirectoryFake, {
           Effect.flatMap(getNode(nodeId), (node) =>
             node.status === "online"
               ? Effect.succeed(node)
-              : Effect.fail(new NodeUnavailable({ nodeId, message: `Node ${node.label} is offline` })))
+              : Effect.fail(new NodeUnavailable({ nodeId, message: `Node ${node.label} is offline` })),
+          )
 
         const directory = NodeDirectory.of({
           list: Effect.map(Ref.get(nodes), (map) => [...map.values()]),
@@ -139,14 +143,17 @@ export interface PlacementRecord {
   readonly released: boolean
 }
 
-export class PlacementServiceFake extends Context.Service<PlacementServiceFake, {
-  /** Every resolve so far, oldest first; `released` flips when the resolve scope closes. */
-  readonly resolutions: Effect.Effect<ReadonlyArray<PlacementRecord>>
-}>()("openbot/core/testing/PlacementServiceFake") {
+export class PlacementServiceFake extends Context.Service<
+  PlacementServiceFake,
+  {
+    /** Every resolve so far, oldest first; `released` flips when the resolve scope closes. */
+    readonly resolutions: Effect.Effect<ReadonlyArray<PlacementRecord>>
+  }
+>()("openbot/core/testing/PlacementServiceFake") {
   /** Rule-following `PlacementService` (via {@link planPlacement}) over `NodeDirectory` + `DataDir`. */
-  static readonly layer: Layer.Layer<PlacementService | PlacementServiceFake, never, NodeDirectory | DataDir> = Layer
-    .effectContext(
-      Effect.gen(function*() {
+  static readonly layer: Layer.Layer<PlacementService | PlacementServiceFake, never, NodeDirectory | DataDir> =
+    Layer.effectContext(
+      Effect.gen(function* () {
         const directory = yield* NodeDirectory
         const dataDir = yield* DataDir
         const records = yield* Ref.make<ReadonlyArray<PlacementRecord>>([])
@@ -155,10 +162,16 @@ export class PlacementServiceFake extends Context.Service<PlacementServiceFake, 
 
         const service = PlacementService.of({
           resolve: ({ bot, driver }) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const hostNode = yield* directory.get(bot.hostNodeId).pipe(
-                Effect.mapError((e) =>
-                  new PlacementError({ botId: bot.id, nodeId: bot.hostNodeId, reason: "node-unavailable", message: e.message })
+                Effect.mapError(
+                  (e) =>
+                    new PlacementError({
+                      botId: bot.id,
+                      nodeId: bot.hostNodeId,
+                      reason: "node-unavailable",
+                      message: e.message,
+                    }),
                 ),
               )
               const plan = planPlacement({ bot, driverKind: driver.kind, capabilities: driver.capabilities, hostNode })
@@ -174,14 +187,15 @@ export class PlacementServiceFake extends Context.Service<PlacementServiceFake, 
                 harnessCwd: brainWorkspace,
                 env: {},
                 disableBuiltinTools: plan.success.disableBuiltinTools,
-                codexEnvironment: plan.success.mode === "codex-environment"
-                  ? {
-                    environmentId: `node-${hostNode.id}`,
-                    execServerUrl: `ws://127.0.0.1:0/relay/${hostNode.id}/codex.exec-server`,
-                    authBearerToken: "test-relay-secret",
-                    cwd: workspacePath,
-                  }
-                  : undefined,
+                codexEnvironment:
+                  plan.success.mode === "codex-environment"
+                    ? {
+                        environmentId: `node-${hostNode.id}`,
+                        execServerUrl: `ws://127.0.0.1:0/relay/${hostNode.id}/codex.exec-server`,
+                        authBearerToken: "test-relay-secret",
+                        cwd: workspacePath,
+                      }
+                    : undefined,
                 toolsets: plan.success.toolsets,
                 ...(plan.success.sharedScreen ? { sharedScreen: true } : {}),
                 promptAppend: describePlacement(plan.success, hostNode, workspacePath),
@@ -208,21 +222,26 @@ export interface IssuedBinding {
   readonly revoked: boolean
 }
 
-export class McpBindingIssuerFake extends Context.Service<McpBindingIssuerFake, {
-  /** Every binding issued so far, oldest first; `revoked` flips when the issue scope closes. */
-  readonly issued: Effect.Effect<ReadonlyArray<IssuedBinding>>
-  /** Claims for a token, if issued and not revoked (what the gateway would accept). */
-  readonly verify: (token: string) => Effect.Effect<McpClaims | undefined>
-}>()("openbot/core/testing/McpBindingIssuerFake") {
+export class McpBindingIssuerFake extends Context.Service<
+  McpBindingIssuerFake,
+  {
+    /** Every binding issued so far, oldest first; `revoked` flips when the issue scope closes. */
+    readonly issued: Effect.Effect<ReadonlyArray<IssuedBinding>>
+    /** Claims for a token, if issued and not revoked (what the gateway would accept). */
+    readonly verify: (token: string) => Effect.Effect<McpClaims | undefined>
+  }
+>()("openbot/core/testing/McpBindingIssuerFake") {
   /** Tokens are `test-token-<n>`; URL is `<baseUrl>/mcp/<botId>`. */
-  static readonly layer = (options?: { readonly baseUrl?: string }): Layer.Layer<McpBindingIssuer | McpBindingIssuerFake> =>
+  static readonly layer = (options?: {
+    readonly baseUrl?: string
+  }): Layer.Layer<McpBindingIssuer | McpBindingIssuerFake> =>
     Layer.effectContext(
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const baseUrl = options?.baseUrl ?? "http://127.0.0.1:0"
         const issued = yield* Ref.make<ReadonlyArray<IssuedBinding>>([])
         const issuer = McpBindingIssuer.of({
           issue: (claims) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const n = (yield* Ref.get(issued)).length + 1
               const token = `test-token-${n}`
               const binding: McpBinding = {
@@ -232,7 +251,7 @@ export class McpBindingIssuerFake extends Context.Service<McpBindingIssuerFake, 
               }
               yield* Ref.update(issued, (all) => [...all, { token, claims, binding, revoked: false }])
               yield* Effect.addFinalizer(() =>
-                Ref.update(issued, (all) => all.map((b) => (b.token === token ? { ...b, revoked: true } : b)))
+                Ref.update(issued, (all) => all.map((b) => (b.token === token ? { ...b, revoked: true } : b))),
               )
               return binding
             }),
@@ -252,49 +271,63 @@ export class McpBindingIssuerFake extends Context.Service<McpBindingIssuerFake, 
 
 // ============================================================================ ComputerPort fake
 
-export class ComputerPortFake extends Context.Service<ComputerPortFake, {
-  readonly set: (status: ComputerStatus) => Effect.Effect<void>
-  /** `lease` calls (`{botId, take}`), oldest first. */
-  readonly leases: Effect.Effect<ReadonlyArray<{ readonly botId: Bot["id"]; readonly take: boolean }>>
-  /** `reset` calls, oldest first. */
-  readonly resets: Effect.Effect<ReadonlyArray<Bot["id"]>>
-}>()("openbot/core/testing/ComputerPortFake") {
+export class ComputerPortFake extends Context.Service<
+  ComputerPortFake,
+  {
+    readonly set: (status: ComputerStatus) => Effect.Effect<void>
+    /** `lease` calls (`{botId, take}`), oldest first. */
+    readonly leases: Effect.Effect<ReadonlyArray<{ readonly botId: Bot["id"]; readonly take: boolean }>>
+    /** `reset` calls, oldest first. */
+    readonly resets: Effect.Effect<ReadonlyArray<Bot["id"]>>
+  }
+>()("openbot/core/testing/ComputerPortFake") {
   /**
    * `status` → "absent" until `ensure`, which makes it "ready" on the given node. `lease` and `reset`
    * publish `leaseChanges` when the holder changes; `reset` makes the screen "absent" again.
    */
   static readonly layer: Layer.Layer<ComputerPort | ComputerPortFake> = Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const statuses = yield* Ref.make<ReadonlyMap<string, ComputerStatus>>(new Map())
       const leaseCalls = yield* Ref.make<ReadonlyArray<{ readonly botId: Bot["id"]; readonly take: boolean }>>([])
       const resetCalls = yield* Ref.make<ReadonlyArray<Bot["id"]>>([])
       const changes = yield* PubSub.unbounded<ComputerLeaseChange>()
       const current = (botId: Bot["id"]): Effect.Effect<ComputerStatus> =>
-        Effect.map(Ref.get(statuses), (map) =>
-          map.get(botId) ?? { botId, nodeId: LOCAL_NODE_ID, state: "absent", surface: "browser", controller: "bot" })
+        Effect.map(
+          Ref.get(statuses),
+          (map) =>
+            map.get(botId) ?? { botId, nodeId: LOCAL_NODE_ID, state: "absent", surface: "browser", controller: "bot" },
+        )
       const put = (status: ComputerStatus) => Ref.update(statuses, (map) => new Map(map).set(status.botId, status))
       const port = ComputerPort.of({
         status: current,
         ensure: (botId) =>
-          Effect.gen(function*() {
-            const status: ComputerStatus = { ...(yield* current(botId)), state: "ready", viewPath: `/ws/computer/${botId}` }
+          Effect.gen(function* () {
+            const status: ComputerStatus = {
+              ...(yield* current(botId)),
+              state: "ready",
+              viewPath: `/ws/computer/${botId}`,
+            }
             yield* put(status)
             return status
           }),
         lease: (botId, take) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             yield* Ref.update(leaseCalls, (all) => [...all, { botId, take }])
             const before = yield* current(botId)
             if (before.state !== "ready") return yield* new NotFound({ entity: "computer", id: botId })
             const status: ComputerStatus = { ...before, controller: take ? "user" : "bot" }
             yield* put(status)
             if (status.controller !== before.controller) {
-              yield* PubSub.publish(changes, { botId, holder: status.controller, cause: "lease" } satisfies ComputerLeaseChange)
+              yield* PubSub.publish(changes, {
+                botId,
+                holder: status.controller,
+                cause: "lease",
+              } satisfies ComputerLeaseChange)
             }
             return status
           }),
         reset: (botId) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             yield* Ref.update(resetCalls, (all) => [...all, botId])
             const before = yield* current(botId)
             const status: ComputerStatus = { ...before, state: "absent", controller: "bot" }
@@ -307,7 +340,10 @@ export class ComputerPortFake extends Context.Service<ComputerPortFake, {
         leaseChanges: Stream.fromPubSub(changes),
       })
       return Context.make(ComputerPort, port).pipe(
-        Context.add(ComputerPortFake, ComputerPortFake.of({ set: put, leases: Ref.get(leaseCalls), resets: Ref.get(resetCalls) })),
+        Context.add(
+          ComputerPortFake,
+          ComputerPortFake.of({ set: put, leases: Ref.get(leaseCalls), resets: Ref.get(resetCalls) }),
+        ),
       )
     }),
   )
@@ -315,17 +351,20 @@ export class ComputerPortFake extends Context.Service<ComputerPortFake, {
 
 // ============================================================================ Notifier fake
 
-export class NotifierFake extends Context.Service<NotifierFake, {
-  readonly sent: Effect.Effect<ReadonlyArray<Notification>>
-}>()("openbot/core/testing/NotifierFake") {
+export class NotifierFake extends Context.Service<
+  NotifierFake,
+  {
+    readonly sent: Effect.Effect<ReadonlyArray<Notification>>
+  }
+>()("openbot/core/testing/NotifierFake") {
   /** Records notifications (requires `IdGen`). */
   static readonly layer: Layer.Layer<Notifier | NotifierFake, never, IdGen> = Layer.effectContext(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const ids = yield* IdGen
       const sent = yield* Ref.make<ReadonlyArray<Notification>>([])
       const notifier = Notifier.of({
         notify: (input: NotificationInput) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const notification: Notification = {
               id: yield* ids.notificationId,
               kind: input.kind,
@@ -358,16 +397,21 @@ const resolveFakePath = (path: string, cwd: string | undefined): string => {
   return `/${out.join("/")}`
 }
 
-export class NodeFilesFake extends Context.Service<NodeFilesFake, {
-  /** Puts a file on a node (absolute path). */
-  readonly put: (nodeId: NodeId, path: string, bytes: Uint8Array) => Effect.Effect<void>
-  /** Every download request, oldest first. */
-  readonly requests: Effect.Effect<ReadonlyArray<NodeDownloadInput>>
-  /** A file on a node (put by a test or uploaded by the brain). */
-  readonly file: (nodeId: NodeId, path: string) => Effect.Effect<Uint8Array | undefined>
-  /** Every upload (path + whether it was skipped), oldest first. */
-  readonly uploads: Effect.Effect<ReadonlyArray<{ readonly nodeId: NodeId; readonly path: string; readonly skipped: boolean }>>
-}>()("openbot/core/testing/NodeFilesFake") {
+export class NodeFilesFake extends Context.Service<
+  NodeFilesFake,
+  {
+    /** Puts a file on a node (absolute path). */
+    readonly put: (nodeId: NodeId, path: string, bytes: Uint8Array) => Effect.Effect<void>
+    /** Every download request, oldest first. */
+    readonly requests: Effect.Effect<ReadonlyArray<NodeDownloadInput>>
+    /** A file on a node (put by a test or uploaded by the brain). */
+    readonly file: (nodeId: NodeId, path: string) => Effect.Effect<Uint8Array | undefined>
+    /** Every upload (path + whether it was skipped), oldest first. */
+    readonly uploads: Effect.Effect<
+      ReadonlyArray<{ readonly nodeId: NodeId; readonly path: string; readonly skipped: boolean }>
+    >
+  }
+>()("openbot/core/testing/NodeFilesFake") {
   /**
    * `NodeFiles` over an in-memory file map per node. Relative paths join `cwd`; a missing file fails
    * with `FsError{code: "ENOENT"}`, one over `maxBytes` with `EFBIG`, a path containing `/denied/`
@@ -382,11 +426,12 @@ export class NodeFilesFake extends Context.Service<NodeFilesFake, {
       const uploads: Array<{ readonly nodeId: NodeId; readonly path: string; readonly skipped: boolean }> = []
       const service = NodeFiles.of({
         upload: (input) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             if (input.nodeId === "nod_offline") {
               return yield* new NodeUnavailable({ nodeId: input.nodeId, message: "Node nod_offline is offline" })
             }
-            if (input.path.includes("/denied/")) return yield* new PathDenied({ path: input.path, reason: "outside the node's roots" })
+            if (input.path.includes("/denied/"))
+              return yield* new PathDenied({ path: input.path, reason: "outside the node's roots" })
             const key = `${input.nodeId}\u0000${input.path}`
             const existing = files.get(key)
             if (existing !== undefined && existing.byteLength === input.size) {
@@ -408,13 +453,23 @@ export class NodeFilesFake extends Context.Service<NodeFilesFake, {
           Effect.suspend((): Effect.Effect<NodeDownload, NodeDownloadError> => {
             requests.push(input)
             const path = resolveFakePath(input.path, input.cwd)
-            if (path.includes("/denied/")) return Effect.fail(new PathDenied({ path: input.path, reason: "outside the node's roots" }))
+            if (path.includes("/denied/"))
+              return Effect.fail(new PathDenied({ path: input.path, reason: "outside the node's roots" }))
             const data = files.get(`${input.nodeId}\u0000${path}`)
             if (data === undefined) {
-              return Effect.fail(new FsError({ op: "download", path: input.path, code: "ENOENT", reason: "no such file" }))
+              return Effect.fail(
+                new FsError({ op: "download", path: input.path, code: "ENOENT", reason: "no such file" }),
+              )
             }
             if (data.byteLength > input.maxBytes) {
-              return Effect.fail(new FsError({ op: "download", path: input.path, code: "EFBIG", reason: `the file is larger than ${input.maxBytes} bytes` }))
+              return Effect.fail(
+                new FsError({
+                  op: "download",
+                  path: input.path,
+                  code: "EFBIG",
+                  reason: `the file is larger than ${input.maxBytes} bytes`,
+                }),
+              )
             }
             const slices: Array<Uint8Array> = []
             for (let at = 0; at < data.byteLength; at += 65_536) slices.push(data.slice(at, at + 65_536))

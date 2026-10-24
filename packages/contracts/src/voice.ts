@@ -71,7 +71,20 @@ export const KOKORO_VOICES: ReadonlyArray<KokoroVoice> = [
 ]
 
 /** Voices a Bot gets when none was chosen (this order keeps every Bot's voice as it was). */
-const DEFAULT_VOICE_IDS = ["af_heart", "af_bella", "af_nicole", "af_sarah", "am_michael", "am_fenrir", "am_puck", "am_eric", "bf_emma", "bf_isabella", "bm_george", "bm_fable"]
+const DEFAULT_VOICE_IDS = [
+  "af_heart",
+  "af_bella",
+  "af_nicole",
+  "af_sarah",
+  "am_michael",
+  "am_fenrir",
+  "am_puck",
+  "am_eric",
+  "bf_emma",
+  "bf_isabella",
+  "bm_george",
+  "bm_fable",
+]
 
 export const kokoroVoice = (id: string | undefined): KokoroVoice | undefined => KOKORO_VOICES.find((v) => v.id === id)
 
@@ -83,7 +96,8 @@ export const defaultVoiceFor = (botId: string): KokoroVoice => {
 }
 
 /** The voice a Bot speaks with on calls. */
-export const voiceOf = (bot: { readonly id: string; readonly voice?: string | undefined }): KokoroVoice => kokoroVoice(bot.voice) ?? defaultVoiceFor(bot.id)
+export const voiceOf = (bot: { readonly id: string; readonly voice?: string | undefined }): KokoroVoice =>
+  kokoroVoice(bot.voice) ?? defaultVoiceFor(bot.id)
 
 export const VoicePreview = Schema.Struct({ pcmBase64: Schema.String, sampleRate: NonNegativeInt })
 export type VoicePreview = typeof VoicePreview.Type

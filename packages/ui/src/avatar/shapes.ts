@@ -101,21 +101,26 @@ const regular = (c: Pt, R: number, sides: number, rotateDeg: number): Pt[] =>
 const build = (): Record<AvatarShape, AvatarBody> => ({
   // A soft, slightly lopsided pebble.
   blob: {
-    d: smoothClosed(polar([50, 51], 48, (t) => 42 * (1 + 0.045 * Math.sin(2 * t + 0.7) + 0.03 * Math.sin(3 * t + 2.1)))),
+    d: smoothClosed(
+      polar([50, 51], 48, (t) => 42 * (1 + 0.045 * Math.sin(2 * t + 0.7) + 0.03 * Math.sin(3 * t + 2.1))),
+    ),
     face: [50, 45],
     eyeScale: 1,
   },
   // Three puffs on a rounded base.
   cloud: {
     d: smoothClosed(
-      circleUnion([50, 58], [
-        [24, 57, 21],
-        [48, 37, 26],
-        [75, 52, 22],
-        [30, 72, 17],
-        [52, 73, 17],
-        [72, 70, 17],
-      ]),
+      circleUnion(
+        [50, 58],
+        [
+          [24, 57, 21],
+          [48, 37, 26],
+          [75, 52, 22],
+          [30, 72, 17],
+          [52, 73, 17],
+          [72, 70, 17],
+        ],
+      ),
     ),
     face: [50, 52],
     eyeScale: 0.95,
@@ -135,13 +140,16 @@ const build = (): Record<AvatarShape, AvatarBody> => ({
   // Four round leaves.
   clover: {
     d: smoothClosed(
-      circleUnion([50, 50], [
-        [50, 28, 21],
-        [72, 50, 21],
-        [50, 72, 21],
-        [28, 50, 21],
-        [50, 50, 20],
-      ]),
+      circleUnion(
+        [50, 50],
+        [
+          [50, 28, 21],
+          [72, 50, 21],
+          [50, 72, 21],
+          [28, 50, 21],
+          [50, 50, 20],
+        ],
+      ),
     ),
     face: [50, 48],
     eyeScale: 0.9,
@@ -162,13 +170,16 @@ const build = (): Record<AvatarShape, AvatarBody> => ({
   // Six petals around a round middle.
   flower: {
     d: smoothClosed(
-      circleUnion([50, 50], [
-        ...Array.from({ length: 6 }, (_, k) => {
-          const t = deg(-90 + 30) + (2 * Math.PI * k) / 6
-          return [50 + 27 * Math.cos(t), 50 + 27 * Math.sin(t), 17] as const
-        }),
-        [50, 50, 26] as const,
-      ]),
+      circleUnion(
+        [50, 50],
+        [
+          ...Array.from({ length: 6 }, (_, k) => {
+            const t = deg(-90 + 30) + (2 * Math.PI * k) / 6
+            return [50 + 27 * Math.cos(t), 50 + 27 * Math.sin(t), 17] as const
+          }),
+          [50, 50, 26] as const,
+        ],
+      ),
     ),
     face: [50, 49],
     eyeScale: 0.85,
@@ -215,7 +226,9 @@ const build = (): Record<AvatarShape, AvatarBody> => ({
   },
   // A chubby five-point star.
   star: {
-    d: smoothClosed(polar([50, 53], 100, (t) => 30 + 19 * Math.pow(Math.abs(Math.cos((5 * (t + Math.PI / 2)) / 2)), 2))),
+    d: smoothClosed(
+      polar([50, 53], 100, (t) => 30 + 19 * Math.pow(Math.abs(Math.cos((5 * (t + Math.PI / 2)) / 2)), 2)),
+    ),
     face: [50, 51],
     eyeScale: 0.8,
   },

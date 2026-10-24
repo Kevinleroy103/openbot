@@ -20,10 +20,13 @@ export const ProcessRecord = Schema.Struct({
 })
 export type ProcessRecord = typeof ProcessRecord.Type
 
-export class ProcessLedger extends Context.Service<ProcessLedger, {
-  readonly record: (entry: ProcessRecord) => Effect.Effect<void, RepoError>
-  readonly remove: (pid: number) => Effect.Effect<void, RepoError>
-  readonly list: Effect.Effect<ReadonlyArray<ProcessRecord>, RepoError>
-  /** Removes every record (after boot recovery killed them). */
-  readonly clear: Effect.Effect<void, RepoError>
-}>()("openbot/core/ProcessLedger") {}
+export class ProcessLedger extends Context.Service<
+  ProcessLedger,
+  {
+    readonly record: (entry: ProcessRecord) => Effect.Effect<void, RepoError>
+    readonly remove: (pid: number) => Effect.Effect<void, RepoError>
+    readonly list: Effect.Effect<ReadonlyArray<ProcessRecord>, RepoError>
+    /** Removes every record (after boot recovery killed them). */
+    readonly clear: Effect.Effect<void, RepoError>
+  }
+>()("openbot/core/ProcessLedger") {}

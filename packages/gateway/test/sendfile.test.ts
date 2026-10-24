@@ -32,22 +32,34 @@ const video = (size: number) => {
 }
 
 const seed = (harness: Harness) =>
-  harness.run(Effect.gen(function*() {
-    const bots = yield* BotRepo
-    const conversations = yield* ConversationRepo
-    for (const bot of [botA, botB]) {
-      yield* Effect.orDie(bots.upsert(bot))
-      yield* Effect.orDie(conversations.upsert(makeDirectConversation({ id: bot.directConversationId, botId: bot.id })))
-    }
-    yield* Effect.orDie(conversations.upsert(makeGroupConversation({ id: GROUP, memberBotIds: [BOT_A, BOT_B] })))
-    const files = yield* NodeFilesFake
-    yield* files.put(LOCAL_NODE_ID, `${WS}/psychopomp/output/cache-demo.mp4`, video(240_000))
-    yield* files.put(REMOTE, `/home/${REMOTE}/openbot/workspaces/${BOT_A}/chart.png`, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]))
-  }))
+  harness.run(
+    Effect.gen(function* () {
+      const bots = yield* BotRepo
+      const conversations = yield* ConversationRepo
+      for (const bot of [botA, botB]) {
+        yield* Effect.orDie(bots.upsert(bot))
+        yield* Effect.orDie(
+          conversations.upsert(makeDirectConversation({ id: bot.directConversationId, botId: bot.id })),
+        )
+      }
+      yield* Effect.orDie(conversations.upsert(makeGroupConversation({ id: GROUP, memberBotIds: [BOT_A, BOT_B] })))
+      const files = yield* NodeFilesFake
+      yield* files.put(LOCAL_NODE_ID, `${WS}/psychopomp/output/cache-demo.mp4`, video(240_000))
+      yield* files.put(
+        REMOTE,
+        `/home/${REMOTE}/openbot/workspaces/${BOT_A}/chart.png`,
+        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]),
+      )
+    }),
+  )
 
 const posted = (harness: Harness) =>
-  harness.run(Effect.map(Effect.flatMap(ConversationServiceFake, (fake) => fake.written), (all) =>
-    all.flatMap((e): Array<TranscriptEntryOf<"message">> => (e.kind === "message" ? [e] : []))))
+  harness.run(
+    Effect.map(
+      Effect.flatMap(ConversationServiceFake, (fake) => fake.written),
+      (all) => all.flatMap((e): Array<TranscriptEntryOf<"message">> => (e.kind === "message" ? [e] : [])),
+    ),
+  )
 
 describe("send_file", () => {
   test("posts the file in the current turn's conversation as the bot's message; a repeated call id replays", async () => {
@@ -56,8 +68,14 @@ describe("send_file", () => {
     const client = await h.connect((await h.issue({ toolsets: ["bot"] })).binding)
     expect((await client.listTools()).tools.map((t) => t.name)).toContain("send_file")
     // the bot's running turn is in the group: the file goes there, not to its DM
-    await h.run(Effect.flatMap(OrchestratorFake, (fake) =>
-      fake.setActiveTurn(BOT_A, makeTurn({ id: turnId("trn_g"), botId: BOT_A, conversationId: GROUP, status: "running" }))))
+    await h.run(
+      Effect.flatMap(OrchestratorFake, (fake) =>
+        fake.setActiveTurn(
+          BOT_A,
+          makeTurn({ id: turnId("trn_g"), botId: BOT_A, conversationId: GROUP, status: "running" }),
+        ),
+      ),
+    )
     const call = {
       name: "send_file",
       arguments: { path: "psychopomp/output/cache-demo.mp4", caption: "Cache demo, 1080p60" },
@@ -65,7 +83,9 @@ describe("send_file", () => {
     }
     const first = await client.callTool(call)
     expect(first.isError).toBeUndefined()
-    expect(textOf(first)).toMatch(/^Sent cache-demo\.mp4 \(240 KB, video\/mp4\) to the owner in this conversation \(message ent_\w+\)\./)
+    expect(textOf(first)).toMatch(
+      /^Sent cache-demo\.mp4 \(240 KB, video\/mp4\) to the owner in this conversation \(message ent_\w+\)\./,
+    )
     const again = await client.callTool(call)
     expect(textOf(again)).toBe(textOf(first))
 
@@ -99,11 +119,20 @@ describe("send_file", () => {
     h = await startHarness({ realMessaging: true })
     await seed(h)
     const client = await h.connect((await h.issue({ toolsets: ["bot"] })).binding)
-    const result = await client.callTool({ name: "send_file", arguments: { path: "psychopomp/output/cache-demo.mp4", to: "Beta", caption: "for your edit" } })
-    expect(textOf(result)).toMatch(/^Sent cache-demo\.mp4 \(240 KB, video\/mp4\) to @Beta in their chat \(message ent_\w+\)\. They are woken with the files/)
+    const result = await client.callTool({
+      name: "send_file",
+      arguments: { path: "psychopomp/output/cache-demo.mp4", to: "Beta", caption: "for your edit" },
+    })
+    expect(textOf(result)).toMatch(
+      /^Sent cache-demo\.mp4 \(240 KB, video\/mp4\) to @Beta in their chat \(message ent_\w+\)\. They are woken with the files/,
+    )
     const messages = await posted(h)
     expect(messages).toHaveLength(1)
-    expect(messages[0]).toMatchObject({ conversationId: botB.directConversationId, toBotId: BOT_B, text: "for your edit" })
+    expect(messages[0]).toMatchObject({
+      conversationId: botB.directConversationId,
+      toBotId: BOT_B,
+      text: "for your edit",
+    })
     const deliveries = await h.run(Effect.flatMap(OrchestratorFake, (fake) => fake.deliveries))
     expect(deliveries).toHaveLength(1)
     expect(deliveries[0]).toMatchObject({
@@ -124,7 +153,9 @@ describe("send_file", () => {
     const remote = await client.callTool({ name: "send_file", arguments: { path: "chart.png", node: REMOTE } })
     expect(textOf(remote)).toMatch(/^Sent chart\.png \(11 bytes, image\/png\)/)
     const messages = await posted(h)
-    expect(messages.map((m) => [m.conversationId, m.attachments.map((a) => a.mime)])).toEqual([[botA.directConversationId, ["image/png"]]])
+    expect(messages.map((m) => [m.conversationId, m.attachments.map((a) => a.mime)])).toEqual([
+      [botA.directConversationId, ["image/png"]],
+    ])
 
     const missing = await client.callTool({ name: "send_file", arguments: { path: "nope.mp4" } })
     expect(missing.isError).toBe(true)
@@ -132,8 +163,11 @@ describe("send_file", () => {
     const none = await client.callTool({ name: "send_file", arguments: { caption: "hi" } })
     expect(textOf(none)).toStartWith("ERROR: Pass `path` (or `paths`)")
     const stranger = await client.callTool({ name: "send_file", arguments: { path: "x.png", node: "nod_stranger" } })
-    expect(textOf(stranger)).toStartWith("ERROR: You cannot use node \"nod_stranger\"")
-    const tooMany = await client.callTool({ name: "send_file", arguments: { paths: Array.from({ length: 11 }, (_, i) => `f${i}.png`) } })
+    expect(textOf(stranger)).toStartWith('ERROR: You cannot use node "nod_stranger"')
+    const tooMany = await client.callTool({
+      name: "send_file",
+      arguments: { paths: Array.from({ length: 11 }, (_, i) => `f${i}.png`) },
+    })
     expect(textOf(tooMany)).toContain("at most 10 items")
     expect(await posted(h)).toHaveLength(1)
   })

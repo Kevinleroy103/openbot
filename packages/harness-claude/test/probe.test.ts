@@ -6,7 +6,14 @@ import { Effect, Layer, Schema } from "effect"
 import { chmodSync } from "node:fs"
 import { join } from "node:path"
 import { CLAUDE_CAPABILITIES, ClaudeHarnessLive, makeClaudeDriver, resolveExecutable } from "../src/Driver.ts"
-import { describeProbeError, parseAuth, parseCliVersion, parseInitialization, readCliVersion, runProbe } from "../src/probe.ts"
+import {
+  describeProbeError,
+  parseAuth,
+  parseCliVersion,
+  parseInitialization,
+  readCliVersion,
+  runProbe,
+} from "../src/probe.ts"
 import type { ClaudeQueryFunction, ClaudeQueryHandle, ClaudeQueryParams } from "../src/sdk.ts"
 import { tempDir } from "./support.ts"
 
@@ -16,7 +23,13 @@ const INIT = {
   output_style: "default",
   available_output_styles: ["default"],
   models: [
-    { value: "default", displayName: "Default (recommended)", description: "Opus", supportsEffort: true, supportedEffortLevels: ["low", "medium", "high"] },
+    {
+      value: "default",
+      displayName: "Default (recommended)",
+      description: "Opus",
+      supportsEffort: true,
+      supportedEffortLevels: ["low", "medium", "high"],
+    },
     { value: "haiku", displayName: "Haiku", description: "Fast" },
     { value: "haiku", displayName: "dup", description: "dup" },
     { value: "", displayName: "empty", description: "" },
@@ -79,9 +92,17 @@ describe("probe parsing", () => {
 describe("runProbe (no model call)", () => {
   test("never-yielding prompt, isolated options, closes the query, schema-valid status", async () => {
     const { query, calls } = probeQuery(async () => INIT)
-    const result = await Effect.runPromise(runProbe({ query, env: { PATH: "/bin" }, executable: "/opt/claude", capabilities: CLAUDE_CAPABILITIES }))
+    const result = await Effect.runPromise(
+      runProbe({ query, env: { PATH: "/bin" }, executable: "/opt/claude", capabilities: CLAUDE_CAPABILITIES }),
+    )
     expect(() => decodeStatus(result.status)).not.toThrow()
-    expect(result.status).toMatchObject({ kind: "claude", installed: true, version: "2.1.300", auth: { state: "signed-in" }, problems: [] })
+    expect(result.status).toMatchObject({
+      kind: "claude",
+      installed: true,
+      version: "2.1.300",
+      auth: { state: "signed-in" },
+      problems: [],
+    })
     expect(result.models?.map((m) => m.id)).toEqual(["default", "haiku"])
     expect(calls[0]!.options).toMatchObject({
       persistSession: false,
@@ -97,13 +118,15 @@ describe("runProbe (no model call)", () => {
   test("older CLIs without claude_code_version: the version comes from `--version`", async () => {
     const { claude_code_version: _omitted, ...olderInit } = INIT
     const { query } = probeQuery(async () => olderInit)
-    const result = await Effect.runPromise(runProbe({
-      query,
-      env: {},
-      executable: "/x/claude",
-      capabilities: CLAUDE_CAPABILITIES,
-      cliVersion: async () => "2.1.280",
-    }))
+    const result = await Effect.runPromise(
+      runProbe({
+        query,
+        env: {},
+        executable: "/x/claude",
+        capabilities: CLAUDE_CAPABILITIES,
+        cliVersion: async () => "2.1.280",
+      }),
+    )
     expect(result.status.version).toBe("2.1.280")
     const none = await Effect.runPromise(runProbe({ query, env: {}, capabilities: CLAUDE_CAPABILITIES }))
     expect(none.status.version).toBeUndefined() // bundled CLI: no binary path to ask
@@ -132,7 +155,9 @@ describe("runProbe (no model call)", () => {
     const b = await Effect.runPromise(runProbe({ query: throwing, env: {}, capabilities: CLAUDE_CAPABILITIES }))
     expect(b.status.installed).toBe(false)
     const slow = probeQuery(() => new Promise(() => {}))
-    const c = await Effect.runPromise(runProbe({ query: slow.query, env: {}, timeoutMs: 30, capabilities: CLAUDE_CAPABILITIES }))
+    const c = await Effect.runPromise(
+      runProbe({ query: slow.query, env: {}, timeoutMs: 30, capabilities: CLAUDE_CAPABILITIES }),
+    )
     expect(c.status.problems[0]).toContain("did not answer")
     expect(slow.calls[0]!.closed).toBe(true)
   })
@@ -141,36 +166,44 @@ describe("runProbe (no model call)", () => {
 describe("driver", () => {
   test("listModels comes from the probe (cached)", async () => {
     const { query, calls } = probeQuery(async () => INIT)
-    const models = await Effect.runPromise(Effect.gen(function*() {
-      const driver = yield* makeClaudeDriver({ query, executable: "bundled" }, { dataDir: makeDataDir(tempDir()) })
-      expect(driver.capabilities).toEqual(CLAUDE_CAPABILITIES)
-      const first = yield* driver.listModels
-      yield* driver.listModels
-      return first
-    }))
+    const models = await Effect.runPromise(
+      Effect.gen(function* () {
+        const driver = yield* makeClaudeDriver({ query, executable: "bundled" }, { dataDir: makeDataDir(tempDir()) })
+        expect(driver.capabilities).toEqual(CLAUDE_CAPABILITIES)
+        const first = yield* driver.listModels
+        yield* driver.listModels
+        return first
+      }),
+    )
     expect(models.map((m) => m.id)).toEqual(["default", "haiku"])
     expect(calls).toHaveLength(1)
   })
 
   test("listModels fails with HarnessError when Claude is missing", async () => {
     const { query } = probeQuery(() => Promise.reject(new Error("Native CLI binary not found")))
-    const exit = await Effect.runPromiseExit(Effect.gen(function*() {
-      const driver = yield* makeClaudeDriver({ query }, { dataDir: makeDataDir(tempDir()) })
-      return yield* driver.listModels
-    }))
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const driver = yield* makeClaudeDriver({ query }, { dataDir: makeDataDir(tempDir()) })
+        return yield* driver.listModels
+      }),
+    )
     expect(JSON.stringify(exit)).toContain("not-installed")
   })
 
   test("ClaudeHarnessLive registers the claude driver in HarnessRegistry", async () => {
     const { query } = probeQuery(async () => INIT)
     const layer = ClaudeHarnessLive({ query, executable: "bundled" }).pipe(Layer.provideMerge(TestPorts()))
-    const status = await Effect.runPromise(Effect.scoped(Effect.gen(function*() {
-      const registry = yield* HarnessRegistry
-      const driver = yield* registry.get("claude")
-      expect(driver.displayName).toBe("Claude")
-      expect(driver.capabilities.remotePlacements).toEqual(["brain-mcp-hands"])
-      return yield* driver.probe
-    }).pipe(Effect.provide(layer))))
+    const status = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const registry = yield* HarnessRegistry
+          const driver = yield* registry.get("claude")
+          expect(driver.displayName).toBe("Claude")
+          expect(driver.capabilities.remotePlacements).toEqual(["brain-mcp-hands"])
+          return yield* driver.probe
+        }).pipe(Effect.provide(layer)),
+      ),
+    )
     expect(status.installed).toBe(true)
   })
 

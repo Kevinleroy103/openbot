@@ -42,18 +42,20 @@ Status: accepted 2026-10-15 (orchestrator), pending user review.
   - an audit log.
 
   The brain's approval service always decides first. (remote-prior-art.md §4.7–4.8)
+
 - **D1.5 Tool placement per harness** (supersedes conflicting defaults in remote-claude.md, remote-prior-art.md and hands-architecture-synthesis.md §S.2). A bot session has one **host node**. Tools on any other node the bot is bound to are reached through the gateway's node tools.
 
-  | Harness | Host = local node | Host = remote node, v1 default | Remote, later options (seams kept) |
-  |---|---|---|---|
-  | Claude | native tools; `cwd` = bot workspace | **B1**: CLI on the brain, all built-ins off (`tools: []`), gateway node tools (`shell`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) aimed at the host node, placement-aware system-prompt append | **R1**: CLI on the node via `spawnClaudeCodeProcess` over a `claude.cli` tunnel. Only when the node has its **own** Claude login or an API key. Never forward claude.ai tokens. |
-  | Codex | native tools, explicit `environments: [{environmentId: "local", cwd}]` | **E**: app-server on the brain, `environment/add` with a relay URL to the node's `codex exec-server`; built-ins run on the node. Falls back to **B1** (`environments: []` + node tools + `baseInstructions`) when the node has no codex binary. | **H**: app-server on the node |
-  | OpenCode | native tools, `opencode serve` on the brain | **B1**: deny shell/read/edit/write/glob/grep per session, gateway node tools | **H**: `opencode serve` on the node via `service.start` + TCP tunnel; **W**: WorkspaceDriver |
+  | Harness  | Host = local node                                                      | Host = remote node, v1 default                                                                                                                                                                                                                  | Remote, later options (seams kept)                                                                                                                                              |
+  | -------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Claude   | native tools; `cwd` = bot workspace                                    | **B1**: CLI on the brain, all built-ins off (`tools: []`), gateway node tools (`shell`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) aimed at the host node, placement-aware system-prompt append                        | **R1**: CLI on the node via `spawnClaudeCodeProcess` over a `claude.cli` tunnel. Only when the node has its **own** Claude login or an API key. Never forward claude.ai tokens. |
+  | Codex    | native tools, explicit `environments: [{environmentId: "local", cwd}]` | **E**: app-server on the brain, `environment/add` with a relay URL to the node's `codex exec-server`; built-ins run on the node. Falls back to **B1** (`environments: []` + node tools + `baseInstructions`) when the node has no codex binary. | **H**: app-server on the node                                                                                                                                                   |
+  | OpenCode | native tools, `opencode serve` on the brain                            | **B1**: deny shell/read/edit/write/glob/grep per session, gateway node tools                                                                                                                                                                    | **H**: `opencode serve` on the node via `service.start` + TCP tunnel; **W**: WorkspaceDriver                                                                                    |
 
   Why:
   - B1 keeps the agent loop **and** the credentials on the brain. That is the user's own model ("LLM brain on one server, hands elsewhere"), it fits vendor terms (policy-and-licensing.md), and it works for every harness and every node.
   - Codex E is verified end to end and keeps the native tools, so it is worth the extra code.
   - R1 and H are opt-in, per node, later.
+
 - **D1.6 Node tools.**
   - One set of tools, each with a `node` parameter (optional, defaulting to the host node), plus a `list_nodes` tool. No per-node prefixes.
   - Tools return MCP `content` (text plus optional images) and **never `structuredContent`**.

@@ -106,13 +106,17 @@ const writeDoc = (sql: SqlClient.SqlClient, doc: SearchDoc) =>
 export const indexEntry = (sql: SqlClient.SqlClient, entry: TranscriptEntry) => {
   if (isStreamingEntry(entry)) return Effect.void
   const doc = searchDocOfEntry(entry)
-  return doc === undefined ? Effect.asVoid(sql`DELETE FROM search_docs WHERE ref_id = ${entry.id}`) : Effect.asVoid(writeDoc(sql, doc))
+  return doc === undefined
+    ? Effect.asVoid(sql`DELETE FROM search_docs WHERE ref_id = ${entry.id}`)
+    : Effect.asVoid(writeDoc(sql, doc))
 }
 
 /** Keeps the doc of a task that was just written. */
 export const indexTask = (sql: SqlClient.SqlClient, task: Task) => {
   const doc = searchDocOfTask(task)
-  return doc === undefined ? Effect.asVoid(sql`DELETE FROM search_docs WHERE ref_id = ${task.id}`) : Effect.asVoid(writeDoc(sql, doc))
+  return doc === undefined
+    ? Effect.asVoid(sql`DELETE FROM search_docs WHERE ref_id = ${task.id}`)
+    : Effect.asVoid(writeDoc(sql, doc))
 }
 
 /** A voice turn's work stays out of search (it is told on the call, not shown in the chat). */
@@ -121,13 +125,15 @@ export const hideVoiceTurn = (sql: SqlClient.SqlClient, turnId: TurnId) =>
 
 // ============================================================================ the repository
 
-export const makeSqlSearchRepo = Effect.gen(function*() {
+export const makeSqlSearchRepo = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
 
-  const storedVersion = sql<{ value_json: string }>`SELECT value_json FROM settings WHERE key = ${SEARCH_VERSION_KEY}`.pipe(
-    Effect.map((rows) => rows[0]?.value_json),
+  const storedVersion = sql<{
+    value_json: string
+  }>`SELECT value_json FROM settings WHERE key = ${SEARCH_VERSION_KEY}`.pipe(Effect.map((rows) => rows[0]?.value_json))
+  const indexing = yield* Ref.make(
+    (yield* storedVersion.pipe(Effect.orElseSucceed(() => undefined))) !== String(SEARCH_TEXT_VERSION),
   )
-  const indexing = yield* Ref.make((yield* storedVersion.pipe(Effect.orElseSucceed(() => undefined))) !== String(SEARCH_TEXT_VERSION))
 
   /** The WHERE clauses of a filter over `search_docs d` (scope first). */
   const filterClauses = (filter: SearchFilter): Array<Statement.Fragment> => {
@@ -194,8 +200,8 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
       ? sql`(score > ${after.rank} OR (score = ${after.rank} AND (${createdAt} < ${after.createdAt}
           OR (${createdAt} = ${after.createdAt} AND ${refId} < ${after.refId}))))`
       : after.sort === "newest"
-      ? sql`(${createdAt} < ${after.createdAt} OR (${createdAt} = ${after.createdAt} AND ${refId} < ${after.refId}))`
-      : sql`(${createdAt} > ${after.createdAt} OR (${createdAt} = ${after.createdAt} AND ${refId} > ${after.refId}))`
+        ? sql`(${createdAt} < ${after.createdAt} OR (${createdAt} = ${after.createdAt} AND ${refId} < ${after.refId}))`
+        : sql`(${createdAt} > ${after.createdAt} OR (${createdAt} = ${after.createdAt} AND ${refId} > ${after.refId}))`
   }
 
   /** The FTS tables that hold `kinds`: chat items, tool steps, or both. */
@@ -216,7 +222,7 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
    * `RELEVANCE_MAX_CANDIDATES` it runs on all of them.
    */
   const byRelevance = (tables: ReadonlyArray<FtsTable>, fts: string, query: SearchRepoQuery, wanted: number) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const after = query.after?.sort === "relevance" ? query.after : undefined
       const filters = sql.and(filterClauses(query))
       for (let k = Math.max(RELEVANCE_FIRST_CANDIDATES, wanted * 16); k <= RELEVANCE_MAX_CANDIDATES; k *= 8) {
@@ -233,8 +239,15 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
           candidates.push(...best)
         }
         if (candidates.length === 0) return []
-        const passed = yield* sql<{ readonly id: number; readonly created_at: number; readonly ref_id: string }>`SELECT d.id,
-            d.created_at, d.ref_id FROM search_docs d WHERE ${sql.in("d.id", candidates.map((c) => c.id))} AND ${filters}`
+        const passed = yield* sql<{
+          readonly id: number
+          readonly created_at: number
+          readonly ref_id: string
+        }>`SELECT d.id,
+            d.created_at, d.ref_id FROM search_docs d WHERE ${sql.in(
+              "d.id",
+              candidates.map((c) => c.id),
+            )} AND ${filters}`
         const keys = new Map(passed.map((row) => [row.id, row]))
         const rows: Array<SortRow> = []
         for (const { id, score } of candidates) {
@@ -242,21 +255,31 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
           if (row === undefined) continue
           if (
             after !== undefined &&
-            !(score > after.rank || (score === after.rank && (row.created_at < after.createdAt ||
-              (row.created_at === after.createdAt && row.ref_id < after.refId))))
-          ) continue
+            !(
+              score > after.rank ||
+              (score === after.rank &&
+                (row.created_at < after.createdAt || (row.created_at === after.createdAt && row.ref_id < after.refId)))
+            )
+          )
+            continue
           rows.push({ id, created_at: row.created_at, ref_id: row.ref_id, score })
         }
-        rows.sort((x, y) => x.score - y.score || y.created_at - x.created_at || (x.ref_id < y.ref_id ? 1 : x.ref_id > y.ref_id ? -1 : 0))
+        rows.sort(
+          (x, y) =>
+            x.score - y.score ||
+            y.created_at - x.created_at ||
+            (x.ref_id < y.ref_id ? 1 : x.ref_id > y.ref_id ? -1 : 0),
+        )
         // Enough passed below the bound (nothing missing can come before them), or every match was a candidate.
         const sure = bound === Infinity ? rows : rows.filter((row) => row.score < bound)
         if (sure.length >= wanted || bound === Infinity) return sure.slice(0, wanted)
       }
       const scored = tables
-        .map((table) =>
-          sql`SELECT d.id, d.created_at, d.ref_id, bm25(${sql.literal(table)}) AS score
+        .map(
+          (table) =>
+            sql`SELECT d.id, d.created_at, d.ref_id, bm25(${sql.literal(table)}) AS score
             FROM ${sql.literal(table)} JOIN search_docs d ON d.id = ${sql.literal(table)}.rowid
-            WHERE ${sql.literal(table)} MATCH ${fts} AND ${filters}`
+            WHERE ${sql.literal(table)} MATCH ${fts} AND ${filters}`,
         )
         .reduce((all, one) => sql`${all} UNION ALL ${one}`)
       return yield* sql<SortRow>`SELECT id, created_at, ref_id, score FROM (${scored})
@@ -280,15 +303,18 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
    * the revision read. Tasks have no revision but are few: all are derived again, and written when
    * their text changed (a task an older release finished gains its result).
    */
-  const backfill = Effect.fn("SearchRepo.backfill")(function*(rebuild: boolean) {
+  const backfill = Effect.fn("SearchRepo.backfill")(function* (rebuild: boolean) {
     let indexed = 0
     let last = ""
     while (true) {
-      const count = yield* Effect.gen(function*() {
+      const count = yield* Effect.gen(function* () {
         const rows = rebuild
           ? yield* sql<{ id: string; payload_json: string }>`SELECT id, payload_json FROM entries
               WHERE id > ${last} ORDER BY id LIMIT ${BACKFILL_BATCH}`
-          : yield* sql<{ id: string; payload_json: string }>`SELECT id, payload_json FROM entries INDEXED BY entries_search_stale
+          : yield* sql<{
+              id: string
+              payload_json: string
+            }>`SELECT id, payload_json FROM entries INDEXED BY entries_search_stale
               WHERE search_rev IS NOT revision AND id > ${last} ORDER BY id LIMIT ${BACKFILL_BATCH}`
         for (const row of rows) {
           const entry = yield* Effect.option(EntryJson.decode("SearchRepo.ensure", row.payload_json, row.id))
@@ -307,8 +333,12 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
     }
     last = ""
     while (true) {
-      const count = yield* Effect.gen(function*() {
-        const rows = yield* sql<{ id: string; payload_json: string; text: string | null }>`SELECT t.id, t.payload_json, d.text
+      const count = yield* Effect.gen(function* () {
+        const rows = yield* sql<{
+          id: string
+          payload_json: string
+          text: string | null
+        }>`SELECT t.id, t.payload_json, d.text
           FROM tasks t LEFT JOIN search_docs d ON d.ref_id = t.id
           WHERE t.id > ${last} ORDER BY t.id LIMIT ${BACKFILL_BATCH}`
         for (const row of rows) {
@@ -327,7 +357,7 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
     return indexed
   })
 
-  const ensure: Effect.Effect<SearchIndexReport, unknown> = Effect.gen(function*() {
+  const ensure: Effect.Effect<SearchIndexReport, unknown> = Effect.gen(function* () {
     const started = yield* Clock.currentTimeMillis
     const rebuild = (yield* storedVersion) !== String(SEARCH_TEXT_VERSION)
     if (rebuild) {
@@ -347,15 +377,16 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
 
   return SearchRepo.of({
     query: (query) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const size = Math.max(0, Math.floor(query.limit))
         const tables = tablesFor(query.kinds)
         if (tables.length === 0) return { hits: [], next: undefined, total: 0 }
         const fts = toFtsQuery(query.match)
         const filters = filterClauses(query)
-        const rows = query.sort === "relevance"
-          ? yield* byRelevance(tables, fts, query, size + 1)
-          : yield* sql<SortRow>`SELECT d.id, d.created_at, d.ref_id, 0 AS score
+        const rows =
+          query.sort === "relevance"
+            ? yield* byRelevance(tables, fts, query, size + 1)
+            : yield* sql<SortRow>`SELECT d.id, d.created_at, d.ref_id, 0 AS score
               FROM search_docs d INDEXED BY search_docs_created
               WHERE d.id IN (${matchIds(tables, fts)})
                 AND ${sql.and([...filters, ...(query.after === undefined ? [] : [keyset(query.after, "d.")])])}
@@ -363,21 +394,25 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
               LIMIT ${size + 1}`
         const page = rows.slice(0, size)
         const ids = page.map((row) => row.id)
-        const docs = ids.length === 0 ? [] : yield* sql<DocRow & { readonly id: number }>`SELECT ${DOC_COLUMNS}
+        const docs =
+          ids.length === 0
+            ? []
+            : yield* sql<DocRow & { readonly id: number }>`SELECT ${DOC_COLUMNS}
           FROM search_docs d WHERE ${sql.in("d.id", ids)}`
         const docOf = new Map(docs.map((row) => [row.id, row]))
         const cap = query.totalCap ?? SEARCH_TOTAL_CAP
         let total = 0
         // a first page that holds every match is the count
         if (query.after === undefined && rows.length <= size) total = Math.min(rows.length, cap)
-        else for (const table of tables) {
-          const counted = yield* sql<{ readonly n: number }>`SELECT count(*) AS n FROM (
+        else
+          for (const table of tables) {
+            const counted = yield* sql<{ readonly n: number }>`SELECT count(*) AS n FROM (
               SELECT 1 FROM ${sql.literal(table)} JOIN search_docs d ON d.id = ${sql.literal(table)}.rowid
               WHERE ${sql.literal(table)} MATCH ${fts} AND ${sql.and(filters)} LIMIT ${cap - total}
             )`
-          total += counted[0]?.n ?? 0
-          if (total >= cap) break
-        }
+            total += counted[0]?.n ?? 0
+            if (total >= cap) break
+          }
         const hits: Array<SearchRepoHit> = []
         for (const { id, score } of page) {
           const row = docOf.get(id)
@@ -391,16 +426,17 @@ export const makeSqlSearchRepo = Effect.gen(function*() {
           })
         }
         const lastRow = page[page.length - 1]
-        const next: SearchCursor | undefined = rows.length > size && lastRow !== undefined
-          ? query.sort === "relevance"
-            ? { sort: "relevance", rank: lastRow.score, createdAt: lastRow.created_at, refId: lastRow.ref_id }
-            : { sort: query.sort, createdAt: lastRow.created_at, refId: lastRow.ref_id }
-          : undefined
+        const next: SearchCursor | undefined =
+          rows.length > size && lastRow !== undefined
+            ? query.sort === "relevance"
+              ? { sort: "relevance", rank: lastRow.score, createdAt: lastRow.created_at, refId: lastRow.ref_id }
+              : { sort: query.sort, createdAt: lastRow.created_at, refId: lastRow.ref_id }
+            : undefined
         return { hits, next, total }
       }).pipe(repoOp("SearchRepo.query")),
 
     positions: (query) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const size = Math.max(0, Math.floor(query.limit))
         const clauses = [
           sql`d.source = 'entry'`,

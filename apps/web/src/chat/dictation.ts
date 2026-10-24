@@ -39,18 +39,24 @@ export const DICTATION_TAP_MODULE = `registerProcessor("${TAP_PROCESSOR}", class
   }
 })`
 
-export const tapMessageHandler = (onAudio: (samples: Float32Array) => void, onFlushed: () => void) => (event: MessageEvent<Float32Array | string>) => {
-  if (event.data === FLUSHED) onFlushed()
-  else if (typeof event.data !== "string") onAudio(event.data)
-}
+export const tapMessageHandler =
+  (onAudio: (samples: Float32Array) => void, onFlushed: () => void) => (event: MessageEvent<Float32Array | string>) => {
+    if (event.data === FLUSHED) onFlushed()
+    else if (typeof event.data !== "string") onAudio(event.data)
+  }
 
 export interface Microphone {
   readonly sampleRate: number
   readonly stop: () => Promise<void>
 }
 
-export const startMicrophone = async (onAudio: (samples: Float32Array) => void, onLimitReached: () => void): Promise<Microphone> => {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+export const startMicrophone = async (
+  onAudio: (samples: Float32Array) => void,
+  onLimitReached: () => void,
+): Promise<Microphone> => {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  })
   const context = new AudioContext()
   const moduleUrl = URL.createObjectURL(new Blob([DICTATION_TAP_MODULE], { type: "text/javascript" }))
   const limit = setTimeout(onLimitReached, MAX_DICTATION_SECONDS * 1000)
@@ -90,7 +96,8 @@ export const startMicrophone = async (onAudio: (samples: Float32Array) => void, 
 
 export const describeMicrophoneError = (error: unknown): string => {
   const name = error instanceof DOMException ? error.name : ""
-  if (name === "NotAllowedError" || name === "SecurityError") return "OpenBot can't use the microphone. Allow it in your browser's site settings."
+  if (name === "NotAllowedError" || name === "SecurityError")
+    return "OpenBot can't use the microphone. Allow it in your browser's site settings."
   if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone was found."
   if (name === "NotReadableError") return "The microphone is in use by another app."
   return "The microphone could not start."

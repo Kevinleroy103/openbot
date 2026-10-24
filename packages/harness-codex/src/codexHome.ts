@@ -61,7 +61,9 @@ export const defaultUserCodexHome = (env: NodeJS.ProcessEnv = process.env): stri
   env.CODEX_HOME && env.CODEX_HOME.trim() !== "" ? env.CODEX_HOME : join(homedir(), ".codex")
 
 const errnoCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : undefined
+  typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+    ? error.code
+    : undefined
 
 const exists = async (path: string): Promise<boolean> => {
   try {
@@ -116,5 +118,6 @@ export const prepareCodexHome = (options: CodexHomeOptions) =>
       if (options.linkUserAuth !== false && userCodexHome !== codexHome) auth = await linkAuth(codexHome, userCodexHome)
       return { codexHome, userCodexHome, auth }
     },
-    catch: (cause) => harnessError("not-installed", `Could not prepare the OpenBot Codex profile at ${options.codexHome}`, cause),
+    catch: (cause) =>
+      harnessError("not-installed", `Could not prepare the OpenBot Codex profile at ${options.codexHome}`, cause),
   })

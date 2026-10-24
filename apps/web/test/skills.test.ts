@@ -34,7 +34,22 @@ describe("skill names", () => {
   })
 
   test("isSkillName agrees with the contract's SkillName", () => {
-    for (const name of ["pdf", "weekly-report", "a_b", "x1", "0day", "a".repeat(64), "", "-a", "_a", "A", "a b", "a.b", "a".repeat(65), "é"]) {
+    for (const name of [
+      "pdf",
+      "weekly-report",
+      "a_b",
+      "x1",
+      "0day",
+      "a".repeat(64),
+      "",
+      "-a",
+      "_a",
+      "A",
+      "a b",
+      "a.b",
+      "a".repeat(65),
+      "é",
+    ]) {
       expect(isSkillName(name)).toBe(isBrainSkillName(name))
     }
     // whatever toSkillName produces from non-empty input is valid (or empty)
@@ -80,15 +95,20 @@ describe("skills.sh formatting", () => {
   })
 
   test("skillsShErrorText: Unavailable and NotFound in plain words, others left to errorText", () => {
-    expect(skillsShErrorText({ _tag: "Unavailable", message: "skills.sh did not answer (search): fetch failed" })).toBe("skills.sh didn't answer — try again.")
-    expect(skillsShErrorText({ _tag: "NotFound", entity: "skill", id: "a/b/c" })).toBe("skills.sh doesn't have this skill any more.")
+    expect(skillsShErrorText({ _tag: "Unavailable", message: "skills.sh did not answer (search): fetch failed" })).toBe(
+      "skills.sh didn't answer — try again.",
+    )
+    expect(skillsShErrorText({ _tag: "NotFound", entity: "skill", id: "a/b/c" })).toBe(
+      "skills.sh doesn't have this skill any more.",
+    )
     expect(skillsShErrorText({ _tag: "InvalidInput", message: "nope" })).toBeUndefined()
     expect(skillsShErrorText("boom")).toBeUndefined()
   })
 })
 
 describe("who has a skill", () => {
-  const bot = (id: string, name: string, skills: ReadonlyArray<string>) => ({ id: id as BotId, name, skills: skills as ReadonlyArray<SkillName> }) as unknown as Bot
+  const bot = (id: string, name: string, skills: ReadonlyArray<string>) =>
+    ({ id: id as BotId, name, skills: skills as ReadonlyArray<SkillName> }) as unknown as Bot
   const ava = bot("bot_a", "Ava", ["pdf", "triage"])
   const ben = bot("bot_b", "Ben", ["triage"])
   const cy = bot("bot_c", "Cy", [])
@@ -107,7 +127,9 @@ describe("who has a skill", () => {
       ["pdf", "Use for PDFs"],
       ["triage", "Use when triaging"],
     ])
-    expect(skillsOfBot(bot("bot_d", "Di", ["zeta", "pdf"]), library.slice(0, 1)).map((s) => [s.name, s.description])).toEqual([
+    expect(
+      skillsOfBot(bot("bot_d", "Di", ["zeta", "pdf"]), library.slice(0, 1)).map((s) => [s.name, s.description]),
+    ).toEqual([
       ["pdf", ""],
       ["zeta", ""],
     ])

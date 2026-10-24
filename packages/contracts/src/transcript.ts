@@ -80,9 +80,30 @@ export const ReasoningEntry = Schema.Struct({
   source: Schema.Literals(["thinking", "summary"]),
 })
 
-export const ToolKind = Schema.Literals(["shell", "file-read", "file-write", "file-edit", "search", "web", "mcp", "subagent", "question", "browser", "computer", "other"])
+export const ToolKind = Schema.Literals([
+  "shell",
+  "file-read",
+  "file-write",
+  "file-edit",
+  "search",
+  "web",
+  "mcp",
+  "subagent",
+  "question",
+  "browser",
+  "computer",
+  "other",
+])
 export type ToolKind = typeof ToolKind.Type
-export const ToolCallStatus = Schema.Literals(["pending", "awaiting-approval", "running", "completed", "failed", "declined", "interrupted"])
+export const ToolCallStatus = Schema.Literals([
+  "pending",
+  "awaiting-approval",
+  "running",
+  "completed",
+  "failed",
+  "declined",
+  "interrupted",
+])
 export type ToolCallStatus = typeof ToolCallStatus.Type
 
 export const ToolOutput = Schema.Struct({
@@ -93,9 +114,17 @@ export const ToolOutput = Schema.Struct({
 })
 export type ToolOutput = typeof ToolOutput.Type
 
-export const ToolCommand = Schema.Struct({ command: Schema.String, cwd: Schema.optionalKey(Schema.String), exitCode: Schema.optionalKey(Schema.Number) })
+export const ToolCommand = Schema.Struct({
+  command: Schema.String,
+  cwd: Schema.optionalKey(Schema.String),
+  exitCode: Schema.optionalKey(Schema.Number),
+})
 export type ToolCommand = typeof ToolCommand.Type
-export const FileChange = Schema.Struct({ path: Schema.String, kind: Schema.Literals(["add", "update", "delete"]), diff: Schema.optionalKey(Schema.String) })
+export const FileChange = Schema.Struct({
+  path: Schema.String,
+  kind: Schema.Literals(["add", "update", "delete"]),
+  diff: Schema.optionalKey(Schema.String),
+})
 export type FileChange = typeof FileChange.Type
 export const ToolMcpRef = Schema.Struct({ server: Schema.String, tool: Schema.String })
 export type ToolMcpRef = typeof ToolMcpRef.Type
@@ -151,7 +180,12 @@ export const ConversationEventMembers = [
     urgency: Schema.optionalKey(Schema.Literals(["urgent", "background"])),
   }),
   /** In the sender's conversation after `post_to_group`. */
-  Schema.Struct({ type: Schema.Literal("posted-to-group"), conversationId: ConversationId, title: Schema.String, entryId: Schema.optionalKey(EntryId) }),
+  Schema.Struct({
+    type: Schema.Literal("posted-to-group"),
+    conversationId: ConversationId,
+    title: Schema.String,
+    entryId: Schema.optionalKey(EntryId),
+  }),
   /** `handoff_task` from one bot to another. */
   Schema.Struct({
     type: Schema.Literal("handoff"),
@@ -162,7 +196,12 @@ export const ConversationEventMembers = [
     conversationId: Schema.optionalKey(ConversationId),
   }),
   /** Collapsed bot<->bot traffic ("2 messages with Research Scout"). */
-  Schema.Struct({ type: Schema.Literal("bot-exchange"), peerBotIds: Schema.Array(BotId), messageCount: NonNegativeInt, threadRootId: Schema.optionalKey(EntryId) }),
+  Schema.Struct({
+    type: Schema.Literal("bot-exchange"),
+    peerBotIds: Schema.Array(BotId),
+    messageCount: NonNegativeInt,
+    threadRootId: Schema.optionalKey(EntryId),
+  }),
   /** Bot-to-bot chain stopped by the hop limit (D5.2): "Stopped: too many hand-offs". */
   Schema.Struct({ type: Schema.Literal("hop-limit"), hops: NonNegativeInt }),
   Schema.Struct({
@@ -201,9 +240,18 @@ export const ConversationEventMembers = [
     toolKey: Schema.optionalKey(Schema.String),
   }),
   /** In a group: the approval/question card was posted to the bot's direct conversation instead. */
-  Schema.Struct({ type: Schema.Literal("request-elsewhere"), botId: BotId, requestId: RequestId, conversationId: ConversationId }),
+  Schema.Struct({
+    type: Schema.Literal("request-elsewhere"),
+    botId: BotId,
+    requestId: RequestId,
+    conversationId: ConversationId,
+  }),
   /** New session / compact (D0.4). */
-  Schema.Struct({ type: Schema.Literal("session-changed"), botId: BotId, action: Schema.Literals(["new-session", "compacted"]) }),
+  Schema.Struct({
+    type: Schema.Literal("session-changed"),
+    botId: BotId,
+    action: Schema.Literals(["new-session", "compacted"]),
+  }),
   /** A voice call with the Bot (experiment): how long it was and what was said ("Voice chat · 00:31"). */
   Schema.Struct({
     type: Schema.Literal("voice-call"),
@@ -231,7 +279,14 @@ export const NoticeEntry = Schema.Struct({
   text: Schema.String,
 })
 
-export const TranscriptEntryMembers = [MessageEntry, ReasoningEntry, ToolCallEntry, CardEntry, EventEntry, NoticeEntry] as const
+export const TranscriptEntryMembers = [
+  MessageEntry,
+  ReasoningEntry,
+  ToolCallEntry,
+  CardEntry,
+  EventEntry,
+  NoticeEntry,
+] as const
 const entryFallback = withUnknownFallback({ members: TranscriptEntryMembers, tag: "kind", keep: EntryBaseFields })
 /** Decodes unknown kinds into `{ kind: "unknown", originalTag, ...base }` (decode-only). */
 export const TranscriptEntry = entryFallback.schema
@@ -274,4 +329,5 @@ export const Turn = Schema.Struct({
 })
 export type Turn = typeof Turn.Type
 
-export const isTerminalTurnStatus = (status: TurnStatus): boolean => status === "completed" || status === "interrupted" || status === "failed"
+export const isTerminalTurnStatus = (status: TurnStatus): boolean =>
+  status === "completed" || status === "interrupted" || status === "failed"

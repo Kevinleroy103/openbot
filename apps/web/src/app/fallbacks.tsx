@@ -24,7 +24,15 @@ import {
   cn,
   useToast,
 } from "@openbot/ui"
-import type { ComputerViewProps, DetailsPaneProps, NewBotFormProps, NewGroupFormProps, OnboardingProps, SettingsDialogProps, SettingsPage } from "../contracts.ts"
+import type {
+  ComputerViewProps,
+  DetailsPaneProps,
+  NewBotFormProps,
+  NewGroupFormProps,
+  OnboardingProps,
+  SettingsDialogProps,
+  SettingsPage,
+} from "../contracts.ts"
 import { describeFailure } from "../cards/useRespond.ts"
 import { useRoster } from "./data.ts"
 import { useDetailsPane } from "./uiState.ts"
@@ -43,7 +51,9 @@ export function FallbackDetailsPane({ botId, conversationId, onClose }: DetailsP
       <div className="flex flex-col items-center gap-1 px-4">
         <Avatar shape={bot?.avatar.shape} color={bot?.avatar.color} size={64} />
         <div className="mt-2 text-xl font-medium text-fg">{isGroup ? summary?.title : bot?.name}</div>
-        <div className="text-xs text-fg-secondary">{isGroup ? `${summary?.botIds.length ?? 0} Bots` : (bot?.label ?? "Add a label")}</div>
+        <div className="text-xs text-fg-secondary">
+          {isGroup ? `${summary?.botIds.length ?? 0} Bots` : (bot?.label ?? "Add a label")}
+        </div>
         <SegmentedTabs
           className="mt-4"
           label="Details sections"
@@ -64,7 +74,9 @@ export function FallbackDetailsPane({ botId, conversationId, onClose }: DetailsP
             <SheetField label="Model">{bot.harness.model ?? "Default"}</SheetField>
             <SheetField label="Computer">{roster.state.nodes.get(bot.hostNodeId)?.label ?? "This computer"}</SheetField>
           </Sheet>
-          <p className="px-4 pt-4 text-center text-sm text-fg-secondary">Routines are recurring tasks this Bot runs on a schedule. Ask it in chat to set one up.</p>
+          <p className="px-4 pt-4 text-center text-sm text-fg-secondary">
+            Routines are recurring tasks this Bot runs on a schedule. Ask it in chat to set one up.
+          </p>
         </div>
       )}
     </div>
@@ -113,7 +125,14 @@ export function FallbackSettingsDialog({ open, initialPage, onClose }: SettingsD
     </div>
   )
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()} width={900} height={702} label="Settings" className="bg-chrome">
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      width={900}
+      height={702}
+      label="Settings"
+      className="bg-chrome"
+    >
       <div className="flex min-h-0 flex-1">
         <nav className="flex w-[192px] shrink-0 flex-col gap-0.5 border-e-[0.5px] border-line-tertiary p-3">
           {PAGES.map((p) => (
@@ -163,8 +182,24 @@ export function FallbackSettingsDialog({ open, initialPage, onClose }: SettingsD
                     ]}
                   />,
                 )}
-                {row("Show steps under replies", "A collapsed list of the tools a Bot used, under each finished reply.", <Switch checked={settings.showSteps} onCheckedChange={(showSteps) => update({ patch: { showSteps } })} label="Show steps" />)}
-                {row("Bots can message each other", "Lets Bots hand off work and ask each other for help.", <Switch checked={settings.botMessaging} onCheckedChange={(botMessaging) => update({ patch: { botMessaging } })} label="Bot messaging" />)}
+                {row(
+                  "Show steps under replies",
+                  "A collapsed list of the tools a Bot used, under each finished reply.",
+                  <Switch
+                    checked={settings.showSteps}
+                    onCheckedChange={(showSteps) => update({ patch: { showSteps } })}
+                    label="Show steps"
+                  />,
+                )}
+                {row(
+                  "Bots can message each other",
+                  "Lets Bots hand off work and ask each other for help.",
+                  <Switch
+                    checked={settings.botMessaging}
+                    onCheckedChange={(botMessaging) => update({ patch: { botMessaging } })}
+                    label="Bot messaging"
+                  />,
+                )}
               </div>
             </>
           ) : (
@@ -186,7 +221,12 @@ export function FallbackNewBotForm({ initialName, onCreated, onCancel }: NewBotF
   const submit = async () => {
     if (!name.trim()) return
     setBusy(true)
-    const exit = await create({ name: name.trim(), ...(label.trim() ? { label: label.trim() } : {}), harness: { kind: harness }, clientNonce: newClientNonce() })
+    const exit = await create({
+      name: name.trim(),
+      ...(label.trim() ? { label: label.trim() } : {}),
+      harness: { kind: harness },
+      clientNonce: newClientNonce(),
+    })
     setBusy(false)
     if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
     else onCreated(exit.value.id)
@@ -199,8 +239,20 @@ export function FallbackNewBotForm({ initialName, onCreated, onCancel }: NewBotF
       }}
     >
       <DialogBody className="flex flex-col gap-3">
-        <TextField label="Name" autoFocus data-autofocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Research Scout" />
-        <TextField label="Label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Research" />
+        <TextField
+          label="Name"
+          autoFocus
+          data-autofocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Research Scout"
+        />
+        <TextField
+          label="Label (optional)"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Research"
+        />
         <div className="flex items-center justify-between">
           <span className="text-xs text-fg-secondary">Harness</span>
           <Select
@@ -239,7 +291,11 @@ export function FallbackNewGroupForm({ initialBotIds, onCreated, onCancel }: New
   const submit = async () => {
     setBusy(true)
     const names = picked.map((id) => roster.botById(id)?.name ?? "Bot")
-    const exit = await create({ title: title.trim() || names.join(", "), memberBotIds: picked, clientNonce: newClientNonce() })
+    const exit = await create({
+      title: title.trim() || names.join(", "),
+      memberBotIds: picked,
+      clientNonce: newClientNonce(),
+    })
     setBusy(false)
     if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
     else onCreated(exit.value.id as ConversationId)
@@ -247,7 +303,12 @@ export function FallbackNewGroupForm({ initialBotIds, onCreated, onCancel }: New
   return (
     <div>
       <DialogBody className="flex flex-col gap-3">
-        <TextField label="Name (optional)" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Launch crew" />
+        <TextField
+          label="Name (optional)"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Launch crew"
+        />
         <div className="text-xs text-fg-secondary">Pick 2–6 Bots</div>
         <div className="flex max-h-72 flex-col overflow-y-auto scrollbar-thin">
           {roster.bots.map((b) => {
@@ -258,7 +319,10 @@ export function FallbackNewGroupForm({ initialBotIds, onCreated, onCancel }: New
                 type="button"
                 aria-pressed={on}
                 onClick={() => setPicked((p) => (on ? p.filter((x) => x !== b.id) : [...p, b.id]))}
-                className={cn("flex h-10 items-center gap-2.5 rounded-xl px-2 text-start text-base text-fg hover:bg-hover", on && "bg-active")}
+                className={cn(
+                  "flex h-10 items-center gap-2.5 rounded-xl px-2 text-start text-base text-fg hover:bg-hover",
+                  on && "bg-active",
+                )}
               >
                 <Avatar shape={b.avatar.shape} color={b.avatar.color} size={22} />
                 <span className="flex-1 truncate">{b.name}</span>
@@ -285,7 +349,9 @@ export function FallbackOnboarding({ onDone }: OnboardingProps): ReactNode {
     <div className="flex h-full flex-col items-center justify-center gap-4 bg-chrome text-center">
       <Avatar shape="blob" color="black" size={108} idle />
       <h1 className="text-3xl font-medium text-fg">Your team of always-on Bots</h1>
-      <p className="max-w-md text-base text-fg-secondary">Each Bot runs on the harness you pick (Claude, Codex or OpenCode) and works on your computers.</p>
+      <p className="max-w-md text-base text-fg-secondary">
+        Each Bot runs on the harness you pick (Claude, Codex or OpenCode) and works on your computers.
+      </p>
       <PillButton variant="primary" size="lg" onClick={() => onDone()}>
         Get started
       </PillButton>
@@ -297,5 +363,3 @@ export function FallbackOnboarding({ onDone }: OnboardingProps): ReactNode {
 export function PaneLoading({ className }: { readonly className?: string }): ReactNode {
   return <div className={cn("h-full w-full", className)} aria-busy="true" />
 }
-
-

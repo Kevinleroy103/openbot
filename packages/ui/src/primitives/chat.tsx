@@ -17,7 +17,10 @@ export const groupPosition = (index: number, length: number): BubblePosition =>
  *   user: first 18 18 6 18 · middle 18 6 6 18 · last 18 6 18 18
  *   bot:  first 18 18 18 6 · middle 6 18 18 6 · last 6 18 18 18
  */
-export const bubbleCorners = (side: BubbleSide, position: BubblePosition): readonly [number, number, number, number] => {
+export const bubbleCorners = (
+  side: BubbleSide,
+  position: BubblePosition,
+): readonly [number, number, number, number] => {
   const R = 18
   const r = 6
   if (position === "single") return [R, R, R, R]
@@ -34,7 +37,13 @@ export const bubbleCorners = (side: BubbleSide, position: BubblePosition): reado
 /** Tailwind classes for the grouped corners (rounded-bubble + 6 px overrides). */
 export const bubbleCornerClass = (side: BubbleSide, position: BubblePosition): string => {
   const [tl, tr, br, bl] = bubbleCorners(side, position)
-  return cn("rounded-bubble", tl === 6 && "rounded-tl-md", tr === 6 && "rounded-tr-md", br === 6 && "rounded-br-md", bl === 6 && "rounded-bl-md")
+  return cn(
+    "rounded-bubble",
+    tl === 6 && "rounded-tl-md",
+    tr === 6 && "rounded-tr-md",
+    br === 6 && "rounded-br-md",
+    bl === 6 && "rounded-bl-md",
+  )
 }
 
 export interface BubbleProps extends HTMLAttributes<HTMLDivElement> {
@@ -46,10 +55,23 @@ export interface BubbleProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /** Chat bubble: bot = 6 % ink fill on the left, user = user-bubble color (bot hue when tinted) on the right. */
-export function Bubble({ side, position = "single", emojiOnly = false, className, children, ref, ...rest }: BubbleProps): ReactNode {
+export function Bubble({
+  side,
+  position = "single",
+  emojiOnly = false,
+  className,
+  children,
+  ref,
+  ...rest
+}: BubbleProps): ReactNode {
   if (emojiOnly)
     return (
-      <div ref={ref} data-side={side} className={cn("text-[32px] leading-[38px]", side === "user" ? "self-end" : "self-start", className)} {...rest}>
+      <div
+        ref={ref}
+        data-side={side}
+        className={cn("text-[32px] leading-[38px]", side === "user" ? "self-end" : "self-start", className)}
+        {...rest}
+      >
         {children}
       </div>
     )
@@ -72,15 +94,42 @@ export function Bubble({ side, position = "single", emojiOnly = false, className
 }
 
 /** Vertical stack for a transcript: bubbles stack 4 px apart within a group; new groups add margin. */
-export function BubbleGroup({ side, children, className }: { readonly side: BubbleSide; readonly children: ReactNode; readonly className?: string }): ReactNode {
-  return <div className={cn("flex flex-col gap-1", side === "user" ? "items-end" : "items-start", className)}>{children}</div>
+export function BubbleGroup({
+  side,
+  children,
+  className,
+}: {
+  readonly side: BubbleSide
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
+  return (
+    <div className={cn("flex flex-col gap-1", side === "user" ? "items-end" : "items-start", className)}>
+      {children}
+    </div>
+  )
 }
 
 // ----------------------------------------------------------------------------------------- EventLine
 
 /** Centered transcript event line ("Created routine ⏱ Morning briefing", "2 messages with ◉ Scout"). */
-export function EventLine({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
-  return <div className={cn("flex min-h-6 w-full flex-wrap items-center justify-center gap-0.5 py-2 text-sm text-fg-secondary", className)}>{children}</div>
+export function EventLine({
+  children,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
+  return (
+    <div
+      className={cn(
+        "flex min-h-6 w-full flex-wrap items-center justify-center gap-0.5 py-2 text-sm text-fg-secondary",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 
 export interface EventChipProps extends HTMLAttributes<HTMLElement> {
@@ -112,14 +161,34 @@ export function EventChip({ leading, interactive = true, className, children, ..
 
 // ----------------------------------------------------------------------------- Timestamp / divider
 
-export function Timestamp({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
-  return <div className={cn("flex h-7 items-center justify-center py-1.5 text-sm text-fg-secondary", className)}>{children}</div>
+export function Timestamp({
+  children,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
+  return (
+    <div className={cn("flex h-7 items-center justify-center py-1.5 text-sm text-fg-secondary", className)}>
+      {children}
+    </div>
+  )
 }
 
 /** Unread divider: hairline with a centered NEW label, both in the accent (bot) color. */
-export function NewDivider({ label = "NEW", className }: { readonly label?: string; readonly className?: string }): ReactNode {
+export function NewDivider({
+  label = "NEW",
+  className,
+}: {
+  readonly label?: string
+  readonly className?: string
+}): ReactNode {
   return (
-    <div role="separator" aria-label="New messages" className={cn("flex items-center gap-3 py-2 text-xs font-medium text-accent-fg", className)}>
+    <div
+      role="separator"
+      aria-label="New messages"
+      className={cn("flex items-center gap-3 py-2 text-xs font-medium text-accent-fg", className)}
+    >
       <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--ob-accent-fg)_30%,transparent)]" />
       {label}
       <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--ob-accent-fg)_30%,transparent)]" />
@@ -130,8 +199,18 @@ export function NewDivider({ label = "NEW", className }: { readonly label?: stri
 // ------------------------------------------------------------------------------ Activity / typing
 
 /** Text with Grok's activity shimmer (ink sweeping over 40 % ink, 2.2 s steps(60)). */
-export function ShimmerText({ children, className, active = true }: { readonly children: ReactNode; readonly className?: string; readonly active?: boolean }): ReactNode {
-  return <span className={cn(active ? "shimmer-text animate-shimmer" : "text-fg-secondary", className)}>{children}</span>
+export function ShimmerText({
+  children,
+  className,
+  active = true,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+  readonly active?: boolean
+}): ReactNode {
+  return (
+    <span className={cn(active ? "shimmer-text animate-shimmer" : "text-fg-secondary", className)}>{children}</span>
+  )
 }
 
 /**
@@ -160,7 +239,12 @@ export function ActivityRow({
     </>
   )
   return (
-    <div role="status" aria-live="polite" className={cn("flex h-9 animate-rise-in items-center gap-2 ps-2", className)} {...rest}>
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn("flex h-9 animate-rise-in items-center gap-2 ps-2", className)}
+      {...rest}
+    >
       {onClick === undefined ? (
         body
       ) : (
@@ -190,9 +274,20 @@ export function TypingDots({ className }: { readonly className?: string }): Reac
 // ------------------------------------------------------------------------------------- Small badges
 
 /** Sidebar label chip ("Ops", "Research"). */
-export function LabelChip({ children, className }: { readonly children: ReactNode; readonly className?: string }): ReactNode {
+export function LabelChip({
+  children,
+  className,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+}): ReactNode {
   return (
-    <span className={cn("inline-flex h-[18px] shrink-0 items-center rounded-sm bg-secondary px-1 text-xs text-fg-secondary hairline border-line-tertiary", className)}>
+    <span
+      className={cn(
+        "inline-flex h-[18px] shrink-0 items-center rounded-sm bg-secondary px-1 text-xs text-fg-secondary hairline border-line-tertiary",
+        className,
+      )}
+    >
       {children}
     </span>
   )
@@ -214,5 +309,11 @@ export function CountBadge({ count, className }: { readonly count: number; reado
 
 /** Unread dot (accent). */
 export function UnreadDot({ className }: { readonly className?: string }): ReactNode {
-  return <span aria-label="Unread" role="status" className={cn("inline-block size-2 shrink-0 rounded-full bg-accent-fg", className)} />
+  return (
+    <span
+      aria-label="Unread"
+      role="status"
+      className={cn("inline-block size-2 shrink-0 rounded-full bg-accent-fg", className)}
+    />
+  )
 }

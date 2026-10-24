@@ -119,9 +119,10 @@ export const brainStack = (options: StackOptions) => {
     ApprovalServiceFake.layer(),
     options.extra ?? Layer.empty,
   ).pipe(Layer.provideMerge(internal), Layer.provideMerge(address), Layer.provideMerge(SequentialIdGen()))
-  const top = options.localDaemon === undefined
-    ? NodeGatewayLive
-    : Layer.merge(NodeGatewayLive, LocalNodeDaemonLive(options.localDaemon))
+  const top =
+    options.localDaemon === undefined
+      ? NodeGatewayLive
+      : Layer.merge(NodeGatewayLive, LocalNodeDaemonLive(options.localDaemon))
   return top.pipe(Layer.provideMerge(BrainNodesLive), Layer.provideMerge(ports))
 }
 
@@ -129,13 +130,11 @@ export const brainStack = (options: StackOptions) => {
  * Serve the brain-nodes routes (public + internal + viewer routes with an allow-all authorizer) on an
  * ephemeral port. Completes `TestAddress` with the base URL.
  */
-export const startServer = Effect.gen(function*() {
+export const startServer = Effect.gen(function* () {
   const routes = Layer.mergeAll(NodePublicRoutes, NodeInternalRoutes, ViewerRoutes(allowAllViewers))
   const context = yield* Layer.build(
     HttpRouter.serve(routes, { disableLogger: true, disableListenLog: true }).pipe(
-      Layer.provideMerge(
-        BunHttpServer.layer({ port: 0, hostname: "127.0.0.1", websocket: { idleTimeout: 0 } }),
-      ),
+      Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1", websocket: { idleTimeout: 0 } })),
     ),
   )
   const server = Context.get(context, HttpServer.HttpServer)
@@ -189,7 +188,14 @@ export const pairOverHttp = (httpBase: string, code: string, keys: KeyPair, host
     const res = await fetch(`${httpBase}${Routes.pair}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code, publicKey: keys.publicKey, hostname, platform: "linux", arch: "x64", nodeVersion: "9.9.9" }),
+      body: JSON.stringify({
+        code,
+        publicKey: keys.publicKey,
+        hostname,
+        platform: "linux",
+        arch: "x64",
+        nodeVersion: "9.9.9",
+      }),
     })
     return { status: res.status, body: (await res.json()) as PairResponse & { error?: string } }
   })
@@ -221,7 +227,7 @@ export const testNodeHandlers = (input: {
   const echoStream = (streamId: string, streamToken: string, prefix: string) =>
     Effect.forkDetach(
       Effect.scoped(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const socket = yield* dialWebSocket(`${input.wsBase}${Routes.stream(streamId)}`, {
             authorization: formatStreamAuth(streamToken),
           })
@@ -230,14 +236,17 @@ export const testNodeHandlers = (input: {
           yield* writer.write(`${prefix}:ready`)
           yield* Effect.forever(
             Effect.flatMap(reader.pull, (frames) =>
-              Effect.forEach(frames, (f) => writer.write(typeof f === "string" ? `${prefix}:${f}` : f), { discard: true })),
+              Effect.forEach(frames, (f) => writer.write(typeof f === "string" ? `${prefix}:${f}` : f), {
+                discard: true,
+              }),
+            ),
           )
         }),
       ).pipe(Effect.ignore),
     )
   return NodeRpcs.toLayer({
     "node.hello": (req) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         const ok = yield* verifyHello({
           brainPublicKey: input.brainPublicKey,
           nodeId: input.nodeId,
@@ -267,7 +276,13 @@ export const testNodeHandlers = (input: {
       gate(
         path.startsWith("/etc")
           ? Effect.fail(new PathDenied({ path, reason: "outside roots" }))
-          : Effect.succeed({ content: `remote:${path}`, encoding: "utf8" as const, sha256: "00", size: 1, truncated: false }),
+          : Effect.succeed({
+              content: `remote:${path}`,
+              encoding: "utf8" as const,
+              sha256: "00",
+              size: 1,
+              truncated: false,
+            }),
       ),
     "fs.download": unused,
     "fs.upload": unused,
@@ -283,14 +298,14 @@ export const testNodeHandlers = (input: {
     "shell.exec": ({ command }) =>
       state.verified
         ? Stream.make<Array<ExecEvent>>(
-          { _tag: "Started", pid: 7, pgid: 7 },
-          { _tag: "Output", stream: "stdout", data: `ran ${command}\n`, seq: 0 },
-          { _tag: "Exit", code: 0, signal: null, timedOut: false, durationMs: 1 },
-        )
+            { _tag: "Started", pid: 7, pgid: 7 },
+            { _tag: "Output", stream: "stdout", data: `ran ${command}\n`, seq: 0 },
+            { _tag: "Exit", code: 0, signal: null, timedOut: false, durationMs: 1 },
+          )
         : Stream.fail(new NotAuthenticated({ reason: "node.hello first" })),
     "pty.open": ({ cols, cwd, rows, streamId, streamToken }) =>
       gate(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           state.ptys.push({ cols, rows, cwd })
           yield* echoStream(streamId, streamToken, "pty")
           return { pid: 42 }
@@ -298,7 +313,7 @@ export const testNodeHandlers = (input: {
       ),
     "tunnel.open": ({ cwd, inv, kind, streamId, streamToken }) =>
       gate(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           state.tunnels.push({ kind, cwd, botId: inv.botId })
           yield* echoStream(streamId, streamToken, kind)
           return { pid: 43 }
@@ -308,26 +323,36 @@ export const testNodeHandlers = (input: {
     "service.stop": unused,
     "forward.listen": unused,
     "browser.ensure": ({ botId }) =>
-      gate(Effect.sync(() => {
-        state.ensured.push(botId)
-        return { windowTargetId: `win-${botId}`, width: 1280, height: 800 }
-      })),
+      gate(
+        Effect.sync(() => {
+          state.ensured.push(botId)
+          return { windowTargetId: `win-${botId}`, width: 1280, height: 800 }
+        }),
+      ),
     "browser.action": unused,
     "browser.screencast": ({ botId, streamId, streamToken }) =>
       gate(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           state.screencasts.push(botId)
           // like the real node: dial the stream, send the URL and one frame, then keep it open
           yield* Effect.forkDetach(
             Effect.scoped(
-              Effect.gen(function*() {
+              Effect.gen(function* () {
                 const socket = yield* dialWebSocket(`${input.wsBase}${Routes.stream(streamId)}`, {
                   authorization: formatStreamAuth(streamToken),
                 })
                 const writer = yield* socket.writer
                 const reader = yield* socket.reader
                 yield* writer.write(JSON.stringify({ _tag: "Url", url: "https://example.com/", title: "Example" }))
-                const meta = { seq: 1, mime: "image/jpeg", width: 2, height: 2, viewportWidth: 2, viewportHeight: 2, timestamp: 1 }
+                const meta = {
+                  seq: 1,
+                  mime: "image/jpeg",
+                  width: 2,
+                  height: 2,
+                  viewportWidth: 2,
+                  viewportHeight: 2,
+                  timestamp: 1,
+                }
                 yield* writer.write(encodeScreencastFrame(meta, new Uint8Array([0xff, 0xd8, 0xff, 0xd9])))
                 yield* Effect.forever(reader.pull)
               }),
@@ -338,89 +363,108 @@ export const testNodeHandlers = (input: {
       ),
     "browser.input": ({ event }) => gate(Effect.sync(() => void state.inputs.push(event))),
     "lease.set": ({ botId, holder }) =>
-      gate(Effect.sync(() => {
-        state.leases.push({ botId, holder })
-        return { botId, holder, since: 1 }
-      })),
+      gate(
+        Effect.sync(() => {
+          state.leases.push({ botId, holder })
+          return { botId, holder, since: 1 }
+        }),
+      ),
     "desktop.ensure": ({ botId }) =>
       gate(
         state.desktopFailure !== undefined
           ? Effect.fail(state.desktopFailure)
           : Effect.sync(() => {
-            state.desktops.push(botId)
-            return { botId, display: ":101", width: 1920, height: 1200 }
-          }),
+              state.desktops.push(botId)
+              return { botId, display: ":101", width: 1920, height: 1200 }
+            }),
       ),
     "desktop.stop": ({ botId }) =>
-      gate(Effect.sync(() => {
-        state.stopped.push(botId)
-        // stopping a desktop ends the user's control (like the real node)
-        state.leases.push({ botId, holder: "bot" })
-      })),
+      gate(
+        Effect.sync(() => {
+          state.stopped.push(botId)
+          // stopping a desktop ends the user's control (like the real node)
+          state.leases.push({ botId, holder: "bot" })
+        }),
+      ),
     "computer.act": ({ action, inv }) =>
       gate(
         leaseOf(inv.botId) === "user"
-          ? Effect.fail(new LeaseHeld({ botId: inv.botId, holder: "user", reason: "the user is controlling the screen" }))
+          ? Effect.fail(
+              new LeaseHeld({ botId: inv.botId, holder: "user", reason: "the user is controlling the screen" }),
+            )
           : Effect.sync(() => {
-            state.acts.push({ botId: inv.botId, action })
-            return { text: `did ${action.action}` }
-          }),
+              state.acts.push({ botId: inv.botId, action })
+              return { text: `did ${action.action}` }
+            }),
       ),
     "computer.stream": ({ botId, mode, streamId, streamToken }) =>
       gate(
         mode === "control" && leaseOf(botId) !== "user"
           ? Effect.fail(new LeaseHeld({ botId, holder: "bot", reason: "take control first" }))
-          : Effect.gen(function*() {
-            state.vncStreams.push({ botId, mode })
-            // like x11vnc behind the node: greet, then answer every binary frame (0xEE + the bytes)
-            yield* Effect.forkDetach(
-              Effect.scoped(
-                Effect.gen(function*() {
-                  const socket = yield* dialWebSocket(`${input.wsBase}${Routes.stream(streamId)}`, {
-                    authorization: formatStreamAuth(streamToken),
-                  })
-                  const reader = yield* socket.reader
-                  const writer = yield* socket.writer
-                  yield* writer.write(RFB_GREETING)
-                  yield* Effect.forever(
-                    Effect.flatMap(reader.pull, (frames) =>
-                      Effect.forEach(frames, (f) => {
-                        if (typeof f === "string") return Effect.void
-                        state.vncReceived.push(f)
-                        const reply = new Uint8Array(f.byteLength + 1)
-                        reply[0] = 0xee
-                        reply.set(f, 1)
-                        return writer.write(reply)
-                      }, { discard: true })),
-                  )
-                }),
-              ).pipe(Effect.ignore),
-            )
-          }),
+          : Effect.gen(function* () {
+              state.vncStreams.push({ botId, mode })
+              // like x11vnc behind the node: greet, then answer every binary frame (0xEE + the bytes)
+              yield* Effect.forkDetach(
+                Effect.scoped(
+                  Effect.gen(function* () {
+                    const socket = yield* dialWebSocket(`${input.wsBase}${Routes.stream(streamId)}`, {
+                      authorization: formatStreamAuth(streamToken),
+                    })
+                    const reader = yield* socket.reader
+                    const writer = yield* socket.writer
+                    yield* writer.write(RFB_GREETING)
+                    yield* Effect.forever(
+                      Effect.flatMap(reader.pull, (frames) =>
+                        Effect.forEach(
+                          frames,
+                          (f) => {
+                            if (typeof f === "string") return Effect.void
+                            state.vncReceived.push(f)
+                            const reply = new Uint8Array(f.byteLength + 1)
+                            reply[0] = 0xee
+                            reply.set(f, 1)
+                            return writer.write(reply)
+                          },
+                          { discard: true },
+                        ),
+                      ),
+                    )
+                  }),
+                ).pipe(Effect.ignore),
+              )
+            }),
       ),
     "screen.ensure": ({ botId }) =>
       gate(
         state.screenFailure !== undefined
           ? Effect.fail(state.screenFailure)
           : Effect.sync(() => {
-            state.screenEnsured.push(botId)
-            return { width: 1440, height: 900 }
-          }),
+              state.screenEnsured.push(botId)
+              return { width: 1440, height: 900 }
+            }),
       ),
     "screen.stream": ({ botId, streamId, streamToken }) =>
       gate(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           state.screenStreams.push(botId)
           // like a Mac: dial the stream, send a frame, keep it open
           yield* Effect.forkDetach(
             Effect.scoped(
-              Effect.gen(function*() {
+              Effect.gen(function* () {
                 const socket = yield* dialWebSocket(`${input.wsBase}${Routes.stream(streamId)}`, {
                   authorization: formatStreamAuth(streamToken),
                 })
                 const writer = yield* socket.writer
                 const reader = yield* socket.reader
-                const meta = { seq: 1, mime: "image/jpeg", width: 1280, height: 800, viewportWidth: 1280, viewportHeight: 800, timestamp: 1 }
+                const meta = {
+                  seq: 1,
+                  mime: "image/jpeg",
+                  width: 1280,
+                  height: 800,
+                  viewportWidth: 1280,
+                  viewportHeight: 800,
+                  timestamp: 1,
+                }
                 yield* writer.write(encodeScreencastFrame(meta, new Uint8Array([0xff, 0xd8, 0xff, 0xd9])))
                 yield* Effect.forever(reader.pull)
               }),
@@ -483,19 +527,24 @@ export const connectTestNode = (input: {
   /** What a Mac reports about its own screen in `node.hello`. */
   readonly screen?: ScreenSupport
 }): Effect.Effect<TestNode, Socket.SocketError, Scope.Scope> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const brainOrigin = input.brainOrigin ?? BRAIN_ORIGIN
-    const auth = yield* Effect.orDie(makeUpgradeAuth({ nodeId: input.nodeId, privateKey: input.keys.privateKey, brainOrigin }))
+    const auth = yield* Effect.orDie(
+      makeUpgradeAuth({ nodeId: input.nodeId, privateKey: input.keys.privateKey, brainOrigin }),
+    )
     const header = input.header ? input.header(auth.header) : auth.header
     const dialed = yield* dialWebSocket(`${input.wsBase}${Routes.control}`, { authorization: header })
     const silenced = input.silenced
-    const socket = silenced === undefined ? dialed : Socket.make({
-      reader: dialed.reader,
-      writer: Effect.map(dialed.writer, (w): Socket.Writer => ({
-        write: (chunk) => (silenced.on ? Effect.void : w.write(chunk)),
-        writeAll: (chunks) => (silenced.on ? Effect.void : w.writeAll(chunks)),
-      })),
-    })
+    const socket =
+      silenced === undefined
+        ? dialed
+        : Socket.make({
+            reader: dialed.reader,
+            writer: Effect.map(dialed.writer, (w): Socket.Writer => ({
+              write: (chunk) => (silenced.on ? Effect.void : w.write(chunk)),
+              writeAll: (chunks) => (silenced.on ? Effect.void : w.writeAll(chunks)),
+            })),
+          })
     const state = input.state ?? newNodeState()
     const handlers = yield* Layer.build(
       testNodeHandlers({

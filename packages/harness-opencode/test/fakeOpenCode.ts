@@ -62,7 +62,11 @@ export class FakeServer {
   readonly mcp = new Map<string, { directory: string; config: any; status: string }>()
   readonly exited: Deferred.Deferred<string>
   dead = false
-  constructor(readonly owner: FakeOpenCode, readonly generation: number, exited: Deferred.Deferred<string>) {
+  constructor(
+    readonly owner: FakeOpenCode,
+    readonly generation: number,
+    exited: Deferred.Deferred<string>,
+  ) {
     this.exited = exited
   }
   emit(type: string, data: unknown) {
@@ -79,7 +83,11 @@ export class FakeServer {
 
 /** The real client's shape for a declared 404 (verified against 2.0.6): an Error named after `_tag`. */
 const sessionNotFound = (sessionID: string) =>
-  Object.assign(new Error(`Session gone: ${sessionID}`), { _tag: "SessionNotFoundError", name: "SessionNotFoundError", sessionID })
+  Object.assign(new Error(`Session gone: ${sessionID}`), {
+    _tag: "SessionNotFoundError",
+    name: "SessionNotFoundError",
+    sessionID,
+  })
 
 export class FakeOpenCode {
   readonly calls: Array<Call> = []
@@ -131,12 +139,15 @@ export class FakeOpenCode {
     return Effect.flatMap(Deferred.make<string>(), (exited) => {
       const server = new FakeServer(this, this.servers.length + 1, exited)
       this.servers.push(server)
-      return Effect.as(Effect.addFinalizer(() => Effect.sync(() => server.crash("stopped"))), {
-        client: this.clientFor(server),
-        url: `http://fake/${server.generation}`,
-        version: "2.0.6",
-        exited: Deferred.await(exited),
-      })
+      return Effect.as(
+        Effect.addFinalizer(() => Effect.sync(() => server.crash("stopped"))),
+        {
+          client: this.clientFor(server),
+          url: `http://fake/${server.generation}`,
+          version: "2.0.6",
+          exited: Deferred.await(exited),
+        },
+      )
     })
   }
 
@@ -237,7 +248,9 @@ export class FakeOpenCode {
         form: {
           reply: async (input: any) => {
             record("form.reply", input)
-            later(() => server.emit("form.replied", { id: input.formID, sessionID: input.sessionID, answer: input.answer }))
+            later(() =>
+              server.emit("form.replied", { id: input.formID, sessionID: input.sessionID, answer: input.answer }),
+            )
           },
           cancel: async (input: any) => {
             record("form.cancel", input)
@@ -248,7 +261,13 @@ export class FakeOpenCode {
       permission: {
         reply: async (input: any) => {
           record("permission.reply", input)
-          later(() => server.emit("permission.replied", { sessionID: input.sessionID, requestID: input.requestID, reply: input.decision }))
+          later(() =>
+            server.emit("permission.replied", {
+              sessionID: input.sessionID,
+              requestID: input.requestID,
+              reply: input.decision,
+            }),
+          )
         },
         list: async (input: any) => {
           record("permission.list", input)
@@ -258,7 +277,11 @@ export class FakeOpenCode {
       mcp: {
         add: async (input: any) => {
           record("mcp.add", input)
-          server.mcp.set(input.server, { directory: input.location?.directory, config: input.config, status: "pending" })
+          server.mcp.set(input.server, {
+            directory: input.location?.directory,
+            config: input.config,
+            status: "pending",
+          })
           this.pendingPolls.set(`${server.generation}:${input.server}`, this.mcpPendingPolls)
         },
         remove: async (input: any) => {
@@ -339,7 +362,12 @@ export class FakeOpenCode {
           return {
             location: input?.location,
             data: [
-              { id: "openai", name: "OpenAI", methods: [], connections: [{ type: "credential", id: "cred_1", label: "OpenAI", method: "oauth" }] },
+              {
+                id: "openai",
+                name: "OpenAI",
+                methods: [],
+                connections: [{ type: "credential", id: "cred_1", label: "OpenAI", method: "oauth" }],
+              },
               { id: "anthropic", name: "Anthropic", methods: [], connections: [] },
             ],
           }
@@ -353,10 +381,20 @@ export class FakeOpenCode {
 // ---------------------------------------------------------------------------- scripted turn helpers
 
 /** Emits a simple successful turn: text "…" then `execution.succeeded`. */
-export const scriptText = (server: FakeServer, sessionID: string, text: string, opts: { messageID?: string; tokens?: number } = {}) => {
+export const scriptText = (
+  server: FakeServer,
+  sessionID: string,
+  text: string,
+  opts: { messageID?: string; tokens?: number } = {},
+) => {
   const assistantMessageID = opts.messageID ?? `msg_a_${server.owner.eventSeq + 1}`
   server.emit("session.execution.started", { sessionID })
-  server.emit("session.step.started", { sessionID, assistantMessageID, agent: "build", model: { id: "gpt-test", providerID: "openai" } })
+  server.emit("session.step.started", {
+    sessionID,
+    assistantMessageID,
+    agent: "build",
+    model: { id: "gpt-test", providerID: "openai" },
+  })
   server.emit("session.text.started", { sessionID, assistantMessageID, ordinal: 0 })
   server.emit("session.text.delta", { sessionID, assistantMessageID, ordinal: 0, delta: text })
   server.emit("session.text.ended", { sessionID, assistantMessageID, ordinal: 0, text })
@@ -371,11 +409,19 @@ export const scriptText = (server: FakeServer, sessionID: string, text: string, 
 }
 
 /** A manual compaction's busy period (`core/src/session/runner/llm.ts` order). */
-export const scriptCompaction = (sessionID: string, server: FakeServer, opts: { fail?: string; summary?: string } = {}) => {
+export const scriptCompaction = (
+  sessionID: string,
+  server: FakeServer,
+  opts: { fail?: string; summary?: string } = {},
+) => {
   server.emit("session.execution.started", { sessionID })
   server.emit("session.compaction.started", { sessionID, reason: "manual", recent: "" })
   if (opts.fail) {
-    server.emit("session.compaction.failed", { sessionID, reason: "manual", error: { type: "compaction.template", message: opts.fail } })
+    server.emit("session.compaction.failed", {
+      sessionID,
+      reason: "manual",
+      error: { type: "compaction.template", message: opts.fail },
+    })
   } else {
     server.emit("session.compaction.ended", {
       sessionID,

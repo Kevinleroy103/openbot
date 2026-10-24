@@ -49,7 +49,10 @@ export function UiBlockView({
       return <CardTable columns={block.columns} rows={block.rows} />
     case "options":
       return (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" data-ui-block="options">
+        <div
+          className="grid grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]"
+          data-ui-block="options"
+        >
           {block.items.map((item) => (
             <div
               key={item.id}
@@ -60,8 +63,11 @@ export function UiBlockView({
             >
               {(item.id === block.pick || item.badge) && (
                 <div>
-                  <StatusPill tone={item.id === block.pick ? "accent" : "neutral"}>
-                    {item.id === block.pick ? "My pick" : item.badge}
+                  <StatusPill
+                    tone={item.id === block.pick ? "accent" : "neutral"}
+                    className="h-auto! min-h-6 max-w-full whitespace-normal!"
+                  >
+                    <span className="min-w-0 break-words">{item.id === block.pick ? "My pick" : item.badge}</span>
                   </StatusPill>
                 </div>
               )}
@@ -218,7 +224,11 @@ export function UiBlockView({
                 {option.label}
                 {option.detail && <span className="mt-0.5 block text-sm text-fg-secondary">{option.detail}</span>}
               </span>
-              {option.badge && <StatusPill className="max-w-[45%] shrink whitespace-normal">{option.badge}</StatusPill>}
+              {option.badge && (
+                <StatusPill className="h-auto! min-h-6 max-w-[45%] whitespace-normal!">
+                  <span className="min-w-0 break-words">{option.badge}</span>
+                </StatusPill>
+              )}
             </label>
           ))}
         </fieldset>

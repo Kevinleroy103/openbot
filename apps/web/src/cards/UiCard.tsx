@@ -119,7 +119,7 @@ export function UiCardContent({
                   key={action.id}
                   variant={action.style ?? "secondary"}
                   size="card"
-                  className="min-h-11 max-w-full whitespace-normal"
+                  className="h-auto! min-h-11 max-w-full py-2 whitespace-normal!"
                   disabled={disabled}
                   loading={pending && actionId === action.id}
                   onClick={() => {
@@ -127,7 +127,7 @@ export function UiCardContent({
                     onAct(action.id, values)
                   }}
                 >
-                  {action.label}
+                  <span className="min-w-0 break-words">{action.label}</span>
                 </PillButton>
               ))}
             </CardActions>

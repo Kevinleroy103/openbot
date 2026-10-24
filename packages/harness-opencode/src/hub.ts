@@ -16,7 +16,7 @@
  * - **Child sessions** (subagents) are routed to their root session (approvals reach the bot).
  */
 import { HarnessError } from "@openbot/core"
-import { Deferred, Effect, Exit, FiberSet, Schedule, Scope, Semaphore, Stream } from "effect"
+import { Cause, Deferred, Effect, Exit, FiberSet, Option, Schedule, Scope, Semaphore, Stream } from "effect"
 import { describeClientError, type OpenCodeApi, type OpenCodeEvent } from "./client.ts"
 import { eventSessionId } from "./normalize.ts"
 import type { OpenCodeTransport } from "./server.ts"
@@ -191,7 +191,10 @@ export const makeHost = (options: HostOptions): Effect.Effect<OpenCodeHost, neve
           duration: readyTimeoutMs,
           orElse: () => Effect.fail(harnessError("open-failed", "Timed out waiting for the OpenCode event stream (server.connected).")),
         }),
-        Effect.tapError((error) => markDead(live, error.message)),
+        Effect.onError((cause) => {
+          const error = Cause.findErrorOption(cause)
+          return markDead(live, Option.isSome(error) ? error.value.message : "Starting the OpenCode server was interrupted.")
+        }),
       )
       current = live
       return live.connection

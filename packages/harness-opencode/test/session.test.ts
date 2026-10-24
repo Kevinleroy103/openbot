@@ -210,6 +210,18 @@ describe("OpenCode session (fake server)", () => {
       }))
   })
 
+  test("interrupting a start that waits for server.connected stops the server", async () => {
+    const fake = new FakeOpenCode()
+    fake.autoConnect = false
+    await Effect.runPromise(Effect.scoped(Effect.gen(function*() {
+      const host = yield* makeHost({ start: fake.start, silentTimeoutMs: 0, readyTimeoutMs: 2_000, modelRetries: 0 })
+      const starting = yield* Effect.forkScoped(host.connection)
+      yield* until(() => fake.servers.length === 1 && fake.server.channels.size === 1)
+      yield* Fiber.interrupt(starting)
+      yield* until(() => fake.server.dead)
+    })))
+  })
+
   test("sessionID filtering: two sessions on one server only see their own events", async () => {
     const fake = new FakeOpenCode()
     await withDriver(fake, (driver) =>

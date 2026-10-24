@@ -1,14 +1,18 @@
 import { beforeEach, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { conversationAtom, outboxAtom, rosterAtom } from "@openbot/client"
-import { emptyConversationState, emptyRosterState, NotFound } from "@openbot/contracts"
+import { conversationAtom, interruptTurnAtom, outboxAtom, rosterAtom } from "@openbot/client"
+import { emptyConversationState, emptyRosterState, Internal, NotFound } from "@openbot/contracts"
+import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 
 const conversationId = "cnv_missing"
 let result
 let outbox
 const back = mock(() => {})
+const alert = mock(() => {})
+let onStop
+let stopExit
 
 mock.module("@effect/atom-react", () => ({
   useAtomValue: (atom) => {
@@ -17,13 +21,16 @@ mock.module("@effect/atom-react", () => ({
     if (atom === outboxAtom(conversationId)) return outbox
     throw new Error("Unexpected atom")
   },
-  useAtomSet: () => () => {},
+  useAtomSet: (atom, options) => {
+    if (atom === interruptTurnAtom && options?.mode === "promiseExit") return async () => stopExit
+    return () => {}
+  },
 }))
 
 const Container = ({ children }) => createElement("div", null, children)
 mock.module("react-native", () => ({
   ActionSheetIOS: {},
-  Alert: {},
+  Alert: { alert },
   FlatList: ({ data, ListEmptyComponent }) => createElement("div", null, data.length === 0 ? ListEmptyComponent : "Transcript"),
   KeyboardAvoidingView: Container,
   Platform: { OS: "ios" },
@@ -40,7 +47,12 @@ mock.module("expo-router", () => ({
 mock.module("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }))
 mock.module("../src/runtime.tsx", () => ({ useConnection: () => ({}) }))
 mock.module("../src/nav.ts", () => ({ openWeb: mock(() => {}) }))
-mock.module("../src/chat/Composer.tsx", () => ({ Composer: () => createElement("input", { "aria-label": "Message" }) }))
+mock.module("../src/chat/Composer.tsx", () => ({
+  Composer: (props) => {
+    onStop = props.onStop
+    return createElement("input", { "aria-label": "Message" })
+  },
+}))
 mock.module("../src/chat/Rows.tsx", () => ({ RowView: () => null, StatusLine: () => null }))
 mock.module("../src/ui/Avatar.tsx", () => ({ Avatar: () => null, AvatarStack: () => null }))
 mock.module("../src/ui/glass.tsx", () => ({
@@ -53,6 +65,8 @@ const { default: Chat } = await import("../app/chat/[id].tsx")
 beforeEach(() => {
   result = AsyncResult.initial()
   outbox = []
+  stopExit = Exit.void
+  alert.mockClear()
 })
 
 test("a terminal conversation error replaces Loading and removes the composer", () => {
@@ -72,4 +86,15 @@ test("an initial conversation still loads, and a synchronized empty chat does no
   expect(html).not.toContain("Loading")
   expect(html).not.toContain("load this conversation")
   expect(html).toContain('aria-label="Message"')
+})
+
+test("a rejected Stop shows an alert, while a successful Stop does not", async () => {
+  renderToStaticMarkup(createElement(Chat))
+  stopExit = Exit.fail(new Internal({ message: "Stop was refused" }))
+  await onStop()
+  expect(alert).toHaveBeenCalledWith("Couldn't stop", "Stop was refused")
+  alert.mockClear()
+  stopExit = Exit.void
+  await onStop()
+  expect(alert).not.toHaveBeenCalled()
 })

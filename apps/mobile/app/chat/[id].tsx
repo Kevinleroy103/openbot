@@ -4,13 +4,14 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { activityPhrase, chatStatuses, type ChatStatus, layoutTranscript, type PendingMessage, requestForCard, type Row } from "@openbot/app-model"
 import { commands, conversationAtom, interruptTurnAtom, loadOlderAtom, outboxAtom, retrySendAtom, sendMessageAtom } from "@openbot/client"
 import { type Bot, type BotId, type ConversationId, DEFAULT_SETTINGS, emptyConversationState, transcriptOf } from "@openbot/contracts"
+import { Exit } from "effect"
 import { router, useLocalSearchParams } from "expo-router"
 import { type ReactElement, type ReactNode, useEffect } from "react"
 import { ActionSheetIOS, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Composer } from "../../src/chat/Composer.tsx"
 import { RowView, StatusLine } from "../../src/chat/Rows.tsx"
-import { useRoster, valueOr } from "../../src/data.ts"
+import { failureText, useRoster, valueOr } from "../../src/data.ts"
 import { openWeb } from "../../src/nav.ts"
 import { useConnection } from "../../src/runtime.tsx"
 import { useTheme } from "../../src/theme.ts"
@@ -34,7 +35,7 @@ export default function Chat(): ReactNode {
   const outbox = useAtomValue(outboxAtom(conversationId))
   const send = useAtomSet(sendMessageAtom)
   const retry = useAtomSet(retrySendAtom)
-  const interrupt = useAtomSet(interruptTurnAtom)
+  const interrupt = useAtomSet(interruptTurnAtom, { mode: "promiseExit" })
   const markRead = useAtomSet(commands["conversations.markRead"])
   const loadOlder = useAtomSet(loadOlderAtom, { mode: "promiseExit" })
 
@@ -141,7 +142,10 @@ export default function Chat(): ReactNode {
           working={working}
           placeholder={isGroup ? `Message ${title}` : `Ask ${primary?.name ?? "your Bot"}`}
           onSend={(text, attachmentIds) => send({ conversationId, text, ...(attachmentIds.length > 0 ? { attachmentIds: [...attachmentIds] as never } : {}) })}
-          onStop={() => interrupt({ conversationId })}
+          onStop={async () => {
+            const exit = await interrupt({ conversationId })
+            if (Exit.isFailure(exit)) Alert.alert("Couldn't stop", failureText(exit))
+          }}
         />
       </View>}
 

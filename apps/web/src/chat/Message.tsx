@@ -3,10 +3,12 @@
 // (grok-bot-ui.md §4.4, grok-bot-ui-activity.md F.7).
 import { Copy, Ellipsis, Hash, MessageSquareQuote, Reply, SmilePlus } from "lucide-react"
 import { type ReactNode, useState } from "react"
+import { Exit } from "effect"
 import { useAtomSet } from "@effect/atom-react"
 import type { Bot, ConversationId, EntryId } from "@openbot/contracts"
 import { commands } from "@openbot/client"
 import { Bubble, Menu, MenuItem, MenuSeparator, Popover, cn, useToast, type BubblePosition } from "@openbot/ui"
+import { describeFailure } from "../cards/useRespond.ts"
 import { plainPreview } from "../app/format.ts"
 import { Attachments } from "./Attachments.tsx"
 import type { MessageEntry, PendingMessage } from "./grouping.ts"
@@ -49,8 +51,12 @@ export interface MessageBubbleProps {
 export function MessageBubble({ entry, position, conversationId, quoted, onReply }: MessageBubbleProps): ReactNode {
   const roster = useRoster()
   const side = entry.role === "user" ? "user" : "bot"
-  const react = useAtomSet(commands["messages.react"])
+  const setReaction = useAtomSet(commands["messages.react"], { mode: "promiseExit" })
   const { toast } = useToast()
+  const react = async (emoji: string) => {
+    const exit = await setReaction({ conversationId, entryId: entry.id as EntryId, emoji })
+    if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+  }
   const [menuOpen, setMenuOpen] = useState(false)
   const emoji = !quoted && entry.attachments.length === 0 && isEmojiOnly(entry.text)
   const reactions = entry.reactions ?? []
@@ -82,7 +88,7 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
                 type="button"
                 className="inline-flex size-8 items-center justify-center rounded-full text-lg hover:bg-hover"
                 onClick={() => {
-                  react({ conversationId, entryId: entry.id as EntryId, emoji: e })
+                  void react(e)
                   close()
                 }}
               >
@@ -145,7 +151,7 @@ export function MessageBubble({ entry, position, conversationId, quoted, onReply
                   <button
                     key={e}
                     type="button"
-                    onClick={() => react({ conversationId, entryId: entry.id as EntryId, emoji: e })}
+                    onClick={() => void react(e)}
                     className="inline-flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-full bg-elevated px-1 text-base shadow-control ring-2 ring-chrome"
                     title={`${e} ${who}`}
                     aria-label={`${e} by ${who}`}

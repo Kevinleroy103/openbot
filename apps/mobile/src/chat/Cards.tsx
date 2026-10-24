@@ -8,6 +8,7 @@ import * as Haptics from "expo-haptics"
 import { type ReactNode, useState } from "react"
 import * as Linking from "expo-linking"
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
+import { failureText } from "../data.ts"
 import { openWeb } from "../nav.ts"
 import type { Theme } from "../theme.ts"
 import { Icon } from "../ui/Icon.tsx"
@@ -17,14 +18,6 @@ type Status = CardState["status"]
 /** A request's live status wins over the card's stored one. */
 const statusOf = (state: CardState, request: RuntimeRequest | undefined): Status =>
   request === undefined ? state.status : request.status === "pending" ? "pending" : request.status === "resolved" ? "resolved" : request.status === "expired" ? "expired" : "cancelled"
-
-const failureText = (exit: Exit.Exit<unknown, unknown>): string => {
-  if (Exit.isSuccess(exit)) return ""
-  const failure = exit.cause.reasons.find((r) => r._tag === "Fail") as { readonly error?: { _tag?: string; message?: string; status?: string } } | undefined
-  const e = failure?.error
-  if (e?._tag === "RequestNotPending") return `This request is already ${e.status ?? "closed"}.`
-  return e?.message || "Couldn't reach OpenBot. Check your connection and try again."
-}
 
 const useRespond = (requestId: string | undefined) => {
   const set = useAtomSet(respondRequestAtom(requestId ?? "none"), { mode: "promiseExit" })

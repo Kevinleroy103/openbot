@@ -103,7 +103,7 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
   const send = useAtomSet(sendMessageAtom)
   const retry = useAtomSet(retrySendAtom)
   const discard = useAtomSet(discardOutboxItemAtom)
-  const interrupt = useAtomSet(interruptTurnAtom)
+  const interrupt = useAtomSet(interruptTurnAtom, { mode: "promiseExit" })
   const markRead = useAtomSet(commands["conversations.markRead"])
   const loadOlder = useAtomSet(loadOlderAtom, { mode: "promiseExit" })
   const details = useDetailsPane()
@@ -700,7 +700,10 @@ export function ChatView({ conversationId }: { readonly conversationId: Conversa
           members={isGroup ? members : []}
           allowEveryone={isGroup}
           working={activeTurns.length > 0}
-          onStop={() => interrupt({ conversationId })}
+          onStop={async () => {
+            const exit = await interrupt({ conversationId })
+            if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+          }}
           onSubmit={onSubmit}
           replyTo={replyTo}
           replyAuthor={replyTo ? authorName(replyTo) : undefined}

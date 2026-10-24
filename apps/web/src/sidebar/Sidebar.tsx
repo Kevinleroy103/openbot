@@ -111,7 +111,7 @@ function RowContextMenu({ target, onClose }: { readonly target: ContextTarget; r
   const roster = useRoster()
   const updateBot = useAtomSet(commands["bots.update"], { mode: "promiseExit" })
   const markRead = useAtomSet(commands["conversations.markRead"])
-  const setHidden = useAtomSet(commands["conversations.setHidden"])
+  const setHidden = useAtomSet(commands["conversations.setHidden"], { mode: "promiseExit" })
   const renameConversation = useAtomSet(commands["conversations.rename"], { mode: "promiseExit" })
   const deleteBot = useAtomSet(commands["bots.delete"], { mode: "promiseExit" })
   const deleteConversation = useAtomSet(commands["conversations.delete"], { mode: "promiseExit" })
@@ -251,7 +251,11 @@ function RowContextMenu({ target, onClose }: { readonly target: ContextTarget; r
                   {item.bot.hidden ? "Show in sidebar" : "Hide from sidebar"}
                 </MenuItem>
               ) : (
-                <MenuItem icon={EyeOff} onSelect={run(() => setHidden({ conversationId, hidden: true }))}>
+                <MenuItem icon={EyeOff} onSelect={run(() => {
+                  void setHidden({ conversationId, hidden: true }).then((exit) => {
+                    if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+                  })
+                })}>
                   Hide from sidebar
                 </MenuItem>
               )}
@@ -438,7 +442,12 @@ function OwnerMenu(): ReactNode {
   const info = useSessionInfo()
   const roster = useRoster()
   const settingsDialog = useSettingsDialog()
-  const updateSettings = useAtomSet(updateSettingsAtom)
+  const setSettings = useAtomSet(updateSettingsAtom, { mode: "promiseExit" })
+  const { toast } = useToast()
+  const updateSettings = async (input: Parameters<typeof setSettings>[0]) => {
+    const exit = await setSettings(input)
+    if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+  }
   const settings = roster.state.settings ?? DEFAULT_SETTINGS
   const owner = valueOr(info, undefined)
   const name = settings.ownerName ?? owner?.ownerName

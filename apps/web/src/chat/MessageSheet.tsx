@@ -2,10 +2,12 @@
 // reactions, Reply, Copy, Copy message ID.
 import { Copy, Hash, Reply } from "lucide-react"
 import type { ReactNode } from "react"
+import { Exit } from "effect"
 import { useAtomSet } from "@effect/atom-react"
 import type { ConversationId, EntryId } from "@openbot/contracts"
 import { commands } from "@openbot/client"
 import { MenuItem, MenuSeparator, useToast } from "@openbot/ui"
+import { describeFailure } from "../cards/useRespond.ts"
 import { ActionSheet } from "../app/ActionSheet.tsx"
 import { plainPreview } from "../app/format.ts"
 import type { MessageEntry } from "./grouping.ts"
@@ -25,7 +27,7 @@ export interface MessageSheetProps {
 }
 
 export function MessageSheet({ entry, conversationId, authorName, onReply, onClose }: MessageSheetProps): ReactNode {
-  const react = useAtomSet(commands["messages.react"])
+  const react = useAtomSet(commands["messages.react"], { mode: "promiseExit" })
   const { toast } = useToast()
   const mine = new Set((entry.reactions ?? []).filter((r) => r.by.kind !== "bot").map((r) => r.emoji))
   const copy = (text: string, what: string) => {
@@ -55,9 +57,10 @@ export function MessageSheet({ entry, conversationId, authorName, onReply, onClo
             aria-label={`React ${e}`}
             aria-pressed={mine.has(e)}
             className="inline-flex size-12 items-center justify-center rounded-full bg-secondary text-[24px] transition-colors active:bg-secondary-hover aria-pressed:bg-accent-soft aria-pressed:ring-1 aria-pressed:ring-accent-line-faint"
-            onClick={() => {
-              react({ conversationId, entryId: entry.id as EntryId, emoji: e })
+            onClick={async () => {
               onClose()
+              const exit = await react({ conversationId, entryId: entry.id as EntryId, emoji: e })
+              if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
             }}
           >
             {e}

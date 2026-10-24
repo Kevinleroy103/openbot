@@ -95,7 +95,12 @@ const PAGES: ReadonlyArray<{ readonly id: SettingsPage; readonly label: string }
 
 export function FallbackSettingsDialog({ open, initialPage, onClose }: SettingsDialogProps): ReactNode {
   const roster = useRoster()
-  const update = useAtomSet(updateSettingsAtom)
+  const setSettings = useAtomSet(updateSettingsAtom, { mode: "promiseExit" })
+  const { toast } = useToast()
+  const update = async (input: Parameters<typeof setSettings>[0]) => {
+    const exit = await setSettings(input)
+    if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+  }
   const settings = roster.state.settings ?? DEFAULT_SETTINGS
   const [page, setPage] = useState<SettingsPage>(initialPage ?? "general")
   const row = (title: string, desc: string | undefined, control: ReactNode) => (

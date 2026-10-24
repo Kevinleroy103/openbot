@@ -6,11 +6,13 @@
 import { Blocks, ChartNoAxesColumn, Cpu, MessageSquarePlus, Monitor, Moon, PanelLeft, Plus, Search, Settings, ShieldCheck, Sparkles, Sun, Users } from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
+import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { DEFAULT_SETTINGS, type ConversationSummary } from "@openbot/contracts"
 import { hitEntryId, hitKey, isSearchable, searchFilters } from "@openbot/app-model"
 import { searchFirstPageAtom, searchIdleAtom, updateSettingsAtom } from "@openbot/client"
-import { Avatar, AvatarStack, CommandPalette, CommandPaletteBody, Dialog, Icon, KeyBadge, LabelChip, Spinner, UnreadDot, filterPaletteItems, type PaletteItem } from "@openbot/ui"
+import { Avatar, AvatarStack, CommandPalette, CommandPaletteBody, Dialog, Icon, KeyBadge, LabelChip, Spinner, UnreadDot, filterPaletteItems, type PaletteItem, useToast } from "@openbot/ui"
+import { describeFailure } from "../cards/useRespond.ts"
 import { useIsPhone } from "../app/layout.ts"
 import { useRoster } from "../app/data.ts"
 import { formatListTime } from "../app/format.ts"
@@ -39,7 +41,8 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
   const settingsDialog = useSettingsDialog()
   const connectApps = useConnectApps()
   const theme = useResolvedTheme()
-  const updateSettings = useAtomSet(updateSettingsAtom)
+  const updateSettings = useAtomSet(updateSettingsAtom, { mode: "promiseExit" })
+  const { toast } = useToast()
   const settings = roster.state.settings ?? DEFAULT_SETTINGS
   const phone = useIsPhone()
   const [query, setQuery] = useState("")
@@ -104,7 +107,10 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
         group: "Actions",
         keywords: ["theme", "appearance", "dark", "light"],
         leading: <Icon icon={theme === "dark" ? Sun : Moon} size="xl" className="text-icon-secondary" />,
-        onSelect: () => updateSettings({ patch: { theme: theme === "dark" ? "light" : "dark" } }),
+        onSelect: async () => {
+          const exit = await updateSettings({ patch: { theme: theme === "dark" ? "light" : "dark" } })
+          if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+        },
       },
       {
         id: "action:steps",
@@ -112,7 +118,10 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
         group: "Actions",
         keywords: ["steps", "tools", "activity"],
         leading: <Icon icon={ChartNoAxesColumn} size="xl" className="text-icon-secondary" />,
-        onSelect: () => updateSettings({ patch: { showSteps: !settings.showSteps } }),
+        onSelect: async () => {
+          const exit = await updateSettings({ patch: { showSteps: !settings.showSteps } })
+          if (Exit.isFailure(exit)) toast({ title: describeFailure(exit), tone: "danger" })
+        },
       },
       {
         id: "action:compact",
@@ -151,7 +160,7 @@ export function SearchPalette({ open, onOpenChange, onToggleCompact }: SearchPal
       })),
       ...(phone ? actions.filter((a) => a.id !== "action:compact").map(({ trailing: _shortcut, ...a }) => a) : actions),
     ]
-  }, [roster, select, dialogs, settingsDialog, connectApps, theme, settings.showSteps, updateSettings, onToggleCompact, phone])
+  }, [roster, select, dialogs, settingsDialog, connectApps, theme, settings.showSteps, updateSettings, onToggleCompact, phone, toast])
 
   // Roster, settings and actions filtered here; message hits come filtered by the brain.
   const messages = useMemo((): ReadonlyArray<PaletteItem> => {

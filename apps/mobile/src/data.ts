@@ -2,6 +2,7 @@
 import { useAtomValue } from "@effect/atom-react"
 import { rosterAtom } from "@openbot/client"
 import { type Bot, type BotId, emptyRosterState, type RosterState } from "@openbot/contracts"
+import { Exit } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useMemo } from "react"
 
@@ -20,4 +21,12 @@ export const useRoster = (): RosterView => {
   const state = valueOr(result, emptyRosterState)
   const loaded = AsyncResult.isSuccess(result) && state.cursor !== undefined
   return useMemo(() => ({ state, loaded, botById: (id) => (id === undefined ? undefined : state.bots.get(id as BotId)) }), [state, loaded])
+}
+
+export const failureText = (exit: Exit.Exit<unknown, unknown>): string => {
+  if (Exit.isSuccess(exit)) return ""
+  const failure = exit.cause.reasons.find((r) => r._tag === "Fail") as { readonly error?: { _tag?: string; message?: string; status?: string } } | undefined
+  const e = failure?.error
+  if (e?._tag === "RequestNotPending") return `This request is already ${e.status ?? "closed"}.`
+  return e?.message || "Couldn't reach OpenBot. Check your connection and try again."
 }

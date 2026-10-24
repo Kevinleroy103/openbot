@@ -159,6 +159,14 @@ describe("favicons", () => {
     expect((await favicons.get("docs.e.example"))?.type).toBe("image/svg+xml")
   })
 
+  test("a malformed data: icon is skipped, not an error", async () => {
+    const { favicons } = setup({
+      "https://g.example/": { body: HTML(`<link rel="icon" href="data:image/png;base64,!!!"><link rel="icon" href="data:image/svg+xml,%E0%A4%A">`) },
+      "https://g.example/favicon.ico": { body: ICO, type: "image/x-icon" },
+    })
+    expect((await favicons.get("g.example"))?.type).toBe("image/x-icon")
+  })
+
   test("an icon over 256 KB is not taken", async () => {
     const big = new Uint8Array(300 * 1024)
     big.set(PNG)

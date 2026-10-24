@@ -249,8 +249,8 @@ export const makeFavicons = (options: FaviconsOptions) => {
   }
 
   const fetchIcon = async (href: string): Promise<Icon | undefined> => {
-    if (href.startsWith("data:")) return dataIcon(href)
     try {
+      if (href.startsWith("data:")) return dataIcon(href)
       const { response } = await request(href, "image/avif,image/webp,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
       if (!response.ok) return undefined
       const bytes = await readCapped(response, ICON_BYTES, false)

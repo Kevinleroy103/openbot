@@ -279,4 +279,18 @@ describe("CarryoverStore (carryover.json)", () => {
     expect(out.unreadable).toEqual({ deliveries: [], cutOff: [] })
     expect(out.left).toBe(false)
   })
+
+  test("concurrent saves all land", async () => {
+    const dir = await tempDataDir()
+    const cut = (n: number) => ({ botId: `bot_${n}` as BotId, conversationId: `cnv_${n}` as ConversationId, turnId: `trn_${n}` as TurnId })
+    const taken = await run(
+      Effect.gen(function*() {
+        const store = yield* CarryoverStore
+        yield* Effect.forEach([1, 2, 3, 4, 5, 6, 7, 8], (n) => store.save({ deliveries: [], cutOff: [cut(n)] }), { concurrency: "unbounded" })
+        return yield* store.take
+      }),
+      testPersistence(dir),
+    )
+    expect(taken.cutOff).toHaveLength(8)
+  })
 })

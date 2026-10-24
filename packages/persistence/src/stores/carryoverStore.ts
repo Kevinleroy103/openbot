@@ -3,7 +3,7 @@
  * boot. A file the next boot cannot read is dropped with a warning: boot must never fail on it.
  */
 import { type Carryover, CarryoverStore, type DataDirShape, EMPTY_CARRYOVER, mergeCarryover } from "@openbot/core"
-import { Effect } from "effect"
+import { Effect, Semaphore } from "effect"
 import { readTextFile, removePath, writeFileAtomic } from "./files.ts"
 
 const VERSION = 1
@@ -19,8 +19,10 @@ const decode = (text: string): Carryover | undefined => {
 }
 
 export const makeFileCarryoverStore = (dirs: Pick<DataDirShape, "carryover">) =>
-  Effect.sync(() => {
+  Effect.gen(function*() {
     const path = dirs.carryover
+    // saves from concurrently stopping runners would otherwise overwrite each other's merge
+    const lock = yield* Semaphore.make(1)
     const read = Effect.gen(function*() {
       const text = yield* readTextFile("CarryoverStore.read", path)
       if (text === undefined) return EMPTY_CARRYOVER
@@ -30,10 +32,10 @@ export const makeFileCarryoverStore = (dirs: Pick<DataDirShape, "carryover">) =>
     })
     return CarryoverStore.of({
       save: (carryover) =>
-        Effect.gen(function*() {
+        lock.withPermits(1)(Effect.gen(function*() {
           const merged = mergeCarryover(yield* read, carryover)
           yield* writeFileAtomic("CarryoverStore.save", path, JSON.stringify({ version: VERSION, ...merged }))
-        }),
+        })),
       take: Effect.gen(function*() {
         const carryover = yield* read
         yield* removePath("CarryoverStore.take", path)

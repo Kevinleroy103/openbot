@@ -1,5 +1,3 @@
-// A Bot's generative UI card (`show_ui`), native: its blocks top to bottom, choices and inputs the
-// owner fills in, and actions sent back with `cards.act`. An answered card shows what was sent.
 import { useAtomSet } from "@effect/atom-react"
 import { imageSrc, safeHref } from "@openbot/app-model"
 import { actCardAtom } from "@openbot/client"
@@ -22,7 +20,6 @@ type Value = UiValues[string]
 interface Form {
   readonly values: UiValues
   readonly set: (id: string, value: Value) => void
-  /** Answered, closed or sending: nothing can change. */
   readonly locked: boolean
 }
 
@@ -32,11 +29,11 @@ const listOf = (value: Value | undefined): ReadonlyArray<string> => {
   return value
 }
 
-const initialValues = (card: UiCard): UiValues => {
+const formValues = (card: UiCard, edits: UiValues): UiValues => {
   const values: Record<string, Value> = {}
   for (const b of card.blocks) {
-    if (b.type === "choice") values[b.id] = b.default ?? []
-    if (b.type === "input") values[b.id] = b.default ?? ""
+    if (b.type === "choice") values[b.id] = edits[b.id] ?? b.default ?? []
+    if (b.type === "input") values[b.id] = edits[b.id] ?? b.default ?? ""
   }
   return values
 }
@@ -55,13 +52,14 @@ export function UiCardView({
   readonly media: MarkdownImage
 }): ReactNode {
   const [open, setOpen] = useState(card.collapsed !== true)
-  const [values, setValues] = useState(() => initialValues(card))
+  const [edits, setEdits] = useState<UiValues>({})
   const [busy, setBusy] = useState<string | null>(null)
   const send = useAtomSet(actCardAtom(entryId ?? "none"), { mode: "promiseExit" })
 
+  const values = formValues(card, edits)
   const form: Form = {
     values: state.answer?.values ?? values,
-    set: (id, value) => setValues({ ...values, [id]: value }),
+    set: (id, value) => setEdits({ ...edits, [id]: value }),
     locked: state.status !== "pending" || busy !== null,
   }
 
@@ -104,7 +102,7 @@ export function UiCardView({
   const heading = card.title ?? (card.collapsed ? card.fallback : undefined)
   return (
     <View style={[styles.card, { backgroundColor: theme.bubbleBot }]}>
-      {heading !== undefined && (
+      {(heading !== undefined || card.subtitle !== undefined) && (
         <Pressable
           onPress={() => setOpen(false)}
           disabled={!card.collapsed}
@@ -112,7 +110,7 @@ export function UiCardView({
           style={styles.header}
         >
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={[styles.title, { color: theme.fg }]}>{heading}</Text>
+            {heading !== undefined && <Text style={[styles.title, { color: theme.fg }]}>{heading}</Text>}
             {card.subtitle ? <Text style={[styles.small, { color: theme.fgSecondary }]}>{card.subtitle}</Text> : null}
           </View>
           {card.collapsed && <Icon name="chevronDown" size={14} color={theme.iconSecondary} />}
@@ -155,7 +153,7 @@ function BlockView({
   switch (block.type) {
     case "text":
       // No `image`: a card's markdown loads no images and no link icons; only image blocks load attachments.
-      return <Markdown text={block.markdown} theme={theme} size={15} />
+      return <Markdown text={block.markdown} theme={theme} size={15} httpsOnly />
     case "fields":
       return <FieldsBlock block={block} theme={theme} />
     case "table":
@@ -448,7 +446,8 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
   const left = 34
   const plotTop = 20
   const plotHeight = 140
-  const plotWidth = Math.max(1, width - left - 4)
+  const plotWidth = Math.max(width - left - 4, xs.length * 24)
+  const chartWidth = left + plotWidth + 4
   const slot = plotWidth / Math.max(1, xs.length)
   const xAt = (x: string) => left + slot * xs.indexOf(x) + slot / 2
   const yAt = (y: number) => plotTop + ((top - y) / span) * plotHeight
@@ -484,86 +483,88 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
           ))}
         </View>
       )}
-      <View style={{ height: plotTop + plotHeight + 24 }}>
-        <Svg width={width} height={plotTop + plotHeight + 24}>
-          {ticks.map((v) => (
-            <Line
-              key={v}
-              x1={left}
-              x2={width}
-              y1={yAt(v)}
-              y2={yAt(v)}
-              stroke={theme.lineSecondary}
-              strokeWidth={StyleSheet.hairlineWidth}
-            />
-          ))}
-          {block.kind === "bar" &&
-            block.series.flatMap((s, si) =>
-              s.points.map((p) => (
-                <Rect
-                  key={`${si}:${p.x}`}
-                  x={xAt(p.x) - (barWidth * block.series.length) / 2 + barWidth * si}
-                  y={Math.min(yAt(p.y), yAt(0))}
-                  width={barWidth - (single ? 0 : 2)}
-                  height={Math.abs(yAt(p.y) - yAt(0))}
-                  rx={3}
-                  fill={barColor(si, p.x)}
-                />
-              )),
-            )}
-          {block.kind === "line" &&
-            block.series.map((s, si) => (
-              <Polyline
-                key={s.name}
-                points={s.points.map((p) => `${xAt(p.x)},${yAt(p.y)}`).join(" ")}
-                fill="none"
-                stroke={color(si)}
-                strokeWidth={2}
-                strokeLinejoin="round"
-                strokeLinecap="round"
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ width: chartWidth, height: plotTop + plotHeight + 24 }}>
+          <Svg width={chartWidth} height={plotTop + plotHeight + 24}>
+            {ticks.map((v) => (
+              <Line
+                key={v}
+                x1={left}
+                x2={chartWidth}
+                y1={yAt(v)}
+                y2={yAt(v)}
+                stroke={theme.lineSecondary}
+                strokeWidth={StyleSheet.hairlineWidth}
               />
             ))}
-          {highlighted !== undefined && block.kind === "line" && (
-            <Circle cx={xAt(highlighted.x)} cy={yAt(highlighted.y)} r={4} fill={color(0)} />
+            {block.kind === "bar" &&
+              block.series.flatMap((s, si) =>
+                s.points.map((p) => (
+                  <Rect
+                    key={`${si}:${p.x}`}
+                    x={xAt(p.x) - (barWidth * block.series.length) / 2 + barWidth * si}
+                    y={Math.min(yAt(p.y), yAt(0))}
+                    width={single ? barWidth : barWidth * 0.8}
+                    height={Math.abs(yAt(p.y) - yAt(0))}
+                    rx={3}
+                    fill={barColor(si, p.x)}
+                  />
+                )),
+              )}
+            {block.kind === "line" &&
+              block.series.map((s, si) => (
+                <Polyline
+                  key={s.name}
+                  points={s.points.map((p) => `${xAt(p.x)},${yAt(p.y)}`).join(" ")}
+                  fill="none"
+                  stroke={color(si)}
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              ))}
+            {highlighted !== undefined && block.kind === "line" && (
+              <Circle cx={xAt(highlighted.x)} cy={yAt(highlighted.y)} r={4} fill={color(0)} />
+            )}
+          </Svg>
+          {ticks.map((v) => (
+            <Text key={v} style={[styles.axis, { top: yAt(v) - 8, color: theme.fgTertiary }]}>
+              {number(v)}
+            </Text>
+          ))}
+          {xs.map((x, i) =>
+            i % labelEvery === 0 || x === block.highlight ? (
+              <Text
+                key={x}
+                numberOfLines={1}
+                style={[
+                  styles.axis,
+                  styles.centered,
+                  { left: xAt(x) - slot / 2, width: slot, top: plotTop + plotHeight + 6, color: theme.fgSecondary },
+                ]}
+              >
+                {x}
+              </Text>
+            ) : null,
           )}
-        </Svg>
-        {ticks.map((v) => (
-          <Text key={v} style={[styles.axis, { top: yAt(v) - 8, color: theme.fgTertiary }]}>
-            {number(v)}
-          </Text>
-        ))}
-        {xs.map((x, i) =>
-          i % labelEvery === 0 || x === block.highlight ? (
+          {highlighted !== undefined && (
             <Text
-              key={x}
-              numberOfLines={1}
               style={[
                 styles.axis,
                 styles.centered,
-                { left: xAt(x) - slot / 2, width: slot, top: plotTop + plotHeight + 6, color: theme.fgSecondary },
+                {
+                  left: xAt(highlighted.x) - 40,
+                  width: 80,
+                  top: yAt(Math.max(0, highlighted.y)) - 24,
+                  color: theme.accentFg,
+                },
               ]}
             >
-              {x}
+              {number(highlighted.y)}
             </Text>
-          ) : null,
-        )}
-        {highlighted !== undefined && (
-          <Text
-            style={[
-              styles.axis,
-              styles.centered,
-              {
-                left: xAt(highlighted.x) - 40,
-                width: 80,
-                top: yAt(Math.max(0, highlighted.y)) - 24,
-                color: theme.accentFg,
-              },
-            ]}
-          >
-            {number(highlighted.y)}
-          </Text>
-        )}
-      </View>
+          )}
+        </View>
+      </ScrollView>
     </View>
   )
 }
@@ -577,9 +578,9 @@ function ImageBlock({
   readonly theme: Theme
   readonly media: MarkdownImage
 }): ReactNode {
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<string>()
   const src = imageSrc(`/api/attachments/${block.attachmentId}`)
-  if (src === undefined || failed) {
+  if (src === undefined || src === failed) {
     return (
       <View style={[styles.image, styles.placeholder, sheet(theme)]}>
         <Icon name="photo" size={20} color={theme.iconSecondary} />
@@ -592,7 +593,7 @@ function ImageBlock({
       source={{ uri: media.origin + src, headers: media.headers }}
       alt={block.alt}
       accessibilityLabel={block.alt}
-      onError={() => setFailed(true)}
+      onError={() => setFailed(src)}
       contentFit="contain"
       style={[styles.image, { backgroundColor: theme.bg }]}
     />

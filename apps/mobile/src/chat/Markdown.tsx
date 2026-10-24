@@ -18,6 +18,7 @@ interface Ctx {
   readonly size: number
   /** The brain to ask for links' site icons (absent: links have none). */
   readonly site?: MarkdownImage | undefined
+  readonly httpsOnly?: boolean | undefined
 }
 
 /** The body-text style every text line carries; block(), inlineRows() and MdImage's fallback share it. */
@@ -202,7 +203,9 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
         const href = safeHref(link.href)
         // A rejected protocol renders as text with no tap target at all (the same guard as
         // the web renderer); an allowed one stays tappable exactly as before.
-        if (href === undefined) return <Text key={key}>{inline(link.tokens, ctx, key)}</Text>
+        if (href === undefined || (ctx.httpsOnly && !/^https:\/\//i.test(href))) {
+          return <Text key={key}>{inline(link.tokens, ctx, key)}</Text>
+        }
         return (
           <Text
             key={key}
@@ -374,12 +377,14 @@ export function Markdown({
   color,
   size = 17,
   image,
+  httpsOnly,
 }: {
   readonly text: string
   readonly theme: Theme
   readonly color?: string
   readonly size?: number
   readonly image?: MarkdownImage
+  readonly httpsOnly?: boolean
 }): ReactNode {
   const tokens = useMemo(() => {
     try {
@@ -388,7 +393,7 @@ export function Markdown({
       return [{ type: "paragraph", raw: text, text, tokens: [{ type: "text", raw: text, text }] } as Token]
     }
   }, [text])
-  const ctx: Ctx = { theme, color: color ?? theme.fg, size, site: image }
+  const ctx: Ctx = { theme, color: color ?? theme.fg, size, site: image, httpsOnly }
   return <View style={{ gap: 8 }}>{tokens.map((t, i) => block(t, ctx, String(i), 0, image))}</View>
 }
 

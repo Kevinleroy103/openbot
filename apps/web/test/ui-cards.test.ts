@@ -7,7 +7,12 @@ import { chromiumPath, screenshotDir, startMock, type RunningMock } from "./shoo
 const enabled = existsSync(chromiumPath)
 const scenarios = ["comparison", "chart", "plan", "choice", "agenda", "compact"] as const
 
+async function loaded(page: Page) {
+  await page.locator('[data-conversation="cnv_expense"] [data-entry]').first().waitFor()
+}
+
 async function show(page: Page, scenario: string) {
+  await loaded(page)
   const cards = page.locator('[data-card="ui"]')
   const previous = (await cards.count())
     ? await cards.last().evaluate((element) => element.closest("[data-entry]")?.getAttribute("data-entry"))
@@ -15,12 +20,12 @@ async function show(page: Page, scenario: string) {
   const box = page.getByRole("textbox", { name: "Message Expense Clerk" })
   await box.fill(`ui-${scenario}`)
   await page.getByRole("button", { name: "Send", exact: true }).click()
-  await page.waitForFunction((id) => {
+  const handle = await page.waitForFunction((id) => {
     const elements = document.querySelectorAll('[data-card="ui"]')
-    const last = elements[elements.length - 1]
-    return last && last.closest("[data-entry]")?.getAttribute("data-entry") !== id
+    const entry = elements[elements.length - 1]?.closest("[data-entry]")?.getAttribute("data-entry")
+    return entry && entry !== id ? entry : null
   }, previous)
-  return page.locator('[data-card="ui"]').last()
+  return page.locator(`[data-entry="${await handle.jsonValue()}"] [data-card="ui"]`)
 }
 
 describe.skipIf(!enabled)("generative UI against the dev mock", () => {
@@ -167,6 +172,7 @@ describe.skipIf(!enabled)("generative UI against the dev mock", () => {
     const page = await browser.newPage()
     try {
       await page.goto(`${mock.url}/#/c/cnv_expense`)
+      await loaded(page)
       const rollouts = page.locator('[data-card="ui"][aria-label="Search rollout"]')
       const before = await rollouts.count()
       const card = await show(page, "progress")

@@ -148,7 +148,8 @@
 }
 /* The dashed border and padding are part of the criterion: a bare coloured word reads as body text,
  * so a failed image would look like ordinary copy instead of a visible placeholder. */
-.ob-md-img-fallback {
+.ob-md-img-fallback,
+.ob-md-img-load {
   display: inline-block;
   max-width: 100%;
   padding: 2px 6px;
@@ -157,6 +158,9 @@
   color: var(--ob-fg-secondary);
   font-size: 13px;
   word-break: break-all;
+}
+.ob-md-img-load {
+  cursor: pointer;
 }
 .ob-md li[data-task="done"] {
   opacity: 0.65;

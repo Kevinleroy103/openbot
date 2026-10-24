@@ -2,7 +2,7 @@
 // link or an image source. `apps/web/test/model.test.ts` has the six original assertions; this file
 // is the full illegal-protocol table plus the boundaries those six do not reach.
 import { describe, expect, test } from "bun:test"
-import { imageSrc, safeHref } from "../src/links.ts"
+import { imageSrc, remoteImageHost, safeHref } from "../src/links.ts"
 
 describe("safeHref: allowed", () => {
   test("http and https, any case", () => {
@@ -198,5 +198,23 @@ describe("imageSrc", () => {
     expect(imageSrc("https://brain.example/api/attachments/att_1?x=1", ORIGIN)).toBeUndefined()
     // another port is another origin
     expect(imageSrc("https://brain.example:8443/logout", ORIGIN)).toBe("https://brain.example:8443/logout")
+  })
+})
+
+describe("remoteImageHost", () => {
+  const ORIGIN = "https://brain.example"
+  const hostOf = (raw: string) => remoteImageHost(imageSrc(raw, ORIGIN)!)
+
+  test("an attachment, also by the brain's absolute URL, loads without a click", () => {
+    expect(hostOf("/api/attachments/att_1")).toBeUndefined()
+    expect(hostOf("https://brain.example/api/attachments/att_1")).toBeUndefined()
+  })
+
+  test("any other image names the host it would load from, port included", () => {
+    expect(hostOf("https://cdn.example/a.png")).toBe("cdn.example")
+    expect(hostOf("HTTPS://CDN.example/a.png")).toBe("cdn.example")
+    expect(hostOf("https://user:pw@cdn.example/a.png")).toBe("cdn.example")
+    expect(hostOf("https://brain.example:8443/api/attachments/att_1")).toBe("brain.example:8443")
+    expect(hostOf("https://xn--80ak6aa92e.com/a.png")).toBe("xn--80ak6aa92e.com")
   })
 })

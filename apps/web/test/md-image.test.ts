@@ -1,13 +1,13 @@
-// An inline image that failed once does not stay failed when its source changes: the new source
-// gets its own try, and so does a source that failed earlier when it comes back. Real Chromium (the
-// failure comes from the <img>'s error event); image requests are answered by Playwright. Skipped
-// without Chromium.
+// A remote inline image waits for a click and an attachment loads at once; an image that failed
+// once does not stay failed when its source changes: the new source gets its own try, and so does a
+// source that failed earlier when it comes back. Real Chromium (the failure comes from the <img>'s
+// error event); image requests are answered by Playwright. Skipped without Chromium.
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { type Browser, chromium } from "playwright-core"
+import { type Browser, type Page, chromium } from "playwright-core"
 
 const chromiumPath = process.env.OPENBOT_CHROMIUM ?? "/usr/bin/chromium"
 const enabled = existsSync(chromiumPath)
@@ -42,6 +42,66 @@ afterAll(async () => {
   if (work) await rm(work, { recursive: true, force: true })
 })
 
+const serveHarness = (page: Page) =>
+  page.route("https://harness.test/", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><div id="root"></div><script type="module">${script.replaceAll("</script", "<\\/script")}</script>`,
+    }),
+  )
+
+const clickLoad = (page: Page, host: string) =>
+  page.getByRole("button", { name: `Load image from ${host}` }).click({ timeout: 10_000 })
+
+test.skipIf(!enabled)(
+  "a remote image is not requested until its placeholder is clicked; an attachment loads at once",
+  async () => {
+    const page = await browser!.newPage()
+    try {
+      const requested: string[] = []
+      await page.route("https://images.test/**", (route) => {
+        requested.push(route.request().url())
+        return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from(PNG) })
+      })
+      await page.route("https://harness.test/api/attachments/**", (route) =>
+        route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from(PNG) }),
+      )
+      await serveHarness(page)
+      await page.goto("https://harness.test/")
+      await page.waitForFunction(() => typeof window.setMarkdown === "function")
+      await page.evaluate(() =>
+        window.setMarkdown("![att](/api/attachments/att_1) ![remote](https://images.test/beacon.png)"),
+      )
+      await page.waitForFunction(
+        () => {
+          const img = document.querySelector<HTMLImageElement>("img.ob-md-img")
+          return img !== null && img.complete && img.naturalWidth === 1
+        },
+        null,
+        { timeout: 10_000 },
+      )
+      expect(await page.locator("img.ob-md-img").getAttribute("src")).toBe("/api/attachments/att_1")
+      expect(await page.locator("img.ob-md-img").count()).toBe(1)
+      expect(requested).toEqual([])
+
+      await clickLoad(page, "images.test")
+      await page.waitForFunction(
+        () => {
+          const img = document.querySelector<HTMLImageElement>('img.ob-md-img[alt="remote"]')
+          return img !== null && img.complete && img.naturalWidth === 1
+        },
+        null,
+        { timeout: 10_000 },
+      )
+      expect(requested).toEqual(["https://images.test/beacon.png"])
+      expect(await page.getByRole("button", { name: /^Load image from / }).count()).toBe(0)
+    } finally {
+      await page.close()
+    }
+  },
+  60_000,
+)
+
 test.skipIf(!enabled)(
   "a failed image retries when its source changes",
   async () => {
@@ -52,19 +112,16 @@ test.skipIf(!enabled)(
           ? route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from(PNG) })
           : route.fulfill({ status: 404, body: "" }),
       )
-      await page.route("https://harness.test/", (route) =>
-        route.fulfill({
-          contentType: "text/html",
-          body: `<!doctype html><div id="root"></div><script type="module">${script.replaceAll("</script", "<\\/script")}</script>`,
-        }),
-      )
+      await serveHarness(page)
       await page.goto("https://harness.test/")
       await page.waitForFunction(() => typeof window.setMarkdown === "function")
       await page.evaluate(() => window.setMarkdown("![shot](https://images.test/broken.png)"))
+      await clickLoad(page, "images.test")
       await page.locator(".ob-md-img-fallback").waitFor({ timeout: 10_000 })
       expect(await page.locator("img.ob-md-img").count()).toBe(0)
 
       await page.evaluate(() => window.setMarkdown("![shot](https://images.test/ok.png)"))
+      await clickLoad(page, "images.test")
       await page.waitForFunction(
         () => {
           const img = document.querySelector<HTMLImageElement>("img.ob-md-img")
@@ -94,12 +151,7 @@ test.skipIf(!enabled)(
         if (url.endsWith("/a.png") && ++requestsA === 1) return route.fulfill({ status: 404, body: "" })
         return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from(PNG) })
       })
-      await page.route("https://harness.test/", (route) =>
-        route.fulfill({
-          contentType: "text/html",
-          body: `<!doctype html><div id="root"></div><script type="module">${script.replaceAll("</script", "<\\/script")}</script>`,
-        }),
-      )
+      await serveHarness(page)
       const loaded = (src: string) =>
         page.waitForFunction(
           (want) => {
@@ -113,12 +165,15 @@ test.skipIf(!enabled)(
       await page.waitForFunction(() => typeof window.setMarkdown === "function")
 
       await page.evaluate(() => window.setMarkdown("![shot](https://images.test/a.png)"))
+      await clickLoad(page, "images.test")
       await page.locator(".ob-md-img-fallback").waitFor({ timeout: 10_000 })
 
       await page.evaluate(() => window.setMarkdown("![shot](https://images.test/b.png)"))
+      await clickLoad(page, "images.test")
       await loaded("https://images.test/b.png")
 
       await page.evaluate(() => window.setMarkdown("![shot](https://images.test/a.png)"))
+      await clickLoad(page, "images.test")
       await loaded("https://images.test/a.png")
       expect(requestsA).toBe(2)
       expect(await page.locator(".ob-md-img-fallback").count()).toBe(0)

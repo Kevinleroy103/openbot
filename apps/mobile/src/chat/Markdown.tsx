@@ -5,8 +5,8 @@ import * as Linking from "expo-linking"
 import { Image } from "expo-image"
 import { type Token, type Tokens, marked } from "marked"
 import { type ReactNode, useMemo, useState } from "react"
-import { Platform, ScrollView, StyleSheet, Text, View } from "react-native"
-import { imageSrc, safeHref } from "@openbot/app-model"
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { imageSrc, remoteImageHost, safeHref } from "@openbot/app-model"
 import type { Theme } from "../theme.ts"
 import { Icon } from "../ui/Icon.tsx"
 
@@ -36,7 +36,8 @@ const uri = (href: string, origin: string): string => (href.startsWith("/") ? or
 
 /** An image is a block of its own: it holds its own failure state, never a shared one. The caller
  * keys it by the address it loads (origin included), so every new source mounts fresh and gets its
- * own try instead of inheriting an old failure. */
+ * own try instead of inheriting an old failure. A remote image waits for a tap; the brain's own
+ * attachments load at once. */
 function MdImage(props: {
   readonly href: string
   readonly alt: string
@@ -45,12 +46,25 @@ function MdImage(props: {
   readonly theme: Theme
   readonly size: number
 }): ReactNode {
+  const host = remoteImageHost(props.href)
+  const [load, setLoad] = useState(host === undefined)
   const [failed, setFailed] = useState(false)
   if (failed) {
     return (
       <Text style={bodyText(props.theme.fgSecondary, props.size)} selectable>
         {props.alt || props.href}
       </Text>
+    )
+  }
+  if (!load) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setLoad(true)}
+        style={[styles.imageLoad, { borderColor: props.theme.line }]}
+      >
+        <Text style={bodyText(props.theme.fgSecondary, props.size - 2)}>Load image from {host}</Text>
+      </Pressable>
     )
   }
   return (
@@ -388,6 +402,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
     transform: [{ translateY: 3 }],
+  },
+  imageLoad: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   code: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
   quote: { borderLeftWidth: 3, paddingLeft: 10, gap: 6 },

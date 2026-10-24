@@ -18,7 +18,7 @@ export const safeHref = (raw: string): string | undefined => {
 const ATTACHMENT_PATH = /^\/api\/attachments\/[A-Za-z0-9_-]+$/
 
 /** The one image-source guard shared by the web renderer and the iPhone app: `https:` anywhere, or
- * an attachment on the brain (`/api/attachments/<id>`), and nothing else. Images load without a
+ * an attachment on the brain (`/api/attachments/<id>`), and nothing else. Attachments load without a
  * click, so no other brain route may get a cookie- or session-bearing GET: an absolute URL on
  * `origin` (the brain's, when known) is held to the attachment rule too, and comes back as its path.
  * `http:`, `data:`, addresses with a control character inside and every other address return
@@ -39,3 +39,8 @@ export const imageSrc = (raw: string, origin?: string): string | undefined => {
     return undefined
   }
 }
+
+/** The host an `imageSrc` result loads from when it is off the brain: such an image waits for a
+ * click, so a message can't beacon to a third party just by being shown. Attachments: undefined. */
+export const remoteImageHost = (src: string): string | undefined =>
+  src.startsWith("/") ? undefined : new URL(src).host

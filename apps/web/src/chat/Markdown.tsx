@@ -2,13 +2,13 @@
 // with soft line breaks, **bold**, *italic*, ~~strike~~, `code`, fenced code blocks, [links](url),
 // bare URLs, bullet and numbered lists, blockquotes, #-headings, GFM tables and @Bot mentions
 // (avatar + name in the Bot's colour, Grok style). Links only allow http(s), mailto and
-// same-origin relative URLs, images only https and attachments; anything else renders as plain text.
+// same-origin relative URLs, images only attachments or https (after a click); anything else is text.
 // A link to a website starts with the site's icon (`/api/favicon`, fetched by the brain), or a globe
 // when the site has none.
 import { Globe } from "lucide-react"
 import { Fragment, type ReactNode, useState } from "react"
 import { Avatar } from "@openbot/ui"
-import { imageSrc, safeHref } from "@openbot/app-model"
+import { imageSrc, remoteImageHost, safeHref } from "@openbot/app-model"
 
 export { safeHref }
 
@@ -176,11 +176,21 @@ export const parseBlocks = (source: string): ReadonlyArray<Block> => {
 
 /** Inline image with its own failure state: a broken image must stay visible as text, never blank.
  * The caller keys it by `href`, so every new source (an edited or re-rendered message, or a source
- * shown before) mounts fresh and gets its own try instead of inheriting an old failure. */
+ * shown before) mounts fresh and gets its own try instead of inheriting an old failure. A remote
+ * image waits for a click; the brain's own attachments load at once. */
 function MdImage(props: { readonly href: string; readonly alt: string }): ReactNode {
+  const host = remoteImageHost(props.href)
+  const [load, setLoad] = useState(host === undefined)
   const [failed, setFailed] = useState(false)
   if (failed) {
     return <span className="ob-md-img-fallback">{props.alt || props.href}</span>
+  }
+  if (!load) {
+    return (
+      <button type="button" className="ob-md-img-load" title={props.alt || undefined} onClick={() => setLoad(true)}>
+        Load image from {host}
+      </button>
+    )
   }
   return (
     <img

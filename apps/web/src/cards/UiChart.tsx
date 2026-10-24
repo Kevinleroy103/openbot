@@ -17,9 +17,15 @@ export function UiChart({ block }: { readonly block: ChartBlock }): ReactNode {
   }, [])
   const labels = [...new Set(block.series.flatMap((series) => series.points.map((point) => point.x)))]
   const values = block.series.flatMap((series) => series.points.map((point) => point.y))
-  const low = Math.min(0, ...values)
-  const high = Math.max(0, ...values)
-  const range = high - low || 1
+  const min = Math.min(0, ...values)
+  const max = Math.max(0, ...values)
+  const rawStep = (max - min || 1) / 2
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep))
+  const tickStep = Math.ceil(rawStep / magnitude) * magnitude
+  const low = Math.floor(min / tickStep) * tickStep
+  const high = Math.max(low + tickStep, Math.ceil(max / tickStep) * tickStep)
+  const range = high - low
+  const ticks = Array.from({ length: Math.round(range / tickStep) + 1 }, (_, index) => low + index * tickStep)
   const width = Math.max(availableWidth, labels.length * 24 + 56)
   const step = (width - 56) / Math.max(1, labels.length)
   const x = (label: string) => 44 + step * (labels.indexOf(label) + 0.5)
@@ -56,7 +62,7 @@ export function UiChart({ block }: { readonly block: ChartBlock }): ReactNode {
           {highlighted >= 0 && (
             <rect x={44 + step * highlighted} y={14} width={step} height={154} rx={4} fill="var(--ob-accent-soft)" />
           )}
-          {[low, low + range / 2, low + range].map((value) => (
+          {ticks.map((value) => (
             <g key={value}>
               <line
                 x1={44}
@@ -67,13 +73,13 @@ export function UiChart({ block }: { readonly block: ChartBlock }): ReactNode {
                 strokeWidth={0.5}
               />
               <text x={36} y={y(value) + 4} textAnchor="end" fill="var(--ob-fg-tertiary)" fontSize={11}>
-                {Number(value.toFixed(1))}
+                {Number(value.toPrecision(12))}
               </text>
             </g>
           ))}
           {labels.map(
             (label, index) =>
-              index % labelEvery === 0 && (
+              (index % labelEvery === 0 || index === highlighted) && (
                 <text key={label} x={x(label)} y={184} textAnchor="middle" fill="var(--ob-fg-secondary)" fontSize={11}>
                   {label.length > 8 ? `${label.slice(0, 7)}…` : label}
                 </text>

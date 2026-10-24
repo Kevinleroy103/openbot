@@ -14,7 +14,7 @@ async function show(page: Page, scenario: string) {
     : null
   const box = page.getByRole("textbox", { name: "Message Expense Clerk" })
   await box.fill(`ui-${scenario}`)
-  await box.press("Enter")
+  await page.getByRole("button", { name: "Send", exact: true }).click()
   await page.waitForFunction((id) => {
     const elements = document.querySelectorAll('[data-card="ui"]')
     const last = elements[elements.length - 1]
@@ -68,7 +68,11 @@ describe.skipIf(!enabled)("generative UI against the dev mock", () => {
                 "_blank",
               )
             }
-            if (scenario === "chart") expect(await card.getByRole("img", { name: /Bar chart/ }).count()).toBe(1)
+            if (scenario === "chart") {
+              expect(await card.getByRole("img", { name: /Bar chart/ }).count()).toBe(1)
+              expect(await card.locator('svg text[x="36"]').allTextContents()).toEqual(["0", "5", "10"])
+              expect(await card.locator("svg text").allTextContents()).toContain("Thu")
+            }
             if (scenario === "agenda") expect(await card.locator("ol > li").count()).toBe(4)
             if (scenario === "compact") {
               const toggle = card.getByRole("button", { name: /All 6 checks passed/ })
@@ -79,6 +83,7 @@ describe.skipIf(!enabled)("generative UI against the dev mock", () => {
               await toggle.click()
               await card.getByText("Web typecheck", { exact: true }).waitFor()
               expect(await toggle.getAttribute("aria-expanded")).toBe("true")
+              await card.scrollIntoViewIfNeeded()
             }
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
             expect(await card.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
@@ -106,7 +111,7 @@ describe.skipIf(!enabled)("generative UI against the dev mock", () => {
       await page.locator(`[data-entry="${entryId}"] [data-card="ui"][data-status="resolved"]`).waitFor()
       await page
         .getByTestId("transcript")
-        .getByText(/Booked.*Launch review.*13:30/)
+        .getByText('Got "Send choice": slot = 13:30 – 14:00; title = Launch review.', { exact: true })
         .waitFor()
       await page.reload()
       const answered = page.locator(`[data-entry="${entryId}"] [data-card="ui"]`)

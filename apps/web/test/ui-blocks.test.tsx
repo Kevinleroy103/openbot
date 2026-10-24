@@ -98,6 +98,22 @@ test("charts support negative values, zero series and readable descriptions", ()
   ).not.toContain("NaN")
 })
 
+test("chart ticks round outward while keeping small values legible", () => {
+  for (const { values, ticks } of [
+    { values: [0, 8.7], ticks: [0, 5, 10] },
+    { values: [-3, 4], ticks: [-4, 0, 4] },
+    { values: [0, 0.0087], ticks: [0, 0.005, 0.01] },
+    { values: [0, 0], ticks: [0, 0.5] },
+  ]) {
+    const html = render({
+      type: "chart",
+      kind: "bar",
+      series: [{ name: "Values", points: values.map((y, index) => ({ x: String(index), y })) }],
+    })
+    expect([...html.matchAll(/<text x="36"[^>]*>([^<]+)<\/text>/g)].map((match) => Number(match[1]))).toEqual(ticks)
+  }
+})
+
 test("stored answers render the chosen values read-only, not the defaults", () => {
   const card = Schema.decodeUnknownSync(UiCard)(choiceFixture)
   const html = renderToStaticMarkup(

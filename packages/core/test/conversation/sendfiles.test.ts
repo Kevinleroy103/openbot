@@ -4,7 +4,7 @@
 // nothing and leave no stored files. Plus the pure type sniffing / image size helpers.
 import { describe, expect, test } from "bun:test"
 import { type ConversationId, LOCAL_NODE_ID, type TurnId } from "@openbot/contracts"
-import { Context, Effect, Layer, Option } from "effect"
+import { Context, Deferred, Effect, Fiber, Layer, Option } from "effect"
 import { AttachmentStore, BotRepo, ConversationRepo, Messaging, type ToolContext } from "../../src/ports/index.ts"
 import { MessagingLive } from "../../src/services/conversation/index.ts"
 import { detectMime, formatBytes, imageDimensions } from "../../src/services/conversation/files.ts"
@@ -169,6 +169,30 @@ describe("send_file (Messaging.sendFiles)", () => {
     expect((out.notMine as { message: string }).message).toContain("conversation you are part of")
     expect(Option.isNone(out.leftover)).toBe(true)
     expect(out.posted).toHaveLength(0)
+  })
+
+  test("importFiles cancelled after storing a file keeps no stored files", async () => {
+    const leftover = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const messaging = yield* Messaging
+        const second = yield* Deferred.make<void>()
+        const fiber = yield* Effect.forkChild(messaging.importFiles({
+          nodeId: LOCAL_NODE_ID,
+          inv,
+          cwd: WS,
+          paths: ["out/cover.png", "psychopomp/output/cache-demo.mp4"],
+          progress: (message) => message.includes("cache-demo") ? Effect.andThen(Deferred.succeed(second, undefined), Effect.never) : Effect.void,
+        }))
+        yield* Deferred.await(second)
+        yield* Fiber.interrupt(fiber)
+        const store = yield* AttachmentStore
+        return yield* Effect.forEach(Array.from({ length: 20 }, (_, i) => `att_${String(i + 1).padStart(6, "0")}`), (id) =>
+          store.get(id as never)).pipe(Effect.map((found) => Option.firstSomeOf(found)))
+      }),
+      layer(),
+    )
+    expect(Option.isNone(leftover)).toBe(true)
   })
 })
 

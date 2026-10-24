@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import type { RoutineSpec, TranscriptEntry } from "@openbot/contracts"
 import { ROUTINE_RUNS_KEPT } from "@openbot/contracts"
-import { Effect, Exit, Layer, Option } from "effect"
-import { botActor, ConversationRepo, EntryRepo, RoutineRepo, RoutineScheduler, userActor } from "../../src/ports/index.ts"
+import { Effect, Exit, Fiber, Layer, Option } from "effect"
+import { botActor, ConversationRepo, EntryRepo, Orchestrator, RoutineRepo, RoutineScheduler, userActor } from "../../src/ports/index.ts"
 import { RoutineSchedulerLive } from "../../src/services/automation/index.ts"
 import { DONE_ONCE_RETENTION_MS } from "../../src/services/automation/RoutineScheduler.ts"
 import {
@@ -293,6 +293,49 @@ describe("RoutineScheduler", () => {
     })
     const changes = out.written.flatMap((e) => (e.kind === "event" && e.event.type === "routine-changed" ? [e.event.action] : []))
     expect(changes).toEqual(["disabled", "enabled", "updated", "deleted"])
+  })
+})
+
+describe("a run whose delivery dies or is cancelled", () => {
+  const withDeliver = (deliver: Effect.Effect<never>) =>
+    RoutineSchedulerLive.pipe(
+      Layer.provide(Layer.effect(Orchestrator, Effect.gen(function*() {
+        return Orchestrator.of({ ...(yield* Orchestrator), deliver: () => deliver })
+      }))),
+      Layer.provideMerge(baseLayer()),
+    )
+  const manual: RoutineSpec = { ...hourly, trigger: { type: "manual" } }
+
+  test("a defect closes the run as failed and the routine can run again", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const scheduler = yield* RoutineScheduler
+        const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: manual })
+        yield* Effect.exit(scheduler.runNow(routine.id))
+        const second = yield* Effect.exit(scheduler.runNow(routine.id))
+        return { second, runs: yield* runsOf(routine.id) }
+      }),
+      withDeliver(Effect.die("boom")),
+    )
+    expect(JSON.stringify(out.second)).not.toContain("Conflict")
+    expect(out.runs.map((r) => [r.status, r.error])).toEqual([["failed", "Internal error."], ["failed", "Internal error."]])
+  })
+
+  test("an interruption closes the run as interrupted", async () => {
+    const out = await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const scheduler = yield* RoutineScheduler
+        const routine = yield* scheduler.create(userActor, { botId: BOT_A.id, spec: manual })
+        const fiber = yield* Effect.forkChild(scheduler.runNow(routine.id))
+        yield* eventually(Effect.map(runsOf(routine.id), (runs) => runs.length === 1))
+        yield* Fiber.interrupt(fiber)
+        return yield* runsOf(routine.id)
+      }),
+      withDeliver(Effect.never),
+    )
+    expect(out.map((r) => r.status)).toEqual(["interrupted"])
   })
 })
 

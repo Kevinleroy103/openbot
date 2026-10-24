@@ -501,8 +501,8 @@ export const MessagingLive: Layer.Layer<
           Effect.map((file) => file.attachment),
           Effect.tap((attachment) => Effect.sync(() => stored.push(attachment))),
         )).pipe(
-          // a later file failed: drop the ones already stored
-          Effect.tapError(() => Effect.forEach(stored, (a) => Effect.ignore(attachmentStore.delete(a.id)), { discard: true })),
+          // a later file failed (or the call was cancelled): drop the ones already stored
+          Effect.onError(() => Effect.forEach(stored, (a) => Effect.ignore(attachmentStore.delete(a.id)), { discard: true })),
         )
     })
 

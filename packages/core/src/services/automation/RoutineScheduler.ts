@@ -35,7 +35,7 @@ import type {
   RoutineSpec,
 } from "@openbot/contracts"
 import { Conflict, InvalidInput, NotFound } from "@openbot/contracts"
-import { Clock, Duration, Effect, FiberSet, Layer, Option, Queue, Semaphore, Stream } from "effect"
+import { Cause, Clock, Duration, Effect, FiberSet, Layer, Option, Queue, Semaphore, Stream } from "effect"
 import { IdGen } from "../../ports/IdGen.ts"
 import { BotRepo, EntryRepo, RoutineRepo } from "../../ports/repos.ts"
 import { type Actor, ConversationService, type EntryDraft, Orchestrator, RoutineScheduler } from "../../ports/services.ts"
@@ -332,12 +332,18 @@ export const makeRoutineScheduler = Effect.gen(function*() {
         sourceEntryId: eventId,
         routineRunId: run.id,
       }).pipe(
-        Effect.tapError((error) =>
-          finishRun(routine.id, run.id, {
-            status: "failed",
-            error: error._tag === "HarnessUnavailable" ? error.message : `${error._tag}: ${error.entity} ${error.id}`,
-          })
-        ),
+        Effect.onError((cause) => {
+          const error = Cause.findErrorOption(cause)
+          if (Option.isSome(error)) {
+            const e = error.value
+            return finishRun(routine.id, run.id, {
+              status: "failed",
+              error: e._tag === "HarnessUnavailable" ? e.message : `${e._tag}: ${e.entity} ${e.id}`,
+            })
+          }
+          if (Cause.hasInterruptsOnly(cause)) return finishRun(routine.id, run.id, { status: "interrupted" })
+          return finishRun(routine.id, run.id, { status: "failed", error: "Internal error." })
+        }),
       )
       const withTurn: RoutineRun = receipt.turnId === undefined ? run : { ...run, turnId: receipt.turnId }
       if (receipt.turnId !== undefined) {

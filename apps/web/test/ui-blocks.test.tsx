@@ -114,6 +114,65 @@ test("chart ticks round outward while keeping small values legible", () => {
   }
 })
 
+test("maximum charts keep all 240 bars or points inside the SVG with positive geometry", () => {
+  for (const kind of ["bar", "line"] as const) {
+    for (const sharedLabels of [true, false]) {
+      const html = render({
+        type: "chart",
+        kind,
+        series: Array.from({ length: 4 }, (_, series) => ({
+          name: `Series ${series}`,
+          points: Array.from({ length: 60 }, (_point, point) => ({
+            x: sharedLabels ? `Day ${point}` : `${series}-${point}`,
+            y: (point - 30) * (series + 1),
+          })),
+        })),
+      })
+      const width = Number(/viewBox="0 0 ([\d.]+) 200"/.exec(html)?.[1])
+      expect(width).toBeGreaterThan(480)
+      expect(html).toContain(`min-width:${width}px`)
+      const shapes = [...html.matchAll(/<(rect|circle)\b([^>]+)>/g)]
+      expect(shapes).toHaveLength(240)
+      for (const [, shape, attributes] of shapes) {
+        const attr = Object.fromEntries(
+          [...attributes!.matchAll(/([a-z]+)="(-?[\d.]+)"/g)].map(([, key, value]) => [key, Number(value)]),
+        )
+        let left = attr.x!
+        let top = attr.y!
+        let right = left + attr.width!
+        let bottom = top + attr.height!
+        if (shape === "circle") {
+          left = attr.cx! - attr.r!
+          top = attr.cy! - attr.r!
+          right = attr.cx! + attr.r!
+          bottom = attr.cy! + attr.r!
+        } else {
+          expect(attr.width!).toBeGreaterThan(0)
+          expect(attr.height!).toBeGreaterThanOrEqual(0)
+        }
+        expect(left).toBeGreaterThanOrEqual(0)
+        expect(top).toBeGreaterThanOrEqual(0)
+        expect(right).toBeLessThanOrEqual(width)
+        expect(bottom).toBeLessThanOrEqual(200)
+      }
+    }
+  }
+})
+
+test("subtitle-only UI cards keep their header", () => {
+  const card = Schema.decodeUnknownSync(UiCard)({
+    type: "ui",
+    version: 1,
+    fallback: "Meeting",
+    subtitle: "Meeting details",
+    blocks: [],
+  })
+  const html = renderToStaticMarkup(
+    <UiCardContent card={card} state={{ status: "pending" }} pending={false} onAct={() => {}} />,
+  )
+  expect(html).toContain("Meeting details")
+})
+
 test("stored answers render the chosen values read-only, not the defaults", () => {
   const card = Schema.decodeUnknownSync(UiCard)(choiceFixture)
   const html = renderToStaticMarkup(

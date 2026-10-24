@@ -5,6 +5,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { chromium, type Browser, type Page } from "playwright-core"
 import { chromiumPath, screenshotDir } from "./shoot.ts"
+import choice from "./fixtures/ui/ui-choice.json"
+import { UiCard } from "@openbot/contracts"
+import { Schema } from "effect"
 
 const enabled = existsSync(chromiumPath)
 
@@ -44,6 +47,7 @@ describe.skipIf(!enabled)("UI card renderer", () => {
     })
     await page.goto(`https://renderer.test/?fixture=${fixture}${query}`)
     await page.locator('[data-card="ui"]').waitFor()
+    await page.waitForFunction(() => typeof window.updateUiCard === "function")
     await page.evaluate(() => document.fonts.ready)
     return page
   }
@@ -128,6 +132,103 @@ describe.skipIf(!enabled)("UI card renderer", () => {
       await page.getByText("Update OpenBot to use this card", { exact: true }).waitFor()
       expect(await page.getByRole("textbox").count()).toBe(0)
       expect(await page.getByRole("button").count()).toBe(0)
+    } finally {
+      await page.close()
+    }
+  }, 30_000)
+
+  test("live form updates reconcile edits, defaults, removed options and reused ids", async () => {
+    const page = await open("choice", 393, "&fail")
+    const initial = Schema.decodeUnknownSync(UiCard)(choice)
+    try {
+      await page.evaluate((card) => window.updateUiCard(card), {
+        ...initial,
+        blocks: initial.blocks.map((block) => {
+          if (block.type === "input") return { ...block, default: "Updated default" }
+          if (block.type === "choice") return { ...block, default: ["1330"] }
+          return block
+        }),
+      })
+      await page.waitForFunction(() =>
+        Array.from(document.querySelectorAll("input")).some((input) => input.value === "Updated default"),
+      )
+      expect(await page.getByRole("textbox", { name: "Meeting title" }).inputValue()).toBe("Updated default")
+      expect(await page.getByRole("radio", { name: "13:30 – 14:00" }).isChecked()).toBe(true)
+      await page.getByRole("textbox", { name: "Meeting title" }).fill("Keep my edit")
+      await page.getByRole("radio", { name: "15:00 – 15:30" }).check()
+      await page.evaluate((card) => window.updateUiCard(card), {
+        ...initial,
+        blocks: initial.blocks.map((block) => {
+          if (block.type === "choice")
+            return { ...block, options: block.options.filter((option) => option.id !== "1500") }
+          return block
+        }),
+      })
+      await page.getByRole("radio", { name: "15:00 – 15:30" }).waitFor({ state: "detached" })
+      expect(await page.getByRole("textbox", { name: "Meeting title" }).inputValue()).toBe("Keep my edit")
+      await page.getByRole("button", { name: "Send choice" }).click()
+      expect(await page.evaluate(() => window.lastUiAction?.values)).toEqual({ slot: [], title: "Keep my edit" })
+      await page.evaluate((card) => window.updateUiCard(card), {
+        ...initial,
+        blocks: [{ type: "input", id: "new", label: "New field", default: "Fresh default" }],
+      } satisfies UiCard)
+      await page.getByRole("textbox", { name: "New field" }).waitFor()
+      await page.getByRole("button", { name: "Send choice" }).click()
+      expect(await page.evaluate(() => window.lastUiAction?.values)).toEqual({ new: "Fresh default" })
+      await page.evaluate((card) => window.updateUiCard(card), initial)
+      await page.getByRole("textbox", { name: "Meeting title" }).waitFor()
+      expect(await page.getByRole("textbox", { name: "Meeting title" }).inputValue()).toBe("Design review")
+      expect(await page.getByRole("radio", { name: "10:00 – 10:30" }).isChecked()).toBe(true)
+      await page.getByRole("textbox", { name: "Meeting title" }).fill("Old text")
+      await page.getByRole("radio", { name: "13:30 – 14:00" }).check()
+      await page.evaluate((card) => window.updateUiCard(card), {
+        ...initial,
+        blocks: [
+          { type: "input", id: "slot", label: "Reused slot", default: "Text default" },
+          {
+            type: "choice",
+            id: "title",
+            label: "Reused title",
+            mode: "one",
+            options: [{ id: "new", label: "New topic" }],
+            default: ["new"],
+          },
+        ],
+      } satisfies UiCard)
+      await page.getByRole("textbox", { name: "Reused slot" }).waitFor()
+      expect(await page.getByRole("textbox", { name: "Reused slot" }).inputValue()).toBe("Text default")
+      expect(await page.getByRole("radio", { name: "New topic" }).isChecked()).toBe(true)
+      await page.getByRole("button", { name: "Send choice" }).click()
+      expect(await page.evaluate(() => window.lastUiAction?.values)).toEqual({ slot: "Text default", title: ["new"] })
+    } finally {
+      await page.close()
+    }
+  }, 30_000)
+
+  test("a live image update retries after the previous attachment failed", async () => {
+    const page = await open("choice")
+    try {
+      await page.evaluate(() =>
+        window.updateUiCard({
+          type: "ui",
+          version: 1,
+          fallback: "Diagram",
+          blocks: [{ type: "image", attachmentId: "att_missing" as never, alt: "Diagram" }],
+        }),
+      )
+      await page.getByText("Diagram (image unavailable)", { exact: true }).waitFor()
+      await page.evaluate(() =>
+        window.updateUiCard({
+          type: "ui",
+          version: 1,
+          fallback: "Diagram",
+          blocks: [{ type: "image", attachmentId: "att_gallery" as never, alt: "Diagram" }],
+        }),
+      )
+      const image = page.getByRole("img", { name: "Diagram", exact: true })
+      await image.waitFor()
+      await image.evaluate((element: HTMLImageElement) => element.decode())
+      expect(await image.getAttribute("src")).toBe("/api/attachments/att_gallery")
     } finally {
       await page.close()
     }

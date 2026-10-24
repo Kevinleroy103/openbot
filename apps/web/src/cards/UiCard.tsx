@@ -43,7 +43,24 @@ export function UiCardContent({
   const id = useId()
   const [expanded, setExpanded] = useState(!card.collapsed)
   const [actionId, setActionId] = useState<string>()
-  const [edited, setEdited] = useState(() => new Map<string, string | ReadonlyArray<string>>())
+  const [form, setForm] = useState(() => ({
+    blocks: card.blocks,
+    edited: new Map<string, string | ReadonlyArray<string>>(),
+  }))
+  let edited = form.edited
+  if (form.blocks !== card.blocks) {
+    edited = new Map()
+    for (const block of card.blocks) {
+      if (block.type !== "input" && block.type !== "choice") continue
+      const value = form.edited.get(block.id)
+      if (block.type === "input" && typeof value === "string") edited.set(block.id, value)
+      if (block.type === "choice" && value !== undefined && typeof value !== "string") {
+        const selected = value.filter((optionId) => block.options.some((option) => option.id === optionId))
+        edited.set(block.id, block.mode === "one" ? selected.slice(0, 1) : selected)
+      }
+    }
+    setForm({ blocks: card.blocks, edited })
+  }
   const answered = state.status === "resolved"
   const inputs: Record<string, string | ReadonlyArray<string>> = Object.create(null)
   for (const block of card.blocks) {
@@ -96,7 +113,9 @@ export function UiCardContent({
               key={index}
               block={block}
               values={values}
-              onChange={(key, value) => setEdited((current) => new Map(current).set(key, value))}
+              onChange={(key, value) =>
+                setForm((current) => ({ ...current, edited: new Map(current.edited).set(key, value) }))
+              }
               disabled={disabled}
               answered={answered}
               namePrefix={id}

@@ -20,7 +20,26 @@ jobs:
         run: bun run typecheck
       - name: Lint
         run: bun run lint
-      - name: Test
-        run: bun run test
+      - name: Test everything but the web app
+        run: bun turbo run test --filter='!@openbot/web'
+        env:
+          OPENBOT_CHROMIUM: /usr/bin/google-chrome
+
+  web:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      # timings.json only balances the shards; refresh it with `bun test --timings=test/timings.json --update-timings`
+      - name: Test the web app
+        working-directory: apps/web
+        run: bun test --shard=${{ matrix.shard }}/3 --timings=test/timings.json
         env:
           OPENBOT_CHROMIUM: /usr/bin/google-chrome

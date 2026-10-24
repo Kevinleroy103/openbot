@@ -91,12 +91,12 @@ export const makeHark = (options: HarkOptions) =>
     /** POSTs one notification; a failure is the reason in words. */
     const post = (token: string, body: Record<string, unknown>, idempotencyKey: string) =>
       Effect.tryPromise({
-        try: async (): Promise<string | undefined> => {
+        try: async (signal): Promise<string | undefined> => {
           const response = await fetchImpl(`${base}/hooks/${token}`, {
             method: "POST",
             headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
             body: JSON.stringify(body),
-            signal: AbortSignal.timeout(15_000),
+            signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
           })
           if (response.ok) return undefined
           const detail = await response.json().then((j: unknown) => {

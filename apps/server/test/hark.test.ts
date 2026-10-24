@@ -2,8 +2,10 @@
 // webhook is refused); OpenBot's notifications become pushes with the Bot as project and a link to
 // the chat; "when a Bot needs you" drops the rest; a webhook Hark forgets shows as a problem.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { Effect } from "effect"
-import { harkToken } from "../src/hark.ts"
+import { Effect, Fiber } from "effect"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
+import { harkToken, makeHark } from "../src/hark.ts"
 import { eventually, login, rpcClient, startServer, type TestServer } from "./helpers.ts"
 
 interface Push {
@@ -48,6 +50,34 @@ describe("Hark", () => {
     expect(harkToken(" whk_abc ")).toBe("whk_abc")
     expect(harkToken("https://hark.ryan.ceo/hooks/abc")).toBeUndefined()
   })
+
+  for (const pendingAt of ["request", "response body"] as const) {
+    test(`interrupting a Hark call aborts its pending ${pendingAt}`, () =>
+      server.run(Effect.gen(function*() {
+        const started = Promise.withResolvers<AbortSignal>()
+        const file = join(server.dataDir, `cancel-${pendingAt}.json`)
+        const fetchImpl: typeof fetch = Object.assign(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+          const signal = init?.signal
+          if (signal == null) throw new Error("Hark must pass an abort signal")
+          const pending = () => {
+            started.resolve(signal)
+            return new Promise<never>((_resolve, reject) => {
+              signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+            })
+          }
+          if (pendingAt === "request") return pending()
+          return Object.assign(new Response(null, { status: 503 }), { json: pending })
+        }, { preconnect: fetch.preconnect })
+        const service = yield* makeHark({ file, fetch: fetchImpl })
+        const call = yield* service.connect("whk_good").pipe(Effect.forkScoped)
+        const signal = yield* Effect.promise(() => started.promise)
+        expect(signal.aborted).toBe(false)
+        yield* Fiber.interrupt(call)
+        expect(signal.aborted).toBe(true)
+        expect(existsSync(file)).toBe(false)
+        expect(yield* service.status).toEqual({ connected: false, sends: "all" })
+      })))
+  }
 
   test("connect, push OpenBot's notifications to the iPhone, choose what is sent, disconnect", () =>
     server.run(Effect.gen(function*() {

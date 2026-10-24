@@ -163,8 +163,7 @@ const browserWsUrl = (port: number): Promise<string | undefined> =>
       const url = ((await r.json()) as { webSocketDebuggerUrl?: unknown }).webSocketDebuggerUrl
       return typeof url === "string" && url.startsWith("ws://") ? url : undefined
     },
-    () => undefined,
-  )
+  ).catch(() => undefined)
 
 /**
  * DevTools ports come from a fixed range, never `--remote-debugging-port=0`: Google sign-in rejects a

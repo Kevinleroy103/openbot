@@ -232,34 +232,36 @@ export const makeBrowserManager = (config: BrowserConfig, options?: BrowserManag
     }
 
     const start = (key: string): Effect.Effect<Running, BrowserUnavailable> => Effect.gen(function* () {
-      const launched = yield* (onScreen && key !== ""
-        ? Effect.flatMap(onScreen(key), (screen) =>
-            launchBrowser({ ...onScreenBrowserConfig(config, screen), debugPort: screen.debugPort }, {
-              env: screen.env,
-              cwd: screen.cwd,
-              logFile: path.join(screen.logDir, "browser.log"),
-              adopt: true,
-            }),
-          )
-        : launchBrowser(config, { logFile: options?.logFile }))
+      const screen = onScreen && key !== "" ? yield* onScreen(key) : undefined
       const scope = yield* Scope.make()
-      const cdp = yield* connectCdp(launched.wsUrl).pipe(
-        Scope.provide(scope),
-        Effect.tapError(() => Effect.andThen(Scope.close(scope, Exit.void), terminateGroup(launched.proc, 200))),
-        Effect.mapError((e) => new BrowserUnavailable({ reason: `cannot connect to the browser: ${e.message}` })),
-      )
-      const r: Running = { key, launched, cdp, scope, bots: new Map(), closedListeners: new Set(), closing: false }
-      cdp.on(onEvent(r))
-      yield* cdp.send("Target.setDiscoverTargets", { discover: true }).pipe(Effect.ignore)
-      cdp.closed.then(() => {
-        if (instances.get(r.key) === r) instances.delete(r.key)
-        for (const w of r.bots.values()) {
-          notify(w.listeners)
-          emitClosed(w.botId, r.closing ? "the node closed the browser" : "the browser exited")
-        }
-        notify(r.closedListeners)
-      })
-      return r
+      return yield* Effect.gen(function* () {
+        const launched = yield* Effect.acquireRelease(
+          screen
+            ? launchBrowser({ ...onScreenBrowserConfig(config, screen), debugPort: screen.debugPort }, {
+                env: screen.env,
+                cwd: screen.cwd,
+                logFile: path.join(screen.logDir, "browser.log"),
+                adopt: true,
+              })
+            : launchBrowser(config, { logFile: options?.logFile }),
+          (l) => terminateGroup(l.proc, 200),
+        )
+        const cdp = yield* connectCdp(launched.wsUrl).pipe(
+          Effect.mapError((e) => new BrowserUnavailable({ reason: `cannot connect to the browser: ${e.message}` })),
+        )
+        const r: Running = { key, launched, cdp, scope, bots: new Map(), closedListeners: new Set(), closing: false }
+        cdp.on(onEvent(r))
+        yield* cdp.send("Target.setDiscoverTargets", { discover: true }).pipe(Effect.ignore)
+        cdp.closed.then(() => {
+          if (instances.get(r.key) === r) instances.delete(r.key)
+          for (const w of r.bots.values()) {
+            notify(w.listeners)
+            emitClosed(w.botId, r.closing ? "the node closed the browser" : "the browser exited")
+          }
+          notify(r.closedListeners)
+        })
+        return r
+      }).pipe(Scope.provide(scope), Effect.onError(() => Scope.close(scope, Exit.void)))
     })
 
     const getRunning = (key: string): Effect.Effect<Running, BrowserUnavailable> => Effect.suspend(() => {

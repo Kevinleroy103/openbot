@@ -200,6 +200,43 @@ describe("SlackConnector", () => {
       partial.stop()
     }
   })
+
+  const savedWithAppToken = (name: string) => {
+    const file = join(dir, `${name}.json`)
+    writeFileSync(file, JSON.stringify({ version: 1, userToken: FAKE_USER_TOKEN, appToken: FAKE_APP_TOKEN, team: "T", teamUrl: "https://t.slack.com/", userId: "U_OWNER", userName: "Owner" }))
+    return file
+  }
+
+  test("live messages that cannot open their socket try again instead of crashing the brain", async () => {
+    const opened: Array<string> = []
+    const fetch = (async (url: string) => {
+      if (url.endsWith("/apps.connections.open")) opened.push(url)
+      return Response.json({ ok: true, url: "not a websocket url" })
+    }) as unknown as typeof globalThis.fetch
+    const scope = Effect.runSync(Scope.make())
+    try {
+      const connector = await Effect.runPromise(Scope.provide(makeSlackConnector({ file: savedWithAppToken("bad-socket"), fetch, reconnectMs: 10 }), scope))
+      await Effect.runPromise(eventually(Effect.sync(() => opened.length), (count) => count > 1))
+      expect(await Effect.runPromise(connector.status)).toMatchObject({ events: "failed" })
+    } finally {
+      await Effect.runPromise(Scope.close(scope, Exit.void))
+    }
+  })
+
+  test("a call waiting out Slack's rate limit is not sent once the brain shuts down", async () => {
+    const opened: Array<string> = []
+    const fetch = (async (url: string) => {
+      if (!url.endsWith("/apps.connections.open")) return Response.json({ ok: true })
+      opened.push(url)
+      return new Response("", { status: 429, headers: { "retry-after": "1" } })
+    }) as unknown as typeof globalThis.fetch
+    const scope = Effect.runSync(Scope.make())
+    await Effect.runPromise(Scope.provide(makeSlackConnector({ file: savedWithAppToken("rate-limited"), fetch }), scope))
+    await Effect.runPromise(eventually(Effect.sync(() => opened.length), (count) => count === 1))
+    await Effect.runPromise(Scope.close(scope, Exit.void))
+    await Bun.sleep(1_200)
+    expect(opened).toHaveLength(1)
+  })
 })
 
 describe("Slack in the brain", () => {

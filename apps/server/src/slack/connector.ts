@@ -125,7 +125,8 @@ const isConversationId = (text: string): boolean => /^[CDG][A-Z0-9_]{6,}$/.test(
 
 export const makeSlackConnector = (options: SlackConnectorOptions) =>
   Effect.gen(function*() {
-    const api: SlackApi = makeSlackApi({ baseUrl: options.apiUrl, fetch: options.fetch })
+    const closing = new AbortController()
+    const api: SlackApi = makeSlackApi({ baseUrl: options.apiUrl, fetch: options.fetch, signal: closing.signal })
     const events = yield* PubSub.unbounded<SlackEvent>()
     const shortcuts = yield* PubSub.unbounded<SlackShortcut>()
     /** The app's id, from Socket Mode's hello. */
@@ -462,7 +463,7 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
         live(problem === undefined ? "connecting" : "failed", problem)
         const delay = Math.min(60_000, reconnectMs * 2 ** Math.min(attempt, 6))
         attempt++
-        timer = setTimeout(() => void open(), delay)
+        timer = setTimeout(start, delay)
       }
       const open = async () => {
         if (stopped) return
@@ -518,7 +519,12 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
           retry()
         }
       }
-      void open()
+      const start = () =>
+        void open().catch((error) => {
+          console.warn("[slack] live messages failed:", error)
+          retry("Couldn't connect to Slack's live messages; trying again.")
+        })
+      start()
       return {
         stop: () => {
           stopped = true
@@ -546,7 +552,12 @@ export const makeSlackConnector = (options: SlackConnectorOptions) =>
     restartListening()
     // the saved token's scopes (the app may have been updated in Slack since)
     if (saved !== undefined) void call("auth.test").catch(() => undefined)
-    yield* Effect.addFinalizer(() => Effect.sync(() => listener?.stop()))
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        closing.abort()
+        listener?.stop()
+      })
+    )
 
     // ---------------------------------------------------------------- the port
 

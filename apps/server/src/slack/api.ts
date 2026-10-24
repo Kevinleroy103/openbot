@@ -4,6 +4,7 @@
  * `Retry-After` (up to 30 s) and tries once more.
  */
 import { InvalidInput, Unavailable } from "@openbot/contracts"
+import { setTimeout as sleep } from "node:timers/promises"
 
 export const SLACK_API_URL = "https://slack.com/api"
 
@@ -29,9 +30,9 @@ export interface SlackApi {
 const TIMEOUT_MS = 20_000
 const MAX_RETRY_AFTER_S = 30
 
-export const makeSlackApi = (options?: { readonly baseUrl?: string | undefined; readonly fetch?: typeof fetch | undefined }): SlackApi => {
-  const base = (options?.baseUrl ?? SLACK_API_URL).replace(/\/+$/, "")
-  const fetchImpl = options?.fetch ?? fetch
+export const makeSlackApi = (options: { readonly baseUrl?: string | undefined; readonly fetch?: typeof fetch | undefined; readonly signal: AbortSignal }): SlackApi => {
+  const base = (options.baseUrl ?? SLACK_API_URL).replace(/\/+$/, "")
+  const fetchImpl = options.fetch ?? fetch
   const call = async (token: string, method: string, args: SlackArgs = {}, retried = false): Promise<Record<string, any>> => {
     const body = new URLSearchParams()
     for (const [key, value] of Object.entries(args)) if (value !== undefined) body.set(key, String(value))
@@ -41,7 +42,7 @@ export const makeSlackApi = (options?: { readonly baseUrl?: string | undefined; 
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/x-www-form-urlencoded; charset=utf-8" },
         body,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.any([options.signal, AbortSignal.timeout(TIMEOUT_MS)]),
       })
     } catch (cause) {
       throw new SlackApiError(cause instanceof Error && cause.name === "TimeoutError" ? "timeout" : "unreachable")
@@ -49,7 +50,7 @@ export const makeSlackApi = (options?: { readonly baseUrl?: string | undefined; 
     if (response.status === 429) {
       const wait = Number(response.headers.get("retry-after") ?? "5")
       if (retried || !(wait <= MAX_RETRY_AFTER_S)) throw new SlackApiError("ratelimited")
-      await new Promise((resolve) => setTimeout(resolve, Math.max(1, wait) * 1000))
+      await sleep(Math.max(1, wait) * 1000, undefined, { signal: options.signal })
       return call(token, method, args, true)
     }
     if (!response.ok) throw new SlackApiError(`http_${response.status}`)

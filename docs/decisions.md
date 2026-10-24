@@ -275,7 +275,7 @@ All three adapters implement one `HarnessDriver` / `HarnessSession` port (t3code
 
 ## D7. Engineering
 
-- **D7.1 Monorepo.** Bun workspaces with a catalog, turbo, TypeScript 7 (`bun check`), oxlint and oxfmt. Packages export source entry points. `vendor/` is never imported.
+- **D7.1 Monorepo.** Bun workspaces with a catalog, turbo, TypeScript 7 (`bun check`), oxlint and `bun fmt`. Packages export source entry points. `vendor/` is never imported.
 - **D7.2 Dependency direction.** `contracts` → `core` (ports and services) → adapters and infrastructure → `apps/*` (composition roots). Core imports no SDK, SQL or React.
 - **D7.3 Tests.**
   - `bun test` throughout.

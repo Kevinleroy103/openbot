@@ -50,13 +50,10 @@
     "typecheck": "bun check --no-script",
     "test": "turbo run test",
     "lint": "oxlint",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
-    "check": "bun run typecheck && bun run lint && bun run test"
+    "check": "bun fmt --check && bun run typecheck && bun run lint && bun run test"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
-    "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "turbo": "2.11.8",
     "typescript": "7.0.2"

@@ -335,6 +335,7 @@ connect with the code under Settings › iPhone app in OpenBot.
 
 ```sh
 bun run dev          # hot reload
+bun fmt
 bun run typecheck
 bun run lint
 bun run test

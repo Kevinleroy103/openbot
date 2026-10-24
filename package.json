@@ -40,7 +40,8 @@
   },
   "overrides": {
     "effect": "4.0.4",
-    "@effect/platform-node-shared": "4.0.4"
+    "@effect/platform-node-shared": "4.0.4",
+    "@types/node": "26.6.5"
   },
   "scripts": {
     "dev": "bun run --filter @openbot/server dev",

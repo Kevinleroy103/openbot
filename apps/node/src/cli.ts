@@ -340,7 +340,7 @@ export const runCommand = (input: { readonly io: CliIo; readonly dataDir: string
 
         const startedAt = Date.now()
         const status = (state: DialState) =>
-          Effect.sync(() =>
+          Effect.try(() =>
             writeStatusFile(dataDir, {
               pid: process.pid,
               nodeId: identity.nodeId,

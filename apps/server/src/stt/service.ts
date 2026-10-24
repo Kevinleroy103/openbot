@@ -97,7 +97,7 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
             Effect.runPromise(
               Effect.flatMap(Clock.currentTimeMillis, (startedAt) =>
                 processes.record({ pid, pgid: pid, kind: "other", label: "speech recognizer", startedAt })).pipe(
-                  Effect.catch((error) => Effect.logWarning(`ProcessLedger.record failed: ${error.message}`)),
+                  Effect.ignoreCause({ log: "Warn", message: "ProcessLedger.record failed" }),
                 ),
             ),
         })
@@ -105,7 +105,7 @@ export const SpeechToTextLive = (options: SpeechToTextOptions): Layer.Layer<Spee
         Option.match(ledger, {
           onNone: () => Promise.resolve(),
           onSome: (processes) =>
-            Effect.runPromise(processes.remove(pid).pipe(Effect.catch((error) => Effect.logWarning(`ProcessLedger.remove failed: ${error.message}`)))),
+            Effect.runPromise(processes.remove(pid).pipe(Effect.ignoreCause({ log: "Warn", message: "ProcessLedger.remove failed" }))),
         })
 
       const launch = async (sampleRate: number): Promise<Recognizer> => {

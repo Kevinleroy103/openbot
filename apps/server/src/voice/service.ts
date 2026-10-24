@@ -233,7 +233,7 @@ export const VoiceCallsLive = (options: VoiceCallsOptions): Layer.Layer<VoiceCal
                     text: answer,
                     attachments: [],
                     streaming: false,
-                  }).pipe(Effect.ignore))
+                  }).pipe(Effect.ignoreCause({ log: "Warn", message: "voice call: could not post the answer to the chat" })))
                 }, () => void unanswered.delete(receipt.deliveryId))
               }, (error) => {
                 void Effect.runFork(Effect.logWarning("voice call: could not reach the Bot", { error: describeError(error) }))

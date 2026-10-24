@@ -647,6 +647,30 @@ describe("voice input over RPC", () => {
     }
   }, 30_000)
 
+  test("a process ledger that fails does not break dictation or removal", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "openbot-server-test-"))
+    const speech = SpeechToTextLive({ dir: join(dataDir, "stt"), manifest: manifestFor(fixtures), recognizerEntry: FAKE_RECOGNIZER }).pipe(
+      Layer.provide(Layer.succeed(ProcessLedger, ProcessLedger.of({
+        record: () => Effect.die(new Error("SQLITE_BUSY: database is locked")),
+        remove: () => Effect.die(new Error("SQLITE_BUSY: database is locked")),
+        list: Effect.succeed([]),
+        clear: Effect.void,
+      }))),
+    )
+    const server = await startServer({ dataDir, server: { speechToText: speech } })
+    try {
+      await withClient(server, (client) =>
+        Effect.gen(function*() {
+          yield* installed(client)
+          yield* client["stt.open"]()
+          yield* client["stt.remove"]()
+          expect(recognizersRunningUnder(dataDir)).toBe(0)
+        }))
+    } finally {
+      await server.close()
+    }
+  }, 30_000)
+
   test("a pending transcription resumed after removal says voice input is not set up", async () => {
     const server = await startWithManifest(manifestFor(fixtures))
     const entered = Effect.runSync(Deferred.make<void>())

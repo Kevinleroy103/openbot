@@ -298,7 +298,7 @@ const cardFromArgs = (args: CardArgs, ctx: ToolCallContext) =>
 const showUi = defineTool({
   name: "show_ui",
   toolset: "bot",
-  description: `Show the owner a card instead of prose: comparisons, status or plans, schedules, numbers, or options for them to pick. It is posted in this conversation as a native card. Keep plain answers as plain text, and never use a card for a single sentence. Blocks render top to bottom; each block is an object with exactly one key: text (markdown), fields, table, options (side by side, \`pick\` marks your recommendation), stats, checklist, timeline, chart, image (a file path), link (https only), choice or input. \`fallback\` is required: the card as plain text. With \`actions\`, the owner's press (and their choice and input values) comes back to you once, as a new message; without, the card is display-only. Returns the card's entry id for update_ui. Caps: ${UI_LIMITS.blocks} blocks, ${UI_LIMITS.tableRows}×${UI_LIMITS.tableColumns} tables, ${UI_LIMITS.options} options, ${UI_LIMITS.chartSeries} series of ${UI_LIMITS.chartPoints} points, ${UI_LIMITS.actions} actions, ${UI_LIMITS.bytes / 1024} KB.`,
+  description: `Post a native card in this conversation instead of a prose answer when you compare options, report a status or plan with numbers, lay out a schedule, or let the owner pick from options you worked out (a \`choice\` block and an action, rather than ask_user). Plain answers and explanations stay plain text, never a card. Blocks render top to bottom; each block is an object with exactly one key: text (markdown), fields, table, options (side by side, \`pick\` marks your recommendation), stats, checklist, timeline, chart, image (a file path), link (https only), choice or input. \`fallback\` is required: the card as plain text. With \`actions\` (required when there is a choice or an input), the owner's press (and their choice and input values) comes back to you once, as a new message; without, the card is display-only. Returns the card's entry id for update_ui. Caps: ${UI_LIMITS.blocks} blocks, ${UI_LIMITS.tableRows}×${UI_LIMITS.tableColumns} tables, ${UI_LIMITS.options} options, ${UI_LIMITS.chartSeries} series of ${UI_LIMITS.chartPoints} points, ${UI_LIMITS.actions} actions, ${UI_LIMITS.bytes / 1024} KB.`,
   params: p.params(cardFields),
   annotations: { title: "Show a card", destructiveHint: false, openWorldHint: false },
   handler: (args, ctx) =>
@@ -308,7 +308,7 @@ const showUi = defineTool({
       const next =
         card.actions !== undefined && card.actions.length > 0
           ? "The owner's answer arrives later as a new message; don't wait for it. With nothing else to add, reply exactly NO_REPLY."
-          : "Don't repeat the card in your reply."
+          : "Don't repeat the card in your reply: add a sentence only for what it doesn't say, else reply exactly NO_REPLY."
       return textResult(`Shown (entry ${entryId}; update_ui changes it). ${next}`)
     }),
 })

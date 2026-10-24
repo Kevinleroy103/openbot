@@ -115,7 +115,7 @@ export interface McpGatewayOptions<R = GatewayToolServices> {
 }
 
 const DEFAULT_INSTRUCTIONS =
-  "OpenBot tools: talk to your team (message_bot, post_to_group, handoff_task, list_bots), ask the user (ask_user, request_approval, notify_user — these never block: end your turn and the answer arrives as a new message), keep memory (remember, forget, recall_memory), schedule routines, save skills, and work on your computers (shell, files, browser, your screen with `computer`; `node` picks a computer from list_nodes; `request_takeover` hands your screen to the owner for logins and codes). Results starting with ERROR: are failures."
+  "OpenBot tools: talk to your team (message_bot, post_to_group, handoff_task, list_bots), ask the user (ask_user, request_approval, notify_user — these never block: end your turn and the answer arrives as a new message), show cards for comparisons, status and picks (show_ui, update_ui), keep memory (remember, forget, recall_memory), schedule routines, save skills, and work on your computers (shell, files, browser, your screen with `computer`; `node` picks a computer from list_nodes; `request_takeover` hands your screen to the owner for logins and codes). Results starting with ERROR: are failures."
 
 // ============================================================================ helpers
 

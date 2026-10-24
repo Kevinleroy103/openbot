@@ -106,8 +106,9 @@ describe.skipIf(!hasChromium)("e2e: message search", () => {
         dm,
         `echo: Trip ${i + 1}: book ${city} for the ${visa ? "partner summit; check the visa rules" : "quarterly review"}, back by Friday.`,
       )
+      // each echo before the next trip: queued echoes lag under load, landing an old echo among the newest trips
+      await idle(dm)
     }
-    await idle(dm)
   }, 240_000)
 
   afterAll(async () => {

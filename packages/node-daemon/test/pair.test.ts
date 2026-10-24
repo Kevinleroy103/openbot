@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
-import { readFileSync, statSync } from "node:fs"
+import { mkdirSync, readFileSync, statSync } from "node:fs"
 import * as path from "node:path"
 import { generateKeyPair, isValidPublicKey, PairRequest, publicKeyFromPrivate } from "@openbot/node-protocol"
 import * as Schema from "effect/Schema"
@@ -103,6 +103,17 @@ describe("AuditLog", () => {
         const log2 = yield* makeAuditLog({ dir })
         yield* log2.record({ inv, action: "read-file", target: "a", decision: "allowed" })
         expect(verifyAuditChain(readFileSync(file, "utf8").trim().split("\n"))).toBe(-1)
+      }),
+    ))
+
+  test("an audit file that cannot be read never fails the action being recorded", () =>
+    run(
+      Effect.gen(function* () {
+        const forwarded: Array<unknown> = []
+        const log = yield* makeAuditLog({ dir: path.join(t.path, "audit-unreadable"), forward: (e) => Effect.sync(() => void forwarded.push(e)) })
+        mkdirSync(log.fileFor(Date.now()), { recursive: true })
+        yield* log.record({ inv: { invocationId: "inv_1", botId: "bot_1" }, action: "read-file", target: "a", decision: "allowed" })
+        expect(forwarded.length).toBe(1)
       }),
     ))
 })

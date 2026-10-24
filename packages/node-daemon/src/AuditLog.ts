@@ -89,9 +89,13 @@ export const makeAuditLog = (options: {
       lastFile = file
       lastHash = GENESIS
       if (!existsSync(file)) return
-      const lines = readFileSync(file, "utf8").split("\n").filter((l) => l.length > 0)
-      const last = lines[lines.length - 1]
-      if (last !== undefined) lastHash = sha256(last)
+      try {
+        const lines = readFileSync(file, "utf8").split("\n").filter((l) => l.length > 0)
+        const last = lines[lines.length - 1]
+        if (last !== undefined) lastHash = sha256(last)
+      } catch (err) {
+        console.error(`[openbot-node] audit log read failed: ${String(err)}`)
+      }
     }
     const record = (input: AuditInput) =>
       Effect.gen(function* () {

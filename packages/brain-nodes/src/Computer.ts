@@ -569,9 +569,10 @@ export const makeComputerService = Effect.gen(function*() {
     hubLock.withPermits(1)(
       Effect.gen(function*() {
         let hub = hubs.get(botId)
+        let stale: Fiber.Fiber<void> | undefined
         if (hub !== undefined && (hub.nodeId !== nodeId || hub.surface !== surface)) {
-          // the bot moved to another node: stop the old stream
-          if (hub.fiber !== undefined) yield* Fiber.interrupt(hub.fiber)
+          // the bot moved to another node: stop the old stream (outside the lock, as in leaveHub)
+          stale = hub.fiber
           hubs.delete(botId)
           hub = undefined
         }
@@ -580,12 +581,12 @@ export const makeComputerService = Effect.gen(function*() {
           const created: Hub = { botId, nodeId, surface, viewers: new Map([[v.id, v]]), lastFrame: undefined, lastUrl: undefined, fiber: undefined }
           hubs.set(botId, created)
           created.fiber = yield* Effect.forkIn(runHub(created), layerScope, { startImmediately: true })
-          return { hub: created, viewer: v }
+          return { hub: created, viewer: v, stale }
         }
         hub.viewers.set(v.id, v)
-        return { hub, viewer: v }
+        return { hub, viewer: v, stale }
       }),
-    )
+    ).pipe(Effect.tap(({ stale }) => (stale === undefined ? Effect.void : Fiber.interrupt(stale))))
 
   /**
    * The last viewer stops the hub. The hub fiber is interrupted OUTSIDE the lock: its own finalizer

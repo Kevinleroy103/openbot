@@ -221,6 +221,31 @@ describe("computer", () => {
         expect(node.state.screencasts).toEqual([botId, botId])
       }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path })))),
     ), 20_000)
+
+  test("a viewer of a bot that moved to another node stops the old screencast and gets the new one", () =>
+    run(
+      Effect.gen(function*() {
+        const server = yield* startServer
+        const computer = yield* ComputerPort
+        const service = yield* ComputerService
+        const first = yield* connectBrowserNode(server.ws, server.http, ["fs@1", "browser@1"])
+        const second = yield* connectBrowserNode(server.ws, server.http, ["fs@1", "browser@1"])
+        const botId = "bot_mover" as BotId
+        const bot = makeBot({ id: botId, name: "Mover", hostNodeId: first.nodeId })
+        yield* putBot(bot)
+        yield* computer.ensure(botId)
+        const v1 = yield* open(yield* dialWebSocket(`${server.ws}/ws/computer/${botId}?mode=view`))
+        yield* collect(v1, (fs) => images(fs).length >= 1)
+
+        yield* putBot({ ...bot, hostNodeId: second.nodeId })
+        yield* computer.ensure(botId)
+        const v2 = yield* open(yield* dialWebSocket(`${server.ws}/ws/computer/${botId}?mode=view`))
+        expect(images(yield* collect(v2, (fs) => images(fs).length >= 1))).toHaveLength(1)
+        expect(second.node.state.screencasts).toEqual([botId])
+        expect(yield* closeCodeOf(v1)).toBe(1011)
+        expect(yield* service.viewerCount(botId)).toBe(1)
+      }).pipe(Effect.provide(Layer.fresh(brainStack({ dataRoot: dir.path })))),
+    ), 20_000)
 })
 
 // ============================================================================ desktop surface (desktop@1)

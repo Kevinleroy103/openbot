@@ -619,12 +619,15 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
         const names = new Map<BotId, string>()
         const messages: Array<ContextMessage> = []
         for (const entry of page.entries) {
-          if (
+          let text: string
+          if (entry.kind === "card" && entry.card.type === "ui") text = entry.card.fallback
+          else if (
             entry.kind !== "message" ||
             entry.streaming ||
             (entry.text.trim() === "" && entry.attachments.length === 0)
           )
             continue
+          else text = messageWithAttachments(entry.text, entry.attachments)
           let speaker: string
           if (entry.author.kind === "user") speaker = "Owner"
           else if (entry.author.kind !== "bot") continue
@@ -638,7 +641,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
               )
             speaker = `@${names.get(id)!}`
           }
-          messages.push({ speaker, text: messageWithAttachments(entry.text, entry.attachments) })
+          messages.push({ speaker, text })
         }
         return renderTaskTurn({ where, messages, brief: task.brief, updates })
       }).pipe(

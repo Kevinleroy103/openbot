@@ -792,6 +792,13 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
             rendered.add(entry.id)
             continue
           }
+          // a teammate's ui card reads as its fallback text
+          if (entry.kind === "card" && entry.card.type === "ui" && entry.author.kind === "bot") {
+            if (entry.author.botId === botId) continue
+            lines.push(`[@${yield* botName(entry.author.botId)}]: ${entry.card.fallback}`)
+            rendered.add(entry.id)
+            continue
+          }
           if (
             entry.kind !== "message" ||
             (entry.text.trim() === "" && entry.attachments.length === 0) ||

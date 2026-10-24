@@ -59,7 +59,7 @@ export const bumpForEntry = (conversation: Conversation, entry: KnownTranscriptE
   }
   const countsAsUnread =
     (entry.kind === "message" && entry.author.kind === "bot") ||
-    (entry.kind === "card" && entry.state.status === "pending") ||
+    (entry.kind === "card" && (entry.state.status === "pending" || entry.card.type === "ui")) ||
     (entry.kind === "notice" && entry.level === "error")
   if (!countsAsUnread) return { ...conversation, lastActivityAt }
   return {

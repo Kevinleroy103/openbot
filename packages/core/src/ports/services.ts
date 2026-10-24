@@ -36,7 +36,7 @@
  *   5b. BackgroundTasks                           (never calls Orchestrator: emits `results`)
  *   6. Orchestrator                               (drains `ApprovalService.asyncAnswers`; group
  *                                                  routing of bot replies is internal)
- *   7. Messaging, RoutineScheduler                (call Orchestrator; resolve bots via BotRepo)
+ *   7. Messaging, RoutineScheduler, UiCardService (call Orchestrator; resolve bots via BotRepo)
  *   8. BotService                                 (Orchestrator.stopBot/newSession/compact,
  *                                                  RoutineScheduler.delete, ApprovalService.cancelPending)
  *
@@ -45,6 +45,7 @@
  * (its delivery's); replies, tool calls, cards and activity land there.
  */
 import type {
+  AlreadyAnswered,
   ApprovalRule,
   ApprovalRuleId,
   ApprovalRuleInput,
@@ -127,6 +128,8 @@ import type {
   Unavailable,
   Turn,
   TurnId,
+  UiCardInput,
+  UiValues,
   Usage,
 } from "@openbot/contracts"
 import type { Invocation, NodeApprovalRequest, NodeApprovalResponse } from "@openbot/node-protocol"
@@ -1033,6 +1036,32 @@ export class MemoryService extends Context.Service<
     readonly promptIndex: (botId: BotId) => Effect.Effect<string>
   }
 >()("openbot/core/MemoryService") {}
+
+// ============================================================================ UiCardService (generative UI)
+
+/**
+ * Bots' `ui` cards (`show_ui` / `update_ui`) and the owner's answer (`cards.act`). Entry-backed like
+ * Slack drafts: the card is the state, so it survives restarts and never expires.
+ */
+export class UiCardService extends Context.Service<
+  UiCardService,
+  {
+    /** Posts the card in the conversation the Bot works in. Same tool call id → the same card. */
+    readonly show: (ctx: ToolContext, card: UiCardInput) => Effect.Effect<{ readonly entryId: EntryId }, InvalidInput>
+    /** Replaces a card the Bot posted in this conversation, until the owner answers it. */
+    readonly update: (
+      ctx: ToolContext,
+      entryId: EntryId,
+      card: UiCardInput,
+    ) => Effect.Effect<void, NotFound | InvalidInput>
+    /** Records the owner's one-shot answer and delivers it to the Bot as a user message. */
+    readonly act: (input: {
+      readonly entryId: EntryId
+      readonly actionId: string
+      readonly values: UiValues
+    }) => Effect.Effect<void, NotFound | InvalidInput | AlreadyAnswered>
+  }
+>()("openbot/core/UiCardService") {}
 
 // ============================================================================ SkillService (D5.5)
 

@@ -73,6 +73,7 @@ import {
   SkillServiceLive,
   SlackServiceLive,
   SlackShortcutsLive,
+  UiCardServiceLive,
   UsageServiceLive,
 } from "@openbot/core"
 import { McpBindingIssuerLive, McpGatewayLive } from "@openbot/gateway"
@@ -437,7 +438,7 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     ), // skills.sh import (D5.5)
     Layer.provideMerge(BotServiceLive),
   ).pipe(
-    Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive, SlackShortcutsLive)), // 10 (+ Slack's "Send to OpenBot")
+    Layer.provideMerge(Layer.mergeAll(MessagingLive, RoutineSchedulerLive, SlackShortcutsLive, UiCardServiceLive)), // 10 (+ Slack's "Send to OpenBot", ui cards)
     // voice calls (experiment): <data>/voice, and voice input's Parakeet + sherpa-onnx
     Layer.provideMerge(
       VoiceCallsLive(

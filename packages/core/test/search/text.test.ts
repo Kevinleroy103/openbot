@@ -123,6 +123,20 @@ describe("searchable text", () => {
         }),
       ),
     ).toBe("Daily brief Every day at 9 Summarize the news")
+    expect(
+      textOf(
+        makeCardEntry({
+          card: {
+            type: "ui",
+            version: 1,
+            title: "Trip options",
+            blocks: [{ type: "table", columns: ["City"], rows: [["Lisbon"]] }],
+            fallback: "Lisbon or Porto in May.",
+          },
+          state: { status: "info" },
+        }),
+      ),
+    ).toBe("Trip options Lisbon or Porto in May.")
   })
 
   test("events: the lines worth finding; audit and housekeeping lines have none", () => {

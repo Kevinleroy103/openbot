@@ -19,7 +19,7 @@ import type {
   TurnId,
 } from "@openbot/contracts"
 
-export const SEARCH_TEXT_VERSION = 1
+export const SEARCH_TEXT_VERSION = 2
 
 /** Caps on indexed text (characters). Tool output is mostly noise past its start. */
 export const SEARCH_TEXT_MAX_CHARS = 32_000
@@ -92,6 +92,8 @@ export const searchTextOfEntry = (entry: KnownTranscriptEntry): string | undefin
           return joinText([card.name, card.triggerSummary, card.prompt])
         case "slack-draft":
           return joinText([card.to, card.threadLabel, card.text, names(card.files)])
+        case "ui":
+          return joinText([card.title, card.subtitle, card.fallback])
         default:
           return undefined
       }

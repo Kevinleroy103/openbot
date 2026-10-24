@@ -11,6 +11,7 @@
  *   RoutineSchedulerLive    Layer<RoutineScheduler, never, Orchestrator | ConversationService | RoutineRepo | BotRepo | EntryRepo | IdGen>
  *                                 (optional SlackConnector: Slack-triggered routines)
  *   SlackServiceLive        Layer<SlackService, never, ConversationService | EntryRepo | BotRepo | Notifier | AttachmentStore> (optional SlackConnector)
+ *   UiCardServiceLive       Layer<UiCardService, never, Orchestrator | ConversationService | EntryRepo | BotRepo | Notifier>
  *   SlackShortcutsLive      Layer<never, never, Orchestrator | SettingsService | BotRepo | ConversationService>
  *                                 (Slack's "Send to OpenBot" clicks; optional SlackConnector)
  *
@@ -31,6 +32,7 @@ export {
   slackEventsText,
   slackTriggerMatches,
 } from "./SlackService.ts"
+export { UiCardServiceLive } from "./UiCardService.ts"
 export { CATCH_UP_WINDOW_MS, describeTrigger, nextRunAfter, parseCron, validateTrigger } from "./schedule.ts"
 export {
   AUTONOMY_LABELS,

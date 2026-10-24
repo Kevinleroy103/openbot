@@ -473,7 +473,7 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
 export interface FinalizedTurn {
   /** Final bot messages of the turn, oldest first. */
   readonly botMessages: ReadonlyArray<TranscriptEntryOf<"message">>
-  /** Text of the last non-empty bot message. */
+  /** Text of the last non-empty bot message, or the fallback of a later `ui` card. */
   readonly lastBotMessage: string | undefined
 }
 
@@ -491,6 +491,7 @@ export const finalizeTurnEntries = (
     const all = yield* orDie(deps.entries.listByTurn(turnId))
     const now = yield* Clock.currentTimeMillis
     const botMessages: Array<TranscriptEntryOf<"message">> = []
+    let lastBotMessage: string | undefined
     for (const entry of all) {
       if (entry.kind === "unknown") continue
       let next: KnownTranscriptEntry | undefined
@@ -513,8 +514,10 @@ export const finalizeTurnEntries = (
         const updated = yield* Effect.result(deps.conversationService.updateEntry(entry.id, () => target))
         if (updated._tag === "Success" && updated.success.kind !== "unknown") final = updated.success
       }
-      if (final.kind === "message" && final.role === "bot" && final.author.kind === "bot") botMessages.push(final)
+      if (final.kind === "message" && final.role === "bot" && final.author.kind === "bot") {
+        botMessages.push(final)
+        if (final.text.trim().length > 0) lastBotMessage = final.text
+      } else if (final.kind === "card" && final.card.type === "ui") lastBotMessage = final.card.fallback
     }
-    const last = [...botMessages].reverse().find((m) => m.text.trim().length > 0)
-    return { botMessages, lastBotMessage: last?.text }
+    return { botMessages, lastBotMessage }
   })

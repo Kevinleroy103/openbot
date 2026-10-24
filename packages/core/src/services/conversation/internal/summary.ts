@@ -91,6 +91,7 @@ export const previewFor = (
       if (yield* hidden(entry)) continue
       if (entry.kind === "message" && entry.text.trim().length > 0) return previewOf(entry.text)
       if (entry.kind === "message" && entry.attachments.length > 0) return previewOf(attachmentsLine(entry.attachments))
+      if (entry.kind === "card" && entry.card.type === "ui") return previewOf(entry.card.fallback)
       if (entry.kind === "event" && entry.event.type !== "unknown" && !isHousekeeping(entry))
         return previewOf(describeEvent(entry.event))
     }

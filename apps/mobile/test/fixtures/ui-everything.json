@@ -1,0 +1,133 @@
+{
+  "type": "ui",
+  "version": 1,
+  "title": "Block gallery",
+  "subtitle": "Every block type",
+  "blocks": [
+    {
+      "type": "text",
+      "markdown": "**Bold** text, `inline code` and a [docs link](https://example.com/docs).\n\n- First item\n- Second item"
+    },
+    {
+      "type": "fields",
+      "items": [
+        { "label": "Owner", "value": "Lekë" },
+        { "label": "Status", "value": "In review" },
+        { "label": "Due", "value": "Fri, 30 Oct" }
+      ]
+    },
+    {
+      "type": "stats",
+      "items": [
+        { "label": "Signups", "value": "1,204", "delta": "+12%", "tone": "good" },
+        { "label": "Errors", "value": "37", "delta": "+9", "tone": "bad" },
+        { "label": "Latency", "value": "212 ms", "delta": "±0", "tone": "neutral" },
+        { "label": "Regions", "value": "4" }
+      ]
+    },
+    {
+      "type": "table",
+      "columns": ["Region", "Requests", "p95"],
+      "rows": [
+        ["eu-central", "48,210", "180 ms"],
+        ["us-east", "61,904", "205 ms"],
+        ["ap-south", "12,377", "290 ms"],
+        ["sa-east", "4,018", "340 ms"]
+      ]
+    },
+    {
+      "type": "options",
+      "items": [
+        {
+          "id": "small",
+          "title": "Small",
+          "subtitle": "2 vCPU · 4 GB",
+          "lines": ["Good for staging"],
+          "value": "€18/mo"
+        },
+        {
+          "id": "large",
+          "title": "Large",
+          "subtitle": "8 vCPU · 16 GB",
+          "lines": ["Handles peak traffic"],
+          "value": "€64/mo",
+          "note": "Recommended for prod",
+          "badge": "Popular"
+        }
+      ]
+    },
+    {
+      "type": "checklist",
+      "items": [
+        { "label": "Lint", "status": "done" },
+        { "label": "Unit tests", "detail": "388 of 388", "status": "done" },
+        { "label": "E2E tests", "detail": "Running shard 2 of 3", "status": "active" },
+        { "label": "Visual diff", "detail": "2 screenshots changed", "status": "failed" },
+        { "label": "Deploy", "status": "upcoming" }
+      ]
+    },
+    {
+      "type": "timeline",
+      "items": [
+        { "time": "09:12", "title": "Alert fired", "detail": "p95 above 300 ms in ap-south", "tag": "Paged" },
+        { "time": "09:20", "title": "Rolled back", "detail": "Back to build 4182" },
+        { "time": "09:41", "title": "Resolved", "tag": "18 min" }
+      ]
+    },
+    {
+      "type": "chart",
+      "kind": "line",
+      "unit": "ms",
+      "series": [
+        {
+          "name": "Web p95",
+          "points": [
+            { "x": "Mon", "y": 210 },
+            { "x": "Tue", "y": 205 },
+            { "x": "Wed", "y": 230 },
+            { "x": "Thu", "y": 310 },
+            { "x": "Fri", "y": 220 },
+            { "x": "Sat", "y": 198 },
+            { "x": "Sun", "y": 192 }
+          ]
+        },
+        {
+          "name": "Mobile p95",
+          "points": [
+            { "x": "Mon", "y": 260 },
+            { "x": "Tue", "y": 255 },
+            { "x": "Wed", "y": 270 },
+            { "x": "Thu", "y": 390 },
+            { "x": "Fri", "y": 280 },
+            { "x": "Sat", "y": 250 },
+            { "x": "Sun", "y": 244 }
+          ]
+        }
+      ],
+      "highlight": "Thu"
+    },
+    { "type": "image", "attachmentId": "att_gallery", "alt": "Architecture diagram" },
+    { "type": "link", "label": "Open the dashboard", "url": "https://example.com/dashboard" },
+    { "type": "map", "center": { "lat": 41.3275, "lng": 19.8187 }, "zoom": 12, "label": "Tirana office" },
+    {
+      "type": "choice",
+      "id": "toppings",
+      "label": "Toppings",
+      "mode": "many",
+      "options": [
+        { "id": "olives", "label": "Olives" },
+        { "id": "basil", "label": "Basil", "detail": "Fresh from the garden" },
+        { "id": "chili", "label": "Chili", "badge": "Hot" },
+        { "id": "anchovies", "label": "Anchovies" }
+      ],
+      "default": ["olives", "basil"]
+    },
+    { "type": "input", "id": "notes", "label": "Notes", "placeholder": "Anything we should change?", "multiline": true }
+  ],
+  "actions": [
+    { "id": "ok", "label": "Looks good", "style": "primary" },
+    { "id": "change", "label": "Ask for changes", "style": "secondary" },
+    { "id": "discard", "label": "Discard", "style": "danger" }
+  ],
+  "fallback": "Block gallery: one card with every block type, a toppings choice and a notes field."
+}

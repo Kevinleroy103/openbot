@@ -26,9 +26,13 @@ export interface Theme {
   readonly onPrimary: string
   readonly accent: string
   readonly accentFg: string
+  readonly accentSoft: string
   readonly danger: string
   readonly dangerFg: string
+  readonly dangerSoft: string
   readonly success: string
+  readonly successFg: string
+  readonly successSoft: string
   readonly warn: string
   readonly codeBg: string
   /** behind glass where liquid glass is unavailable */
@@ -56,9 +60,13 @@ const dark: Theme = {
   onPrimary: "#121212",
   accent: "#1884fc",
   accentFg: "#4d9bff",
+  accentSoft: "rgba(24,132,252,0.07)",
   danger: "#cf2b35",
   dangerFg: "#ff6463",
+  dangerSoft: "rgba(252,44,62,0.07)",
   success: "#14c370",
+  successFg: "#00ba69",
+  successSoft: "rgba(20,195,112,0.07)",
   warn: "#f69412",
   codeBg: "rgba(245,245,245,0.06)",
   glassFallback: "rgba(40,40,40,0.82)",
@@ -85,9 +93,13 @@ const light: Theme = {
   onPrimary: "#ffffff",
   accent: "#1680f3",
   accentFg: "#0b6dd3",
+  accentSoft: "rgba(30,134,252,0.09)",
   danger: "#e72e3b",
   dangerFg: "#cd2834",
+  dangerSoft: "rgba(251,43,62,0.09)",
   success: "#10ab61",
+  successFg: "#00854a",
+  successSoft: "rgba(20,193,111,0.09)",
   warn: "#f59312",
   codeBg: "rgba(28,28,28,0.05)",
   glassFallback: "rgba(245,245,245,0.86)",

@@ -1,0 +1,42 @@
+{
+  "type": "ui",
+  "version": 1,
+  "title": "Tirana → London",
+  "subtitle": "Thu, 29 Oct · One way · 1 adult",
+  "blocks": [
+    {
+      "type": "options",
+      "items": [
+        {
+          "id": "ba",
+          "title": "British Airways",
+          "subtitle": "TIA → LHR",
+          "lines": ["09:20 – 11:40", "3h 20m · Direct"],
+          "value": "€148",
+          "note": "Cabin bag included"
+        },
+        {
+          "id": "wizz",
+          "title": "Wizz Air",
+          "subtitle": "TIA → LTN",
+          "lines": ["12:10 – 14:35", "3h 25m · Direct"],
+          "value": "€92",
+          "note": "Small bag only"
+        },
+        {
+          "id": "os",
+          "title": "Austrian",
+          "subtitle": "TIA → LHR",
+          "lines": ["06:00 – 10:10", "5h 10m · 1 stop"],
+          "value": "€176",
+          "note": "Cabin bag included",
+          "badge": "1 stop"
+        }
+      ],
+      "pick": "ba"
+    },
+    { "type": "text", "markdown": "Heathrow is the easier arrival for central London. Prices are illustrative." },
+    { "type": "link", "label": "View morning flight", "url": "https://www.britishairways.com/" }
+  ],
+  "fallback": "Tirana → London, Thu 29 Oct: British Airways 09:20–11:40 direct €148 (my pick); Wizz Air 12:10–14:35 direct €92; Austrian 06:00–10:10 1 stop €176."
+}

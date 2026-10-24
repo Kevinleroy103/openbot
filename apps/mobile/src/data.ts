@@ -33,5 +33,6 @@ export const failureText = (exit: Exit.Exit<unknown, unknown>): string => {
     { readonly error?: { _tag?: string; message?: string; status?: string } } | undefined
   const e = failure?.error
   if (e?._tag === "RequestNotPending") return `This request is already ${e.status ?? "closed"}.`
+  if (e?._tag === "AlreadyAnswered") return "This card was already answered."
   return e?.message || "Couldn't reach OpenBot. Check your connection and try again."
 }

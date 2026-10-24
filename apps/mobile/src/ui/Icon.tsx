@@ -26,6 +26,7 @@ const ICONS = {
   bolt: { ios: "bolt.fill", web: "bolt" },
   person: { ios: "person.crop.circle", web: "account_circle" },
   globe: { ios: "globe", web: "public" },
+  external: { ios: "arrow.up.right", web: "arrow_outward" },
 } as const
 
 export type IconName = keyof typeof ICONS

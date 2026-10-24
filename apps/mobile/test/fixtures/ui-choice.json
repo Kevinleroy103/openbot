@@ -1,0 +1,30 @@
+{
+  "type": "ui",
+  "version": 1,
+  "title": "Choose a meeting time",
+  "subtitle": "Sun, 25 Oct · 30 min · Europe/Tirane",
+  "blocks": [
+    {
+      "type": "fields",
+      "items": [
+        { "label": "With", "value": "Mira" },
+        { "label": "Availability", "value": "Both available" }
+      ]
+    },
+    {
+      "type": "choice",
+      "id": "slot",
+      "label": "Meeting time",
+      "mode": "one",
+      "options": [
+        { "id": "1000", "label": "10:00 – 10:30", "badge": "Recommended" },
+        { "id": "1330", "label": "13:30 – 14:00" },
+        { "id": "1500", "label": "15:00 – 15:30" }
+      ],
+      "default": ["1000"]
+    },
+    { "type": "input", "id": "title", "label": "Meeting title", "default": "Design review" }
+  ],
+  "actions": [{ "id": "send", "label": "Send choice", "style": "primary" }],
+  "fallback": "Choose a meeting time with Mira on Sun 25 Oct: 10:00–10:30, 13:30–14:00 or 15:00–15:30."
+}

@@ -1,0 +1,22 @@
+{
+  "type": "ui",
+  "version": 1,
+  "title": "Search release checks",
+  "subtitle": "6 checks passed · No blockers",
+  "collapsed": true,
+  "blocks": [
+    {
+      "type": "checklist",
+      "items": [
+        { "label": "Web typecheck", "status": "done" },
+        { "label": "Mobile typecheck", "status": "done" },
+        { "label": "Search regressions", "status": "done" },
+        { "label": "Message window tests", "status": "done" },
+        { "label": "Keyboard navigation", "status": "done" },
+        { "label": "Phone layout", "status": "done" }
+      ]
+    },
+    { "type": "text", "markdown": "The branch is ready for your review." }
+  ],
+  "fallback": "All 6 checks passed on the search release branch."
+}

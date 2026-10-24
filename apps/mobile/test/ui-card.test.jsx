@@ -1,0 +1,217 @@
+import { beforeEach, expect, mock, test } from "bun:test"
+import { Children, createElement, isValidElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { actCardAtom } from "@openbot/client"
+import { AlreadyAnswered, UiCard } from "@openbot/contracts"
+import { Exit, Schema } from "effect"
+import answers from "./fixtures/answers.json"
+import chart from "./fixtures/ui-chart.json"
+import choice from "./fixtures/ui-choice.json"
+import compact from "./fixtures/ui-compact.json"
+import comparison from "./fixtures/ui-comparison.json"
+import everything from "./fixtures/ui-everything.json"
+import hostile from "./fixtures/ui-hostile.json"
+
+const entryId = "ent_card"
+const alert = mock(() => {})
+const act = mock(async () => actExit)
+let actExit
+let pressables
+
+mock.module("@effect/atom-react", () => ({
+  useAtomValue: () => undefined,
+  useAtomSet: (atom, options) => {
+    if (atom === actCardAtom(entryId) && options?.mode === "promiseExit") return act
+    return () => {}
+  },
+}))
+
+const box = ({ children }) => createElement("div", null, children)
+const svg =
+  (name) =>
+  ({ children, ...props }) =>
+    createElement(name, props, children)
+mock.module("react-native", () => ({
+  ActivityIndicator: () => createElement("progress"),
+  Alert: { alert },
+  Platform: { OS: "ios", select: (options) => options.ios ?? options.default },
+  Pressable: ({ children, onPress, disabled, accessibilityRole, accessibilityState }) => {
+    pressables.push({ onPress, disabled, children })
+    return createElement(
+      "button",
+      { role: accessibilityRole, disabled, "aria-checked": accessibilityState?.checked },
+      typeof children === "function" ? children({ pressed: false }) : children,
+    )
+  },
+  ScrollView: box,
+  StyleSheet: { create: (styles) => styles, hairlineWidth: 0.5 },
+  Text: ({ children, onPress }) => createElement("span", onPress ? { "data-link": "" } : null, children),
+  TextInput: ({ value, editable, placeholder, accessibilityLabel }) =>
+    createElement("input", {
+      value,
+      onChange: () => {},
+      readOnly: editable === false,
+      placeholder,
+      "aria-label": accessibilityLabel,
+    }),
+  View: box,
+  useColorScheme: () => "light",
+}))
+mock.module("react-native-svg", () => ({
+  default: svg("svg"),
+  Circle: svg("circle"),
+  Line: svg("line"),
+  Polyline: svg("polyline"),
+  Rect: svg("rect"),
+}))
+mock.module("expo-image", () => ({ Image: ({ source, alt }) => createElement("img", { src: source.uri, alt }) }))
+mock.module("expo-haptics", () => ({ impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }))
+mock.module("expo-linking", () => ({ openURL: mock(() => {}) }))
+mock.module("../src/nav.ts", () => ({ openWeb: mock(() => {}) }))
+mock.module("../src/ui/Icon.tsx", () => ({ Icon: ({ name }) => createElement("i", { "data-icon": name }) }))
+
+const { CardView } = await import("../src/chat/Cards.tsx")
+// useColorScheme is mocked to "light", so this is the light theme.
+const { useTheme: lightTheme } = await import("../src/theme.ts")
+const theme = lightTheme()
+
+const decode = Schema.decodeUnknownSync(UiCard)
+const render = (card, state = { status: "info" }) =>
+  renderToStaticMarkup(
+    createElement(CardView, {
+      card: decode(card),
+      state,
+      request: undefined,
+      bot: undefined,
+      entryId,
+      theme,
+      media: { origin: "https://box.example", headers: { authorization: "Bearer t" } },
+    }),
+  )
+const textOf = (node) => {
+  if (typeof node === "string" || typeof node === "number") return String(node)
+  if (isValidElement(node)) return textOf(node.props.children)
+  return Children.toArray(node).map(textOf).join("")
+}
+const pressable = (label) => pressables.find((p) => textOf(p.children).includes(label))
+const checked = (html, label) =>
+  html
+    .split("<button")
+    .find((b) => b.includes(`<span>${label}</span>`))
+    ?.includes('aria-checked="true"')
+
+beforeEach(() => {
+  pressables = []
+  actExit = Exit.void
+  act.mockClear()
+  alert.mockClear()
+})
+
+test("every known block of a card renders, and an unknown block shows the can't-show line", () => {
+  const html = render(everything, { status: "pending" })
+  for (const text of [
+    "Block gallery",
+    "Every block type",
+    "Bold",
+    "Lekë",
+    "1,204",
+    "+12%",
+    "eu-central",
+    "340 ms",
+    "€64/mo",
+    "Recommended for prod",
+    "Popular",
+    "Visual diff",
+    "Failed",
+    "In progress",
+    "Alert fired",
+    "18 min",
+    "Web p95",
+    "Mobile p95",
+    "Open the dashboard",
+    "This part can&#x27;t be shown in this version of the app.",
+    "Toppings",
+    "Anything we should change?",
+    "Looks good",
+    "Ask for changes",
+    "Discard",
+  ])
+    expect(html).toContain(text)
+  expect(html).toContain('src="https://box.example/api/attachments/att_gallery"')
+  expect(html.match(/<polyline/g)).toHaveLength(2)
+  expect(pressable("Open the dashboard").onPress).toBeFunction()
+})
+
+test("options stack with the pick marked, and a bar chart highlights its x", () => {
+  const options = render(comparison)
+  expect(options.match(/My pick/g)).toHaveLength(1)
+  expect(options.indexOf("My pick")).toBeLessThan(options.indexOf("British Airways"))
+  const bars = render(chart)
+  const fills = [...bars.matchAll(/<rect[^>]*fill="([^"]+)"/g)].map((m) => m[1])
+  expect(fills).toHaveLength(7)
+  expect(fills.filter((f) => f === theme.accentFg)).toHaveLength(1)
+  expect(bars).toContain("5.8")
+})
+
+test("a collapsed card shows only its fallback until tapped", () => {
+  const html = render(compact)
+  expect(html).toContain("All 6 checks passed on the search release branch.")
+  expect(html).not.toContain("Web typecheck")
+  expect(html).not.toContain("Search release checks")
+})
+
+test("a card of an unknown version shows its fallback", () => {
+  const html = render({ ...choice, version: 2 }, { status: "pending" })
+  expect(html).toContain(choice.fallback)
+  expect(html).not.toContain("Send choice")
+})
+
+test("a pending card starts from its defaults and sends them with the pressed action", async () => {
+  const html = render(choice, { status: "pending" })
+  expect(checked(html, "10:00 – 10:30")).toBe(true)
+  expect(checked(html, "13:30 – 14:00")).toBe(false)
+  expect(html).toContain('value="Design review"')
+  expect(html).not.toContain("readOnly")
+  await pressable("Send choice").onPress()
+  expect(act).toHaveBeenCalledWith({
+    entryId,
+    actionId: "send",
+    values: { slot: ["1000"], title: "Design review" },
+  })
+  expect(alert).not.toHaveBeenCalled()
+})
+
+test("a refused action shows why, and the card stays as it was", async () => {
+  render(choice, { status: "pending" })
+  actExit = Exit.fail(new AlreadyAnswered({ entryId }))
+  await pressable("Send choice").onPress()
+  expect(alert).toHaveBeenCalledWith("Couldn't send that", "This card was already answered.")
+})
+
+test("an answered card shows what was sent, read-only, with its actions disabled", () => {
+  const html = render(choice, { status: "resolved", answer: { ...answers["ui-choice"], at: 1 } })
+  expect(checked(html, "13:30 – 14:00")).toBe(true)
+  expect(checked(html, "10:00 – 10:30")).toBe(false)
+  expect(html).toContain('value="Design sync"')
+  expect(html).toContain("readOnly")
+  expect(pressables.every((p) => p.disabled)).toBe(true)
+  expect(html).toMatch(/data-icon="check".*Send choice/)
+
+  const many = render(everything, { status: "resolved", answer: { ...answers["ui-everything"], at: 1 } })
+  expect(checked(many, "Chili")).toBe(true)
+  expect(checked(many, "Basil")).toBe(false)
+})
+
+test("hostile content renders inert: no script, data or http links, no remote images, HTML as text", () => {
+  const html = render(hostile)
+  expect(html).toContain("&lt;b&gt;Hostile&lt;/b&gt; card")
+  expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;")
+  expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;")
+  expect(html).not.toContain("data-link")
+  expect(html).not.toContain('role="link"')
+  expect(html).not.toContain("tracker.example")
+  expect([...html.matchAll(/<img src="([^"]+)"/g)].map((m) => m[1])).toEqual([
+    "https://box.example/api/attachments/att_missing",
+  ])
+  expect(html).toContain("A".repeat(400))
+})

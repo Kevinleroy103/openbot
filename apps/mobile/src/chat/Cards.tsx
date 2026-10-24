@@ -1,5 +1,5 @@
 // Cards in a chat (the web's cards/Cards.tsx, native): questions with lettered options (Grok iOS),
-// approvals, computer hand-offs, secrets, routines, Slack drafts; forms open in the web app.
+// approvals, computer hand-offs, secrets, routines, Slack drafts, Bots' ui cards; forms open in the web app.
 import { useAtomSet } from "@effect/atom-react"
 import { commandAtom, respondRequestAtom } from "@openbot/client"
 import type { Bot, Card, CardState, EntryId, RequestId, RuntimeRequest, RuntimeResponseInput } from "@openbot/contracts"
@@ -12,6 +12,8 @@ import { failureText } from "../data.ts"
 import { openWeb } from "../nav.ts"
 import type { Theme } from "../theme.ts"
 import { Icon } from "../ui/Icon.tsx"
+import type { MarkdownImage } from "./Markdown.tsx"
+import { UiCardView } from "./UiCard.tsx"
 
 type Status = CardState["status"]
 
@@ -56,6 +58,8 @@ export interface CardProps {
   /** The card's transcript entry (a Slack draft is answered by entry). */
   readonly entryId?: EntryId | undefined
   readonly theme: Theme
+  /** Where a ui card's image attachments load from. */
+  readonly media: MarkdownImage
 }
 
 export function CardView(props: CardProps): ReactNode {
@@ -71,6 +75,10 @@ export function CardView(props: CardProps): ReactNode {
       return <SecretCard {...props} card={card} />
     case "slack-draft":
       return <SlackDraftCard {...props} card={card} />
+    case "ui":
+      return (
+        <UiCardView card={card} state={props.state} entryId={props.entryId} theme={props.theme} media={props.media} />
+      )
     case "routine":
       return (
         <Shell theme={props.theme}>

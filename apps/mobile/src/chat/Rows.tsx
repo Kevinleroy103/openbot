@@ -54,6 +54,7 @@ export function RowView({ row, ctx }: { readonly row: Row; readonly ctx: RowCont
             bot={author ?? ctx.primary}
             entryId={row.entry.id}
             theme={theme}
+            media={{ origin: ctx.connection.origin, headers: sessionHeaders(ctx.connection) }}
           />
         </View>
       )

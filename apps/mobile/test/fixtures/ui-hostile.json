@@ -1,0 +1,136 @@
+{
+  "type": "ui",
+  "version": 1,
+  "title": "<b>Hostile</b> card",
+  "subtitle": "Everything here must render inert",
+  "blocks": [
+    {
+      "type": "text",
+      "markdown": "Tracking pixel: ![pixel](https://tracker.example/p.gif)\n\nScript link: [click](javascript:alert(1))\n\nData link: [data](data:text/html,<script>alert(1)</script>)\n\nRaw HTML: <img src=x onerror=alert(1)>"
+    },
+    {
+      "type": "fields",
+      "items": [
+        {
+          "label": "<i>Label</i>",
+          "value": "<script>alert(1)</script>"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "label": "javascript link",
+      "url": "javascript:alert(1)"
+    },
+    {
+      "type": "link",
+      "label": "plain http link",
+      "url": "http://example.com"
+    },
+    {
+      "type": "link",
+      "label": "data link",
+      "url": "data:text/html,<script>alert(1)</script>"
+    },
+    {
+      "type": "image",
+      "attachmentId": "att_missing",
+      "alt": "Missing attachment"
+    },
+    {
+      "type": "table",
+      "columns": [
+        "Column 1",
+        "Column 2",
+        "Column 3",
+        "Column 4",
+        "Column 5",
+        "Column 6",
+        "Column 7",
+        "Column 8",
+        "Column 9",
+        "Column 10"
+      ],
+      "rows": [
+        ["r1c1", "r1c2", "r1c3", "r1c4", "r1c5", "r1c6", "r1c7", "r1c8", "r1c9", "r1c10"],
+        ["r2c1", "r2c2", "r2c3", "r2c4", "r2c5", "r2c6", "r2c7", "r2c8", "r2c9", "r2c10"],
+        ["r3c1", "r3c2", "r3c3", "r3c4", "r3c5", "r3c6", "r3c7", "r3c8", "r3c9", "r3c10"],
+        ["r4c1", "r4c2", "r4c3", "r4c4", "r4c5", "r4c6", "r4c7", "r4c8", "r4c9", "r4c10"],
+        ["r5c1", "r5c2", "r5c3", "r5c4", "r5c5", "r5c6", "r5c7", "r5c8", "r5c9", "r5c10"],
+        ["r6c1", "r6c2", "r6c3", "r6c4", "r6c5", "r6c6", "r6c7", "r6c8", "r6c9", "r6c10"],
+        ["r7c1", "r7c2", "r7c3", "r7c4", "r7c5", "r7c6", "r7c7", "r7c8", "r7c9", "r7c10"],
+        ["r8c1", "r8c2", "r8c3", "r8c4", "r8c5", "r8c6", "r8c7", "r8c8", "r8c9", "r8c10"],
+        ["r9c1", "r9c2", "r9c3", "r9c4", "r9c5", "r9c6", "r9c7", "r9c8", "r9c9", "r9c10"],
+        ["r10c1", "r10c2", "r10c3", "r10c4", "r10c5", "r10c6", "r10c7", "r10c8", "r10c9", "r10c10"],
+        ["r11c1", "r11c2", "r11c3", "r11c4", "r11c5", "r11c6", "r11c7", "r11c8", "r11c9", "r11c10"],
+        ["r12c1", "r12c2", "r12c3", "r12c4", "r12c5", "r12c6", "r12c7", "r12c8", "r12c9", "r12c10"],
+        ["r13c1", "r13c2", "r13c3", "r13c4", "r13c5", "r13c6", "r13c7", "r13c8", "r13c9", "r13c10"],
+        ["r14c1", "r14c2", "r14c3", "r14c4", "r14c5", "r14c6", "r14c7", "r14c8", "r14c9", "r14c10"],
+        ["r15c1", "r15c2", "r15c3", "r15c4", "r15c5", "r15c6", "r15c7", "r15c8", "r15c9", "r15c10"],
+        ["r16c1", "r16c2", "r16c3", "r16c4", "r16c5", "r16c6", "r16c7", "r16c8", "r16c9", "r16c10"],
+        ["r17c1", "r17c2", "r17c3", "r17c4", "r17c5", "r17c6", "r17c7", "r17c8", "r17c9", "r17c10"],
+        ["r18c1", "r18c2", "r18c3", "r18c4", "r18c5", "r18c6", "r18c7", "r18c8", "r18c9", "r18c10"],
+        ["r19c1", "r19c2", "r19c3", "r19c4", "r19c5", "r19c6", "r19c7", "r19c8", "r19c9", "r19c10"],
+        ["r20c1", "r20c2", "r20c3", "r20c4", "r20c5", "r20c6", "r20c7", "r20c8", "r20c9", "r20c10"],
+        ["r21c1", "r21c2", "r21c3", "r21c4", "r21c5", "r21c6", "r21c7", "r21c8", "r21c9", "r21c10"],
+        ["r22c1", "r22c2", "r22c3", "r22c4", "r22c5", "r22c6", "r22c7", "r22c8", "r22c9", "r22c10"],
+        ["r23c1", "r23c2", "r23c3", "r23c4", "r23c5", "r23c6", "r23c7", "r23c8", "r23c9", "r23c10"],
+        ["r24c1", "r24c2", "r24c3", "r24c4", "r24c5", "r24c6", "r24c7", "r24c8", "r24c9", "r24c10"],
+        ["r25c1", "r25c2", "r25c3", "r25c4", "r25c5", "r25c6", "r25c7", "r25c8", "r25c9", "r25c10"],
+        ["r26c1", "r26c2", "r26c3", "r26c4", "r26c5", "r26c6", "r26c7", "r26c8", "r26c9", "r26c10"],
+        ["r27c1", "r27c2", "r27c3", "r27c4", "r27c5", "r27c6", "r27c7", "r27c8", "r27c9", "r27c10"],
+        ["r28c1", "r28c2", "r28c3", "r28c4", "r28c5", "r28c6", "r28c7", "r28c8", "r28c9", "r28c10"],
+        ["r29c1", "r29c2", "r29c3", "r29c4", "r29c5", "r29c6", "r29c7", "r29c8", "r29c9", "r29c10"],
+        ["r30c1", "r30c2", "r30c3", "r30c4", "r30c5", "r30c6", "r30c7", "r30c8", "r30c9", "r30c10"],
+        ["r31c1", "r31c2", "r31c3", "r31c4", "r31c5", "r31c6", "r31c7", "r31c8", "r31c9", "r31c10"],
+        ["r32c1", "r32c2", "r32c3", "r32c4", "r32c5", "r32c6", "r32c7", "r32c8", "r32c9", "r32c10"],
+        ["r33c1", "r33c2", "r33c3", "r33c4", "r33c5", "r33c6", "r33c7", "r33c8", "r33c9", "r33c10"],
+        ["r34c1", "r34c2", "r34c3", "r34c4", "r34c5", "r34c6", "r34c7", "r34c8", "r34c9", "r34c10"],
+        ["r35c1", "r35c2", "r35c3", "r35c4", "r35c5", "r35c6", "r35c7", "r35c8", "r35c9", "r35c10"],
+        ["r36c1", "r36c2", "r36c3", "r36c4", "r36c5", "r36c6", "r36c7", "r36c8", "r36c9", "r36c10"],
+        ["r37c1", "r37c2", "r37c3", "r37c4", "r37c5", "r37c6", "r37c7", "r37c8", "r37c9", "r37c10"],
+        ["r38c1", "r38c2", "r38c3", "r38c4", "r38c5", "r38c6", "r38c7", "r38c8", "r38c9", "r38c10"],
+        ["r39c1", "r39c2", "r39c3", "r39c4", "r39c5", "r39c6", "r39c7", "r39c8", "r39c9", "r39c10"],
+        ["r40c1", "r40c2", "r40c3", "r40c4", "r40c5", "r40c6", "r40c7", "r40c8", "r40c9", "r40c10"],
+        ["r41c1", "r41c2", "r41c3", "r41c4", "r41c5", "r41c6", "r41c7", "r41c8", "r41c9", "r41c10"],
+        ["r42c1", "r42c2", "r42c3", "r42c4", "r42c5", "r42c6", "r42c7", "r42c8", "r42c9", "r42c10"],
+        ["r43c1", "r43c2", "r43c3", "r43c4", "r43c5", "r43c6", "r43c7", "r43c8", "r43c9", "r43c10"],
+        ["r44c1", "r44c2", "r44c3", "r44c4", "r44c5", "r44c6", "r44c7", "r44c8", "r44c9", "r44c10"],
+        ["r45c1", "r45c2", "r45c3", "r45c4", "r45c5", "r45c6", "r45c7", "r45c8", "r45c9", "r45c10"],
+        ["r46c1", "r46c2", "r46c3", "r46c4", "r46c5", "r46c6", "r46c7", "r46c8", "r46c9", "r46c10"],
+        ["r47c1", "r47c2", "r47c3", "r47c4", "r47c5", "r47c6", "r47c7", "r47c8", "r47c9", "r47c10"],
+        ["r48c1", "r48c2", "r48c3", "r48c4", "r48c5", "r48c6", "r48c7", "r48c8", "r48c9", "r48c10"],
+        ["r49c1", "r49c2", "r49c3", "r49c4", "r49c5", "r49c6", "r49c7", "r49c8", "r49c9", "r49c10"],
+        ["r50c1", "r50c2", "r50c3", "r50c4", "r50c5", "r50c6", "r50c7", "r50c8", "r50c9", "r50c10"],
+        ["r51c1", "r51c2", "r51c3", "r51c4", "r51c5", "r51c6", "r51c7", "r51c8", "r51c9", "r51c10"],
+        ["r52c1", "r52c2", "r52c3", "r52c4", "r52c5", "r52c6", "r52c7", "r52c8", "r52c9", "r52c10"],
+        ["r53c1", "r53c2", "r53c3", "r53c4", "r53c5", "r53c6", "r53c7", "r53c8", "r53c9", "r53c10"],
+        ["r54c1", "r54c2", "r54c3", "r54c4", "r54c5", "r54c6", "r54c7", "r54c8", "r54c9", "r54c10"],
+        ["r55c1", "r55c2", "r55c3", "r55c4", "r55c5", "r55c6", "r55c7", "r55c8", "r55c9", "r55c10"],
+        ["r56c1", "r56c2", "r56c3", "r56c4", "r56c5", "r56c6", "r56c7", "r56c8", "r56c9", "r56c10"],
+        ["r57c1", "r57c2", "r57c3", "r57c4", "r57c5", "r57c6", "r57c7", "r57c8", "r57c9", "r57c10"],
+        ["r58c1", "r58c2", "r58c3", "r58c4", "r58c5", "r58c6", "r58c7", "r58c8", "r58c9", "r58c10"],
+        ["r59c1", "r59c2", "r59c3", "r59c4", "r59c5", "r59c6", "r59c7", "r59c8", "r59c9", "r59c10"],
+        ["r60c1", "r60c2", "r60c3", "r60c4", "r60c5", "r60c6", "r60c7", "r60c8", "r60c9", "r60c10"]
+      ]
+    },
+    {
+      "type": "options",
+      "items": [
+        {
+          "id": "long",
+          "title": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "lines": [
+            "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+          ]
+        },
+        {
+          "id": "short",
+          "title": "Short"
+        }
+      ],
+      "pick": "long"
+    }
+  ],
+  "fallback": "Hostile content test card."
+}

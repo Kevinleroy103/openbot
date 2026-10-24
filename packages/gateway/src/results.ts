@@ -173,6 +173,8 @@ const nodeProtocolTags = new Set([
 
 const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined)
 
+export const INTERNAL_ERROR = "ERROR: Internal error"
+
 /**
  * Model-readable text for any failure a tool handler may produce: contract errors (`NotFound`,
  * `InvalidInput`, `Conflict`, `Forbidden`, `HarnessUnavailable`, `NodeUnavailable`), node-protocol
@@ -212,12 +214,12 @@ export const renderToolError = (error: unknown): string => {
         return errorText(`${str(e.message) ?? "The desktop is unavailable"}${missing}`)
       }
       case "Internal":
-        return "ERROR: Internal error"
+        return INTERNAL_ERROR
       default:
         if (nodeProtocolTags.has(e._tag)) {
           return errorText(describeNodeError(error as Parameters<typeof describeNodeError>[0]))
         }
     }
   }
-  return "ERROR: Internal error"
+  return INTERNAL_ERROR
 }

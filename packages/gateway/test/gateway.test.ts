@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { LOCAL_NODE_ID } from "@openbot/contracts"
 import { McpTokenRepo } from "@openbot/core"
 import { conversationId, localNodeSummary, makeTurn, OrchestratorFake, remoteNodeSummary, turnId } from "@openbot/core/testing"
@@ -6,7 +6,9 @@ import { DesktopUnavailable, type ExecEvent, LeaseHeld } from "@openbot/node-pro
 import type { TaskId } from "@openbot/contracts"
 import { Effect, Option, Stream } from "effect"
 import { hashMcpToken } from "../src/McpBindingIssuer.ts"
-import { McpGateway } from "../src/McpGateway.ts"
+import { DefaultToolkits, McpGateway } from "../src/McpGateway.ts"
+import { params } from "../src/params.ts"
+import { defineTool } from "../src/tool.ts"
 import {
   BOT_A,
   botA,
@@ -598,4 +600,23 @@ describe("screen tools (D1.7)", () => {
     const empty = await client.callTool({ name: "request_takeover", arguments: { instruction: "" } })
     expect(textOf(empty)).toContain("`instruction` must not be empty")
   })
+})
+
+test("a tool error the gateway does not know is logged, and the model reads Internal error", async () => {
+  const odd = defineTool({
+    name: "odd",
+    toolset: "bot",
+    description: "Fails with an error no one maps.",
+    params: params({}),
+    handler: () => Effect.fail({ _tag: "Mystery" }),
+  })
+  const logged = spyOn(console, "log")
+  try {
+    h = await startHarness({ tools: [...DefaultToolkits, odd] })
+    const client = await h.connect((await h.issue({ toolsets: ["bot"] })).binding)
+    expect(textOf(await client.callTool({ name: "odd", arguments: {} }))).toBe("ERROR: Internal error")
+    expect(logged.mock.calls.flat().join(" ")).toContain("McpGateway: tool odd failed with an unrecognised error")
+  } finally {
+    logged.mockRestore()
+  }
 })

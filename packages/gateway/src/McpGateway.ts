@@ -46,7 +46,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js"
 import { Cause, Clock, Context, Deferred, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { bearerTokenOf, hashMcpToken } from "./McpBindingIssuer.ts"
-import { errorResult, MAX_RESULT_TEXT_BYTES, renderToolError, toWireResult, type WireToolResult } from "./results.ts"
+import { errorResult, INTERNAL_ERROR, MAX_RESULT_TEXT_BYTES, renderToolError, toWireResult, type WireToolResult } from "./results.ts"
 import { type AnyTool, MAX_DESCRIPTION_CHARS, type ToolCallContext } from "./tool.ts"
 import { BotToolkit, type BotToolkitServices } from "./toolkits/bot.ts"
 import { BrowserToolkit } from "./toolkits/browser.ts"
@@ -304,7 +304,13 @@ export const makeMcpGateway = <R = GatewayToolServices>(
       ctx: ToolCallContext,
     ): Effect.Effect<WireToolResult, never, R> =>
       tool.handler(args, ctx).pipe(
-        Effect.catch((error) => Effect.succeed(errorResult(renderToolError(error)))),
+        Effect.catch((error) => {
+          const text = renderToolError(error)
+          if (text !== INTERNAL_ERROR) return Effect.succeed(errorResult(text))
+          return Effect.logWarning(`McpGateway: tool ${tool.name} failed with an unrecognised error (bot ${session.claims.botId})`, error).pipe(
+            Effect.as(errorResult(text)),
+          )
+        }),
         Effect.catchDefect((defect) =>
           Effect.logError(`McpGateway: tool ${tool.name} died (bot ${session.claims.botId})`, defect).pipe(
             Effect.as(errorResult("Internal error")),

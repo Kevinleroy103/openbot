@@ -238,7 +238,10 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function*(
       const active = normalizer.activeTurn
       if (active !== undefined && outcome !== undefined) emit(normalizer.finishTurn(active, outcome))
       const fibers: Array<Fiber.Fiber<void>> = []
-      for (const entry of pending.values()) if (entry.fiber) fibers.push(entry.fiber)
+      for (const entry of pending.values()) {
+        Deferred.doneUnsafe(entry.reply, Effect.succeed<RequestReply>(safeReply(entry.decline)))
+        if (entry.fiber) fibers.push(entry.fiber)
+      }
       pending.clear()
       for (const waiter of compactWaiters.splice(0)) Deferred.doneUnsafe(waiter, Effect.fail(closedError()))
       emit([{ _tag: "SessionClosed", reason }])

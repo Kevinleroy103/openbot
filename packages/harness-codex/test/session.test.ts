@@ -609,6 +609,24 @@ describe("Codex session: lifecycle", () => {
     expect(result.events.at(-1)).toEqual({ _tag: "SessionClosed", reason: "closed" })
   })
 
+  test("Codex closing the thread declines its pending approvals", async () => {
+    const result = await run(Effect.gen(function*() {
+      const ctx = yield* setup()
+      let asked = false
+      const session = yield* ctx.driver.openSession(makeSessionInput(ctx.workspace, () =>
+        Effect.sync(() => void (asked = true)).pipe(Effect.andThen(Effect.never))))
+      const events = yield* collect(session.events)
+      yield* session.startTurn({ turnId: turnId(1), text: "run", attachments: [] })
+      yield* waitUntil(() => asked, "approval asked")
+      ctx.server().notify("thread/closed", { threadId: "thr-1" })
+      yield* events.waitFor(has("SessionClosed"))
+      yield* waitUntil(() => ctx.server().received.some((m) => m.method === undefined), "approval answered")
+      return { server: ctx.server() }
+    }))
+    const replies = result.server.received.filter((m) => m.method === undefined)
+    expect(replies.map((m) => m.result)).toEqual([{ decision: "decline" }])
+  })
+
   test("a thread Codex unloaded while no session held it resumes cleanly (the stale thread/closed is not replayed)", async () => {
     const result = await run(Effect.gen(function*() {
       const ctx = yield* setup()

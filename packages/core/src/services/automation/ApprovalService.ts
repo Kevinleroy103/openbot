@@ -695,7 +695,7 @@ export const makeApprovalService = Effect.gen(function*() {
 
   const expireAsync = (requestId: RequestId): Effect.Effect<void> =>
     Effect.gen(function*() {
-      const current = yield* getRequest(requestId).pipe(Effect.orDie)
+      const current = yield* getRequest(requestId)
       // a hand-off the owner is still working on (they hold the screen) waits another period
       if (current.kind === "handoff" && current.status === "pending" && pending.has(requestId) && (yield* ownerHoldsScreen(current.botId))) {
         const now = yield* Clock.currentTimeMillis
@@ -707,11 +707,15 @@ export const makeApprovalService = Effect.gen(function*() {
       }
       const claimed = yield* takePending(requestId)
       if (Option.isNone(claimed)) return
-      const request = yield* getRequest(requestId).pipe(Effect.orDie)
+      const request = yield* getRequest(requestId)
       const { approvalExpiryMinutes } = yield* settings.get
       yield* finish(request, { status: "expired", statusReason: "timeout" })
       yield* deliverAsync(claimed.value, request, expiredText(request, approvalExpiryMinutes))
-    }).pipe(Effect.catchDefect((defect) => Effect.logError("ApprovalService: expiry failed", defect)))
+    }).pipe(
+      // the request went with its conversation: nothing left to expire
+      Effect.catchTag("NotFound", () => Effect.asVoid(takePending(requestId))),
+      Effect.catchDefect((defect) => Effect.logError("ApprovalService: expiry failed", defect)),
+    )
 
   const resolveToolBot = (ctx: ToolContext) =>
     bots.get(ctx.claims.botId).pipe(

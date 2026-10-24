@@ -8,7 +8,7 @@ import type {
   RuntimeRequest,
   TranscriptEntry,
 } from "@openbot/contracts"
-import { Effect, Exit, Fiber, Layer, Option, Ref, Stream } from "effect"
+import { Effect, Exit, Fiber, Layer, Logger, Option, Ref, Stream } from "effect"
 import {
   type ApprovalContext,
   ApprovalRuleRepo,
@@ -767,6 +767,25 @@ describe("ApprovalService async tools (D3.3)", () => {
     expect(cardState(out.card)?.status).toBe("expired")
     expect(out.delivered[0]).toMatchObject({ conversationId: GROUP.id, botId: BOT_A.id })
     expect(out.delivered[0]!.text).toContain("expired without an answer")
+  })
+
+  test("a request deleted with its conversation expires quietly", async () => {
+    const claims = makeClaims({ botId: BOT_A.id, conversationId: GROUP.id })
+    const errors: Array<unknown> = []
+    const capture = Logger.make(({ logLevel, message }) => {
+      if (logLevel === "Error") errors.push(message)
+    })
+    await runTest(
+      Effect.gen(function*() {
+        yield* seed
+        const approvals = yield* ApprovalService
+        yield* approvals.requestApproval({ claims, callId: "call-3" }, { title: "Send the weekly email", detail: "To the team list" })
+        yield* Effect.flatMap(RequestRepo, (r) => r.deleteByConversation(GROUP.id))
+        yield* advance("10 minutes")
+      }).pipe(Effect.provide(Logger.layer([capture]))),
+      layer(),
+    )
+    expect(errors).toEqual([])
   })
 })
 

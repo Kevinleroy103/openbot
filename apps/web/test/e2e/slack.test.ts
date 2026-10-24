@@ -157,7 +157,7 @@ describe.skipIf(!hasChromium)("e2e: Slack", () => {
     await card.scrollIntoViewIfNeeded()
     await app.shot("e2e-88-slack-draft-file")
     await card.getByRole("button", { name: "Send message" }).click()
-    const sent = page.locator('[data-card="slack-draft"][data-status="resolved"]').last()
+    const sent = page.locator('[data-card="slack-draft"][data-status="resolved"]', { has: page.locator("video") })
     await sent.getByRole("link", { name: "Open in Slack" }).waitFor()
     expect(slack.uploads.at(-1)).toMatchObject({ filename: "teaser.mp4", length: 50_000, bytes: 50_000 })
     expect(slack.shared.at(-1)).toMatchObject({ channel_id: "C_GENERAL", initial_comment: "Teaser for the launch" })

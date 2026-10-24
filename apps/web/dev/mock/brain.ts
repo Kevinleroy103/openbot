@@ -817,6 +817,25 @@ export class MockBrain {
         inputEntryId,
       )
     }
+    if (/\btake your time\b/.test(lower)) {
+      return this.startTurn(
+        conversationId,
+        botId,
+        "user",
+        async (turn, signal) => {
+          this.put(
+            this.message(conversationId, botAuthor(botId), "Digging through everything now", this.now(), {
+              streaming: true,
+              turnId: turn.id,
+            }),
+          )
+          await new Promise((_, reject) =>
+            signal.addEventListener("abort", () => reject(new Aborted()), { once: true }),
+          )
+        },
+        inputEntryId,
+      )
+    }
     const ask = /\bask\s+@?([\w ]+?)(?:\s+(?:to|about|for|if)\b|[?.!,]|$)/i.exec(text)
     const peer = ask
       ? [...this.roster.state.bots.values()].find(

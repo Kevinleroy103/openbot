@@ -79,11 +79,12 @@ export const fakeLinks = (brain: FakeBrain): Layer.Layer<BrainLink | StreamDiale
       event: (type, data) => Effect.sync(() => void brain.events.push({ type, data })),
     }),
     Layer.succeed(StreamDialer, {
-      dial: ({ ticket }) =>
-        Effect.sync(() => {
+      dial: ({ ticket, kind }) =>
+        Effect.suspend(() => {
+          if (ticket.streamToken === "expired") return Effect.fail(new StreamRefused({ kind, reason: "expired ticket" }))
           const pair = makeMemorySocketPair()
           brain.streams.set(ticket.streamId, pair.b)
-          return pair.a
+          return Effect.succeed(pair.a)
         }),
     }),
   )

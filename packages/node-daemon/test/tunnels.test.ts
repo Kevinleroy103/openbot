@@ -84,6 +84,26 @@ describe("tunnels, services and forwards", () => {
       }),
     ))
 
+  test("tunnel.open tcp with a refused stream closes its connection to the port", () =>
+    run(
+      Effect.gen(function* () {
+        let opened = 0
+        let closed = 0
+        const target = Bun.listen({
+          hostname: "127.0.0.1",
+          port: 0,
+          socket: { open: () => void opened++, close: () => void closed++, data: () => undefined },
+        })
+        yield* Effect.addFinalizer(() => Effect.sync(() => target.stop(true)))
+        const { client } = yield* makeTestNode({ dataDir, roots: [root] })
+        const refused = yield* Effect.flip(
+          client["tunnel.open"]({ inv: inv(), kind: "tcp", args: [], env: {}, cwd: root, port: target.port, streamId: "t_exp", streamToken: "expired" }),
+        )
+        expect(refused._tag).toBe("TunnelFailed")
+        expect(yield* waitFor(() => opened === 1 && closed === 1)).toBe(true)
+      }),
+    ))
+
   test("tunnel.open codex.exec-server: one JSON-RPC message per text frame <-> NDJSON stdio; closing kills it", () =>
     run(
       Effect.gen(function* () {

@@ -83,6 +83,7 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "slack.disconnect": [Keys.slack, Keys.botContext],
   "slack.sendDraft": [],
   "slack.discardDraft": [],
+  "cards.act": [],
   "stt.install": [Keys.stt],
   "stt.remove": [Keys.stt],
   "voice.install": [Keys.voice],
@@ -172,3 +173,5 @@ export const createPairingCodeAtom = commands["nodes.createPairingCode"]
 /** Answer a runtime request; keyed per request so answering two cards never interrupts one. */
 export const respondRequestAtom = (requestId: string): CommandAtom<"requests.respond"> =>
   commandAtom("requests.respond", requestId)
+/** Press an action on a `ui` card; keyed per card entry. */
+export const actCardAtom = (entryId: string): CommandAtom<"cards.act"> => commandAtom("cards.act", entryId)

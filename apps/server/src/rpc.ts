@@ -321,6 +321,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(
       "slack.disconnect": () => edge("slack.disconnect", Effect.andThen(slack.disconnect, slack.status)),
       "slack.sendDraft": ({ entryId, text }) => edge("slack.sendDraft", slackDrafts.send({ entryId, text })),
       "slack.discardDraft": ({ entryId }) => edge("slack.discardDraft", slackDrafts.discard(entryId)),
+      "cards.act": () => Effect.fail(new Internal({ message: "cards.act is not wired yet" })),
 
       "stt.status": () => edge("stt.status", speech.status),
       "stt.install": () => edge("stt.install", speech.install),

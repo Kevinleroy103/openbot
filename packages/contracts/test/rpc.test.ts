@@ -109,6 +109,7 @@ const V1_RPCS = [
   "slack.disconnect",
   "slack.sendDraft",
   "slack.discardDraft",
+  "cards.act",
   "stt.status",
   "stt.install",
   "stt.remove",

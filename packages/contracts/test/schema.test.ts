@@ -2,6 +2,7 @@
 import { describe, expect, test } from "bun:test"
 import { Result, Schema } from "effect"
 import {
+  AlreadyAnswered,
   ApprovalRule,
   ApprovalRuleInput,
   applySettingsPatch,
@@ -29,6 +30,7 @@ import {
   minAutonomy,
   normalizeProjectFolder,
   NodeSummary,
+  OpenBotRpcs,
   projectFolderProblem,
   Routine,
   RoutineRun,
@@ -44,6 +46,8 @@ import {
   TranscriptEntry,
   TranscriptWindow,
   Turn,
+  UiCard,
+  UiCardInput,
 } from "../src/index.ts"
 
 /** encode -> JSON text -> decode must give back the same value. */
@@ -412,6 +416,98 @@ describe("transcript", () => {
       })
       expect(roundTrip(KnownTranscriptEntry, entry).card).toEqual(card)
     }
+  })
+})
+
+describe("ui cards", () => {
+  const card = {
+    type: "ui",
+    version: 1,
+    title: "Choose a meeting time",
+    subtitle: "Thursday",
+    collapsed: false,
+    blocks: [
+      { type: "text", markdown: "Two slots **work** for everyone." },
+      { type: "fields", items: [{ label: "Where", value: "Room 3" }] },
+      { type: "table", columns: ["Slot", "Who"], rows: [["10:00", "All"]] },
+      {
+        type: "options",
+        items: [
+          { id: "a", title: "Plan A", subtitle: "Fast", lines: ["2 days"], value: "$10", note: "n", badge: "New" },
+        ],
+        pick: "a",
+      },
+      { type: "stats", items: [{ label: "Revenue", value: "$12k", delta: "+4%", tone: "good" }] },
+      { type: "checklist", items: [{ label: "Build", detail: "ok", status: "done" }] },
+      { type: "timeline", items: [{ time: "09:00", title: "Standup", detail: "d", tag: "daily" }] },
+      {
+        type: "chart",
+        kind: "bar",
+        unit: "ms",
+        series: [{ name: "p95", points: [{ x: "Mon", y: 120 }] }],
+        highlight: "Mon",
+      },
+      { type: "image", attachmentId: "att_1", alt: "Floor plan" },
+      { type: "link", label: "Agenda", url: "https://example.com/agenda" },
+      {
+        type: "choice",
+        id: "slot",
+        label: "Slot",
+        mode: "one",
+        options: [{ id: "s1", label: "10:00–10:30", detail: "d", badge: "b" }],
+        default: ["s1"],
+      },
+      { type: "input", id: "title", label: "Title", placeholder: "p", default: "Design review", multiline: true },
+    ],
+    actions: [{ id: "send", label: "Send choice", style: "primary" }],
+    fallback: "Choose a meeting time: 10:00–10:30",
+  } as const
+
+  test("every block type round-trips inside a card entry, with its answer on the state", () => {
+    const entry = Schema.decodeUnknownSync(KnownTranscriptEntry)({
+      ...base,
+      kind: "card",
+      card,
+      state: {
+        status: "resolved",
+        answer: { actionId: "send", values: { slot: ["s1"], title: "Design review" }, at: 5 },
+      },
+    })
+    const json = roundTrip(KnownTranscriptEntry, entry)
+    expect(json.card).toEqual(card)
+    expect(json.state.answer.values).toEqual({ slot: ["s1"], title: "Design review" })
+  })
+
+  test("an unknown block type decodes as unknown; a known block with a bad payload fails", () => {
+    const decoded = Schema.decodeUnknownSync(UiCard)({
+      ...card,
+      blocks: [{ type: "map", center: [1, 2] }, card.blocks[0]],
+    })
+    expect(decoded.blocks[0]).toEqual({ type: "unknown", originalTag: "map" })
+    expect(decoded.blocks[1]).toEqual(card.blocks[0])
+    expect(decodes(UiCard, { ...card, blocks: [{ type: "table", columns: "Slot" }] })).toBe(false)
+    expect(
+      decodes(UiCard, { ...card, blocks: [{ type: "stats", items: [{ label: "a", value: "1", tone: "meh" }] }] }),
+    ).toBe(false)
+    expect(decodes(UiCard, { ...card, fallback: undefined })).toBe(false)
+  })
+
+  test("the show_ui input schema accepts every known block and rejects an unknown one", () => {
+    expect(decodes(UiCardInput, card)).toBe(true)
+    expect(decodes(UiCardInput, { ...card, blocks: [{ type: "map", center: [1, 2] }] })).toBe(false)
+  })
+
+  test("cards.act decodes its values and its AlreadyAnswered error", () => {
+    const rpc = OpenBotRpcs.requests.get("cards.act")!
+    const payload = Schema.decodeUnknownSync(rpc.payloadSchema)({
+      entryId: "ent_1",
+      actionId: "send",
+      values: { slot: ["s1"], title: "Design review" },
+    })
+    expect(payload).toMatchObject({ actionId: "send", values: { slot: ["s1"], title: "Design review" } })
+    expect(decodes(rpc.payloadSchema, { entryId: "ent_1", actionId: "send", values: { slot: 1 } })).toBe(false)
+    const error = Schema.decodeUnknownSync(rpc.errorSchema)({ _tag: "AlreadyAnswered", entryId: "ent_1" })
+    expect(error).toBeInstanceOf(AlreadyAnswered)
   })
 })
 

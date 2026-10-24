@@ -41,6 +41,7 @@ import {
 import { HarnessProfile, HarnessProfileCandidate, HarnessStatus, ModelInfo } from "./harness.ts"
 import { BotMemory, MemoryFact, MemoryFactId, MemoryFactInput } from "./memory.ts"
 import { ApprovalRule, ApprovalRuleInput, BotAutonomy, ProjectFolders } from "./policy.ts"
+import { UiValues } from "./card.ts"
 import { RuntimeRequest, RuntimeResponseInput } from "./runtime-request.ts"
 import { Settings, SettingsPatch } from "./settings.ts"
 import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
@@ -83,6 +84,8 @@ export class NodeUnavailable extends Schema.TaggedError<NodeUnavailable>()("Node
 }) {}
 /** A defect or repository failure, logged with its cause on the brain; the message is safe to show. */
 export class Internal extends Schema.TaggedError<Internal>()("Internal", { message: Schema.String }) {}
+/** A `ui` card's action was already pressed (`cards.act` is one-shot). */
+export class AlreadyAnswered extends Schema.TaggedError<AlreadyAnswered>()("AlreadyAnswered", { entryId: EntryId }) {}
 /** An outside service (skills.sh) did not answer or failed. */
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Unavailable", { message: Schema.String }) {}
 
@@ -650,6 +653,13 @@ export class OpenBotRpcs extends RpcGroup.make(
     error: errors(NotFound, InvalidInput, Conflict, Unavailable),
   }),
   Rpc.make("slack.discardDraft", { payload: { entryId: EntryId }, error: errors(NotFound, Conflict) }),
+
+  // generative UI
+  /** The owner presses an action on a Bot's `ui` card; the Bot gets the answer as a message. */
+  Rpc.make("cards.act", {
+    payload: { entryId: EntryId, actionId: Schema.String, values: UiValues },
+    error: errors(NotFound, InvalidInput, AlreadyAnswered),
+  }),
 
   Rpc.make("stt.status", { success: SttStatus, error: errors() }),
   Rpc.make("stt.install", { success: SttStatus, error: errors(Conflict) }),

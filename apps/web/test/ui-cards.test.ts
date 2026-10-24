@@ -162,11 +162,12 @@ describe.skipIf(!enabled)("generative UI against the dev mock", () => {
     const page = await browser.newPage()
     try {
       await page.goto(`${mock.url}/#/c/cnv_expense`)
-      const before = await page.locator('[data-card="ui"]').count()
+      const rollouts = page.locator('[data-card="ui"][aria-label="Search rollout"]')
+      const before = await rollouts.count()
       const card = await show(page, "progress")
       const entryId = await card.locator("xpath=..").getAttribute("data-entry")
       await card.getByText("Finished", { exact: true }).waitFor()
-      expect(await page.locator('[data-card="ui"]').count()).toBe(before + 1)
+      expect(await rollouts.count()).toBe(before + 1)
       expect(await card.locator("xpath=..").getAttribute("data-entry")).toBe(entryId)
     } finally {
       await page.close()

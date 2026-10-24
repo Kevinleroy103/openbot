@@ -5,7 +5,7 @@ import { activityPhrase, chatStatuses, type ChatStatus, layoutTranscript, type P
 import { commands, conversationAtom, interruptTurnAtom, loadOlderAtom, outboxAtom, retrySendAtom, sendMessageAtom } from "@openbot/client"
 import { type Bot, type BotId, type ConversationId, DEFAULT_SETTINGS, emptyConversationState, transcriptOf } from "@openbot/contracts"
 import { router, useLocalSearchParams } from "expo-router"
-import { type ReactNode, useEffect } from "react"
+import { type ReactElement, type ReactNode, useEffect } from "react"
 import { ActionSheetIOS, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Composer } from "../../src/chat/Composer.tsx"
@@ -28,7 +28,9 @@ export default function Chat(): ReactNode {
   const insets = useSafeAreaInsets()
   const connection = useConnection()
   const roster = useRoster()
-  const state = valueOr(useAtomValue(conversationAtom(conversationId)), emptyConversationState)
+  const result = useAtomValue(conversationAtom(conversationId))
+  const state = valueOr(result, emptyConversationState)
+  const failed = result._tag === "Failure"
   const outbox = useAtomValue(outboxAtom(conversationId))
   const send = useAtomSet(sendMessageAtom)
   const retry = useAtomSet(retrySendAtom)
@@ -108,12 +110,19 @@ export default function Chat(): ReactNode {
     retry: (clientNonce: string) => retry({ conversationId, clientNonce }),
   }
 
+  let emptyState: ReactElement | undefined
+  if (failed) {
+    emptyState = <Text accessibilityRole="alert" style={[styles.loading, { color: theme.fgSecondary }]}>Couldn't load this conversation. Go back and try again.</Text>
+  } else if (!state.synchronized) {
+    emptyState = <Text style={[styles.loading, { color: theme.fgTertiary }]}>Loading…</Text>
+  }
+
   const top = insets.top + 6
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <FlatList
         inverted
-        data={items}
+        data={failed ? [] : items}
         keyExtractor={(item) => (item.kind === "row" ? item.row.key : item.key)}
         renderItem={({ item }) => (item.kind === "row" ? <RowView row={item.row} ctx={ctx} /> : <StatusLine bot={roster.botById(item.status.botId)} text={statusText(item.status)} theme={theme} />)}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: top + 64 }}
@@ -123,9 +132,9 @@ export default function Chat(): ReactNode {
         onEndReached={() => {
           if (state.hasMoreBefore) void loadOlder(conversationId)
         }}
-        ListEmptyComponent={state.synchronized ? undefined : <Text style={[styles.loading, { color: theme.fgTertiary }]}>Loading…</Text>}
+        ListEmptyComponent={emptyState}
       />
-      <View style={{ paddingBottom: Math.max(insets.bottom, 10), paddingTop: 6 }}>
+      {!failed && <View style={{ paddingBottom: Math.max(insets.bottom, 10), paddingTop: 6 }}>
         <Composer
           conversationId={conversationId}
           theme={theme}
@@ -134,7 +143,7 @@ export default function Chat(): ReactNode {
           onSend={(text, attachmentIds) => send({ conversationId, text, ...(attachmentIds.length > 0 ? { attachmentIds: [...attachmentIds] as never } : {}) })}
           onStop={() => interrupt({ conversationId })}
         />
-      </View>
+      </View>}
 
       {/* floating header */}
       <View style={[styles.header, { top }]} pointerEvents="box-none">

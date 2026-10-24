@@ -152,8 +152,7 @@ function BlockView({
 }): ReactNode {
   switch (block.type) {
     case "text":
-      // No `image`: a card's markdown loads no images and no link icons; only image blocks load attachments.
-      return <Markdown text={block.markdown} theme={theme} size={15} httpsOnly />
+      return <Markdown text={block.markdown} theme={theme} size={15} image={media} uiCard />
     case "fields":
       return <FieldsBlock block={block} theme={theme} />
     case "table":

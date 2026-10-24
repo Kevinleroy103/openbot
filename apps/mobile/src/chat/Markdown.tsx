@@ -18,7 +18,7 @@ interface Ctx {
   readonly size: number
   /** The brain to ask for links' site icons (absent: links have none). */
   readonly site?: MarkdownImage | undefined
-  readonly httpsOnly?: boolean | undefined
+  readonly uiCard?: boolean | undefined
 }
 
 /** The body-text style every text line carries; block(), inlineRows() and MdImage's fallback share it. */
@@ -134,8 +134,12 @@ function inlineRows(
       {inline(run, ctx, key)}
     </Text>
   )
-  const src = (t: Token): string | undefined =>
-    t.type === "image" && image !== undefined ? imageSrc((t as Tokens.Image).href, image.origin) : undefined
+  const src = (t: Token): string | undefined => {
+    if (t.type !== "image" || image === undefined) return undefined
+    const href = imageSrc((t as Tokens.Image).href, image.origin)
+    if (ctx.uiCard && !href?.startsWith("/")) return undefined
+    return href
+  }
   const split = tokens.some((t) => src(t) !== undefined)
   if (!split) return [textRow(tokens, `${keyBase}.t`)]
   const rows: ReactNode[] = []
@@ -203,7 +207,7 @@ const inline = (tokens: ReadonlyArray<Token> | undefined, ctx: Ctx, keyBase: str
         const href = safeHref(link.href)
         // A rejected protocol renders as text with no tap target at all (the same guard as
         // the web renderer); an allowed one stays tappable exactly as before.
-        if (href === undefined || (ctx.httpsOnly && !/^https:\/\//i.test(href))) {
+        if (href === undefined || (ctx.uiCard && !/^https:\/\//i.test(href))) {
           return <Text key={key}>{inline(link.tokens, ctx, key)}</Text>
         }
         return (
@@ -377,14 +381,14 @@ export function Markdown({
   color,
   size = 17,
   image,
-  httpsOnly,
+  uiCard,
 }: {
   readonly text: string
   readonly theme: Theme
   readonly color?: string
   readonly size?: number
   readonly image?: MarkdownImage
-  readonly httpsOnly?: boolean
+  readonly uiCard?: boolean
 }): ReactNode {
   const tokens = useMemo(() => {
     try {
@@ -393,7 +397,7 @@ export function Markdown({
       return [{ type: "paragraph", raw: text, text, tokens: [{ type: "text", raw: text, text }] } as Token]
     }
   }, [text])
-  const ctx: Ctx = { theme, color: color ?? theme.fg, size, site: image, httpsOnly }
+  const ctx: Ctx = { theme, color: color ?? theme.fg, size, site: uiCard ? undefined : image, uiCard }
   return <View style={{ gap: 8 }}>{tokens.map((t, i) => block(t, ctx, String(i), 0, image))}</View>
 }
 

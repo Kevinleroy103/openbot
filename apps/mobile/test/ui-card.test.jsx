@@ -269,6 +269,20 @@ test("a ui text block links https only, while chat markdown keeps its http links
   )
 })
 
+test("a ui text block shows attachment images and drops remote ones, while chat markdown offers to load them", () => {
+  const markdown = "![Diagram](/api/attachments/att_diagram) ![Tracker](https://tracker.example/pixel.png)"
+  const html = render({ ...choice, blocks: [{ type: "text", markdown }] })
+  expect([...html.matchAll(/<img src="([^"]+)"/g)].map((m) => m[1])).toEqual([
+    "https://box.example/api/attachments/att_diagram",
+  ])
+  expect(html).toContain("Tracker")
+  expect(html).not.toContain("Load image from")
+  const chat = renderToStaticMarkup(
+    createElement(Markdown, { text: markdown, theme, image: { origin: "https://box.example", headers: {} } }),
+  )
+  expect(chat).toContain("Load image from tracker.example")
+})
+
 test("update_ui keeps the owner's edits to blocks that remain, drops removed ones and takes new defaults", () => {
   const draw = mount(UiCardView)
   const send = (blocks) => {

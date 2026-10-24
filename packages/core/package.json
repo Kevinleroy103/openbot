@@ -8,7 +8,6 @@
     "./testing": "./src/testing/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {

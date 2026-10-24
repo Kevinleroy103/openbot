@@ -6,7 +6,7 @@ Read first: `docs/decisions.md` (binding), `docs/architecture.md`, `docs/plan.md
 
 ## Rules
 
-- **Bun 1.4.4** for everything: `bun install`, `bun test`, `bun run`, `bunx tsc`. Workspaces use Bun's isolated linker, so a package can only import its **declared** dependencies.
+- **Bun 1.4.4** for everything: `bun install`, `bun test`, `bun run`, `bun check`. Workspaces use Bun's isolated linker, so a package can only import its **declared** dependencies.
 - **Effect 4.0.4 only** (pinned via the root `catalog:` and `overrides`).
   - Use `Context.Service`, `Layer`, `Schema.TaggedError<Self>()(tag, fields)` (there is no `TaggedErrorClass` in 4.0.4), `Effect.fn`, and scoped resources (`Effect.acquireRelease`, `Layer.effect` with a scope).
   - The API reference is `vendor/effect-4.0.4` and the installed d.ts. `vendor/effect` is rc.117; do not trust it.
@@ -23,5 +23,5 @@ Read first: `docs/decisions.md` (binding), `docs/architecture.md`, `docs/plan.md
   - Never forward claude.ai or ChatGPT credentials.
 - **MCP tools** return `content` (text plus optional images) and **never `structuredContent`**. Error text starts with `ERROR:`. Results stay under about 10 KB. Schemas have no tuples. MCP tokens never go on argv.
 - **Tests.** `bun test` runs against fakes and recorded fixtures. Live harness tests are gated by `OPENBOT_LIVE_CLAUDE`, `OPENBOT_LIVE_CODEX` and `OPENBOT_LIVE_OPENCODE`, and must stay trivially cheap.
-- **Per-package checks:** `bunx tsc --noEmit -p packages/<name>` and `bun test packages/<name>`. The root `bunfig.toml` ignores `vendor/`; never run a bare `bun test` that crawls `vendor/`.
+- **Per-package checks:** `bun check --no-script -p packages/<name>` (bare `bun check` at the root runs the `check` script) and `bun test packages/<name>`. The root `bunfig.toml` ignores `vendor/`; never run a bare `bun test` that crawls `vendor/`.
 - **Don't commit** unless the user asks.

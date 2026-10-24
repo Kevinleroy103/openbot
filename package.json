@@ -47,7 +47,7 @@
     "dev": "bun run --filter @openbot/server dev",
     "start": "bun run --filter @openbot/server start",
     "deploy": "bun scripts/deploy.ts",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "bun check --no-script",
     "test": "turbo run test",
     "lint": "oxlint",
     "format": "oxfmt",

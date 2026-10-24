@@ -10,7 +10,6 @@
     "./styles.css": "./src/styles.css"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests",
     "gen-theme": "bun run scripts/gen-theme.ts",
     "gallery:build": "bun run scripts/build-gallery.ts",

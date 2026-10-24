@@ -5,7 +5,6 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {

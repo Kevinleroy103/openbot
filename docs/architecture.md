@@ -88,7 +88,7 @@ node-protocol ─┤                     (browser-safe, effect only)
 
 Rules:
 - Every package exports source (`"exports": {".": "./src/index.ts"}`); there is no build step except `bun build --compile` for `apps/node`.
-- Every package has `typecheck: tsc --noEmit` and, where it has tests, `test: bun test`.
+- The root `typecheck` runs `bun check` over every package listed in the root `tsconfig.json` references; a package with tests has `test: bun test`.
 - Pin versions exactly through the root `catalog:`; effect is 4.0.4 (D4.5).
 
 ## 3. Core ports (the seams)

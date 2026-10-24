@@ -5,7 +5,6 @@
   "type": "module",
   "description": "OpenBot desktop app (Electron): the owner's OpenBot in its own window, with notifications. Built and served by the brain (apps/server/src/desktop.ts).",
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests"
   },
   "devDependencies": {

@@ -1,4 +1,25 @@
 {
   "extends": "./packages/tsconfig/bun.json",
-  "files": []
+  "files": [],
+  "references": [
+    { "path": "apps/desktop" },
+    { "path": "apps/mobile" },
+    { "path": "apps/node" },
+    { "path": "apps/server" },
+    { "path": "apps/web" },
+    { "path": "packages/app-model" },
+    { "path": "packages/brain-nodes" },
+    { "path": "packages/client" },
+    { "path": "packages/contracts" },
+    { "path": "packages/core" },
+    { "path": "packages/gateway" },
+    { "path": "packages/harness-claude" },
+    { "path": "packages/harness-codex" },
+    { "path": "packages/harness-fake" },
+    { "path": "packages/harness-opencode" },
+    { "path": "packages/node-daemon" },
+    { "path": "packages/node-protocol" },
+    { "path": "packages/persistence" },
+    { "path": "packages/ui" }
+  ]
 }

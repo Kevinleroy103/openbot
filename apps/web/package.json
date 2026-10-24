@@ -8,7 +8,6 @@
     "./index.html": "./index.html"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {

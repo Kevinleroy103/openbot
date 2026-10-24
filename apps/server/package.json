@@ -7,7 +7,6 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests",
     "dev": "bun --hot src/main.ts --dev",
     "start": "bun src/main.ts"

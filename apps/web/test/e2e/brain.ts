@@ -146,7 +146,7 @@ export interface AppPage {
   readonly shot: (name: string) => Promise<void>
 }
 
-/** Opens the app logged in (login URL → cookie → `/`); `context` sets the window (a phone's, say). */
+/** Opens the app logged in (login URL → cookie), at `route`; `context` sets the window (a phone's, say). */
 export const openApp = async (
   browser: Browser,
   brain: Brain,
@@ -166,8 +166,9 @@ export const openApp = async (
   page.on("console", (msg) => {
     if (msg.type() === "error") errors.push(`console: ${msg.text()}`)
   })
-  await page.goto(brain.loginUrl)
-  if (options?.route) await page.goto(`${brain.base}/${options.route}`)
+  // a hash-only goto after landing on `/` would race the app's boot
+  await context.request.get(brain.loginUrl)
+  await page.goto(`${brain.base}/${options?.route ?? ""}`)
   await page.evaluate(() => document.fonts.ready)
   return {
     page,

@@ -217,6 +217,7 @@ interface MentionScope {
   readonly byName: ReadonlyMap<string, MentionBot>
   /** "bot": name in the Bot's colour (grey bubbles); "inherit": bold in the bubble's text colour. */
   readonly tone: "bot" | "inherit"
+  readonly uiCard?: boolean | undefined
 }
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 export const makeMentionScope = (bots: ReadonlyArray<MentionBot>, tone: "bot" | "inherit" = "bot"): MentionScope => {
@@ -276,7 +277,8 @@ const rules: ReadonlyArray<InlineRule> = [
       const alt = m[1] ?? ""
       // Anything but https: or an attachment falls back to text *before* creating the element, so
       // it never loads and no broken image flashes before it turns into text.
-      if (href === undefined) return <Fragment key={key}>{alt || m[2]!.trim()}</Fragment>
+      if (href === undefined || (currentScope?.uiCard && !href.startsWith("/api/attachments/")))
+        return <Fragment key={key}>{alt || m[2]!.trim()}</Fragment>
       return <MdImage key={`${key}:${href}`} href={href} alt={alt} />
     },
   },
@@ -284,9 +286,10 @@ const rules: ReadonlyArray<InlineRule> = [
     re: /\[([^\]\n]+)\]\(([^)\s]+)\)/,
     render: (m, key) => {
       const href = safeHref(m[2]!)
-      if (!href) return <Fragment key={key}>{renderInline(m[1]!, `${key}t`)}</Fragment>
+      if (!href || (currentScope?.uiCard && !/^https:\/\//i.test(href)))
+        return <Fragment key={key}>{renderInline(m[1]!, `${key}t`)}</Fragment>
       return (
-        <Link key={key} href={href}>
+        <Link key={key} href={href} showIcon={!currentScope?.uiCard}>
           {renderInline(m[1]!, `${key}t`)}
         </Link>
       )
@@ -294,11 +297,14 @@ const rules: ReadonlyArray<InlineRule> = [
   },
   {
     re: /\bhttps?:\/\/[^\s<>()]+[^\s<>().,:;!?"'\]]/,
-    render: (m, key) => (
-      <Link key={key} href={m[0]}>
-        {m[0]}
-      </Link>
-    ),
+    render: (m, key) => {
+      if (currentScope?.uiCard && !/^https:\/\//i.test(m[0])) return <Fragment key={key}>{m[0]}</Fragment>
+      return (
+        <Link key={key} href={m[0]} showIcon={!currentScope?.uiCard}>
+          {m[0]}
+        </Link>
+      )
+    },
   },
   { re: /\*\*(?=\S)([\s\S]+?)\*\*/, render: (m, key) => <strong key={key}>{renderInline(m[1]!, `${key}b`)}</strong> },
   { re: /__(?=\S)([\s\S]+?)__(?!\w)/, render: (m, key) => <strong key={key}>{renderInline(m[1]!, `${key}b`)}</strong> },
@@ -384,16 +390,24 @@ const leadOf = (children: ReactNode): readonly [ReactNode, ReactNode] => {
   return [first.slice(0, cut), [first.slice(cut), ...rest]]
 }
 
-function Link({ href, children }: { readonly href: string; readonly children: ReactNode }): ReactNode {
+function Link({
+  href,
+  children,
+  showIcon = true,
+}: {
+  readonly href: string
+  readonly children: ReactNode
+  readonly showIcon?: boolean
+}): ReactNode {
   const external = /^https?:/i.test(href)
-  const [lead, rest] = external ? leadOf(children) : [undefined, children]
+  const [lead, rest] = external && showIcon ? leadOf(children) : [undefined, children]
   return (
     <a
       href={href}
       {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})}
       className="break-words"
     >
-      {external && (
+      {external && showIcon && (
         <span className="whitespace-nowrap">
           <SiteIcon key={hostOf(href)} host={hostOf(href)} />
           {lead}
@@ -465,14 +479,16 @@ export function Markdown({
   text,
   className,
   bots,
+  uiCard,
 }: {
   readonly text: string
   readonly className?: string
   readonly bots?: ReadonlyArray<MentionBot>
+  readonly uiCard?: boolean
 }): ReactNode {
   const blocks = parseBlocks(text)
   const previous = currentScope
-  currentScope = bots === undefined ? undefined : makeMentionScope(bots, "bot")
+  currentScope = { ...makeMentionScope(bots ?? [], "bot"), uiCard }
   try {
     return renderBlocks(blocks, className)
   } finally {

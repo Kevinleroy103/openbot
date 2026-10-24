@@ -147,3 +147,5 @@ export {
   type PaletteItem,
   type CommandPaletteProps,
 } from "./primitives/overlay.tsx"
+
+export { CardTable } from "./primitives/table.tsx"

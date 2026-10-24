@@ -49,6 +49,7 @@ import { renderInline } from "../chat/Markdown.tsx"
 import { ScreenPeek } from "../computer/ScreenThumbnail.tsx"
 import { useComputer } from "../computer/useComputer.ts"
 import { useCommand } from "../details/kit.tsx"
+import { UiCard } from "./UiCard.tsx"
 import { useRespond, useSaveRule } from "./useRespond.ts"
 
 export interface CardViewProps {
@@ -81,6 +82,8 @@ const responseOf = (state: CardState, request: RuntimeRequest | undefined): Runt
 export function CardView(props: CardViewProps): ReactNode {
   const card = props.card
   switch (card.type) {
+    case "ui":
+      return <UiCard {...props} card={card} />
     case "approval":
       return <ApprovalCard {...props} card={card} />
     case "question":

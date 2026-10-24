@@ -1,0 +1,8 @@
+{
+  "ui-plan": { "actionId": "review", "values": {} },
+  "ui-choice": { "actionId": "send", "values": { "slot": ["1330"], "title": "Design sync" } },
+  "ui-everything": {
+    "actionId": "change",
+    "values": { "toppings": ["olives", "chili"], "notes": "Swap basil for chili.\nKeep the olives." }
+  }
+}

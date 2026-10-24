@@ -59,8 +59,9 @@ test("link blocks allow only guarded external HTTPS URLs", () => {
 
 test("image blocks use only attachment routes even for an injected URL", () => {
   const html = render({ type: "image", attachmentId: "https://tracker.example/p.gif", alt: "Diagram" } as UiBlock)
-  expect(html).toContain('src="/api/attachments/https%3A%2F%2Ftracker.example%2Fp.gif"')
-  expect(html).not.toContain('src="https:')
+  expect(html).not.toContain("<img")
+  expect(html).toContain("image unavailable")
+  expect(render({ type: "image", attachmentId: "..", alt: "Invalid attachment" } as UiBlock)).not.toContain("<img")
 })
 
 test("charts support negative values, zero series and readable descriptions", () => {

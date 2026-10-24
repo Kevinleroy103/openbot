@@ -43,12 +43,12 @@ export function UiCardContent({
   const id = useId()
   const [expanded, setExpanded] = useState(!card.collapsed)
   const [actionId, setActionId] = useState<string>()
-  const [edited, setEdited] = useState<UiValues>({})
+  const [edited, setEdited] = useState(() => new Map<string, string | ReadonlyArray<string>>())
   const answered = state.status === "resolved"
-  const inputs: Record<string, string | ReadonlyArray<string>> = {}
+  const inputs: Record<string, string | ReadonlyArray<string>> = Object.create(null)
   for (const block of card.blocks) {
-    if (block.type === "choice") inputs[block.id] = edited[block.id] ?? block.default ?? []
-    if (block.type === "input") inputs[block.id] = edited[block.id] ?? block.default ?? ""
+    if (block.type === "choice") inputs[block.id] = edited.get(block.id) ?? block.default ?? []
+    if (block.type === "input") inputs[block.id] = edited.get(block.id) ?? block.default ?? ""
   }
   const values = answered ? (state.answer?.values ?? {}) : inputs
   if (card.version !== 1)
@@ -96,7 +96,7 @@ export function UiCardContent({
               key={index}
               block={block}
               values={values}
-              onChange={(key, value) => setEdited((current) => ({ ...current, [key]: value }))}
+              onChange={(key, value) => setEdited((current) => new Map(current).set(key, value))}
               disabled={disabled}
               answered={answered}
               namePrefix={id}

@@ -1,4 +1,5 @@
 import type { UiBlock, UiValues } from "@openbot/contracts"
+import { imageSrc } from "@openbot/app-model"
 import { CardTable, Icon, Sheet, SheetField, StatusPill, TextArea, TextField, cn } from "@openbot/ui"
 import { Check, Circle, CircleAlert, Clock, ExternalLink } from "lucide-react"
 import { useState, type ReactNode } from "react"
@@ -256,10 +257,12 @@ export function UiBlockView({
 
 function UiImage({ attachmentId, alt }: { readonly attachmentId: string; readonly alt: string }): ReactNode {
   const [failed, setFailed] = useState(false)
-  if (failed) return <p className="rounded-xl bg-elevated p-3 text-sm text-fg-secondary">{alt} (image unavailable)</p>
+  const src = imageSrc(`/api/attachments/${attachmentId}`)
+  if (failed || src === undefined)
+    return <p className="rounded-xl bg-elevated p-3 text-sm text-fg-secondary">{alt} (image unavailable)</p>
   return (
     <img
-      src={`/api/attachments/${encodeURIComponent(attachmentId)}`}
+      src={src}
       alt={alt}
       loading="lazy"
       decoding="async"

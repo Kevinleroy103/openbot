@@ -298,6 +298,33 @@ describe("MacScreen", () => {
       }),
     ))
 
+  test("an action waiting behind another is refused once the owner has taken control", () =>
+    run(
+      Effect.gen(function* () {
+        const leases = makeLeaseBook()
+        const sys = fakeSystem()
+        const capturing = Promise.withResolvers<void>()
+        const gate = Promise.withResolvers<void>()
+        const system: ScreenSystem = {
+          ...sys.system,
+          exec: async (argv, timeoutMs) => {
+            capturing.resolve()
+            await gate.promise
+            return sys.system.exec(argv, timeoutMs)
+          },
+        }
+        const screen = yield* makeMacScreen({ config: darwin(), helper: fakeHelper(allowed).client, system, leases })
+        const first = yield* Effect.forkScoped(screen.act("bot_a", { action: "screenshot" }))
+        yield* Effect.promise(() => capturing.promise)
+        const second = yield* Effect.forkScoped(Effect.flip(screen.act("bot_a", { action: "screenshot" })))
+        yield* Effect.sleep(50)
+        leases.set("bot_a", "user")
+        gate.resolve()
+        yield* Fiber.join(first)
+        expect(((yield* Fiber.join(second)) as { reason: string }).reason).toContain("controlling this screen")
+      }),
+    ))
+
   test("the owner's input needs the lease; mouse and keys become helper requests", () =>
     run(
       Effect.gen(function* () {

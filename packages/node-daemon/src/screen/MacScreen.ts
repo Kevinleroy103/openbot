@@ -369,22 +369,22 @@ export const makeMacScreen = (input: {
 
     const act = (botId: string, action: ComputerAction): Effect.Effect<ComputerResult, DesktopUnavailable | LeaseHeld> =>
       Effect.gen(function* () {
-        if (userHolds.size > 0) return yield* held(botId, "The owner is controlling this screen. Wait until they hand it back.")
         yield* requirePermissions
         const plan = planAction(geometry, action, { mac: true })
         if (typeof plan === "string") return { text: `ERROR: ${plan}` }
         const steps = macSteps(plan)
         if (typeof steps === "string") return { text: `ERROR: ${steps}` }
-        const idle = yield* call<MacIdle>({ op: "idle" })
-        // input after this helper's last event came from someone at the Mac
-        if (idle.idle < OWNER_ACTIVE_S && idle.idle + 0.5 < idle.sincePost) {
-          return yield* held(botId, "The owner is using this computer right now. Try again in a few minutes, or ask them in the chat.")
-        }
-        if (lastBot && lastBot.botId !== botId && now() - lastBot.at < BOT_EXCLUSIVE_MS) {
-          return yield* held(botId, "Another Bot is using this screen right now. Try again in a minute.")
-        }
         return yield* lock.withPermits(1)(
           Effect.gen(function* () {
+            if (userHolds.size > 0) return yield* held(botId, "The owner is controlling this screen. Wait until they hand it back.")
+            const idle = yield* call<MacIdle>({ op: "idle" })
+            // input after this helper's last event came from someone at the Mac
+            if (idle.idle < OWNER_ACTIVE_S && idle.idle + 0.5 < idle.sincePost) {
+              return yield* held(botId, "The owner is using this computer right now. Try again in a few minutes, or ask them in the chat.")
+            }
+            if (lastBot && lastBot.botId !== botId && now() - lastBot.at < BOT_EXCLUSIVE_MS) {
+              return yield* held(botId, "Another Bot is using this screen right now. Try again in a minute.")
+            }
             lastBot = { botId, at: now() }
             if (steps.needsPointer) {
               const p = yield* Effect.option(cursor)

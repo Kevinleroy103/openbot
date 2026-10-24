@@ -17,7 +17,8 @@ import { chatHash, parseRoute, searchHash } from "./route.ts"
 /** `#/new` is the explicit new-chat view; no hash = "open the most recent conversation". */
 export const isNewChatHash = (): boolean => typeof location !== "undefined" && /^#\/new\b/.test(location.hash)
 
-const bootRoute = parseRoute(typeof location === "undefined" ? "" : location.hash)
+export const bootHash = typeof location === "undefined" ? "" : location.hash
+const bootRoute = parseRoute(bootHash)
 
 /** The open conversation (null = the empty / new-chat state). Mirrored to `#/c/<id>`. */
 export const selectedConversationAtom: Atom.Writable<ConversationId | null> = Atom.make<ConversationId | null>(

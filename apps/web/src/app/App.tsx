@@ -27,6 +27,7 @@ const ConnectAppsDialog = lazy(() =>
   import("../connections/ConnectAppsDialog.tsx").then((m) => ({ default: m.ConnectAppsDialog })),
 )
 import {
+  bootHash,
   findBarAtom,
   isNewChatHash,
   previousConversationAtom,
@@ -205,6 +206,7 @@ export function App(): ReactNode {
   }, [roster.loaded, roster.state.conversations, conversationId, select, previous, nav])
 
   // Back/forward and manual hash edits. On a phone, a hash that is not a chat screen is Home.
+  const hashCaughtUp = useRef(false)
   useEffect(() => {
     const on = () => {
       const route = parseRoute(location.hash)
@@ -214,6 +216,11 @@ export function App(): ReactNode {
       select(null)
     }
     window.addEventListener("hashchange", on)
+    // a hash change while the app booted came before this listener
+    if (!hashCaughtUp.current) {
+      hashCaughtUp.current = true
+      if (location.hash !== bootHash) on()
+    }
     return () => window.removeEventListener("hashchange", on)
   }, [select, openSearch, nav])
 

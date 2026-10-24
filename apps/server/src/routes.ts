@@ -6,6 +6,8 @@
  * - `GET /rpc`: Effect RPC over WebSocket (`RpcSerialization.layerJson`), cookie + Origin or
  *   `?wsTicket=`; the socket closes when its session is logged out.
  * - `/api/auth/login` (GET `?token=` → cookie + redirect, POST → cookie), `POST /api/auth/logout`,
+ *   `POST /api/auth/device/{start,poll,approve}` (the desktop app's code, and "Sign in with another
+ *   device" on the login page, whose script is `GET /login.js`),
  *   `POST /api/auth/ws-ticket`, `GET /api/auth/status`; for the iPhone app `POST /api/auth/app-code`
  *   (signed in: a one-time code for its QR), `POST /api/auth/app-login` (`{code}` or `{token}` →
  *   `{sessionToken}`, sent back as `Authorization: Bearer`) and `POST /api/auth/web-code` (a 60 s code
@@ -23,7 +25,7 @@
 import { NodeInternalRoutes, NodePublicRoutes, ViewerRoutes } from "@openbot/brain-nodes"
 import { DesktopRoutes } from "./desktop.ts"
 import { type AttachmentId, OpenBotRpcs } from "@openbot/contracts"
-import { AttachmentStore, DataDir } from "@openbot/core"
+import { AttachmentStore, DataDir, LiveHub, Notifier, SignInRequests } from "@openbot/core"
 import { McpGateway } from "@openbot/gateway"
 import { Effect, Layer, Option } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -33,7 +35,7 @@ import { faviconHost, makeFavicons, NO_ICON, recolorMonoSvg } from "./favicons.t
 import { ServerConfig } from "./config.ts"
 import { PublicListener } from "./listeners.ts"
 import { VoiceCalls } from "./voice/service.ts"
-import { loginPage, makeWebApp, PAGE_HEADERS, STATIC_PAGE_CSP, unavailablePage } from "./web.ts"
+import { LOGIN_PAGE_CSP, LOGIN_SCRIPT, loginPage, makeWebApp, PAGE_HEADERS, unavailablePage } from "./web.ts"
 
 /** `HttpRouter.use`, spelled out (a layer that adds routes to the ambient router). */
 const routes = <E, R>(add: (router: HttpRouter.HttpRouter) => Effect.Effect<void, E, R>) =>
@@ -42,6 +44,49 @@ const routes = <E, R>(add: (router: HttpRouter.HttpRouter) => Effect.Effect<void
 /** How long a desktop app's code waits to be allowed, and how many may wait at once. */
 const DEVICE_CODE_TTL_MS = 10 * 60 * 1000
 const DEVICE_PENDING_MAX = 64
+/** A browser's "Sign in with another device": how long it waits, and how many may wait at once
+ * (each one is put in front of the owner on every signed-in app). */
+const BROWSER_CODE_TTL_MS = 5 * 60 * 1000
+const BROWSER_PENDING_MAX = 3
+
+/** "Chrome on macOS", from a User-Agent: only for the owner to recognise a sign-in request. */
+export const describeAgent = (agent: string | undefined): string => {
+  const ua = agent ?? ""
+  const browser = /Edg(A|iOS)?\//.test(ua)
+    ? "Edge"
+    : /OPR\//.test(ua)
+      ? "Opera"
+      : /Firefox\/|FxiOS\//.test(ua)
+        ? "Firefox"
+        : /Chrome\/|CriOS\//.test(ua)
+          ? "Chrome"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : "A browser"
+  const os = /iPhone|iPad|iPod/.test(ua)
+    ? "iOS"
+    : /Android/.test(ua)
+      ? "Android"
+      : /Mac OS X|Macintosh/.test(ua)
+        ? "macOS"
+        : /Windows/.test(ua)
+          ? "Windows"
+          : /CrOS/.test(ua)
+            ? "ChromeOS"
+            : /Linux/.test(ua)
+              ? "Linux"
+              : undefined
+  return os === undefined ? browser : `${browser} on ${os}`
+}
+
+/** A two-digit number to match, and three to pick from (it among them, in random order). */
+export const matchChoices = (random: () => number = Math.random): { match: number; choices: number[] } => {
+  const pick = () => 10 + Math.floor(random() * 90)
+  const match = pick()
+  const choices = new Set([match])
+  while (choices.size < 3) choices.add(pick())
+  return { match, choices: [...choices].sort(() => random() - 0.5) }
+}
 /** Letters and digits that cannot be mistaken for one another. */
 const USER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
@@ -69,7 +114,7 @@ const json = (body: unknown, status = 200, headers?: Record<string, string>) =>
 const refusal = (status: number, reason: string) =>
   HttpServerResponse.text(reason, { status, headers: { "cache-control": "no-store" } })
 
-const htmlPage = (html: string, status: number, csp: string = STATIC_PAGE_CSP) =>
+const htmlPage = (html: string, status: number, csp: string = LOGIN_PAGE_CSP) =>
   HttpServerResponse.text(html, {
     status,
     contentType: "text/html; charset=utf-8",
@@ -243,24 +288,77 @@ export const AuthRoutes = routes(
         return json({ sessionToken: signedIn.sessionToken }, 200, { "cache-control": "no-store" })
       }),
     )
-    // Desktop app sign-in (device flow, apps/desktop): the app shows a code and opens the owner's
-    // browser on `/#/connect-device?code=…`; the signed-in owner allows it there; the app's poll then
-    // gets an app code (traded at `/api/auth/app-login` for a session of its own).
-    const devices = new Map<string, { readonly userCode: string; readonly expiresAt: number; appCode?: string }>()
-    const sweepDevices = (now: number) => {
-      for (const [deviceCode, device] of devices) if (device.expiresAt <= now) devices.delete(deviceCode)
-      while (devices.size >= DEVICE_PENDING_MAX) devices.delete(devices.keys().next().value!)
+    // Device sign-in. The desktop app (apps/desktop) shows a code and opens the owner's browser on
+    // `/#/connect-device?code=…`; the signed-in owner allows it there; the app's poll then gets an app
+    // code (traded at `/api/auth/app-login` for a session of its own). A browser on the login page
+    // ("Sign in with another device", `{"kind": "browser"}`) shows a two-digit number instead: every
+    // signed-in app is told (roster `sign-in.requested`, a notification) and allows it by picking that
+    // number of three; a wrong pick or "Not me" cancels it. Its poll then sets the session cookie.
+    const hub = yield* LiveHub
+    const notifier = yield* Notifier
+    const signIns = yield* SignInRequests
+    interface Device {
+      readonly userCode: string
+      readonly expiresAt: number
+      readonly kind: "app" | "browser"
+      readonly match?: number | undefined
+      appCode?: string
+      refused?: boolean
     }
+    const devices = new Map<string, Device>()
+    const endSignIn = (code: string) =>
+      signIns.end(code) ? Effect.asVoid(hub.publishRoster({ type: "sign-in.ended", code })) : Effect.void
+    const sweepDevices = (now: number) =>
+      Effect.gen(function* () {
+        for (const [deviceCode, device] of devices) if (device.expiresAt <= now) devices.delete(deviceCode)
+        while (devices.size >= DEVICE_PENDING_MAX) {
+          const [oldest, device] = devices.entries().next().value!
+          devices.delete(oldest)
+          if (device.kind === "browser") yield* endSignIn(device.userCode)
+        }
+        const browsers = [...devices].filter(([, d]) => d.kind === "browser" && !d.refused && d.appCode === undefined)
+        for (const [deviceCode, device] of browsers.slice(0, Math.max(0, browsers.length - BROWSER_PENDING_MAX + 1))) {
+          devices.delete(deviceCode)
+          yield* endSignIn(device.userCode)
+        }
+      })
+    const bodyOf = (request: HttpServerRequest.HttpServerRequest) =>
+      Effect.map(Effect.option(request.json), (body) =>
+        Option.isSome(body) && typeof body.value === "object" && body.value !== null
+          ? (body.value as Record<string, unknown>)
+          : {},
+      )
     yield* router.add(
       "POST",
       "/api/auth/device/start",
-      Effect.sync(() => {
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest
+        const browser = (yield* bodyOf(request))["kind"] === "browser"
+        if (browser) {
+          const refused = auth.checkOrigin(request)
+          if (refused !== undefined) return json({ error: refused }, 403)
+        }
         const now = Date.now()
-        sweepDevices(now)
+        yield* sweepDevices(now)
         const deviceCode = randomToken(32)
         const userCode = userCodeOf(crypto.getRandomValues(new Uint8Array(8)))
-        devices.set(deviceCode, { userCode, expiresAt: now + DEVICE_CODE_TTL_MS })
-        return json({ deviceCode, userCode, expiresInSeconds: DEVICE_CODE_TTL_MS / 1000, interval: 2 })
+        if (!browser) {
+          devices.set(deviceCode, { userCode, expiresAt: now + DEVICE_CODE_TTL_MS, kind: "app" })
+          return json({ deviceCode, userCode, expiresInSeconds: DEVICE_CODE_TTL_MS / 1000, interval: 2 })
+        }
+        const { match, choices } = matchChoices()
+        const expiresAt = now + BROWSER_CODE_TTL_MS
+        devices.set(deviceCode, { userCode, expiresAt, kind: "browser", match })
+        const from = describeAgent(request.headers["user-agent"])
+        const signIn = { code: userCode, from, choices, at: now, expiresAt }
+        signIns.put(signIn)
+        yield* hub.publishRoster({ type: "sign-in.requested", request: signIn })
+        yield* notifier.notify({
+          kind: "sign-in",
+          title: "Sign-in request",
+          body: `${from} wants to sign in to OpenBot. Open OpenBot to allow it.`,
+        })
+        return json({ deviceCode, match, expiresInSeconds: BROWSER_CODE_TTL_MS / 1000, interval: 2 })
       }),
     )
     yield* router.add(
@@ -268,16 +366,26 @@ export const AuthRoutes = routes(
       "/api/auth/device/poll",
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
-        const body = yield* Effect.option(request.json)
-        const deviceCode =
-          Option.isSome(body) && typeof (body.value as { deviceCode?: unknown })?.deviceCode === "string"
-            ? (body.value as { deviceCode: string }).deviceCode
-            : ""
+        const raw = (yield* bodyOf(request))["deviceCode"]
+        const deviceCode = typeof raw === "string" ? raw : ""
         const device = devices.get(deviceCode)
         if (device === undefined || device.expiresAt <= Date.now()) return json({ status: "expired" }, 410)
+        if (device.refused === true) {
+          devices.delete(deviceCode)
+          return json({ status: "refused" }, 403)
+        }
         if (device.appCode === undefined) return json({ status: "pending" })
+        if (device.kind === "app") {
+          devices.delete(deviceCode)
+          return json({ status: "approved", code: device.appCode })
+        }
+        // the browser itself: its session goes straight into a cookie
+        const refused = auth.checkOrigin(request)
+        if (refused !== undefined) return json({ error: refused }, 403)
         devices.delete(deviceCode)
-        return json({ status: "approved", code: device.appCode })
+        const signedIn = yield* auth.loginWithAppCode(device.appCode)
+        if (signedIn === undefined) return json({ status: "expired" }, 410)
+        return json({ status: "approved" }, 200, { "set-cookie": auth.sessionCookie(request, signedIn.sessionToken) })
       }),
     )
     yield* router.add(
@@ -287,16 +395,44 @@ export const AuthRoutes = routes(
         const request = yield* HttpServerRequest.HttpServerRequest
         const result = yield* auth.authenticate(request)
         if (!result.ok) return json({ error: result.reason }, result.status)
-        const body = yield* Effect.option(request.json)
-        const raw = Option.isSome(body) ? (body.value as { code?: unknown })?.code : undefined
-        const userCode = typeof raw === "string" ? normalizeUserCode(raw) : ""
+        const body = yield* bodyOf(request)
+        const userCode = typeof body["code"] === "string" ? normalizeUserCode(body["code"]) : ""
         const now = Date.now()
-        const found = [...devices.values()].find((d) => d.userCode === userCode && d.expiresAt > now)
-        if (found === undefined)
-          return json({ error: "That code is not valid any more. Get a new one in the app." }, 404)
+        const found = [...devices.values()].find(
+          (d) => d.userCode === userCode && d.expiresAt > now && d.refused !== true && d.appCode === undefined,
+        )
+        if (found === undefined) {
+          return json({ error: "That code is not valid any more. Get a new one where you are signing in." }, 404)
+        }
+        if (found.kind === "browser") {
+          yield* endSignIn(found.userCode)
+          if (body["refuse"] === true || body["match"] !== found.match) {
+            found.refused = true
+            return body["refuse"] === true
+              ? json({ ok: true })
+              : json(
+                  {
+                    error:
+                      "That isn't the number the other screen shows, so its request was cancelled. If it was you, start again there.",
+                  },
+                  409,
+                )
+          }
+        }
         found.appCode = (yield* auth.mintAppCode(result.session)).code
         return json({ ok: true })
       }),
+    )
+    // the login page's script (its CSP allows only scripts from here)
+    yield* router.add(
+      "GET",
+      "/login.js",
+      Effect.succeed(
+        HttpServerResponse.text(LOGIN_SCRIPT, {
+          contentType: "text/javascript; charset=utf-8",
+          headers: { "cache-control": "no-cache", "x-content-type-options": "nosniff" },
+        }),
+      ),
     )
     yield* router.add(
       "GET",

@@ -45,7 +45,7 @@ import {
   TaskRepo,
   TurnRepo,
 } from "../../ports/repos.ts"
-import { LiveHub } from "../../ports/services.ts"
+import { LiveHub, SignInRequests } from "../../ports/services.ts"
 import { rosterTasks } from "./BackgroundTasks.ts"
 import { summarize, visiblePage } from "./internal/summary.ts"
 import { cardRequestId, orDie, required } from "./internal/util.ts"
@@ -95,6 +95,7 @@ export const LiveHubLive: Layer.Layer<
     const taskRepo = yield* TaskRepo
     const directory = yield* NodeDirectory
     const ids = yield* IdGen
+    const signInRequests = yield* Effect.serviceOption(SignInRequests)
     const repos = yield* Effect.context<EntryRepo | RequestRepo | SettingsRepo | TurnRepo>()
 
     const lock = yield* Semaphore.make(1)
@@ -210,6 +211,7 @@ export const LiveHubLive: Layer.Layer<
         const allSections = yield* orDie(sections.list)
         const settings = yield* Effect.provide(orDie(readSettings), repos)
         const tasks = (yield* orDie(rosterTasks(taskRepo))).filter((t) => botIds.has(t.botId))
+        const signIns = Option.isSome(signInRequests) ? signInRequests.value.list(Date.now()) : []
         const item: KnownRosterStreamItem = {
           kind: "snapshot",
           cursor,
@@ -220,6 +222,7 @@ export const LiveHubLive: Layer.Layer<
           sections: allSections,
           settings,
           tasks,
+          ...(signIns.length > 0 ? { signIns } : {}),
         }
         return item
       })

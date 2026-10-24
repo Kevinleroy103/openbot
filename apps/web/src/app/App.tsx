@@ -14,6 +14,7 @@ import { SearchView } from "../search/SearchView.tsx"
 import { Sidebar } from "../sidebar/Sidebar.tsx"
 import { AppShell } from "./AppShell.tsx"
 import { ConnectDeviceDialog } from "./ConnectDevice.tsx"
+import { SignInPrompt } from "./SignInPrompt.tsx"
 import { useRoster, useSessionInfo, valueOr } from "./data.ts"
 import { PaneLoading } from "./fallbacks.tsx"
 import { ComputerView, DetailsPane, NewBotForm, NewGroupForm, Onboarding, SettingsDialog } from "./lazy.tsx"
@@ -383,6 +384,7 @@ export function App(): ReactNode {
       {connectCode !== undefined && (
         <ConnectDeviceDialog code={connectCode} onClose={() => setConnectCode(undefined)} />
       )}
+      <SignInPrompt />
       <SearchPalette
         open={dialog?.kind === "search"}
         onOpenChange={(o) => (o ? dialogs.show({ kind: "search" }) : dialogs.hide())}

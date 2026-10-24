@@ -77,8 +77,8 @@ export const harkToken = (webhook: string): string | undefined => {
 
 const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`)
 
-/** A Bot waiting for the owner, or something failing. */
-const needsYou = (n: Notification) => n.kind === "waiting" || n.kind === "error"
+/** A Bot waiting for the owner, something failing, or a browser asking to sign in. */
+const needsYou = (n: Notification) => n.kind === "waiting" || n.kind === "error" || n.kind === "sign-in"
 
 export const makeHark = (options: HarkOptions) =>
   Effect.gen(function* () {

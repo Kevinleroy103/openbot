@@ -43,6 +43,7 @@ import {
 } from "@openbot/brain-nodes"
 import {
   CallPresence,
+  SignInRequests,
   ApprovalServiceLive,
   AttachmentServiceLive,
   BackgroundTasks,
@@ -400,6 +401,8 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     options?.speechToText ?? SpeechToTextLive({ dir: makeDataDir(config.dataDir).stt }),
     // voice calls (experiment): who is on a call (background work started on one reports back on it)
     CallPresence.layer,
+    // browsers waiting to be allowed to sign in ("Sign in with another device")
+    SignInRequests.layer,
   )
   const level2 = Layer.mergeAll(
     SettingsServiceLive,

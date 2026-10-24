@@ -147,7 +147,13 @@ const shell = (title: string, body: string): string => `<!doctype html>
   form { display: flex; gap: 8px; margin-top: 8px; }
   input { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; }
   button { padding: 10px 18px; border-radius: 999px; border: 0; background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: default; }
+  button.wide { width: 100%; }
   .error { color: #f87171; }
+  .device { margin: 20px 0 24px; }
+  .match { margin: 4px 0 8px; color: var(--fg); font-size: 56px; line-height: 64px; font-weight: 700; letter-spacing: 2px; text-align: center; font-variant-numeric: tabular-nums; }
+  .or { padding-top: 20px; border-top: 1px solid var(--line); }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -163,15 +169,77 @@ export const loginPage = (options?: { readonly error?: string | undefined }): st
   shell(
     "Sign in · OpenBot",
     `<h1>OpenBot is running</h1>
-<p>To sign in, open the link printed in the terminal where you started OpenBot. It looks like
-<code>http://127.0.0.1:7420/?token=…</code></p>
-<p>Or paste the token here:</p>
+<div class="device" id="device">
+  <p>Signed in to OpenBot on your phone or another computer? Let it sign this browser in.</p>
+  <button type="button" class="wide" id="device-start">Sign in with another device</button>
+  <div id="device-wait" hidden>
+    <p>Open OpenBot where you're signed in. It asks whether to let this browser in: choose</p>
+    <p class="match" id="device-match" aria-live="polite"></p>
+  </div>
+  <p id="device-status" hidden></p>
+</div>
+<p class="or">Or open the link printed in the terminal where you started OpenBot. It looks like
+<code>http://127.0.0.1:7420/?token=…</code> Or paste the token here:</p>
 ${options?.error === undefined ? "" : `<p class="error">${escapeHtml(options.error)}</p>`}
 <form method="get" action="/">
   <input name="token" type="password" autocomplete="off" spellcheck="false" placeholder="Token" aria-label="Token" required />
   <button type="submit">Sign in</button>
-</form>`,
+</form>
+<script src="/login.js" defer></script>`,
   )
+
+/**
+ * The login page's script (`GET /login.js`): "Sign in with another device" asks the brain for a
+ * request (`/api/auth/device/start`), shows its number, and polls until a signed-in app allows it
+ * (the poll's answer sets the session cookie) or refuses it.
+ */
+export const LOGIN_SCRIPT = `"use strict";
+(function () {
+  var start = document.getElementById("device-start");
+  var wait = document.getElementById("device-wait");
+  var number = document.getElementById("device-match");
+  var status = document.getElementById("device-status");
+  if (!start) return;
+  var say = function (text, error) {
+    status.textContent = text;
+    status.hidden = !text;
+    status.className = error ? "error" : "";
+  };
+  var post = function (path, body) {
+    return fetch(path, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (res) { return res.json().catch(function () { return {}; }); });
+  };
+  var reset = function (text) {
+    wait.hidden = true;
+    start.hidden = false;
+    start.disabled = false;
+    start.textContent = "Try again";
+    say(text, true);
+  };
+  start.addEventListener("click", function () {
+    start.disabled = true;
+    say("");
+    post("/api/auth/device/start", { kind: "browser" }).then(function (begun) {
+      if (!begun.deviceCode) return reset(begun.error || "OpenBot could not start that. Try again.");
+      start.hidden = true;
+      wait.hidden = false;
+      number.textContent = String(begun.match);
+      say("Waiting for you to allow it…");
+      var until = Date.now() + begun.expiresInSeconds * 1000;
+      var poll = function () {
+        if (Date.now() > until) return reset("That request expired.");
+        post("/api/auth/device/poll", { deviceCode: begun.deviceCode }).then(function (answer) {
+          if (answer.status === "approved") { say("Allowed. Opening OpenBot…"); location.replace("/"); return; }
+          if (answer.status === "refused") return reset("That request was turned down or cancelled.");
+          if (answer.status === "expired") return reset("That request expired.");
+          setTimeout(poll, (begun.interval || 2) * 1000);
+        }, function () { setTimeout(poll, 4000); });
+      };
+      setTimeout(poll, (begun.interval || 2) * 1000);
+    }, function () { reset("OpenBot could not be reached. Try again."); });
+  });
+})();
+`
 
 export const unavailablePage = (detail: string): string =>
   shell(
@@ -187,9 +255,13 @@ export const PAGE_HEADERS = {
   "referrer-policy": "no-referrer",
 } as const
 
-/** CSP of the login and error pages (no scripts). */
+/** CSP of the error pages (no scripts). */
 export const STATIC_PAGE_CSP =
   "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
+
+/** CSP of the login page: its own script (`/login.js`) talking to this brain, nothing else. */
+export const LOGIN_PAGE_CSP =
+  "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
 
 // ============================================================================ the app page
 

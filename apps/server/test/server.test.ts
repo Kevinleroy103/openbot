@@ -234,6 +234,107 @@ describe("auth negatives", () => {
     expect((await post("/api/auth/device/poll", { deviceCode: "nope" })).status).toBe(410)
   })
 
+  test("a browser signs in with another device: a signed-in app picks the number it shows", async () => {
+    const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+      fetch(`${server.base}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      })
+    const chrome = { origin: server.base, "user-agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/156.0 Safari/537.36" }
+    type Started = { deviceCode: string; match: number; expiresInSeconds: number }
+    const start = async () =>
+      (await (await post("/api/auth/device/start", { kind: "browser" }, chrome)).json()) as Started
+    // only from the login page itself
+    expect((await post("/api/auth/device/start", { kind: "browser" }, { origin: "https://evil.example" })).status).toBe(
+      403,
+    )
+    // the login page loads its script, and nothing else
+    const page = await fetch(`${server.base}/`)
+    expect(page.headers.get("content-security-policy")).toContain("script-src 'self'")
+    expect(await page.text()).toContain(`<script src="/login.js" defer></script>`)
+    expect((await fetch(`${server.base}/login.js`)).headers.get("content-type")).toContain("text/javascript")
+
+    // the request reaches every signed-in app (roster snapshots) with three numbers to pick from
+    const wrong = await start()
+    expect(wrong.match).toBeGreaterThanOrEqual(10)
+    expect(wrong.expiresInSeconds).toBe(300)
+    const snapshot = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const client = yield* connect()
+          const first = yield* client["roster.subscribe"]({}).pipe(Stream.take(1), Stream.runCollect)
+          return [...first][0]!
+        }),
+      ),
+    )
+    const request = snapshot.kind === "snapshot" ? snapshot.signIns?.[0] : undefined
+    expect(request?.from).toBe("Chrome on Linux")
+    expect(request?.choices).toHaveLength(3)
+    expect(request?.choices).toContain(wrong.match)
+    // a wrong number cancels it
+    const other = request!.choices.find((n) => n !== wrong.match)!
+    const picked = await post(
+      "/api/auth/device/approve",
+      { code: request!.code, match: other },
+      { cookie, origin: server.base },
+    )
+    expect(picked.status).toBe(409)
+    expect(await (await post("/api/auth/device/poll", { deviceCode: wrong.deviceCode }, chrome)).json()).toEqual({
+      status: "refused",
+    })
+
+    // the right number: the browser's poll comes back with a session cookie
+    const right = await start()
+    expect(await (await post("/api/auth/device/poll", { deviceCode: right.deviceCode }, chrome)).json()).toEqual({
+      status: "pending",
+    })
+    const roster = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const client = yield* connect()
+          const first = yield* client["roster.subscribe"]({}).pipe(Stream.take(1), Stream.runCollect)
+          return [...first][0]!
+        }),
+      ),
+    )
+    const code =
+      roster.kind === "snapshot" ? roster.signIns?.find((r) => r.choices.includes(right.match))?.code : undefined
+    expect((await post("/api/auth/device/approve", { code, match: right.match })).status).toBe(401)
+    expect(
+      (await post("/api/auth/device/approve", { code, match: right.match }, { cookie, origin: server.base })).status,
+    ).toBe(200)
+    const allowed = await post("/api/auth/device/poll", { deviceCode: right.deviceCode }, chrome)
+    expect(await allowed.json()).toEqual({ status: "approved" })
+    const session = (allowed.headers.get("set-cookie") ?? "").split(";")[0]!
+    expect(session).toMatch(/^openbot_session=/)
+    expect(await (await fetch(`${server.base}/api/auth/status`, { headers: { cookie: session } })).json()).toEqual({
+      authenticated: true,
+    })
+    expect((await post("/api/auth/device/poll", { deviceCode: right.deviceCode }, chrome)).status).toBe(410)
+
+    // "Not me" turns it down
+    const unknown = await start()
+    const pending = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const client = yield* connect()
+          const first = yield* client["roster.subscribe"]({}).pipe(Stream.take(1), Stream.runCollect)
+          return [...first][0]!
+        }),
+      ),
+    )
+    const theirs =
+      pending.kind === "snapshot" ? pending.signIns?.find((r) => r.choices.includes(unknown.match)) : undefined
+    expect(
+      (await post("/api/auth/device/approve", { code: theirs?.code, refuse: true }, { cookie, origin: server.base }))
+        .status,
+    ).toBe(200)
+    expect(await (await post("/api/auth/device/poll", { deviceCode: unknown.deviceCode }, chrome)).json()).toEqual({
+      status: "refused",
+    })
+  })
+
   test("the desktop app downloads: an install script with this OpenBot's address; unknown targets are refused", async () => {
     const script = await (await fetch(`${server.base}/desktop/install.sh`)).text()
     expect(script).toStartWith("#!/bin/sh")

@@ -109,6 +109,7 @@ import type {
   SendMode,
   SendResult,
   Settings,
+  SignInRequest,
   SettingsPatch,
   Skill,
   SkillInput,
@@ -1216,6 +1217,33 @@ export class SearchService extends Context.Service<
     readonly chats: (ids: ReadonlyArray<ConversationId>) => Effect.Effect<ReadonlyMap<ConversationId, Conversation>>
   }
 >()("openbot/core/SearchService") {}
+
+/**
+ * Browsers waiting to be allowed to sign in ("Sign in with another device" on the login page), held
+ * in memory: the auth routes add and end them (and publish `sign-in.*` roster changes), roster
+ * snapshots include the ones not yet expired.
+ */
+export class SignInRequests extends Context.Service<
+  SignInRequests,
+  {
+    readonly list: (now: number) => ReadonlyArray<SignInRequest>
+    readonly put: (request: SignInRequest) => void
+    /** True when it was there. */
+    readonly end: (code: string) => boolean
+  }
+>()("openbot/core/SignInRequests") {
+  static readonly layer: Layer.Layer<SignInRequests> = Layer.sync(SignInRequests, () => {
+    const requests = new Map<string, SignInRequest>()
+    return SignInRequests.of({
+      list: (now) => {
+        for (const [code, r] of requests) if (r.expiresAt <= now) requests.delete(code)
+        return [...requests.values()]
+      },
+      put: (request) => void requests.set(request.code, request),
+      end: (code) => requests.delete(code),
+    })
+  })
+}
 
 /**
  * Voice calls (experiment): which Bots are on a call right now. Background work started on a call

@@ -15,7 +15,16 @@ import {
   TaskId,
   withUnknownFallback,
 } from "./base.ts"
-import { Bot, BotActivity, Conversation, ConversationSummary, NodeSummary, Notification, Section } from "./domain.ts"
+import {
+  Bot,
+  BotActivity,
+  Conversation,
+  ConversationSummary,
+  NodeSummary,
+  Notification,
+  Section,
+  SignInRequest,
+} from "./domain.ts"
 import { RuntimeRequest } from "./runtime-request.ts"
 import { Settings } from "./settings.ts"
 import { Task } from "./task.ts"
@@ -142,6 +151,10 @@ export const RosterChangeMembers = [
   /** A background task started, changed status or progressed (throttled), D5.7. */
   Schema.Struct({ type: Schema.Literal("task.upserted"), task: Task }),
   Schema.Struct({ type: Schema.Literal("task.removed"), taskId: TaskId }),
+  /** A browser asks to sign in ("Sign in with another device"); every signed-in app offers to allow it. */
+  Schema.Struct({ type: Schema.Literal("sign-in.requested"), request: SignInRequest }),
+  /** It was allowed, refused, cancelled or replaced. */
+  Schema.Struct({ type: Schema.Literal("sign-in.ended"), code: Schema.String }),
 ] as const
 const rosterChangeFallback = withUnknownFallback({ members: RosterChangeMembers, tag: "type", keep: {} })
 export const RosterChange = rosterChangeFallback.schema
@@ -160,6 +173,8 @@ export const RosterSnapshotItem = Schema.Struct({
   settings: Settings,
   /** Queued and running tasks plus each bot's most recent finished ones (D5.7). Absent from older brains. */
   tasks: Schema.optionalKey(Schema.Array(Task)),
+  /** Browsers waiting to be allowed to sign in. Absent when there are none (and from older brains). */
+  signIns: Schema.optionalKey(Schema.Array(SignInRequest)),
 })
 export const RosterStreamMembers = [
   RosterSnapshotItem,

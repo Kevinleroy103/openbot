@@ -11,6 +11,7 @@ import type {
   NodeSummary,
   Notification,
   Section,
+  SignInRequest,
 } from "./domain.ts"
 import type { RuntimeRequest } from "./runtime-request.ts"
 import type { Settings } from "./settings.ts"
@@ -215,6 +216,8 @@ export interface RosterState {
   readonly tasks: ReadonlyMap<TaskId, Task>
   /** Most recent first. */
   readonly notifications: ReadonlyArray<Notification>
+  /** Browsers waiting to be allowed to sign in, by code (`signInRequestsOf` drops the expired ones). */
+  readonly signIns: ReadonlyMap<string, SignInRequest>
   readonly skippedUnknown: number
 }
 
@@ -246,6 +249,7 @@ export const emptyRosterState: RosterState = {
   settings: undefined,
   tasks: new Map(),
   notifications: [],
+  signIns: new Map(),
   skippedUnknown: 0,
 }
 
@@ -289,6 +293,10 @@ export const applyRosterChange = (state: RosterState, change: RosterChange): Ros
       return { ...state, tasks: withTask(state.tasks, change.task) }
     case "task.removed":
       return { ...state, tasks: withDeleted(state.tasks, change.taskId) }
+    case "sign-in.requested":
+      return { ...state, signIns: withSet(state.signIns, change.request.code, change.request) }
+    case "sign-in.ended":
+      return { ...state, signIns: withDeleted(state.signIns, change.code) }
     case "unknown":
       return { ...state, skippedUnknown: state.skippedUnknown + 1 }
   }
@@ -310,6 +318,7 @@ export const applyRosterStreamItem = (state: RosterState, item: RosterStreamItem
         settings: item.settings,
         tasks: byKey(item.tasks ?? [], (t) => t.id),
         notifications: state.notifications,
+        signIns: byKey(item.signIns ?? [], (r) => r.code),
         skippedUnknown: state.skippedUnknown,
       }
     case "change":
@@ -325,6 +334,10 @@ export const applyRosterStreamItem = (state: RosterState, item: RosterStreamItem
       }
   }
 }
+
+/** Browsers still waiting to be allowed to sign in, oldest first. */
+export const signInRequestsOf = (state: Pick<RosterState, "signIns">, now: number): SignInRequest[] =>
+  [...state.signIns.values()].filter((r) => r.expiresAt > now).sort((a, b) => a.at - b.at)
 
 /** A bot's queued and running tasks, oldest first. */
 export const activeTasksOf = (state: Pick<RosterState, "tasks">, botId: BotId): Task[] =>

@@ -149,7 +149,9 @@ tailscale serve --bg --https=8444 http://127.0.0.1:7420
 bun run start -- --public-origin https://<machine>.<tailnet>.ts.net:8444
 ```
 
-Then open the printed login link on your phone.
+Then open the printed login link on your phone. After that, any other browser can sign in without the
+link: open OpenBot's address there, choose **Sign in with another device**, and on a device where you're
+already signed in pick the number that browser shows.
 
 ## Run it on a home server
 

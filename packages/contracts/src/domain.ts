@@ -401,7 +401,21 @@ export const PairingCode = Schema.Struct({
 export type PairingCode = typeof PairingCode.Type
 
 // ---------------------------------------------------------------------------- Notifications (web-only in v1)
-export const NotificationKind = Schema.Literals(["finished", "waiting", "message", "routine", "error"])
+/**
+ * A browser asking to sign in from the login page ("Sign in with another device"). A signed-in app
+ * allows it by picking, of `choices`, the number that browser shows; a wrong pick cancels it.
+ */
+export const SignInRequest = Schema.Struct({
+  code: NonEmptyString,
+  /** What is asking, e.g. "Chrome on Linux". */
+  from: Schema.String,
+  choices: Schema.Array(NonNegativeInt),
+  at: Millis,
+  expiresAt: Millis,
+})
+export type SignInRequest = typeof SignInRequest.Type
+
+export const NotificationKind = Schema.Literals(["finished", "waiting", "message", "routine", "error", "sign-in"])
 export type NotificationKind = typeof NotificationKind.Type
 
 /** Web notification published through the roster (architecture §3.5 `Notifier`). */

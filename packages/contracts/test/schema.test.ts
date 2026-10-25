@@ -447,6 +447,16 @@ describe("ui cards", () => {
         series: [{ name: "p95", points: [{ x: "Mon", y: 120 }] }],
         highlight: "Mon",
       },
+      {
+        type: "chart",
+        kind: "line",
+        fill: true,
+        stacked: true,
+        series: [
+          { name: "Web", points: [{ x: "Mon", y: 3 }] },
+          { name: "iPhone", points: [{ x: "Mon", y: 2 }] },
+        ],
+      },
       { type: "image", attachmentId: "att_1", alt: "Floor plan" },
       { type: "link", label: "Agenda", url: "https://example.com/agenda" },
       {

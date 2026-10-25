@@ -159,10 +159,16 @@ export const UiTimelineBlock = Schema.Struct({
     }),
   ),
 })
-/** `x` is a category label ("Mon", "10:00"); `highlight` is one of the `x` values. */
+/**
+ * `x` is a category label ("Mon", "10:00"); `highlight` is one of the `x` values. An area chart is a
+ * `line` with `fill` (not a new kind, so older clients draw it as a line). `stacked` piles bars and
+ * filled lines on top of each other; it is ignored for an unfilled line.
+ */
 export const UiChartBlock = Schema.Struct({
   type: Schema.Literal("chart"),
   kind: Schema.Literals(["bar", "line"]),
+  fill: Schema.optionalKey(Schema.Boolean),
+  stacked: Schema.optionalKey(Schema.Boolean),
   unit: Schema.optionalKey(Schema.String),
   series: Schema.Array(
     Schema.Struct({

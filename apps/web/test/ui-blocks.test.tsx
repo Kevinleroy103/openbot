@@ -114,12 +114,127 @@ test("chart ticks round outward while keeping small values legible", () => {
   }
 })
 
-test("maximum charts keep all 240 bars or points inside the SVG with positive geometry", () => {
-  for (const kind of ["bar", "line"] as const) {
+test("stacked bars and filled lines pile up to their totals; an unfilled line ignores stacked", () => {
+  const chart = (kind: "bar" | "line", options: { fill?: boolean; stacked?: boolean }) =>
+    render({
+      type: "chart",
+      kind,
+      ...options,
+      unit: "h",
+      highlight: "Tue",
+      series: [
+        {
+          name: "Web",
+          points: [
+            { x: "Mon", y: 3 },
+            { x: "Tue", y: 5 },
+          ],
+        },
+        {
+          name: "iPhone",
+          points: [
+            { x: "Mon", y: 2 },
+            { x: "Tue", y: 4 },
+          ],
+        },
+      ],
+    })
+  const ticksOf = (html: string) =>
+    [...html.matchAll(/<text x="36"[^>]*>([^<]+)<\/text>/g)].map((match) => Number(match[1]))
+  const rectsOf = (html: string) =>
+    [...html.matchAll(/<rect x="[^"]+" y="([\d.]+)" width="[^"]+" height="([\d.]+)"[^>]*><title>/g)].map(
+      ([, top, height]) => ({
+        top: Number(top),
+        bottom: Number(top) + Number(height),
+      }),
+    )
+
+  const bars = chart("bar", { stacked: true })
+  expect(bars).toContain("Stacked bar chart (h)")
+  expect(ticksOf(bars)).toEqual([0, 5, 10])
+  expect(bars).toContain("iPhone: Tue, 4 h of 9 h total")
+  expect(bars).toContain("Totals: Mon: 5, Tue: 9")
+  const mark = (html: string) => {
+    const match = /<g fill="([^"]+)">(<circle[^>]*><\/circle>)?<text[^>]*font-weight="600">([^<]+)</.exec(html)
+    return match && { color: match[1], dot: match[2] !== undefined, value: match[3] }
+  }
+  expect(mark(bars)).toEqual({ color: "var(--ob-fg)", dot: false, value: "9" })
+  const [webMon, , phoneMon] = rectsOf(bars)
+  expect(phoneMon!.bottom).toBeCloseTo(webMon!.top)
+
+  const grouped = chart("bar", {})
+  expect(ticksOf(grouped)).toEqual([0, 3, 6])
+  expect(grouped).not.toContain("total")
+  expect(mark(grouped)).toEqual({ color: "var(--ob-accent-fg)", dot: false, value: "5" })
+
+  const line = chart("line", { stacked: true })
+  expect(line).toContain("Line chart (h)")
+  expect(ticksOf(line)).toEqual([0, 3, 6])
+  expect(line).not.toContain("<path")
+  expect(line).not.toContain("total")
+  expect(mark(line)).toEqual({ color: "var(--ob-accent-fg)", dot: true, value: "5" })
+
+  const area = chart("line", { fill: true })
+  expect(area).toContain("Area chart (h)")
+  expect(ticksOf(area)).toEqual([0, 3, 6])
+  expect(
+    [...area.matchAll(/<stop offset="(\d)" stop-color="([^"]+)" stop-opacity="([\d.]+)"/g)].map((m) => m.slice(1)),
+  ).toEqual([
+    ["0", "var(--ob-accent-fg)", "0.25"],
+    ["1", "var(--ob-accent-fg)", "0"],
+    ["0", "var(--ob-purple-fg)", "0.25"],
+    ["1", "var(--ob-purple-fg)", "0"],
+  ])
+  const gradients = [...area.matchAll(/<linearGradient id="([^"]+)" x1="0" y1="0" x2="0" y2="1">/g)].map((m) => m[1])
+  expect([...area.matchAll(/<path d="[^"]+" fill="url\(#([^)]+)\)"><\/path>/g)].map((m) => m[1])).toEqual(gradients)
+  expect(gradients).toHaveLength(2)
+  expect(mark(area)).toEqual({ color: "var(--ob-accent-fg)", dot: true, value: "5" })
+
+  const stackedArea = chart("line", { fill: true, stacked: true })
+  expect(stackedArea).toContain("Stacked area chart (h)")
+  expect(ticksOf(stackedArea)).toEqual([0, 5, 10])
+  expect(stackedArea).toContain("iPhone: Mon, 2 h of 5 h total")
+  const [webBand, phoneBand] = [...stackedArea.matchAll(/<path d="M([^"]+)Z"/g)].map((match) =>
+    match[1]!.split("L").map((point) => point.split(",").map(Number)),
+  )
+  expect(phoneBand!.slice(2).toReversed()).toEqual(webBand!.slice(0, 2))
+  expect([...stackedArea.matchAll(/<path d="[^"]+" fill="([^"]+)" fill-opacity="0.55"/g)].map((m) => m[1])).toEqual([
+    "var(--ob-accent-fg)",
+    "var(--ob-purple-fg)",
+  ])
+  expect(stackedArea).not.toContain("<linearGradient")
+  expect(mark(stackedArea)).toEqual({ color: "var(--ob-fg)", dot: true, value: "9" })
+})
+
+test("dense lines and areas fit the width, and about seven x labels show, none crowding the highlight", () => {
+  const dense = (options: { fill?: boolean; stacked?: boolean; highlight?: string }) =>
+    render({
+      type: "chart",
+      kind: "line",
+      ...options,
+      series: ["Web", "iPhone"].map((name) => ({
+        name,
+        points: Array.from({ length: 60 }, (_, index) => ({ x: `D${index + 1}`, y: index % 7 })),
+      })),
+    })
+  const xLabels = (html: string) => [...html.matchAll(/<text x="[\d.]+" y="184"[^>]*>([^<]+)</g)].map((m) => m[1])
+  for (const options of [{}, { fill: true }, { fill: true, stacked: true }]) {
+    const html = dense({ ...options, highlight: "D40" })
+    expect(html).toContain('viewBox="0 0 480 200"')
+    expect(html).not.toContain("min-width")
+    expect([...html.matchAll(/<circle/g)]).toHaveLength(1)
+    expect(xLabels(html)).toEqual(["D1", "D10", "D19", "D28", "D40", "D55"])
+    expect(xLabels(dense(options))).toEqual(["D1", "D10", "D19", "D28", "D37", "D46", "D55"])
+  }
+})
+
+test("maximum bar charts scroll and keep all 240 bars inside the SVG with positive geometry", () => {
+  for (const stacked of [false, true]) {
     for (const sharedLabels of [true, false]) {
       const html = render({
         type: "chart",
-        kind,
+        kind: "bar",
+        stacked,
         series: Array.from({ length: 4 }, (_, series) => ({
           name: `Series ${series}`,
           points: Array.from({ length: 60 }, (_point, point) => ({
@@ -131,25 +246,19 @@ test("maximum charts keep all 240 bars or points inside the SVG with positive ge
       const width = Number(/viewBox="0 0 ([\d.]+) 200"/.exec(html)?.[1])
       expect(width).toBeGreaterThan(480)
       expect(html).toContain(`min-width:${width}px`)
-      const shapes = [...html.matchAll(/<(rect|circle)\b([^>]+)>/g)]
-      expect(shapes).toHaveLength(240)
-      for (const [, shape, attributes] of shapes) {
+      const bars = [...html.matchAll(/<rect\b([^>]+)><title>/g)]
+      // Stacked bars leave out each series' zero at point 30.
+      expect(bars).toHaveLength(stacked ? 236 : 240)
+      for (const [, attributes] of bars) {
         const attr = Object.fromEntries(
           [...attributes!.matchAll(/([a-z]+)="(-?[\d.]+)"/g)].map(([, key, value]) => [key, Number(value)]),
         )
-        let left = attr.x!
-        let top = attr.y!
-        let right = left + attr.width!
-        let bottom = top + attr.height!
-        if (shape === "circle") {
-          left = attr.cx! - attr.r!
-          top = attr.cy! - attr.r!
-          right = attr.cx! + attr.r!
-          bottom = attr.cy! + attr.r!
-        } else {
-          expect(attr.width!).toBeGreaterThan(0)
-          expect(attr.height!).toBeGreaterThanOrEqual(0)
-        }
+        const left = attr.x!
+        const top = attr.y!
+        const right = left + attr.width!
+        const bottom = top + attr.height!
+        expect(attr.width!).toBeGreaterThan(0)
+        expect(attr.height!).toBeGreaterThanOrEqual(0)
         expect(left).toBeGreaterThanOrEqual(0)
         expect(top).toBeGreaterThanOrEqual(0)
         expect(right).toBeLessThanOrEqual(width)

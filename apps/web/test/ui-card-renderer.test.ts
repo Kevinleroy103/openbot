@@ -58,11 +58,15 @@ describe.skipIf(!enabled)("UI card renderer", () => {
       try {
         await page.getByText("Can't show this part", { exact: false }).waitFor()
         await page.getByRole("img", { name: /Line chart/ }).waitFor()
-        await page
-          .locator('[data-ui-block="chart"] svg text')
-          .filter({ hasText: /^Tue$/ })
-          .waitFor({ state: "detached" })
-        expect(await page.locator('[data-ui-block="chart"] svg text').allTextContents()).toContain("Thu")
+        expect(await page.locator('[data-ui-block="chart"] svg text[y="184"]').allTextContents()).toEqual([
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun",
+        ])
         expect(await page.getByRole("columnheader").count()).toBe(3)
         expect(await page.locator('input[type="checkbox"]:checked').count()).toBe(2)
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)

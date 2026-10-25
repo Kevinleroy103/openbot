@@ -90,6 +90,10 @@ const blockFields = {
     p.object(
       {
         kind: p.literals(["bar", "line"]),
+        fill: p.optional(p.boolean("Fill under each line: an area chart (kind line).")),
+        stacked: p.optional(
+          p.boolean("Pile the series on top of each other to show totals (bars, or lines with fill)."),
+        ),
         unit: p.optional(p.string()),
         series: p.array(
           p.object({
@@ -101,7 +105,7 @@ const blockFields = {
         ),
         highlight: p.optional(p.string("An x value to highlight.")),
       },
-      "A bar or line chart.",
+      "A bar, line or area chart.",
     ),
   ),
   image: p.optional(
@@ -298,7 +302,7 @@ const cardFromArgs = (args: CardArgs, ctx: ToolCallContext) =>
 const showUi = defineTool({
   name: "show_ui",
   toolset: "bot",
-  description: `Post a native card in this conversation instead of a prose answer when you compare options, report a status or plan with numbers, lay out a schedule, or let the owner pick from options you worked out (a \`choice\` block and an action, rather than ask_user). Plain answers and explanations stay plain text, never a card. Blocks render top to bottom; each block is an object with exactly one key: text (markdown), fields, table, options (side by side, \`pick\` marks your recommendation), stats, checklist, timeline, chart, image (a file path), link (https only), choice or input. \`fallback\` is required: the card as plain text. With \`actions\` (required when there is a choice or an input), the owner's press (and their choice and input values) comes back to you once, as a new message; without, the card is display-only. Returns the card's entry id for update_ui. Caps: ${UI_LIMITS.blocks} blocks, ${UI_LIMITS.tableRows}×${UI_LIMITS.tableColumns} tables, ${UI_LIMITS.options} options, ${UI_LIMITS.chartSeries} series of ${UI_LIMITS.chartPoints} points, ${UI_LIMITS.actions} actions, ${UI_LIMITS.bytes / 1024} KB.`,
+  description: `Post a native card in this conversation instead of a prose answer when you compare options, report a status or plan with numbers, lay out a schedule, or let the owner pick from options you worked out (a \`choice\` block and an action, rather than ask_user). Plain answers and explanations stay plain text, never a card. Blocks render top to bottom; each block is an object with exactly one key: text (markdown), fields, table, options (side by side, \`pick\` marks your recommendation), stats, checklist, timeline, chart (bar or line; an area is a line with \`fill\`, for one series or a stacked whole, never many overlapping series; \`stacked\` piles series into totals), image (a file path), link (https only), choice or input. \`fallback\` is required: the card as plain text. With \`actions\` (required when there is a choice or an input), the owner's press (and their choice and input values) comes back to you once, as a new message; without, the card is display-only. Returns the card's entry id for update_ui. Caps: ${UI_LIMITS.blocks} blocks, ${UI_LIMITS.tableRows}×${UI_LIMITS.tableColumns} tables, ${UI_LIMITS.options} options, ${UI_LIMITS.chartSeries} series of ${UI_LIMITS.chartPoints} points, ${UI_LIMITS.actions} actions, ${UI_LIMITS.bytes / 1024} KB.`,
   params: p.params(cardFields),
   annotations: { title: "Show a card", destructiveHint: false, openWorldHint: false },
   handler: (args, ctx) =>

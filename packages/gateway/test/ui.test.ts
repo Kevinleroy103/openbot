@@ -36,7 +36,7 @@ describe("toUiCard", () => {
         { stats: [{ label: "A", value: "1", tone: "good" }] },
         { checklist: [{ label: "A", status: "done" }] },
         { timeline: [{ time: "9:00", title: "A" }] },
-        { chart: { kind: "bar", series: [{ name: "A", points: [{ x: "Mon", y: 1 }] }] } },
+        { chart: { kind: "line", fill: true, stacked: true, series: [{ name: "A", points: [{ x: "Mon", y: 1 }] }] } },
         { image: { path: "chart.png", alt: "Chart" } },
         { link: { label: "A", url: "https://example.com" } },
         { choice: { id: "c", label: "C", mode: "one", options: [{ id: "x", label: "X" }] } },
@@ -64,6 +64,7 @@ describe("toUiCard", () => {
       "input",
     ])
     expect(decoded).toMatchObject({ type: "ui", version: 1, title: "Plan", fallback: "The plan." })
+    expect(decoded.blocks[7]).toMatchObject({ type: "chart", kind: "line", fill: true, stacked: true })
     expect(decoded.blocks[8]).toMatchObject({ type: "image", attachmentId: "att_1", alt: "Chart" })
     expect(uiCardProblem(decoded)).toBeUndefined()
   })

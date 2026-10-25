@@ -6,9 +6,9 @@ import { Exit } from "effect"
 import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
 import * as Linking from "expo-linking"
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useId, useState } from "react"
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
-import Svg, { Circle, Line, Polygon, Polyline, Rect } from "react-native-svg"
+import Svg, { Circle, Defs, Line, LinearGradient, Polygon, Polyline, Rect, Stop } from "react-native-svg"
 import { failureText } from "../data.ts"
 import type { Theme } from "../theme.ts"
 import { Icon } from "../ui/Icon.tsx"
@@ -460,6 +460,7 @@ const spansOf = (
 
 function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly theme: Theme }): ReactNode {
   const [width, setWidth] = useState(300)
+  const gradientId = useId()
   const palette = [theme.accentFg, theme.success, theme.warn, theme.dangerFg]
   const color = (series: number) => palette[series % palette.length]!
   const xs = [...new Set(block.series.flatMap((s) => s.points.map((p) => p.x)))]
@@ -481,11 +482,13 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
   const yAt = (y: number) => plotTop + ((top - y) / span) * plotHeight
   const labelEvery = Math.ceil(xs.length / 7)
   const labelWidth = slot * labelEvery
-  // Thinned labels step from the highlighted x so its label never collides with a neighbour.
-  const labelFrom = Math.max(
-    0,
-    xs.findIndex((x) => x === block.highlight),
-  )
+  const highlightAt = xs.findIndex((x) => x === block.highlight)
+  // Thinned labels count from the first x and keep clear of the highlight, which is always labelled.
+  const labelled = (i: number) => {
+    if (i === highlightAt) return true
+    if (highlightAt !== -1 && Math.abs(i - highlightAt) < labelEvery) return false
+    return i % labelEvery === 0
+  }
   const ticks = [top, (top + bottom) / 2, bottom]
   const single = block.series.length === 1
   const columns = stacked ? 1 : block.series.length
@@ -549,6 +552,16 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
                   />
                 )),
               )}
+            {block.kind === "line" && block.fill === true && !stacked && (
+              <Defs>
+                {block.series.map((s, si) => (
+                  <LinearGradient key={s.name} id={`${gradientId}-${si}`} x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0" stopColor={color(si)} stopOpacity={0.25} />
+                    <Stop offset="1" stopColor={color(si)} stopOpacity={0} />
+                  </LinearGradient>
+                ))}
+              </Defs>
+            )}
             {block.kind === "line" &&
               block.fill === true &&
               spans.map((s, si) => (
@@ -558,8 +571,8 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
                     ...s.map((p) => `${xAt(p.x)},${yAt(p.to)}`),
                     ...[...s].reverse().map((p) => `${xAt(p.x)},${yAt(p.from)}`),
                   ].join(" ")}
-                  fill={color(si)}
-                  fillOpacity={stacked ? 0.55 : 0.2}
+                  fill={stacked ? color(si) : `url(#${gradientId}-${si})`}
+                  fillOpacity={stacked ? 0.55 : 1}
                 />
               ))}
             {block.kind === "line" &&
@@ -584,7 +597,7 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
             </Text>
           ))}
           {xs.map((x, i) =>
-            (i - labelFrom) % labelEvery === 0 ? (
+            labelled(i) ? (
               <Text
                 key={x}
                 numberOfLines={1}

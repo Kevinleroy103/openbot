@@ -77,10 +77,13 @@ mock.module("react-native", () => ({
 mock.module("react-native-svg", () => ({
   default: svg("svg"),
   Circle: svg("circle"),
+  Defs: svg("defs"),
   Line: svg("line"),
+  LinearGradient: svg("linearGradient"),
   Polygon: svg("polygon"),
   Polyline: svg("polyline"),
   Rect: svg("rect"),
+  Stop: svg("stop"),
 }))
 mock.module("expo-image", () => ({ Image: ({ source, alt }) => createElement("img", { src: source.uri, alt }) }))
 mock.module("expo-haptics", () => ({ impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }))
@@ -96,18 +99,17 @@ const { useTheme: lightTheme } = await import("../src/theme.ts")
 const theme = lightTheme()
 
 const decode = Schema.decodeUnknownSync(UiCard)
-const render = (card, state = { status: "info" }) =>
-  renderToStaticMarkup(
-    createElement(CardView, {
-      card: decode(card),
-      state,
-      request: undefined,
-      bot: undefined,
-      entryId,
-      theme,
-      media: { origin: "https://box.example", headers: { authorization: "Bearer t" } },
-    }),
-  )
+const cardView = (card, state = { status: "info" }) =>
+  createElement(CardView, {
+    card: decode(card),
+    state,
+    request: undefined,
+    bot: undefined,
+    entryId,
+    theme,
+    media: { origin: "https://box.example", headers: { authorization: "Bearer t" } },
+  })
+const render = (card, state) => renderToStaticMarkup(cardView(card, state))
 const textOf = (node) => {
   if (typeof node === "string" || typeof node === "number") return String(node)
   if (isValidElement(node)) return textOf(node.props.children)
@@ -355,9 +357,22 @@ test("stacked bars put each x's series in one column, one on top of the other, a
   expect(chartOf({ kind: "bar" })).not.toContain(">10<")
 })
 
-test("a filled line draws overlapping translucent areas, and stacked they pile up", () => {
+test("a filled line draws overlapping areas fading to the baseline, and stacked they pile up", () => {
   const overlap = chartOf({ kind: "line", fill: true })
-  expect(overlap.match(/fill-opacity="0.2"/g)).toHaveLength(2)
+  const fills = [...overlap.matchAll(/<polygon points="[^"]+" fill="url\(#([^)]+)\)"/g)].map((m) => m[1])
+  expect(fills).toHaveLength(2)
+  for (const [i, id] of fills.entries()) {
+    const color = [theme.accentFg, theme.success][i]
+    expect(overlap).toContain(
+      `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.25"></stop><stop offset="1" stop-color="${color}" stop-opacity="0"></stop></linearGradient>`,
+    )
+  }
+  const single = chartOf({ kind: "line", fill: true, series: sales.slice(0, 1) })
+  expect(single).toContain('stop-opacity="0.25"')
+  const area = { ...choice, blocks: [{ type: "chart", kind: "line", fill: true, series: sales }] }
+  const twoCards = renderToStaticMarkup(createElement("div", null, cardView(area), cardView(area)))
+  const ids = [...twoCards.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1])
+  expect(new Set(ids).size).toBe(4)
   const [webArea, iphoneArea] = pointsOf(overlap, "polygon")
   expect(iphoneArea.at(-1)[1]).toBe(webArea.at(-1)[1])
   expect(pointsOf(overlap, "polyline")).toHaveLength(2)
@@ -403,16 +418,18 @@ test("a dense line or filled line fits the card width with thinned x labels; onl
     ">D46</span>",
     ">D55</span>",
   ])
-  const highlighted = render({ ...choice, blocks: [{ type: "chart", kind: "line", highlight: "D40", series }] })
-  expect(highlighted.match(/>D\d+<\/span>/g)).toEqual([
-    ">D4</span>",
-    ">D13</span>",
-    ">D22</span>",
-    ">D31</span>",
-    ">D40</span>",
-    ">D49</span>",
-    ">D58</span>",
-  ])
+  // The first x keeps its label and none sits close enough to the highlight to collide with it.
+  for (const block of [{ kind: "line" }, { kind: "line", fill: true }, { kind: "line", fill: true, stacked: true }]) {
+    const highlighted = render({ ...choice, blocks: [{ type: "chart", highlight: "D40", series, ...block }] })
+    expect(highlighted.match(/>D\d+<\/span>/g)).toEqual([
+      ">D1</span>",
+      ">D10</span>",
+      ">D19</span>",
+      ">D28</span>",
+      ">D40</span>",
+      ">D55</span>",
+    ])
+  }
 })
 
 test("stacked is ignored for an unfilled line", () => {

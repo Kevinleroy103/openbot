@@ -44,6 +44,7 @@ import { Hark } from "./hark.ts"
 import { HarnessProfiles } from "./profiles.ts"
 import { SpeechToText } from "./stt/service.ts"
 import { VoiceCalls } from "./voice/service.ts"
+import { Updates } from "./updates.ts"
 
 const INTERNAL_MESSAGE = "Something went wrong on the brain; the details are in its log."
 
@@ -159,6 +160,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(
     const uiCards = yield* UiCardService
     const speech = yield* SpeechToText
     const voice = yield* VoiceCalls
+    const updates = yield* Updates
     const hark = yield* Hark
     const ownerFallback = defaultOwnerName()
 
@@ -344,6 +346,10 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(
       "voice.install": () => edge("voice.install", voice.install),
       "voice.remove": () => edge("voice.remove", voice.remove),
       "voice.preview": ({ voice: id, text }) => edge("voice.preview", voice.preview(id, text)),
+      "updates.status": () => edge("updates.status", updates.status),
+      "updates.check": () => edge("updates.check", updates.check),
+      "updates.install": () => edge("updates.install", updates.install),
+      "updates.rollback": () => edge("updates.rollback", updates.rollback),
 
       // ---------------------------------------------------------------- sidebar (drag and drop)
       "sidebar.arrange": (input) => edge("sidebar.arrange", bots.arrangeSidebar(input)),

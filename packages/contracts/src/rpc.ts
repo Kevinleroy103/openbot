@@ -47,6 +47,7 @@ import { Settings, SettingsPatch } from "./settings.ts"
 import { Skill, SkillInput, SkillName, SkillPreview, SkillSearchResult } from "./skills.ts"
 import { SlackConnectInput, SlackStatus } from "./slack.ts"
 import { SttSession, SttStatus, SttTranscription } from "./stt.ts"
+import { UpdateStatus } from "./updates.ts"
 import { VoiceCallStatus, VoicePreview } from "./voice.ts"
 import { HarkSends, HarkStatus } from "./hark.ts"
 import { SearchKind, SearchPage, SearchPositions, SearchSender, SearchSort } from "./search.ts"
@@ -687,6 +688,15 @@ export class OpenBotRpcs extends RpcGroup.make(
     success: VoicePreview,
     error: errors(InvalidInput, Unavailable),
   }),
+
+  // Updates: releases from CI, installed through scripts/deploy.ts (updates.ts)
+  Rpc.make("updates.status", { success: UpdateStatus, error: errors() }),
+  /** Asks GitHub for the newest release now. */
+  Rpc.make("updates.check", { success: UpdateStatus, error: errors() }),
+  /** Downloads, checks and installs the newest release; the brain restarts into it. */
+  Rpc.make("updates.install", { success: UpdateStatus, error: errors(Conflict, Unavailable) }),
+  /** Goes back to the release before the current one. */
+  Rpc.make("updates.rollback", { success: UpdateStatus, error: errors(Conflict, Unavailable) }),
 
   // Hark: iPhone notifications (D3.5)
   Rpc.make("hark.status", { success: HarkStatus, error: errors() }),

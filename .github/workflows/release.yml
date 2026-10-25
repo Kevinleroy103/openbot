@@ -1,0 +1,56 @@
+# A release for every green push to main: the commit's source as a tarball with release.json in it,
+# its sha256, and the commits since the previous release as notes. OpenBot checks for the newest one
+# and installs it from Settings › About (apps/server/src/updates.ts).
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Skip a commit that is no longer the newest on main
+        id: newest
+        run: |
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" = "$SHA" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "main moved on: no release for $SHA"; fi
+      - name: Package
+        if: steps.newest.outputs.go == 'true'
+        run: |
+          version="$(git show -s --format=%cd --date=format:%Y.%m.%d "$SHA")-${SHA::7}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          printf '{\n  "version": "%s",\n  "sha": "%s",\n  "dirty": false\n}\n' "$version" "$SHA" > release.json
+          git archive --format=tar --prefix=openbot/ "$SHA" > openbot.tar
+          tar --append --file=openbot.tar --transform='s,^,openbot/,' release.json
+          gzip -9 < openbot.tar > "openbot-$version.tar.gz"
+          sha256sum "openbot-$version.tar.gz" | cut -d' ' -f1 > "openbot-$version.tar.gz.sha256"
+      - name: Publish
+        if: steps.newest.outputs.go == 'true'
+        run: |
+          previous="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+          if [ -n "$previous" ] && git rev-parse -q --verify "refs/tags/$previous" >/dev/null; then
+            notes="$(git log --format='- %s (%h)' "$previous..$SHA")"
+          else
+            notes="$(git log -20 --format='- %s (%h)' "$SHA")"
+          fi
+          gh release create "v$VERSION" "openbot-$VERSION.tar.gz" "openbot-$VERSION.tar.gz.sha256" \
+            --target "$SHA" --title "OpenBot $VERSION" --notes "${notes:-No changes.}" --latest

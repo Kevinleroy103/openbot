@@ -415,7 +415,15 @@ export const SignInRequest = Schema.Struct({
 })
 export type SignInRequest = typeof SignInRequest.Type
 
-export const NotificationKind = Schema.Literals(["finished", "waiting", "message", "routine", "error", "sign-in"])
+export const NotificationKind = Schema.Literals([
+  "finished",
+  "waiting",
+  "message",
+  "routine",
+  "error",
+  "sign-in",
+  "update",
+])
 export type NotificationKind = typeof NotificationKind.Type
 
 /** Web notification published through the roster (architecture §3.5 `Notifier`). */

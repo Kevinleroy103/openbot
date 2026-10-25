@@ -2,7 +2,7 @@
 /**
  * `bun run deploy`: ships the working tree to the live OpenBot without losing the bots' work.
  *
- *   bun run deploy [--grace 3m] [--now] [--to <ssh host> | --local] [--data-dir <dir>] [--releases <dir>] [-- <server args>]
+ *   bun run deploy [--grace 3m] [--now] [--to <ssh host> | --local] [--use <release>] [--data-dir <dir>] [--releases <dir>] [-- <server args>]
  *
  * The brain on another machine: `--to` (or `{ "host": "<ssh host>" }` in this machine's
  * `~/.config/openbot/deploy.json`) copies the working tree to `<host>:~/.local/share/openbot-staging`
@@ -21,6 +21,11 @@
  *    deploy's) and waits for "OpenBot started". If it does not start, the previous release is started
  *    again.
  * 5. Points `<releases>/current` at it and keeps the newest releases.
+ *
+ * `--use <release>` starts a release already in `<releases>` (going back to an earlier one) instead of
+ * copying the repo. Each release holds `release.json` (`version`, `sha`, `dirty`): from the tarball of
+ * a published release (CI), else written here; the brain reads it to compare itself with the newest
+ * release (apps/server/src/updates.ts).
  *
  * Where the brain runs as the systemd user service `openbot` (scripts/openbot.service: it starts on
  * boot and again after a crash), it is started and stopped through systemd; the service runs
@@ -41,6 +46,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
@@ -70,7 +76,7 @@ const parseDuration = (text: string): number => {
 }
 
 const argv = process.argv.slice(2)
-const VALUE_OPTIONS = ["--grace", "--to", "--data-dir", "--releases", "--release-id"]
+const VALUE_OPTIONS = ["--grace", "--to", "--data-dir", "--releases", "--release-id", "--use"]
 const FLAG_OPTIONS = ["--now", "--local"]
 /** Where the server arguments start: after `--`, or at the first argument that is not this script's
  * own (Bun drops a leading `--`, so `bun run deploy -- --port 7420` arrives as `--port 7420`). */
@@ -196,6 +202,13 @@ const prepareRelease = (previous: string | undefined) => {
   ]
   const copied = run(rsync)
   if (!copied.ok) fail(`copying failed:\n${copied.out}`)
+  // what this release is (a published release's tarball brings its own)
+  const id = release.split("/").at(-1)!
+  if (!existsSync(join(release, "release.json"))) {
+    const sha = /-([0-9a-f]{7,40})(?:-dirty)?$/.exec(id)?.[1]
+    const info = { version: id, ...(sha === undefined ? {} : { sha }), dirty: id.endsWith("-dirty") }
+    writeFileSync(join(release, "release.json"), `${JSON.stringify(info, null, 2)}\n`)
+  }
   const loads = run(["bun", "apps/server/src/main.ts", "--version"], release)
   if (!loads.ok) {
     rmSync(release, { recursive: true, force: true })
@@ -402,7 +415,17 @@ if (args === undefined)
   fail("OpenBot is not running and no earlier deploy is known: pass the server arguments after --")
 
 const current = existsSync(join(releases, "current")) ? readlinkSync(join(releases, "current")) : undefined
-const release = prepareRelease(current ?? brain?.cwd)
+const use = option("--use")
+const release =
+  use === undefined
+    ? prepareRelease(current ?? brain?.cwd)
+    : (() => {
+        const chosen = resolve(releases, use)
+        if (!chosen.startsWith(`${releases}/`) || !existsSync(join(chosen, "apps/server/src/main.ts")))
+          fail(`no release ${use} in ${releases}`)
+        say(`going back to ${chosen}`)
+        return chosen
+      })()
 if (brain !== undefined) await stopBrain(brain)
 backupDatabase(release)
 say(`starting ${release}`)

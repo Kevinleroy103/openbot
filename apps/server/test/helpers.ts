@@ -69,7 +69,14 @@ export const startServer = async (options?: {
   const scope = Effect.runSync(Scope.make())
   const context = await Effect.runPromise(
     Layer.buildWithScope(
-      ServerLive(config, { quiet: true, drivers: FakeHarnessLive, localNode: TEST_LOCAL_NODE, ...options?.server }),
+      ServerLive(config, {
+        quiet: true,
+        drivers: FakeHarnessLive,
+        localNode: TEST_LOCAL_NODE,
+        // no GitHub from tests
+        updates: { schedule: false, fetch: async () => new Response("offline", { status: 503 }) },
+        ...options?.server,
+      }),
       scope,
     ),
   )

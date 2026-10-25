@@ -40,7 +40,8 @@ export const childEnv = (extra?: Record<string, string>): Record<string, string>
     if (k === "DISPLAY" || k === "WAYLAND_DISPLAY" || k.startsWith("OPENBOT_")) continue
     env[k] = v
   }
-  return { ...env, ...extra }
+  // test brains never ask GitHub for updates
+  return { ...env, OPENBOT_UPDATES: "off", ...extra }
 }
 
 export interface Brain {

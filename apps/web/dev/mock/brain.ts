@@ -63,6 +63,7 @@ import {
   type SlackStatus,
   type SttStatus,
   type VoiceCallStatus,
+  type UpdateStatus,
   type HarkStatus,
   type ToolKind,
   type Turn,
@@ -154,6 +155,26 @@ export class MockBrain {
   slack: SlackStatus = { connected: false, events: "off" }
   stt: SttStatus = { state: "ready", model: "Parakeet TDT 0.6B v3" }
   voice: VoiceCallStatus = { state: "absent", model: "Kokoro", downloadBytes: VOICE_DOWNLOAD_BYTES }
+  /** OpenBot's own updates: a newer release with a few changes, to install (Settings › About). */
+  updates: UpdateStatus = {
+    current: { version: "2026.10.20-3c1d2e4", sha: "3c1d2e4" },
+    state: "available",
+    latest: {
+      version: "2026.10.25-fa1465b",
+      sha: "fa1465b",
+      publishedAt: Date.now() - 2 * 3_600_000,
+      url: "https://github.com/Leka74/openbot/releases",
+    },
+    behind: 3,
+    commits: [
+      { sha: "fa1465b", message: "Charts: stacked bars and filled areas on web and iPhone" },
+      { sha: "c9dc334", message: "Sign in with another device: pick the number the browser shows" },
+      { sha: "bf6ccd1", message: "README: what OpenBot is and why, with screenshots" },
+    ],
+    checkedAt: Date.now() - 5 * 60_000,
+    previous: "2026.10.18-8d207db",
+    canInstall: true,
+  }
   sttFailsAppend = false
   sttFinishDelayMs = 0
   sttDiscards = 0
@@ -2152,6 +2173,12 @@ export class MockBrain {
           return this.stt
         })(),
       "voice.status": () => sync(() => this.voice)(),
+      "updates.status": () => sync(() => this.updates)(),
+      "updates.check": () => sync(() => (this.updates = { ...this.updates, checkedAt: Date.now() }))(),
+      "updates.install": () =>
+        sync(() => (this.updates = { ...this.updates, state: "installing", step: "Downloading…" }))(),
+      "updates.rollback": () =>
+        sync(() => (this.updates = { ...this.updates, state: "installing", step: "Going back…" }))(),
       "voice.install": () =>
         sync(() => {
           this.voice = { state: "ready", model: this.voice.model }

@@ -44,6 +44,8 @@ export const Settings = Schema.Struct({
   slackSendTo: Schema.optionalKey(BotId),
   /** The owner's own Slack messages that mention @OpenBot go there too, like Send to OpenBot (D3.4). */
   slackMentions: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
+  /** Install updates without asking, once no Bot has worked for a few minutes (Settings › About). */
+  autoUpdate: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
 })
 export type Settings = typeof Settings.Type
 
@@ -59,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sharedProjectFolders: [],
   defaultAutonomy: DEFAULT_BOT_AUTONOMY,
   slackMentions: true,
+  autoUpdate: false,
 }
 
 /** `settings.update` input: any subset of keys. */
@@ -79,6 +82,7 @@ export const SettingsPatch = Schema.Struct({
   /** `null`: the Bot chatted with last. */
   slackSendTo: Schema.optionalKey(Schema.NullOr(BotId)),
   slackMentions: Schema.optionalKey(Schema.Boolean),
+  autoUpdate: Schema.optionalKey(Schema.Boolean),
 })
 export type SettingsPatch = typeof SettingsPatch.Type
 
@@ -96,6 +100,7 @@ export const applySettingsPatch = (settings: Settings, patch: SettingsPatch): Se
   if (patch.sharedProjectFolders !== undefined) next.sharedProjectFolders = patch.sharedProjectFolders
   if (patch.defaultAutonomy !== undefined) next.defaultAutonomy = patch.defaultAutonomy
   if (patch.slackMentions !== undefined) next.slackMentions = patch.slackMentions
+  if (patch.autoUpdate !== undefined) next.autoUpdate = patch.autoUpdate
   if (patch.defaultHarness === null) delete next.defaultHarness
   else if (patch.defaultHarness !== undefined) next.defaultHarness = patch.defaultHarness
   if (patch.ownerName === null) delete next.ownerName

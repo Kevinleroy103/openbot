@@ -17,6 +17,7 @@ import {
   useRosterValue,
 } from "../details/kit.tsx"
 import { GroupLabel, PageHeader, SettingsCard } from "./layout.tsx"
+import { UpdatesCard } from "./Updates.tsx"
 
 type Period = "7d" | "30d" | "all"
 
@@ -165,13 +166,14 @@ export function AboutPage(): ReactNode {
   return (
     <div className="flex flex-col">
       <PageHeader title="About" />
+      <GroupLabel>Updates</GroupLabel>
+      <UpdatesCard />
       <GroupLabel>OpenBot</GroupLabel>
       <SettingsCard>
         {info.loading ? (
           <LoadingLine />
         ) : (
           [
-            ["Version", info.value?.version ?? "Unknown"],
             ["Owner", info.value?.ownerName ?? "—"],
             ["Data folder", info.value?.dataDir ?? "—"],
           ].map(([k, v]) => (
@@ -185,7 +187,8 @@ export function AboutPage(): ReactNode {
         )}
       </SettingsCard>
       <p className="mt-3 px-1 text-2xs text-fg-quaternary">
-        OpenBot is open source (MIT) and self-hosted. Update it like any other package on the server.
+        OpenBot is open source (MIT) and self-hosted. Every change that passes its checks on GitHub becomes a release;
+        this page installs them.
       </p>
     </div>
   )

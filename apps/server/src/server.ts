@@ -107,6 +107,7 @@ import { SkillsShLive } from "./skillsSh.ts"
 import { SlackConnectorLive } from "./slack/connector.ts"
 import { type SpeechToText, SpeechToTextLive } from "./stt/service.ts"
 import { VoiceCallsLive } from "./voice/service.ts"
+import { UpdatesLive, type UpdatesOptions } from "./updates.ts"
 import { HarkLive } from "./hark.ts"
 
 // ============================================================================ startup errors
@@ -374,6 +375,8 @@ export interface ServerOptions {
   readonly speechToText?: Layer.Layer<SpeechToText> | undefined
   /** Voice calls' folders (tests: an installed copy). */
   readonly voiceCalls?: { readonly dir: string; readonly sttDir: string } | undefined
+  /** Updates from GitHub Releases (tests: a fake GitHub, no timer). */
+  readonly updates?: Omit<UpdatesOptions, "dataDir"> | undefined
   readonly quiet?: boolean | undefined
 }
 
@@ -444,6 +447,16 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
       VoiceCallsLive(
         options?.voiceCalls ?? { dir: makeDataDir(config.dataDir).voice, sttDir: makeDataDir(config.dataDir).stt },
       ),
+    ),
+    // updates: the newest release of OpenBot, installed through scripts/deploy.ts
+    Layer.provideMerge(
+      UpdatesLive({
+        dataDir: config.dataDir,
+        repo: process.env["OPENBOT_UPDATE_REPO"],
+        // OPENBOT_UPDATES=off: no checking on a timer (tests, or a brain updated by other means)
+        schedule: process.env["OPENBOT_UPDATES"] !== "off",
+        ...options?.updates,
+      }),
     ),
     Layer.provideMerge(LocalNodeDaemonLive(options?.localNode)), // 9
     Layer.provideMerge(HarnessProfilesLayer(options?.profiles)), // 8b: added accounts (profiles.ts)

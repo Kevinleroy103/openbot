@@ -142,6 +142,7 @@ describe("settings key/value codec", () => {
     expect(out.keys).toEqual([
       "accent",
       "approvalExpiryMinutes",
+      "autoUpdate",
       "botMessaging",
       "botSearch",
       "compactIdleBots",
@@ -159,6 +160,7 @@ describe("settings key/value codec", () => {
     ).toEqual([
       "accent",
       "approvalExpiryMinutes",
+      "autoUpdate",
       "botMessaging",
       "botSearch",
       "compactIdleBots",

@@ -23,6 +23,8 @@ export const Keys = {
   slack: "slack",
   stt: "stt",
   voice: "voice",
+  /** OpenBot's own updates (releases). */
+  updates: "updates",
   /** Hark, iPhone notifications (D3.5). */
   hark: "hark",
 } as const

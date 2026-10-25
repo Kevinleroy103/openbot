@@ -41,7 +41,7 @@ import {
   type SectionId,
   type SidebarPlace,
 } from "@openbot/contracts"
-import { commands, updateSettingsAtom } from "@openbot/client"
+import { commands, updateSettingsAtom, updatesStatusAtom } from "@openbot/client"
 import {
   Avatar,
   AvatarStack,
@@ -68,6 +68,7 @@ import { useIsPhone } from "../app/layout.ts"
 import { type LongPressPoint, useArmedClicks, useLongPress } from "../app/longPress.ts"
 import { useConnectApps, useDialogs, useSelection, useSettingsDialog } from "../app/uiState.ts"
 import { APPS, StackedLogos, useAppStatuses } from "../connections/apps.tsx"
+import { useQuery } from "../details/kit.tsx"
 import { describeFailure } from "../cards/useRespond.ts"
 import { modKey } from "../palette/SearchPalette.tsx"
 import { DropLine, useSidebarDrag } from "./drag.tsx"
@@ -851,6 +852,7 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
         )}
       </div>
       {!phone && <DesktopUpdateButton />}
+      {!phone && <OpenBotUpdateButton />}
       <div
         className={cn(
           "flex shrink-0 items-center gap-2 px-4 pt-2",
@@ -883,6 +885,34 @@ function ConnectAppsPill({ phone }: { readonly phone: boolean }): ReactNode {
       <span className="truncate">Connect apps</span>
       <StackedLogos apps={connected} size={18} />
     </button>
+  )
+}
+
+/** A newer OpenBot release is out: opens Settings › About, where it installs (the brain asks GitHub hourly). */
+function OpenBotUpdateButton(): ReactNode {
+  const status = useQuery(updatesStatusAtom)
+  const settingsDialog = useSettingsDialog()
+  const refresh = status.refresh
+  useEffect(() => {
+    const timer = setInterval(refresh, 15 * 60_000)
+    return () => clearInterval(timer)
+  }, [refresh])
+  const value = status.value
+  if (value === undefined || !value.canInstall || (value.state !== "available" && value.state !== "installing"))
+    return null
+  return (
+    <div className="shrink-0 px-4 pt-2">
+      <PillButton
+        variant={value.state === "installing" ? "secondary" : "primary"}
+        size="md"
+        leadingIcon={RefreshCw}
+        className="w-full"
+        onClick={() => settingsDialog.show("updates")}
+        data-testid="openbot-update"
+      >
+        {value.state === "installing" ? "Updating OpenBot…" : "Update OpenBot"}
+      </PillButton>
+    </div>
   )
 }
 

@@ -42,3 +42,6 @@ docs/research/
 apps/web/test/screenshots/
 apps/web/test/e2e/screenshots/
 packages/ui/test/screenshots/
+
+# a release's own description (CI puts it in the tarball, scripts/deploy.ts in each release)
+/release.json

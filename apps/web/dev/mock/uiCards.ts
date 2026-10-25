@@ -1,4 +1,4 @@
-// DEV MOCK ONLY: the `ui` cards a Bot posts when a message names a scenario (`ui-choice`, `ui-chart`, …).
+// DEV MOCK ONLY: the `ui` cards a Bot posts when a message names a scenario (`ui-choice`, `ui-chart-fill`, …).
 // They cover every block, the three action styles, update_ui and content the renderer must defuse.
 import type { AttachmentId, UiAnswer, UiCard, UiChecklistStatus } from "@openbot/contracts"
 
@@ -11,6 +11,15 @@ export interface UiScenario {
   readonly updates?: ReadonlyArray<UiCard>
   readonly closing?: string
 }
+
+const CI_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const WEEKS = ["W36", "W37", "W38", "W39", "W40", "W41", "W42", "W43"]
+const HALF_HOURS = Array.from(
+  { length: 48 },
+  (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`,
+)
+/** 0 at midnight, 1 at midday. */
+const daytime = (halfHour: number) => (1 - Math.cos((halfHour / 48) * 2 * Math.PI)) / 2
 
 const ROLLOUT = ["Build web bundle", "Run migrations", "Roll out to 10%", "Roll out to everyone"]
 
@@ -118,6 +127,71 @@ export const UI_SCENARIOS: Record<string, UiScenario> = {
       ],
       fallback:
         "CI median fell from 8m 24s to 5m 12s (38% faster) after the cache change on Thu 22 Oct; 42 runs, 100% passed.",
+    },
+  },
+  "ui-chart-stacked": {
+    reply: "Browser tests are still the biggest share, but every step got faster after Thursday's cache change.",
+    card: {
+      type: "ui",
+      version: 1,
+      title: "Where CI time goes",
+      subtitle: "Main branch · 19–25 Oct",
+      blocks: [
+        {
+          type: "chart",
+          kind: "bar",
+          stacked: true,
+          unit: "min",
+          series: [
+            { name: "Typecheck", points: CI_DAYS.map((x, i) => ({ x, y: [2.1, 2.0, 2.0, 1.2, 1.1, 1.1, 1.0][i]! })) },
+            { name: "Unit tests", points: CI_DAYS.map((x, i) => ({ x, y: [3.4, 3.3, 3.2, 2.4, 2.2, 2.1, 2.1][i]! })) },
+            {
+              name: "Browser tests",
+              points: CI_DAYS.map((x, i) => ({ x, y: [3.2, 3.1, 3.0, 2.2, 2.0, 2.0, 2.0][i]! })),
+            },
+          ],
+          highlight: "Thu",
+        },
+      ],
+      fallback:
+        "CI minutes per day, 19–25 Oct: 8.7 on Monday down to 5.1 on Sunday; browser tests take the largest share every day.",
+    },
+  },
+  "ui-chart-fill": {
+    reply: "iPhone is now 40% of weekly users. Response times peak around midday but p95 stays under 400 ms.",
+    card: {
+      type: "ui",
+      version: 1,
+      title: "Usage and latency",
+      subtitle: "Weeks 36–43 · today in half hours",
+      blocks: [
+        {
+          type: "chart",
+          kind: "line",
+          fill: true,
+          stacked: true,
+          series: [
+            {
+              name: "Web",
+              points: WEEKS.map((x, i) => ({ x, y: [1200, 1260, 1310, 1290, 1380, 1420, 1460, 1510][i]! })),
+            },
+            { name: "iPhone", points: WEEKS.map((x, i) => ({ x, y: [310, 340, 420, 510, 640, 760, 880, 1010][i]! })) },
+          ],
+          highlight: "W43",
+        },
+        {
+          type: "chart",
+          kind: "line",
+          fill: true,
+          unit: "ms",
+          series: [
+            { name: "p50", points: HALF_HOURS.map((x, i) => ({ x, y: Math.round(110 + 60 * daytime(i)) })) },
+            { name: "p95", points: HALF_HOURS.map((x, i) => ({ x, y: Math.round(220 + 160 * daytime(i)) })) },
+          ],
+        },
+      ],
+      fallback:
+        "Weekly active users grew from 1,510 to 2,520 over weeks 36–43 (iPhone 310 → 1,010). Today p50 stayed at 110–170 ms and p95 at 220–380 ms, peaking around midday.",
     },
   },
   "ui-plan": {

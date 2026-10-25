@@ -5,7 +5,7 @@ import { chromium, type Browser, type Page } from "playwright-core"
 import { chromiumPath, screenshotDir, startMock, type RunningMock } from "./shoot.ts"
 
 const enabled = existsSync(chromiumPath)
-const scenarios = ["comparison", "chart", "plan", "choice", "agenda", "compact"] as const
+const scenarios = ["comparison", "chart", "chart-stacked", "chart-fill", "plan", "choice", "agenda", "compact"] as const
 
 async function loaded(page: Page) {
   await page.locator('[data-conversation="cnv_expense"] [data-entry]').first().waitFor()
@@ -43,7 +43,7 @@ describe.skipIf(!enabled)("generative UI against the dev mock", () => {
 
   for (const theme of ["light", "dark"] as const) {
     for (const phone of [false, true]) {
-      test(`six reply layouts in ${theme}, ${phone ? "phone" : "desktop"}`, async () => {
+      test(`reply layouts in ${theme}, ${phone ? "phone" : "desktop"}`, async () => {
         const context = await browser.newContext({
           viewport: phone ? { width: 393, height: 852 } : { width: 1280, height: 850 },
           colorScheme: theme,
@@ -77,6 +77,23 @@ describe.skipIf(!enabled)("generative UI against the dev mock", () => {
               expect(await card.getByRole("img", { name: /Bar chart/ }).count()).toBe(1)
               expect(await card.locator('svg text[x="36"]').allTextContents()).toEqual(["0", "5", "10"])
               expect(await card.locator("svg text").allTextContents()).toContain("Thu")
+            }
+            if (scenario === "chart-stacked") {
+              const chart = card.getByRole("img", { name: /^Stacked bar chart \(min\)/ })
+              expect(await chart.locator('text[x="36"]').allTextContents()).toEqual(["0", "5", "10"])
+              expect(await chart.locator('text[font-weight="600"]').allTextContents()).toEqual(["5.8"])
+              expect(await chart.locator("rect title").first().textContent()).toBe(
+                "Typecheck: Mon, 2.1 min of 8.7 min total",
+              )
+            }
+            if (scenario === "chart-fill") {
+              const stacked = card.getByRole("img", { name: /^Stacked area chart/ })
+              expect(await stacked.locator('text[font-weight="600"]').allTextContents()).toEqual(["2520"])
+              const dense = card.getByRole("img", { name: /^Area chart \(ms\)/ })
+              expect(await dense.locator("path").count()).toBe(2)
+              expect(
+                await dense.evaluate((svg) => svg.parentElement!.scrollWidth <= svg.parentElement!.clientWidth),
+              ).toBe(true)
             }
             if (scenario === "agenda") expect(await card.locator("ol > li").count()).toBe(4)
             if (scenario === "compact") {

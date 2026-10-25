@@ -672,7 +672,7 @@ export class MockBrain {
     const lower = text.toLowerCase()
     const bot = this.bot(botId)
     const name = bot?.name ?? "Bot"
-    const ui = UI_SCENARIOS[/\bui-[a-z]+\b/.exec(lower)?.[0] ?? ""]
+    const ui = UI_SCENARIOS[/\bui-[a-z]+(-[a-z]+)*/.exec(lower)?.[0] ?? ""]
     if (ui) return this.showUi(conversationId, botId, ui, inputEntryId)
     if (/\bfail|\bbreak\b|\berror\b/.test(lower)) {
       return this.startTurn(

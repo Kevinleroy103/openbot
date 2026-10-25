@@ -27,9 +27,10 @@ directory's `bunfig.toml`, and only `apps/web` declares `bun-plugin-tailwind`.
   - `which`, `choose`, `pick`, `options`: a question card;
   - `fail`, `error`: a failed turn ("Bot failed to respond");
   - `ask <Bot name>`: a bot-to-bot message ("Messaged …" event line) and a reply in that Bot's chat;
-  - `ui-comparison`, `ui-chart`, `ui-plan`, `ui-choice`, `ui-agenda`, `ui-compact`, `ui-progress`,
-    `ui-everything`, `ui-hostile` (checked first): a `ui` card from `dev/mock/uiCards.ts`. A card with
-    actions waits for `cards.act`, then the Bot echoes the answer; `ui-progress` updates its card in place.
+  - `ui-comparison`, `ui-chart`, `ui-chart-stacked`, `ui-chart-fill`, `ui-plan`, `ui-choice`, `ui-agenda`,
+    `ui-compact`, `ui-progress`, `ui-everything`, `ui-hostile` (checked first): a `ui` card from
+    `dev/mock/uiCards.ts`. A card with actions waits for `cards.act`, then the Bot echoes the answer;
+    `ui-progress` updates its card in place.
 - Group chats route to `@mentioned` members, `@everyone`, the replied-to Bot, or the lead Bot.
 - `turns.interrupt`, `requests.respond` (all card kinds, "Always allow" saves a rule),
   `bots.create` (the new Bot introduces itself with a question card), `conversations.createGroup`,

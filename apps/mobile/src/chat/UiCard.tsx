@@ -473,18 +473,27 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
   const left = 34
   const plotTop = 20
   const plotHeight = 140
-  const plotWidth = Math.max(width - left - 4, xs.length * 24)
+  // Only bars need room per x; lines and areas fit the card width.
+  const plotWidth = block.kind === "bar" ? Math.max(width - left - 4, xs.length * 24) : width - left - 4
   const chartWidth = left + plotWidth + 4
   const slot = plotWidth / Math.max(1, xs.length)
   const xAt = (x: string) => left + slot * xs.indexOf(x) + slot / 2
   const yAt = (y: number) => plotTop + ((top - y) / span) * plotHeight
   const labelEvery = Math.ceil(xs.length / 7)
+  const labelWidth = slot * labelEvery
+  // Thinned labels step from the highlighted x so its label never collides with a neighbour.
+  const labelFrom = Math.max(
+    0,
+    xs.findIndex((x) => x === block.highlight),
+  )
   const ticks = [top, (top + bottom) / 2, bottom]
   const single = block.series.length === 1
   const columns = stacked ? 1 : block.series.length
   const barWidth = Math.min(28, (slot * 0.7) / columns)
   const highlightSeries = stacked ? spans.length - 1 : 0
   const highlighted = spans[highlightSeries]?.find((p) => p.x === block.highlight)
+  // A stacked total belongs to no single series.
+  const highlightColor = stacked ? theme.fg : color(0)
   const barColor = (series: number, x: string) => {
     if (single && block.highlight !== undefined && x !== block.highlight) return theme.lineSecondary
     return color(series)
@@ -566,7 +575,7 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
                 />
               ))}
             {highlighted !== undefined && block.kind === "line" && (
-              <Circle cx={xAt(highlighted.x)} cy={yAt(highlighted.to)} r={4} fill={color(highlightSeries)} />
+              <Circle cx={xAt(highlighted.x)} cy={yAt(highlighted.to)} r={4} fill={highlightColor} />
             )}
           </Svg>
           {ticks.map((v) => (
@@ -575,14 +584,19 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
             </Text>
           ))}
           {xs.map((x, i) =>
-            i % labelEvery === 0 || x === block.highlight ? (
+            (i - labelFrom) % labelEvery === 0 ? (
               <Text
                 key={x}
                 numberOfLines={1}
                 style={[
                   styles.axis,
                   styles.centered,
-                  { left: xAt(x) - slot / 2, width: slot, top: plotTop + plotHeight + 6, color: theme.fgSecondary },
+                  {
+                    left: xAt(x) - labelWidth / 2,
+                    width: labelWidth,
+                    top: plotTop + plotHeight + 6,
+                    color: theme.fgSecondary,
+                  },
                 ]}
               >
                 {x}
@@ -598,7 +612,7 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
                   left: xAt(highlighted.x) - 40,
                   width: 80,
                   top: yAt(Math.max(0, highlighted.to)) - 24,
-                  color: theme.accentFg,
+                  color: highlightColor,
                 },
               ]}
             >

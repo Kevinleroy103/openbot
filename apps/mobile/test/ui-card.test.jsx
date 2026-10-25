@@ -41,6 +41,7 @@ mock.module("react", () => ({
   },
 }))
 
+const colorOf = (style) => [style].flat(Infinity).reduce((color, s) => s?.color ?? color, undefined)
 const box = ({ children }) => createElement("div", null, children)
 const svg =
   (name) =>
@@ -60,7 +61,8 @@ mock.module("react-native", () => ({
   },
   ScrollView: box,
   StyleSheet: { create: (styles) => styles, hairlineWidth: 0.5 },
-  Text: ({ children, onPress }) => createElement("span", onPress ? { "data-link": "" } : null, children),
+  Text: ({ children, onPress, style }) =>
+    createElement("span", { "data-link": onPress ? "" : undefined, "data-color": colorOf(style) }, children),
   TextInput: ({ value, editable, placeholder, accessibilityLabel }) =>
     createElement("input", {
       value,
@@ -135,7 +137,7 @@ const pressable = (label) => pressables.find((p) => textOf(p.children).includes(
 const checked = (html, label) =>
   html
     .split("<button")
-    .find((b) => b.includes(`<span>${label}</span>`))
+    .find((b) => b.includes(`>${label}</span>`))
     ?.includes('aria-checked="true"')
 
 beforeEach(() => {
@@ -365,6 +367,52 @@ test("a filled line draws overlapping translucent areas, and stacked they pile u
   const [, iphoneStack] = pointsOf(stacked, "polygon")
   expect(iphoneStack.slice(3).reverse()).toEqual(webTop)
   expect(iphoneTop.every(([, y], i) => y < webTop[i][1])).toBe(true)
+})
+
+test("a stacked total is labelled and marked in the text colour, not a series colour", () => {
+  // The y axis also has a 10; the total's label comes after it.
+  const total = (html) => [...html.matchAll(/<span data-color="([^"]+)">10<\/span>/g)].at(-1)?.[1]
+  expect(total(chartOf({ kind: "bar", stacked: true, highlight: "Mon" }))).toBe(theme.fg)
+  const area = chartOf({ kind: "line", fill: true, stacked: true, highlight: "Mon" })
+  expect(total(area)).toBe(theme.fg)
+  const [x, y] = pointsOf(area, "polyline")[1][0]
+  expect(area).toContain(`<circle cx="${x}" cy="${y}" r="4" fill="${theme.fg}"`)
+  const unstacked = chartOf({ kind: "line", highlight: "Mon" })
+  expect(unstacked).toContain(`<span data-color="${theme.accentFg}">6</span>`)
+  expect(unstacked).toContain(`r="4" fill="${theme.accentFg}"`)
+})
+
+test("a dense line or filled line fits the card width with thinned x labels; only bars scroll", () => {
+  const series = ["A", "B", "C", "D"].map((name) => ({
+    name,
+    points: Array.from({ length: 60 }, (_, i) => ({ x: `D${i + 1}`, y: i + 1 })),
+  }))
+  const widthOf = (block) =>
+    Number(render({ ...choice, blocks: [{ type: "chart", series, ...block }] }).match(/<svg width="([^"]+)"/)[1])
+  // 300 is the card's width before layout.
+  for (const block of [{ kind: "line" }, { kind: "line", fill: true }, { kind: "line", fill: true, stacked: true }])
+    expect(widthOf(block)).toBe(300)
+  expect(widthOf({ kind: "bar" })).toBeGreaterThan(300)
+  const html = render({ ...choice, blocks: [{ type: "chart", kind: "line", fill: true, series }] })
+  expect(html.match(/>D\d+<\/span>/g)).toEqual([
+    ">D1</span>",
+    ">D10</span>",
+    ">D19</span>",
+    ">D28</span>",
+    ">D37</span>",
+    ">D46</span>",
+    ">D55</span>",
+  ])
+  const highlighted = render({ ...choice, blocks: [{ type: "chart", kind: "line", highlight: "D40", series }] })
+  expect(highlighted.match(/>D\d+<\/span>/g)).toEqual([
+    ">D4</span>",
+    ">D13</span>",
+    ">D22</span>",
+    ">D31</span>",
+    ">D40</span>",
+    ">D49</span>",
+    ">D58</span>",
+  ])
 })
 
 test("stacked is ignored for an unfilled line", () => {

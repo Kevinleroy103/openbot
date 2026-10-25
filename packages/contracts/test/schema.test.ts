@@ -44,6 +44,7 @@ import {
   SettingsPatch,
   SkillName,
   TranscriptEntry,
+  TranscriptPage,
   TranscriptWindow,
   Turn,
   UiCard,
@@ -488,23 +489,50 @@ describe("ui cards", () => {
     expect(json.state.answer.values).toEqual({ slot: ["s1"], title: "Design review" })
   })
 
-  test("an unknown block type decodes as unknown; a known block with a bad payload fails", () => {
+  test("an unknown block type, or a known one with a payload this build can't read, decodes as unknown", () => {
     const decoded = Schema.decodeUnknownSync(UiCard)({
       ...card,
-      blocks: [{ type: "map", center: [1, 2] }, card.blocks[0]],
+      blocks: [
+        { type: "map", center: [1, 2] },
+        card.blocks[0],
+        { type: "table", columns: "Slot" },
+        { type: "stats", items: [{ label: "a", value: "1", tone: "meh" }] },
+      ],
     })
-    expect(decoded.blocks[0]).toEqual({ type: "unknown", originalTag: "map" })
-    expect(decoded.blocks[1]).toEqual(card.blocks[0])
-    expect(decodes(UiCard, { ...card, blocks: [{ type: "table", columns: "Slot" }] })).toBe(false)
-    expect(
-      decodes(UiCard, { ...card, blocks: [{ type: "stats", items: [{ label: "a", value: "1", tone: "meh" }] }] }),
-    ).toBe(false)
+    expect(decoded.blocks).toEqual([
+      { type: "unknown", originalTag: "map" },
+      card.blocks[0],
+      { type: "unknown", originalTag: "table" },
+      { type: "unknown", originalTag: "stats" },
+    ])
     expect(decodes(UiCard, { ...card, fallback: undefined })).toBe(false)
+  })
+
+  test("a chart kind from a newer build leaves the rest of the chat page readable", () => {
+    const page = Schema.decodeUnknownSync(TranscriptPage)({
+      entries: [
+        { ...base, kind: "message", role: "bot", text: "Here is the trend.", attachments: [], streaming: false },
+        {
+          ...base,
+          id: "ent_2",
+          kind: "card",
+          card: { ...card, blocks: [card.blocks[0], { type: "chart", kind: "radar", series: [] }] },
+          state: { status: "pending" },
+        },
+      ],
+      hasMoreBefore: false,
+      beforeCursor: null,
+    })
+    expect(page.entries.map((entry) => entry.kind)).toEqual(["message", "card"])
+    const entry = page.entries[1]
+    if (entry?.kind !== "card" || entry.card.type !== "ui") throw new Error("expected a ui card")
+    expect(entry.card.blocks).toEqual([card.blocks[0], { type: "unknown", originalTag: "chart" }])
   })
 
   test("the show_ui input schema accepts every known block and rejects an unknown one", () => {
     expect(decodes(UiCardInput, card)).toBe(true)
     expect(decodes(UiCardInput, { ...card, blocks: [{ type: "map", center: [1, 2] }] })).toBe(false)
+    expect(decodes(UiCardInput, { ...card, blocks: [{ type: "chart", kind: "radar", series: [] }] })).toBe(false)
   })
 
   test("cards.act decodes its values and its AlreadyAnswered error", () => {

@@ -226,8 +226,16 @@ export const UiBlockMembers = [
   UiChoiceBlock,
   UiInputBlock,
 ] as const
-const uiBlockFallback = withUnknownFallback({ members: UiBlockMembers, tag: "type", keep: {} })
-/** Decodes unknown block types into `{ type: "unknown", originalTag }`, shown as "can't show this part". */
+const uiBlockFallback = withUnknownFallback({
+  members: UiBlockMembers,
+  tag: "type",
+  keep: {},
+  malformedAsUnknown: true,
+})
+/**
+ * Decodes unknown block types, and known ones this build can't read (e.g. a newer chart kind), into
+ * `{ type: "unknown", originalTag }`, shown as "can't show this part".
+ */
 export const UiBlock = uiBlockFallback.schema
 export type UiBlock = typeof UiBlock.Type
 export type KnownUiBlock = (typeof UiBlockMembers)[number]["Type"]

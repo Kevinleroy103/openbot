@@ -117,7 +117,8 @@ export type Author = typeof Author.Type
  * A tagged union that decodes members whose tag this build does not know into an explicit,
  * decode-only `unknown` member instead of failing (t3code `kindUnionWithFallback` idea, but the
  * unknown value is KEPT so the UI can render "update OpenBot to see this", like Grok's renderer).
- * A known tag whose payload is malformed still fails. Encoding an unknown member is forbidden.
+ * A known tag whose payload is malformed still fails, unless `malformedAsUnknown` is set. Encoding an
+ * unknown member is forbidden.
  */
 export const withUnknownFallback = <
   const Members extends ReadonlyArray<Schema.Top & { readonly fields: object }>,
@@ -127,6 +128,7 @@ export const withUnknownFallback = <
   readonly members: Members
   readonly tag: Tag
   readonly keep: KeepFields
+  readonly malformedAsUnknown?: boolean
 }) => {
   const known = knownTags(options.members, options.tag)
   const unknownType = Schema.Struct({
@@ -138,7 +140,9 @@ export const withUnknownFallback = <
     ...options.keep,
     [options.tag]: Schema.String.check(
       Schema.makeFilter(
-        (value: string) => (value !== "unknown" && !known.has(value)) || `A known ${options.tag} must decode in full.`,
+        (value: string) =>
+          (value !== "unknown" && (options.malformedAsUnknown === true || !known.has(value))) ||
+          `A known ${options.tag} must decode in full.`,
       ),
     ),
   } as KeepFields & { [K in Tag]: Schema.String }).pipe(

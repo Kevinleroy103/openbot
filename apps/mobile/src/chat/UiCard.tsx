@@ -8,7 +8,7 @@ import { Image } from "expo-image"
 import * as Linking from "expo-linking"
 import { type ReactNode, useState } from "react"
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
-import Svg, { Circle, Line, Polyline, Rect } from "react-native-svg"
+import Svg, { Circle, Line, Polygon, Polyline, Rect } from "react-native-svg"
 import { failureText } from "../data.ts"
 import type { Theme } from "../theme.ts"
 import { Icon } from "../ui/Icon.tsx"
@@ -432,12 +432,40 @@ const roundUp = (n: number): number => {
   return Math.ceil(n / step) * step
 }
 
+interface Span {
+  readonly x: string
+  readonly from: number
+  readonly to: number
+}
+
+// Stacked, positive values pile up from zero and negative ones pile down.
+const spansOf = (
+  block: Block<"chart">,
+  xs: ReadonlyArray<string>,
+  stacked: boolean,
+): ReadonlyArray<ReadonlyArray<Span>> => {
+  if (!stacked) return block.series.map((s) => s.points.map((p) => ({ x: p.x, from: 0, to: p.y })))
+  const up = new Map<string, number>()
+  const down = new Map<string, number>()
+  return block.series.map((s) =>
+    xs.map((x) => {
+      const y = s.points.find((p) => p.x === x)?.y ?? 0
+      const sums = y < 0 ? down : up
+      const from = sums.get(x) ?? 0
+      sums.set(x, from + y)
+      return { x, from, to: from + y }
+    }),
+  )
+}
+
 function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly theme: Theme }): ReactNode {
   const [width, setWidth] = useState(300)
   const palette = [theme.accentFg, theme.success, theme.warn, theme.dangerFg]
   const color = (series: number) => palette[series % palette.length]!
   const xs = [...new Set(block.series.flatMap((s) => s.points.map((p) => p.x)))]
-  const ys = block.series.flatMap((s) => s.points.map((p) => p.y))
+  const stacked = block.stacked === true && (block.kind === "bar" || block.fill === true)
+  const spans = spansOf(block, xs, stacked)
+  const ys = spans.flatMap((s) => s.map((p) => p.to))
   const top = roundUp(Math.max(0, ...ys))
   const low = Math.min(0, ...ys)
   const bottom = low < 0 ? -roundUp(-low) : 0
@@ -453,8 +481,10 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
   const labelEvery = Math.ceil(xs.length / 7)
   const ticks = [top, (top + bottom) / 2, bottom]
   const single = block.series.length === 1
-  const barWidth = Math.min(28, (slot * 0.7) / block.series.length)
-  const highlighted = block.series[0]?.points.find((p) => p.x === block.highlight)
+  const columns = stacked ? 1 : block.series.length
+  const barWidth = Math.min(28, (slot * 0.7) / columns)
+  const highlightSeries = stacked ? spans.length - 1 : 0
+  const highlighted = spans[highlightSeries]?.find((p) => p.x === block.highlight)
   const barColor = (series: number, x: string) => {
     if (single && block.highlight !== undefined && x !== block.highlight) return theme.lineSecondary
     return color(series)
@@ -497,24 +527,37 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
               />
             ))}
             {block.kind === "bar" &&
-              block.series.flatMap((s, si) =>
-                s.points.map((p) => (
+              spans.flatMap((s, si) =>
+                s.map((p) => (
                   <Rect
                     key={`${si}:${p.x}`}
-                    x={xAt(p.x) - (barWidth * block.series.length) / 2 + barWidth * si}
-                    y={Math.min(yAt(p.y), yAt(0))}
-                    width={single ? barWidth : barWidth * 0.8}
-                    height={Math.abs(yAt(p.y) - yAt(0))}
+                    x={xAt(p.x) - (barWidth * columns) / 2 + barWidth * (stacked ? 0 : si)}
+                    y={Math.min(yAt(p.to), yAt(p.from))}
+                    width={columns === 1 ? barWidth : barWidth * 0.8}
+                    height={Math.abs(yAt(p.to) - yAt(p.from))}
                     rx={3}
                     fill={barColor(si, p.x)}
                   />
                 )),
               )}
             {block.kind === "line" &&
-              block.series.map((s, si) => (
+              block.fill === true &&
+              spans.map((s, si) => (
+                <Polygon
+                  key={si}
+                  points={[
+                    ...s.map((p) => `${xAt(p.x)},${yAt(p.to)}`),
+                    ...[...s].reverse().map((p) => `${xAt(p.x)},${yAt(p.from)}`),
+                  ].join(" ")}
+                  fill={color(si)}
+                  fillOpacity={stacked ? 0.55 : 0.2}
+                />
+              ))}
+            {block.kind === "line" &&
+              spans.map((s, si) => (
                 <Polyline
-                  key={s.name}
-                  points={s.points.map((p) => `${xAt(p.x)},${yAt(p.y)}`).join(" ")}
+                  key={si}
+                  points={s.map((p) => `${xAt(p.x)},${yAt(p.to)}`).join(" ")}
                   fill="none"
                   stroke={color(si)}
                   strokeWidth={2}
@@ -523,7 +566,7 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
                 />
               ))}
             {highlighted !== undefined && block.kind === "line" && (
-              <Circle cx={xAt(highlighted.x)} cy={yAt(highlighted.y)} r={4} fill={color(0)} />
+              <Circle cx={xAt(highlighted.x)} cy={yAt(highlighted.to)} r={4} fill={color(highlightSeries)} />
             )}
           </Svg>
           {ticks.map((v) => (
@@ -554,12 +597,12 @@ function ChartBlock({ block, theme }: { readonly block: Block<"chart">; readonly
                 {
                   left: xAt(highlighted.x) - 40,
                   width: 80,
-                  top: yAt(Math.max(0, highlighted.y)) - 24,
+                  top: yAt(Math.max(0, highlighted.to)) - 24,
                   color: theme.accentFg,
                 },
               ]}
             >
-              {number(highlighted.y)}
+              {number(highlighted.to)}
             </Text>
           )}
         </View>

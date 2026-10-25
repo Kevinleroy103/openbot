@@ -76,6 +76,7 @@ mock.module("react-native-svg", () => ({
   default: svg("svg"),
   Circle: svg("circle"),
   Line: svg("line"),
+  Polygon: svg("polygon"),
   Polyline: svg("polyline"),
   Rect: svg("rect"),
 }))
@@ -300,15 +301,75 @@ test("update_ui keeps the owner's edits to blocks that remain, drops removed one
   expect(send([newField])).toEqual({ newField: "New default" })
 })
 
-test("a dense grouped bar chart draws every bar with a positive width", () => {
+test("a dense bar chart, grouped or stacked, draws every bar with a positive width", () => {
   const series = ["A", "B", "C", "D"].map((name) => ({
     name,
     points: Array.from({ length: 60 }, (_, i) => ({ x: String(i), y: i + 1 })),
   }))
-  const html = render({ ...choice, blocks: [{ type: "chart", kind: "bar", series }] })
-  const widths = [...html.matchAll(/<rect[^>]*width="([^"]+)"/g)].map((m) => Number(m[1]))
-  expect(widths).toHaveLength(240)
-  expect(widths.every((w) => w > 0)).toBe(true)
+  for (const stacked of [false, true]) {
+    const html = render({ ...choice, blocks: [{ type: "chart", kind: "bar", stacked, series }] })
+    const widths = [...html.matchAll(/<rect[^>]*width="([^"]+)"/g)].map((m) => Number(m[1]))
+    expect(widths).toHaveLength(240)
+    expect(widths.every((w) => w > 0)).toBe(true)
+  }
+})
+
+const sales = [
+  {
+    name: "Web",
+    points: [
+      { x: "Mon", y: 6 },
+      { x: "Tue", y: 2 },
+      { x: "Wed", y: 4 },
+    ],
+  },
+  {
+    name: "iPhone",
+    points: [
+      { x: "Mon", y: 4 },
+      { x: "Tue", y: 3 },
+      { x: "Wed", y: 1 },
+    ],
+  },
+]
+const chartOf = (block) => render({ ...choice, blocks: [{ type: "chart", series: sales, ...block }] })
+const rects = (html) =>
+  [...html.matchAll(/<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g)].map((m) =>
+    m.slice(1).map(Number),
+  )
+const pointsOf = (html, tag) =>
+  [...html.matchAll(new RegExp(`<${tag} points="([^"]+)"`, "g"))].map((m) =>
+    m[1].split(" ").map((p) => p.split(",").map(Number)),
+  )
+
+test("stacked bars put each x's series in one column, one on top of the other, and the axis reaches the total", () => {
+  const html = chartOf({ kind: "bar", stacked: true })
+  const [web, iphone] = [rects(html).slice(0, 3), rects(html).slice(3)]
+  for (let i = 0; i < 3; i++) {
+    expect(iphone[i][0]).toBe(web[i][0])
+    expect(iphone[i][1] + iphone[i][3]).toBeCloseTo(web[i][1])
+  }
+  expect(html).toContain(">10<")
+  expect(chartOf({ kind: "bar" })).not.toContain(">10<")
+})
+
+test("a filled line draws overlapping translucent areas, and stacked they pile up", () => {
+  const overlap = chartOf({ kind: "line", fill: true })
+  expect(overlap.match(/fill-opacity="0.2"/g)).toHaveLength(2)
+  const [webArea, iphoneArea] = pointsOf(overlap, "polygon")
+  expect(iphoneArea.at(-1)[1]).toBe(webArea.at(-1)[1])
+  expect(pointsOf(overlap, "polyline")).toHaveLength(2)
+
+  const stacked = chartOf({ kind: "line", fill: true, stacked: true })
+  const [webTop, iphoneTop] = pointsOf(stacked, "polyline")
+  const [, iphoneStack] = pointsOf(stacked, "polygon")
+  expect(iphoneStack.slice(3).reverse()).toEqual(webTop)
+  expect(iphoneTop.every(([, y], i) => y < webTop[i][1])).toBe(true)
+})
+
+test("stacked is ignored for an unfilled line", () => {
+  expect(chartOf({ kind: "line", stacked: true })).toBe(chartOf({ kind: "line" }))
+  expect(chartOf({ kind: "line" })).not.toContain("<polygon")
 })
 
 test("an image that failed to load tries again when update_ui points it at another attachment", () => {

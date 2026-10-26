@@ -5,6 +5,8 @@
 // notifications; in a browser they are opt-in (Settings › General) and need the browser's permission.
 // A notification for the chat you are looking at is not shown; clicking one opens its chat. It carries
 // the Bot's avatar as its icon (botIcon.ts).
+import { useAtomSet } from "@effect/atom-react"
+import { commands } from "@openbot/client"
 import type { ConversationId } from "@openbot/contracts"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import { botIconUrl } from "./botIcon.ts"
@@ -24,6 +26,8 @@ export interface DesktopBridge {
   readonly onUpdate?: (listener: (state: unknown) => void) => () => void
   readonly checkForUpdates?: () => Promise<unknown>
   readonly installUpdate?: () => void
+  /** Whether the owner is using this computer ("active" | "idle" | "locked" | "unknown"); absent in older copies. */
+  readonly idleState?: () => Promise<string>
   /** The quick send panel's controls (apps/desktop/src/quickSend.ts); absent in older copies. */
   readonly quickSend?: {
     readonly prefill: () => Promise<unknown>
@@ -76,6 +80,32 @@ export const useNotificationsEnabled = (): boolean =>
     listeners.add(listener)
     return () => void listeners.delete(listener)
   }, notificationsEnabled)
+
+/** How often the desktop app tells the brain the owner is using this computer (presence.ts on the brain). */
+const PRESENCE_EVERY_MS = 30_000
+
+/**
+ * Mounted once (App): in the desktop app with notifications on, tells the brain every 30 s while the
+ * owner is using this computer, so Hark does not push the same notifications to their phone.
+ */
+export function useDesktopPresence(): void {
+  const report = useAtomSet(commands["presence.active"])
+  useEffect(() => {
+    const idleState = desktopApp()?.idleState
+    if (idleState === undefined) return
+    const tick = () => {
+      if (!notificationsEnabled()) return
+      void idleState()
+        .then((state) => {
+          if (state === "active") report(undefined as never)
+        })
+        .catch(() => {})
+    }
+    tick()
+    const timer = setInterval(tick, PRESENCE_EVERY_MS)
+    return () => clearInterval(timer)
+  }, [report])
+}
 
 /** Mounted once (App): shows new notifications and keeps the desktop app's badge current. */
 export function useSystemNotifications(): void {

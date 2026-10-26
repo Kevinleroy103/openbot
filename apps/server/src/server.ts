@@ -108,6 +108,7 @@ import { SlackConnectorLive } from "./slack/connector.ts"
 import { type SpeechToText, SpeechToTextLive } from "./stt/service.ts"
 import { VoiceCallsLive } from "./voice/service.ts"
 import { UpdatesLive, type UpdatesOptions } from "./updates.ts"
+import { OwnerPresence } from "./presence.ts"
 import { HarkLive } from "./hark.ts"
 
 // ============================================================================ startup errors
@@ -407,6 +408,8 @@ export const ServerLive = (config: ServerConfigShape, options?: ServerOptions) =
     CallPresence.layer,
     // browsers waiting to be allowed to sign in ("Sign in with another device")
     SignInRequests.layer,
+    // whether the owner is at a computer whose desktop app shows notifications (Hark waits meanwhile)
+    OwnerPresence.layer,
   )
   const level2 = Layer.mergeAll(
     SettingsServiceLive,

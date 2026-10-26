@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld("openbotDesktop", {
     return () => void ipcRenderer.removeListener("openbot:update", handler)
   },
   checkForUpdates: () => ipcRenderer.invoke("openbot:check-updates"),
+  /** "active" | "idle" | "locked" | "unknown": whether the owner is using this computer. */
+  idleState: () => ipcRenderer.invoke("openbot:idle-state"),
   installUpdate: () => ipcRenderer.send("openbot:install-update"),
   // quick send (quickSend.ts): what the panel was opened with, and its controls
   quickSend: {

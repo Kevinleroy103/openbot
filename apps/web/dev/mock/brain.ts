@@ -2127,6 +2127,9 @@ export class MockBrain {
           this.hark = { ...this.hark, lastSentAt: this.now() }
           return this.hark
         })(),
+      "hark.setQuietAtComputer": ({ quiet }: { quiet: boolean }) =>
+        sync(() => (this.hark = { ...this.hark, quietAtComputer: quiet }))(),
+      "presence.active": () => sync(() => undefined)(),
       "hark.setSends": ({ sends }) =>
         sync(() => {
           this.hark = { ...this.hark, sends }

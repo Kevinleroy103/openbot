@@ -709,6 +709,12 @@ export class OpenBotRpcs extends RpcGroup.make(
   Rpc.make("hark.disconnect", { success: HarkStatus, error: errors() }),
   Rpc.make("hark.test", { success: HarkStatus, error: errors(InvalidInput, Unavailable) }),
   Rpc.make("hark.setSends", { payload: { sends: HarkSends }, success: HarkStatus, error: errors(InvalidInput) }),
+  Rpc.make("hark.setQuietAtComputer", { payload: { quiet: Schema.Boolean }, success: HarkStatus, error: errors() }),
+  /**
+   * The owner is using this computer and its OpenBot desktop app shows notifications (sent every 30 s
+   * while they are active there): Hark holds its pushes back meanwhile.
+   */
+  Rpc.make("presence.active", { error: errors() }),
 
   // usage
   Rpc.make("usage.byBot", {

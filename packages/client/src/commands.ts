@@ -100,6 +100,8 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "hark.disconnect": [Keys.hark],
   "hark.test": [Keys.hark],
   "hark.setSends": [Keys.hark],
+  "hark.setQuietAtComputer": [Keys.hark],
+  "presence.active": [],
 }
 
 /** Run one RPC as an Effect (for composing inside other `runtime.fn` atoms). */

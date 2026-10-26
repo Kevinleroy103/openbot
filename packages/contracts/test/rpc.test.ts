@@ -130,6 +130,8 @@ const V1_RPCS = [
   "hark.disconnect",
   "hark.test",
   "hark.setSends",
+  "hark.setQuietAtComputer",
+  "presence.active",
   "usage.byBot",
 ] as const satisfies ReadonlyArray<OpenBotRpcTag>
 

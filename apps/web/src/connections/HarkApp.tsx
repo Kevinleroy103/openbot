@@ -4,7 +4,7 @@
 // it). Connected: what to send, a test, Disconnect.
 import { harkStatusAtom } from "@openbot/client"
 import type { HarkSends, HarkStatus } from "@openbot/contracts"
-import { PillButton, Select, TextField } from "@openbot/ui"
+import { PillButton, Select, Switch, TextField } from "@openbot/ui"
 import { ExternalLink } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { ConfirmDialog, ErrorLine, formatWhen, LoadingLine, useCommand, useQuery } from "../details/kit.tsx"
@@ -107,6 +107,7 @@ const SENDS: ReadonlyArray<{ readonly value: HarkSends; readonly label: string }
 
 function Connected({ status }: { readonly status: HarkStatus }): ReactNode {
   const setSends = useCommand("hark.setSends")
+  const setQuiet = useCommand("hark.setQuietAtComputer")
   const test = useCommand("hark.test")
   const disconnect = useCommand("hark.disconnect")
   const [confirming, setConfirming] = useState(false)
@@ -132,6 +133,22 @@ function Connected({ status }: { readonly status: HarkStatus }): ReactNode {
         >
           {setSends.error && <p className="text-sm text-danger-fg">{setSends.error}</p>}
         </SettingsRow>
+        <RowDivider />
+        <SettingsRow
+          title="Not while I'm at my computer"
+          description={
+            status.quietAtComputer !== false && status.atComputer === true
+              ? "Paused now: you're using a computer with the OpenBot desktop app, so notifications show there."
+              : "While you're using a computer with the OpenBot desktop app, notifications show there and not on your iPhone too. They come back a couple of minutes after you step away."
+          }
+          control={
+            <Switch
+              checked={status.quietAtComputer !== false}
+              onCheckedChange={(quiet) => void setQuiet.run({ quiet })}
+              label="Not while I'm at my computer"
+            />
+          }
+        />
         <RowDivider />
         <SettingsRow
           title="Test"

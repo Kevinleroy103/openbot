@@ -45,6 +45,7 @@ import { HarnessProfiles } from "./profiles.ts"
 import { SpeechToText } from "./stt/service.ts"
 import { VoiceCalls } from "./voice/service.ts"
 import { Updates } from "./updates.ts"
+import { OwnerPresence } from "./presence.ts"
 
 const INTERNAL_MESSAGE = "Something went wrong on the brain; the details are in its log."
 
@@ -162,6 +163,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(
     const voice = yield* VoiceCalls
     const updates = yield* Updates
     const hark = yield* Hark
+    const presence = yield* OwnerPresence
     const ownerFallback = defaultOwnerName()
 
     return OpenBotRpcs.of({
@@ -360,6 +362,8 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(
       "hark.disconnect": () => edge("hark.disconnect", hark.disconnect),
       "hark.test": () => edge("hark.test", hark.test),
       "hark.setSends": ({ sends }) => edge("hark.setSends", hark.setSends(sends)),
+      "hark.setQuietAtComputer": ({ quiet }) => edge("hark.setQuietAtComputer", hark.setQuietAtComputer(quiet)),
+      "presence.active": () => edge("presence.active", presence.active),
 
       // ---------------------------------------------------------------- usage
       "usage.byBot": ({ sinceMs }) => edge("usage.byBot", usage.byBot({ sinceMs })),

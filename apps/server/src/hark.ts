@@ -8,6 +8,8 @@
  * the Bot as Hark's project (one group per Bot) and a link that opens the chat in OpenBot (the first
  * `--public-origin`; none when OpenBot is only on loopback). `sends: "needs-you"` keeps only a Bot
  * waiting for the owner and failures. Each push is sent once (`Idempotency-Key`: the notification id).
+ * `quietAtComputer` (on unless turned off): nothing is pushed while the owner is at a computer whose
+ * OpenBot desktop app shows the notifications (presence.ts), so they do not get each one twice.
  */
 import {
   HARK_DISCONNECTED,
@@ -23,6 +25,7 @@ import { Clock, Context, Effect, Layer, Option, Stream } from "effect"
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { ServerConfig } from "./config.ts"
+import { OwnerPresence } from "./presence.ts"
 
 export class Hark extends Context.Service<
   Hark,
@@ -33,6 +36,7 @@ export class Hark extends Context.Service<
     readonly disconnect: Effect.Effect<HarkStatus>
     readonly test: Effect.Effect<HarkStatus, InvalidInput | Unavailable>
     readonly setSends: (sends: HarkSends) => Effect.Effect<HarkStatus, InvalidInput>
+    readonly setQuietAtComputer: (quiet: boolean) => Effect.Effect<HarkStatus>
   }
 >()("openbot/server/Hark") {}
 
@@ -48,13 +52,20 @@ interface Saved {
   readonly version: 1
   readonly token: string
   readonly sends: HarkSends
+  /** Absent: on. */
+  readonly quietAtComputer?: boolean
 }
 
 const readSaved = (file: string): Saved | undefined => {
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8")) as Partial<Saved>
     if (parsed.version !== 1 || typeof parsed.token !== "string") return undefined
-    return { version: 1, token: parsed.token, sends: parsed.sends === "needs-you" ? "needs-you" : "all" }
+    return {
+      version: 1,
+      token: parsed.token,
+      sends: parsed.sends === "needs-you" ? "needs-you" : "all",
+      ...(parsed.quietAtComputer === false ? { quietAtComputer: false } : {}),
+    }
   } catch {
     return undefined
   }
@@ -85,6 +96,8 @@ export const makeHark = (options: HarkOptions) =>
     const config = yield* ServerConfig
     const hub = yield* LiveHub
     const bots = yield* BotRepo
+    const presence = yield* Effect.serviceOption(OwnerPresence)
+    const atComputer = () => Option.isSome(presence) && presence.value.atComputer()
     const base = (options.baseUrl ?? HARK_URL).replace(/\/+$/, "")
     const fetchImpl = options.fetch ?? fetch
     /** Where a notification's link opens: the first address OpenBot is reached at from other devices. */
@@ -100,6 +113,8 @@ export const makeHark = (options: HarkOptions) =>
         : {
             connected: true,
             sends: saved.sends,
+            quietAtComputer: saved.quietAtComputer !== false,
+            ...(saved.quietAtComputer !== false && atComputer() ? { atComputer: true } : {}),
             ...(problem === undefined ? {} : { problem }),
             ...(lastSentAt === undefined ? {} : { lastSentAt }),
           }
@@ -147,6 +162,8 @@ export const makeHark = (options: HarkOptions) =>
       Effect.gen(function* () {
         const current = saved
         if (current === undefined || (current.sends === "needs-you" && !needsYou(n))) return
+        // the owner is at a computer whose desktop app shows it already
+        if (current.quietAtComputer !== false && atComputer()) return
         const bot =
           n.botId === undefined
             ? Option.none()
@@ -224,6 +241,17 @@ export const makeHark = (options: HarkOptions) =>
         lastSentAt = yield* Clock.currentTimeMillis
         return status()
       }),
+      setQuietAtComputer: (quiet) =>
+        Effect.sync(() => {
+          const current = saved
+          if (current === undefined) return status()
+          const next: Saved = { ...current, quietAtComputer: quiet }
+          try {
+            writeSaved(options.file, next)
+            saved = next
+          } catch {}
+          return status()
+        }),
       setSends: (sends) =>
         Effect.gen(function* () {
           const current = saved

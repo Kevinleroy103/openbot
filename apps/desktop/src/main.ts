@@ -296,6 +296,9 @@ ipcMain.on("openbot:info", (event) => {
   event.returnValue = { version: baked.version, build: baked.build ?? "", origin }
 })
 ipcMain.handle("openbot:update-state", () => updater.state())
+// whether the owner is using this computer (input within 2 minutes, screen not locked): while they
+// are, the brain holds Hark's pushes back (apps/server/src/presence.ts)
+ipcMain.handle("openbot:idle-state", () => powerMonitor.getSystemIdleState(120))
 ipcMain.handle("openbot:check-updates", () => updater.check())
 ipcMain.on("openbot:install-update", () => void updater.install())
 ipcMain.on("openbot:badge", (_event, count: unknown) => {

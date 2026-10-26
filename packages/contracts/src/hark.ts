@@ -13,6 +13,13 @@ export const HarkStatus = Schema.Struct({
   /** Why the last push failed (cleared by the next one that works). */
   problem: Schema.optionalKey(Schema.String),
   lastSentAt: Schema.optionalKey(Millis),
+  /**
+   * No pushes while the owner is at a computer whose OpenBot desktop app shows the notifications
+   * (it reports activity, `presence.active`). Absent from older brains: on.
+   */
+  quietAtComputer: Schema.optionalKey(Schema.Boolean),
+  /** The owner is at such a computer right now: pushes are held back. */
+  atComputer: Schema.optionalKey(Schema.Boolean),
 })
 export type HarkStatus = typeof HarkStatus.Type
 

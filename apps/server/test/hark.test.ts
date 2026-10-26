@@ -156,6 +156,36 @@ describe("Hark", () => {
           expect(hark.pushes[2]!.body).toMatchObject({ title: "Scout", body: expect.stringContaining("Which format?") })
           expect(hark.pushes.some((p) => p.body.body === "Done again.")).toBe(false)
 
+          // the owner is at a computer whose desktop app shows notifications: nothing is pushed meanwhile
+          expect(yield* client["hark.status"]()).toMatchObject({ quietAtComputer: true })
+          yield* client["presence.active"]()
+          expect(yield* client["hark.status"]()).toMatchObject({ atComputer: true })
+          yield* client["messages.send"]({
+            conversationId: bot.directConversationId,
+            text: "ask: Which day? | Monday | Friday",
+            clientNonce: "hark-4",
+          })
+          yield* Effect.sleep("1500 millis")
+          expect(hark.pushes.some((p) => String(p.body.body).includes("Which day?"))).toBe(false)
+          // turned off: pushed even then (another Bot: Scout still waits for its answer)
+          expect(yield* client["hark.setQuietAtComputer"]({ quiet: false })).toMatchObject({ quietAtComputer: false })
+          const other = yield* client["bots.create"]({
+            name: "Ranger",
+            harness: { kind: "fake" },
+            clientNonce: "hark-ranger",
+            introduce: false,
+          })
+          yield* client["messages.send"]({
+            conversationId: other.directConversationId,
+            text: "ask: Which room? | A | B",
+            clientNonce: "hark-5",
+          })
+          yield* eventually(
+            Effect.sync(() => hark.pushes.some((p) => String(p.body.body).includes("Which room?"))),
+            (seen) => seen,
+            { label: "the push while at the computer, quiet off", timeout: 20_000 },
+          )
+
           // Hark forgets the webhook: the next push fails and says why
           hark.known.delete("whk_good")
           const tested = yield* Effect.flip(client["hark.test"]())

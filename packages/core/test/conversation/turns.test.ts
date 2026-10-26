@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { KnownConversationStreamItem, KnownRosterStreamItem } from "@openbot/contracts"
+import type { HarnessEvent, KnownConversationStreamItem, KnownRosterStreamItem, TurnId } from "@openbot/contracts"
 import { Effect, Option } from "effect"
 import { TestClock } from "effect/testing"
 import { BotRepo, ConversationService, LiveHub, Orchestrator, sessionKeyOf } from "../../src/ports/index.ts"
@@ -150,6 +150,72 @@ describe("DM turn end to end", () => {
     expect(out.missing).toEqual({ outcome: "not-found" })
     expect(out.empty._tag).toBe("InvalidInput")
     expect(out.turns).toHaveLength(1)
+  })
+})
+
+describe("routine runs", () => {
+  test("only the final message is posted; narration on the way goes with the run's steps; NO_REPLY posts nothing", async () => {
+    const out = await runTest(
+      Effect.gen(function* () {
+        const driver = yield* TestDriver
+        const orchestrator = yield* Orchestrator
+        const bot = yield* createBot("Ada")
+        const dm = bot.directConversationId
+        const tool = (turnId: TurnId, key: string): HarnessEvent => ({
+          _tag: "ItemUpserted",
+          turnId,
+          key,
+          item: {
+            _tag: "ToolCall",
+            toolName: "mail_search",
+            title: "Mail",
+            kind: "other",
+            status: "completed",
+            inputSummary: "inbox",
+          },
+        })
+        yield* driver.setBehavior(bot.id, (turn) =>
+          turn.input.text.includes("Quiet check")
+            ? turn
+                .say(`${turn.turnId}/a`, "Checking the inbox.")
+                .pipe(
+                  Effect.andThen(turn.emit(tool(turn.turnId, `${turn.turnId}/t`))),
+                  Effect.andThen(turn.say(`${turn.turnId}/b`, "NO_REPLY")),
+                  Effect.andThen(turn.complete()),
+                )
+            : turn
+                .say(`${turn.turnId}/a`, "Next, the personal mail and X.")
+                .pipe(
+                  Effect.andThen(turn.emit(tool(turn.turnId, `${turn.turnId}/t1`))),
+                  Effect.andThen(turn.say(`${turn.turnId}/b`, "Now the calendar.")),
+                  Effect.andThen(turn.emit(tool(turn.turnId, `${turn.turnId}/t2`))),
+                  Effect.andThen(turn.say(`${turn.turnId}/c`, "Karl sent a new invite for 14:00.")),
+                  Effect.andThen(turn.complete()),
+                ),
+        )
+        const run = (text: string) =>
+          Effect.flatMap(
+            orchestrator.deliver({ conversationId: dm, botId: bot.id, kind: "routine", text, urgency: "urgent" }),
+            (receipt) => orchestrator.awaitDelivery(receipt.deliveryId),
+          )
+        const first = yield* run('Routine "Morning sweep" (scheduled run):\nSweep my inboxes.')
+        const second = yield* run('Routine "Quiet check" (scheduled run):\nQuiet check of the inbox.')
+        const entries = yield* transcript(dm)
+        return { first, second, entries }
+      }),
+      appLayer(),
+    )
+    const inTurn = (turnId: string | undefined) => out.entries.filter((e) => e.turnId === turnId)
+    const first = inTurn(out.first.turn?.id)
+    expect(messagesOf(first).map((m) => m.text)).toEqual(["Karl sent a new invite for 14:00."])
+    expect(first.flatMap((e) => (e.kind === "reasoning" ? [e.text] : []))).toEqual([
+      "Next, the personal mail and X.",
+      "Now the calendar.",
+    ])
+    expect(out.first.lastBotMessage).toBe("Karl sent a new invite for 14:00.")
+    const second = inTurn(out.second.turn?.id)
+    expect(messagesOf(second)).toEqual([])
+    expect(second.flatMap((e) => (e.kind === "reasoning" ? [e.text] : []))).toEqual(["Checking the inbox."])
   })
 })
 

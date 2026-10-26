@@ -57,6 +57,10 @@ export const ROUTINE_LIMITS = {
   summaryChars: 500,
 } as const
 
+/** Ends every routine run's message: only the run's final message reaches the owner (TurnIngest's quiet turns). */
+export const ROUTINE_REPLY_NOTE =
+  "(Only your final message from this run is posted for the owner, as it is: write it for them. If this run turned up nothing worth telling them, reply exactly NO_REPLY.)"
+
 /** Slack messages for one routine within this window make one run. */
 export const SLACK_BATCH_MS = 5_000
 /** At most this many Slack messages wait for one routine (the oldest are dropped). */
@@ -371,7 +375,7 @@ export const makeRoutineScheduler = Effect.gen(function* () {
                 : run.firedBy === "event"
                   ? "it was triggered by what follows the instruction"
                   : "scheduled run"
-          }:\n${routine.prompt}${eventText === undefined ? "" : `\n\n${eventText}`}`,
+          }:\n${routine.prompt}${eventText === undefined ? "" : `\n\n${eventText}`}\n\n${ROUTINE_REPLY_NOTE}`,
           // Wakes an idle bot; queues behind a running turn instead of steering into it.
           urgency: "urgent",
           mode: "queue",

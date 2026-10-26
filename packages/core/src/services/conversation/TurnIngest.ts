@@ -13,6 +13,10 @@
  * - A harness-initiated turn (`TurnStarted` with `initiator: "harness"`, D2.1) is routed through the
  *   runner (`onHarnessTurn`): its adapter-generated id maps to the running turn (joined: its output
  *   lands there and its end ends nothing) or to a turn of its own that the runner registered.
+ * - A quiet turn (`beginTurn(…, { quiet: true })`: a routine run) posts only its final message: each
+ *   bot message is held back; when more work follows it (a tool call, another message) it was
+ *   narration and lands as a reasoning entry (shown with the turn's steps), and the one still held
+ *   when the turn ends is posted as the reply.
  * - `finalizeTurnEntries` closes every streaming entry of a turn (`aborted` on interrupt/failure,
  *   unfinished tool calls `interrupted`).
  *
@@ -180,7 +184,11 @@ export interface SessionIngestDeps {
 
 export interface SessionIngest {
   /** Registers a turn (and its conversation) before `startTurn`, so early events find it. */
-  readonly beginTurn: (turnId: TurnId, conversationId: ConversationId) => Effect.Effect<Deferred.Deferred<TurnTerminal>>
+  readonly beginTurn: (
+    turnId: TurnId,
+    conversationId: ConversationId,
+    options?: { readonly quiet?: boolean | undefined },
+  ) => Effect.Effect<Deferred.Deferred<TurnTerminal>>
   /** True once the turn's terminal event (completed / failed / interrupted) was handled. */
   readonly hasEnded: (turnId: TurnId) => boolean
   readonly handle: (event: HarnessEvent) => Effect.Effect<void>
@@ -267,6 +275,9 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
     let pendingContext: { readonly usedTokens: number; readonly windowTokens: number } | undefined
     /** Turns whose terminal event was handled (bounded). */
     const ended = new Set<TurnId>()
+    /** Quiet turns, and the bot message each one holds back (see the module doc). */
+    const quiet = new Set<TurnId>()
+    const held = new Map<TurnId, { readonly key: string; readonly text: string; readonly item: HarnessItem }>()
     /** Harness-initiated turn (adapter id) → where its events go. */
     const routes = new Map<TurnId, HarnessTurnRoute>()
     const routeOf = (turnId: TurnId): TurnId => routes.get(turnId)?.turnId ?? turnId
@@ -295,10 +306,46 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
         ended.add(turnId)
         keep(ended)
         const deferred = terminals.get(turnId)
-        return deferred === undefined ? Effect.void : Effect.asVoid(Deferred.succeed(deferred, terminal))
+        // a quiet turn's last held message is its reply
+        const last = held.get(turnId)
+        held.delete(turnId)
+        quiet.delete(turnId)
+        const reply =
+          last === undefined || last.item._tag !== "Message"
+            ? Effect.void
+            : upsertItem(turnId, last.key, { ...last.item, streaming: false })
+        return Effect.andThen(
+          reply,
+          deferred === undefined ? Effect.void : Effect.asVoid(Deferred.succeed(deferred, terminal)),
+        )
       })
 
-    const upsertItem = (turnId: TurnId, key: string, item: HarnessItem) =>
+    /** In a quiet turn: a message is held; anything after it turns the held one into narration. */
+    const quietItem = (turnId: TurnId, key: string, item: HarnessItem): Effect.Effect<boolean> =>
+      Effect.gen(function* () {
+        if (!quiet.has(turnId)) return false
+        const before = held.get(turnId)
+        if (item._tag === "Message") {
+          if (before !== undefined && before.key !== key) yield* narrate(turnId, before)
+          held.set(turnId, { key, text: item.text, item })
+          return true
+        }
+        if (before !== undefined) {
+          held.delete(turnId)
+          yield* narrate(turnId, before)
+        }
+        return false
+      })
+
+    const narrate = (turnId: TurnId, message: { readonly key: string; readonly text: string }) =>
+      message.text.trim() === "" || isNoReply(message.text)
+        ? Effect.void
+        : write(turnId, message.key, { _tag: "Reasoning", text: message.text, streaming: false, source: "thinking" })
+
+    const upsertItem = (turnId: TurnId, key: string, item: HarnessItem): Effect.Effect<void> =>
+      Effect.flatMap(quietItem(turnId, key, item), (wasHeld) => (wasHeld ? Effect.void : write(turnId, key, item)))
+
+    const write = (turnId: TurnId, key: string, item: HarnessItem) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const conversationId = conversationOf(turnId)
@@ -440,10 +487,11 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
     }
 
     const self: SessionIngest = {
-      beginTurn: (turnId, conversationId) =>
+      beginTurn: (turnId, conversationId, options) =>
         Effect.gen(function* () {
           const deferred = yield* Deferred.make<TurnTerminal>()
           terminals.set(turnId, deferred)
+          if (options?.quiet === true) quiet.add(turnId)
           turnConversations.set(turnId, conversationId)
           lastConversationId = conversationId
           keep(turnConversations)
@@ -465,6 +513,8 @@ export const makeSessionIngest = (deps: SessionIngestDeps): Effect.Effect<Sessio
       endTurn: (turnId) => {
         terminals.delete(turnId)
         usage.delete(turnId)
+        quiet.delete(turnId)
+        held.delete(turnId)
       },
     }
     return self

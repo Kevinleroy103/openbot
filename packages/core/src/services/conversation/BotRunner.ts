@@ -914,7 +914,10 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           text: [note, rendered.text, files.line].filter((part) => part !== undefined && part !== "").join("\n"),
           attachments: files.attachments,
         }
-        const terminal = yield* open.ingest.beginTurn(active.turnId, conversationId)
+        // a routine run is quiet: only its final message is posted, its narration goes with its steps
+        const terminal = yield* open.ingest.beginTurn(active.turnId, conversationId, {
+          quiet: active.deliveries.every((d) => d.kind === "routine"),
+        })
         const started = yield* Effect.result(open.session.startTurn(input))
         if (started._tag === "Failure") {
           if (started.failure.code === "closed") yield* dropSession("closed")

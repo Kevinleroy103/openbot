@@ -1,7 +1,7 @@
 // The browser profile lock (launch.ts `clearStaleLock`): an orphaned browser on this node's profile
 // (its brain / daemon was SIGKILLed) is killed so the next launch works; other processes are left alone.
 import { afterEach, describe, expect, test } from "bun:test"
-import { existsSync, mkdtempSync, rmSync, symlinkSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs"
 import { hostname, tmpdir } from "node:os"
 import * as path from "node:path"
 import { clearStaleLock } from "../src/browser/launch.ts"
@@ -44,10 +44,29 @@ const fakeBrowser = (extra: string) => {
   return p
 }
 
+/**
+ * Waits until the stand-in runs with `extra` in its command line: `Bun.spawn` returns right after the
+ * fork, and on a busy machine the child may still be a copy of this test runner when
+ * `clearStaleLock` reads it (a real orphaned browser has long been running).
+ */
+const started = async (p: Bun.Subprocess, extra: string) => {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    try {
+      if (readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(extra)) return
+    } catch {
+      if (process.platform !== "linux") return
+    }
+    await Bun.sleep(10)
+  }
+  throw new Error(`the stand-in browser never started with ${extra}`)
+}
+
 describe("clearStaleLock", () => {
   test("kills an orphaned browser that holds this profile, then removes the lock", async () => {
     const dir = profile()
     const orphan = fakeBrowser(`--user-data-dir=${dir}`)
+    await started(orphan, `--user-data-dir=${dir}`)
     symlinkSync(`${hostname()}-${orphan.pid}`, path.join(dir, "SingletonLock"))
     clearStaleLock(dir)
     await orphan.exited
@@ -55,9 +74,10 @@ describe("clearStaleLock", () => {
     expect(existsSync(path.join(dir, "SingletonLock"))).toBe(false)
   })
 
-  test("leaves an unrelated live process (and its lock) alone", () => {
+  test("leaves an unrelated live process (and its lock) alone", async () => {
     const dir = profile()
     const other = fakeBrowser("--user-data-dir=/somewhere/else")
+    await started(other, "--user-data-dir=/somewhere/else")
     symlinkSync(`${hostname()}-${other.pid}`, path.join(dir, "SingletonLock"))
     clearStaleLock(dir)
     expect(alive(other.pid)).toBe(true)

@@ -73,7 +73,12 @@ for (const action of [
         } else if (action === "reaction chip") {
           await page.getByTestId("reaction").first().click()
         } else if (action === "reaction sheet") {
-          await longPress(page, transcript.locator("[data-side]").filter({ hasText: "Booked: marina house" }).first())
+          await longPress(
+            page,
+            transcript.locator("[data-side]").filter({ hasText: "Booked: marina house" }).first(),
+            700,
+            page.getByTestId("message-sheet"),
+          )
           await page.getByTestId("message-sheet").getByRole("button", { name: "React 🎉", exact: true }).click()
         } else if (action === "stop") {
           const box = page.getByRole("textbox", { name: "Message Chief of Staff" })

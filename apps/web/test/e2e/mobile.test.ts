@@ -5,8 +5,9 @@
 // Settings list → page drill-down; New chat; in-app back and browser Back return Home; a group chat.
 // Real brain, fake harness only. Screenshots: e2e/screenshots/e2e-mobile-*.png.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import type { Browser, BrowserContext, Locator, Page } from "playwright-core"
+import type { Browser, BrowserContext, Page } from "playwright-core"
 import type { Bot } from "@openbot/contracts"
+import { longPress } from "../shoot-mobile.ts"
 import {
   type Brain,
   connectRpc,
@@ -27,18 +28,6 @@ const IPHONE = {
   userAgent:
     "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
 } as const
-
-/** Touch long-press (CDP touch events, so the app sees real touch pointers). */
-const longPress = async (page: Page, target: Locator, ms = 700) => {
-  const box = await target.boundingBox()
-  if (!box) throw new Error("long-press target is not visible")
-  const cdp = await page.context().newCDPSession(page)
-  const point = { x: box.x + box.width / 2, y: box.y + Math.min(box.height / 2, 24) }
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] })
-  await page.waitForTimeout(ms)
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
-  await cdp.detach()
-}
 
 describe.skipIf(!hasChromium)("e2e: phone layout", () => {
   let brain: Brain
@@ -171,7 +160,7 @@ describe.skipIf(!hasChromium)("e2e: phone layout", () => {
     // no hover toolbar on touch
     expect(await page.locator(".ob-msg-actions").first().isVisible()).toBe(false)
     const bubble = page.locator(".ob-msg[data-entry] [data-side]").filter({ hasText: "the phone" }).last()
-    await longPress(page, bubble)
+    await longPress(page, bubble, 700, page.getByTestId("message-sheet"))
     const sheet = page.getByTestId("message-sheet")
     await sheet.waitFor()
     // lifting the finger did not trigger an item under it
@@ -196,7 +185,7 @@ describe.skipIf(!hasChromium)("e2e: phone layout", () => {
 
   test("long-press a Home row → its menu as an action sheet", async () => {
     const row = home().locator(`[data-row="${bots["Bea"]!.id}"], [data-bot="${bots["Bea"]!.id}"]`).first()
-    await longPress(page, row)
+    await longPress(page, row, 700, page.getByTestId("row-sheet"))
     const sheet = page.getByTestId("row-sheet")
     await sheet.waitFor()
     await page.waitForTimeout(300)

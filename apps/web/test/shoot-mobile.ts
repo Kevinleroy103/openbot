@@ -94,17 +94,30 @@ export const openDevice = async (
   return { page, errors, close: () => context.close() }
 }
 
-/** Touch long-press at the center of `target` (CDP touch events → pointer events). */
-export const longPress = async (page: Page, target: Locator, ms = 700): Promise<void> => {
-  const box = await target.boundingBox()
-  if (!box) throw new Error("long-press target is not visible")
-  const x = box.x + box.width / 2
-  const y = box.y + Math.min(box.height / 2, 24)
-  const cdp = await page.context().newCDPSession(page)
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] })
-  await page.waitForTimeout(ms)
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
-  await cdp.detach()
+/**
+ * Touch long-press at the center of `target` (CDP touch events → pointer events). With `opens`, the
+ * press is tried again (up to 3 times) until that appears: on a busy machine the list can still be
+ * settling, and a press measured a moment too early lands beside its target.
+ */
+export const longPress = async (page: Page, target: Locator, ms = 700, opens?: Locator): Promise<void> => {
+  for (let attempt = 1; ; attempt++) {
+    await target.scrollIntoViewIfNeeded()
+    const box = await target.boundingBox()
+    if (!box) throw new Error("long-press target is not visible")
+    const x = box.x + box.width / 2
+    const y = box.y + Math.min(box.height / 2, 24)
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] })
+    await page.waitForTimeout(ms)
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
+    await cdp.detach()
+    if (opens === undefined) return
+    const opened = await opens
+      .waitFor({ timeout: 3_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (opened || attempt === 3) return
+  }
 }
 
 const settle = (page: Page, ms = 450) => page.waitForTimeout(ms)
@@ -264,7 +277,7 @@ export const SCENES: ReadonlyArray<Scene> = [
     run: async (page, shot) => {
       const bubble = page.locator(".ob-msg[data-entry] [data-side]").last()
       await bubble.waitFor()
-      await longPress(page, bubble)
+      await longPress(page, bubble, 700, page.getByTestId("message-sheet"))
       await page.getByTestId("message-sheet").waitFor()
       await settle(page)
       await shot("message")
@@ -276,7 +289,7 @@ export const SCENES: ReadonlyArray<Scene> = [
     run: async (page, shot) => {
       const row = home(page).locator('[data-row="bot_scout"]')
       await row.waitFor()
-      await longPress(page, row)
+      await longPress(page, row, 700, page.getByTestId("row-sheet"))
       await page.getByTestId("row-sheet").waitFor()
       await settle(page)
       await shot()

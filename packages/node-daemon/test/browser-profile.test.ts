@@ -28,9 +28,13 @@ const profile = () => {
   return dir
 }
 
-/** A long-running stand-in for Chromium whose argv carries `extra`, spawned detached like the real one. */
+/**
+ * A long-running stand-in for Chromium whose argv carries `extra`, spawned detached like the real one.
+ * Two commands, so the shell cannot exec into `sleep` and lose `extra` from its command line (a race
+ * with `clearStaleLock` reading it).
+ */
 const fakeBrowser = (extra: string) => {
-  const p = Bun.spawn(["sh", "-c", "sleep 60", "sh", extra], {
+  const p = Bun.spawn(["sh", "-c", "sleep 60; exit 0", "sh", extra], {
     detached: true,
     stdin: "ignore",
     stdout: "ignore",

@@ -106,6 +106,7 @@ export const COMMAND_INVALIDATES: Partial<Record<CommandTag, ReadonlyArray<React
   "ntfy.disconnect": [Keys.ntfy],
   "ntfy.test": [Keys.ntfy],
   "ntfy.setSends": [Keys.ntfy],
+  "ntfy.setQuietAtComputer": [Keys.ntfy],
 }
 
 /** Run one RPC as an Effect (for composing inside other `runtime.fn` atoms). */

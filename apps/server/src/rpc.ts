@@ -372,6 +372,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(
       "ntfy.disconnect": () => edge("ntfy.disconnect", ntfy.disconnect),
       "ntfy.test": () => edge("ntfy.test", ntfy.test),
       "ntfy.setSends": ({ sends }) => edge("ntfy.setSends", ntfy.setSends(sends)),
+      "ntfy.setQuietAtComputer": ({ quiet }) => edge("ntfy.setQuietAtComputer", ntfy.setQuietAtComputer(quiet)),
 
       // ---------------------------------------------------------------- usage
       "usage.byBot": ({ sinceMs }) => edge("usage.byBot", usage.byBot({ sinceMs })),

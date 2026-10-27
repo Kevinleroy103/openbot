@@ -3,7 +3,7 @@
 // the chat; "when a Bot needs you" drops the rest; a webhook Hark forgets shows as a problem.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { Effect, Fiber } from "effect"
-import { existsSync } from "node:fs"
+import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { harkToken, makeHark } from "../src/hark.ts"
 import { eventually, login, rpcClient, startServer, type TestServer } from "./helpers.ts"
@@ -54,6 +54,16 @@ describe("Hark", () => {
     expect(harkToken(" whk_abc ")).toBe("whk_abc")
     expect(harkToken("https://hark.ryan.ceo/hooks/abc")).toBeUndefined()
   })
+
+  test("a webhook saved without sends reads back connected, sending all", () =>
+    server.run(
+      Effect.gen(function* () {
+        const file = join(server.dataDir, "hark-no-sends.json")
+        writeFileSync(file, JSON.stringify({ version: 1, token: "whk_good" }))
+        const service = yield* makeHark({ file })
+        expect(yield* service.status).toEqual({ connected: true, sends: "all", quietAtComputer: true })
+      }),
+    ))
 
   for (const pendingAt of ["request", "response body"] as const) {
     test(`interrupting a Hark call aborts its pending ${pendingAt}`, () =>

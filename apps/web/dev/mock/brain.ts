@@ -2167,6 +2167,8 @@ export class MockBrain {
           this.ntfy = { ...this.ntfy, sends }
           return this.ntfy
         })(),
+      "ntfy.setQuietAtComputer": ({ quiet }: { quiet: boolean }) =>
+        sync(() => (this.ntfy = { ...this.ntfy, quietAtComputer: quiet }))(),
       "slack.status": () => Effect.succeed(this.slack),
       "slack.connect": ({ userToken, appToken }) =>
         sync(() => {

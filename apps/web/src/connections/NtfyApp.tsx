@@ -1,14 +1,15 @@
 // Connect apps › ntfy (D3.6): OpenBot's notifications on any phone with the ntfy app (Android,
 // iPhone), on ntfy.sh or the owner's own ntfy server. Not connected: get ntfy, pick a topic (a long
 // random one: on ntfy.sh anyone who knows it can read it), subscribe to it in the app, connect
-// (OpenBot sends a test notification to check it). Connected: what to send, a test, Disconnect.
+// (OpenBot sends a test notification to check it). Connected: the topic, then the shared card (PushApp.tsx).
 import { ntfyStatusAtom } from "@openbot/client"
-import type { NtfySends, NtfyStatus } from "@openbot/contracts"
-import { PillButton, Select, TextField } from "@openbot/ui"
+import type { NtfyStatus } from "@openbot/contracts"
+import { PillButton, TextField } from "@openbot/ui"
 import { ExternalLink } from "lucide-react"
 import { type ReactNode, useState } from "react"
-import { ConfirmDialog, ErrorLine, formatWhen, LoadingLine, useCommand, useQuery } from "../details/kit.tsx"
+import { useCommand, useQuery } from "../details/kit.tsx"
 import { GroupLabel, RowDivider, SettingsCard, SettingsRow } from "../settings/layout.tsx"
+import { PushConnected, PushPage } from "./PushApp.tsx"
 
 export const NTFY_SITE = "https://ntfy.sh"
 const NTFY_ANDROID = "https://play.google.com/store/apps/details?id=io.heckel.ntfy"
@@ -22,19 +23,29 @@ export const randomTopic = (): string => {
 }
 
 export function NtfyApp(): ReactNode {
-  const status = useQuery(ntfyStatusAtom)
   return (
     <div className="flex flex-col">
-      {status.loading ? (
-        <LoadingLine />
-      ) : status.error && !status.value ? (
-        <ErrorLine onRetry={status.refresh}>Couldn't check ntfy: {status.error}</ErrorLine>
-      ) : status.value?.connected ? (
-        <Connected status={status.value} />
-      ) : (
-        <Connect />
-      )}
+      <PushPage name="ntfy" status={useQuery(ntfyStatusAtom)} Connect={Connect} Connected={Connected} />
     </div>
+  )
+}
+
+function Connected({ status }: { readonly status: NtfyStatus }): ReactNode {
+  return (
+    <PushConnected
+      app="ntfy"
+      name="ntfy"
+      device="phone"
+      status={status}
+      what="topic"
+      leftBehind="The subscription stays in the ntfy app until you remove it there."
+    >
+      <SettingsRow
+        title="Topic"
+        description={`${status.topic ?? ""} on ${status.server ?? NTFY_SITE}. Subscribe to it in the ntfy app.`}
+      />
+      <RowDivider />
+    </PushConnected>
   )
 }
 
@@ -141,91 +152,6 @@ function Connect(): ReactNode {
           {connect.error && <p className="text-sm text-danger-fg">{connect.error}</p>}
         </SettingsRow>
       </SettingsCard>
-    </>
-  )
-}
-
-const SENDS: ReadonlyArray<{ readonly value: NtfySends; readonly label: string }> = [
-  { value: "all", label: "Everything" },
-  { value: "needs-you", label: "When a Bot needs you" },
-]
-
-function Connected({ status }: { readonly status: NtfyStatus }): ReactNode {
-  const setSends = useCommand("ntfy.setSends")
-  const test = useCommand("ntfy.test")
-  const disconnect = useCommand("ntfy.disconnect")
-  const [confirming, setConfirming] = useState(false)
-  return (
-    <>
-      <GroupLabel>Connected</GroupLabel>
-      <SettingsCard testId="ntfy-connected">
-        <SettingsRow
-          title="Topic"
-          description={`${status.topic ?? ""} on ${status.server ?? NTFY_SITE}. Subscribe to it in the ntfy app.`}
-        />
-        <RowDivider />
-        <SettingsRow
-          title="Send to your phone"
-          description={
-            status.sends === "all"
-              ? "Every notification: a Bot finished, wrote, needs you, a routine ran, something failed."
-              : "Only when a Bot is waiting for you (a question, an approval, your screen) or something failed."
-          }
-          control={
-            <Select<NtfySends>
-              label="Send"
-              value={status.sends}
-              onValueChange={(sends) => void setSends.run({ sends })}
-              options={SENDS}
-            />
-          }
-        >
-          {setSends.error && <p className="text-sm text-danger-fg">{setSends.error}</p>}
-        </SettingsRow>
-        <RowDivider />
-        <SettingsRow
-          title="Test"
-          description={
-            status.problem ??
-            (status.lastSentAt === undefined
-              ? "Nothing sent yet."
-              : `Last notification sent ${formatWhen(status.lastSentAt)}.`)
-          }
-          control={
-            <PillButton
-              variant="secondary"
-              size="md"
-              loading={test.pending}
-              onClick={() => void test.run(undefined as never)}
-            >
-              Send a test
-            </PillButton>
-          }
-        >
-          {test.error && <p className="text-sm text-danger-fg">{test.error}</p>}
-        </SettingsRow>
-        <RowDivider />
-        <SettingsRow
-          title="Disconnect"
-          description="OpenBot stops sending to ntfy and forgets the topic."
-          control={
-            <PillButton variant="secondary" size="md" onClick={() => setConfirming(true)}>
-              Disconnect
-            </PillButton>
-          }
-        />
-      </SettingsCard>
-      <ConfirmDialog
-        open={confirming}
-        title="Disconnect ntfy?"
-        body="Your phone stops getting OpenBot's notifications. The subscription stays in the ntfy app until you remove it there."
-        confirmLabel="Disconnect"
-        danger
-        pending={disconnect.pending}
-        error={disconnect.error}
-        onConfirm={() => void disconnect.run(undefined as never).then((r) => r.ok && setConfirming(false))}
-        onCancel={() => setConfirming(false)}
-      />
     </>
   )
 }

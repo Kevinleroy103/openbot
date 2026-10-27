@@ -3,30 +3,35 @@
 // web dashboard (the app has none), paste its webhook (OpenBot sends a test notification to check
 // it). Connected: what to send, a test, Disconnect.
 import { harkStatusAtom } from "@openbot/client"
-import type { HarkSends, HarkStatus } from "@openbot/contracts"
-import { PillButton, Select, Switch, TextField } from "@openbot/ui"
+import type { HarkStatus } from "@openbot/contracts"
+import { PillButton, TextField } from "@openbot/ui"
 import { ExternalLink } from "lucide-react"
 import { type ReactNode, useState } from "react"
-import { ConfirmDialog, ErrorLine, formatWhen, LoadingLine, useCommand, useQuery } from "../details/kit.tsx"
+import { useCommand, useQuery } from "../details/kit.tsx"
 import { GroupLabel, RowDivider, SettingsCard, SettingsRow } from "../settings/layout.tsx"
+import { PushConnected, PushPage } from "./PushApp.tsx"
 
 export const HARK_SITE = "https://hark.ryan.ceo"
 const HARK_APP_STORE = "https://apps.apple.com/us/app/hark-developer-notifications/id6794121509"
 
 export function HarkApp(): ReactNode {
-  const status = useQuery(harkStatusAtom)
   return (
     <div className="flex flex-col">
-      {status.loading ? (
-        <LoadingLine />
-      ) : status.error && !status.value ? (
-        <ErrorLine onRetry={status.refresh}>Couldn't check Hark: {status.error}</ErrorLine>
-      ) : status.value?.connected ? (
-        <Connected status={status.value} />
-      ) : (
-        <Connect />
-      )}
+      <PushPage name="Hark" status={useQuery(harkStatusAtom)} Connect={Connect} Connected={Connected} />
     </div>
+  )
+}
+
+function Connected({ status }: { readonly status: HarkStatus }): ReactNode {
+  return (
+    <PushConnected
+      app="hark"
+      name="Hark"
+      device="iPhone"
+      status={status}
+      what="webhook"
+      leftBehind="The service stays in Hark until you remove it there."
+    />
   )
 }
 
@@ -96,103 +101,6 @@ function Connect(): ReactNode {
           {connect.error && <p className="text-sm text-danger-fg">{connect.error}</p>}
         </SettingsRow>
       </SettingsCard>
-    </>
-  )
-}
-
-const SENDS: ReadonlyArray<{ readonly value: HarkSends; readonly label: string }> = [
-  { value: "all", label: "Everything" },
-  { value: "needs-you", label: "When a Bot needs you" },
-]
-
-function Connected({ status }: { readonly status: HarkStatus }): ReactNode {
-  const setSends = useCommand("hark.setSends")
-  const setQuiet = useCommand("hark.setQuietAtComputer")
-  const test = useCommand("hark.test")
-  const disconnect = useCommand("hark.disconnect")
-  const [confirming, setConfirming] = useState(false)
-  return (
-    <>
-      <GroupLabel>Connected</GroupLabel>
-      <SettingsCard testId="hark-connected">
-        <SettingsRow
-          title="Send to your iPhone"
-          description={
-            status.sends === "all"
-              ? "Every notification: a Bot finished, wrote, needs you, a routine ran, something failed."
-              : "Only when a Bot is waiting for you (a question, an approval, your screen) or something failed."
-          }
-          control={
-            <Select<HarkSends>
-              label="Send"
-              value={status.sends}
-              onValueChange={(sends) => void setSends.run({ sends })}
-              options={SENDS}
-            />
-          }
-        >
-          {setSends.error && <p className="text-sm text-danger-fg">{setSends.error}</p>}
-        </SettingsRow>
-        <RowDivider />
-        <SettingsRow
-          title="Not while I'm at my computer"
-          description={
-            status.quietAtComputer !== false && status.atComputer === true
-              ? "Paused now: you're using a computer with the OpenBot desktop app, so notifications show there."
-              : "While you're using a computer with the OpenBot desktop app, notifications show there and not on your iPhone too. They come back a couple of minutes after you step away."
-          }
-          control={
-            <Switch
-              checked={status.quietAtComputer !== false}
-              onCheckedChange={(quiet) => void setQuiet.run({ quiet })}
-              label="Not while I'm at my computer"
-            />
-          }
-        />
-        <RowDivider />
-        <SettingsRow
-          title="Test"
-          description={
-            status.problem ??
-            (status.lastSentAt === undefined
-              ? "Nothing sent yet."
-              : `Last notification sent ${formatWhen(status.lastSentAt)}.`)
-          }
-          control={
-            <PillButton
-              variant="secondary"
-              size="md"
-              loading={test.pending}
-              onClick={() => void test.run(undefined as never)}
-            >
-              Send a test
-            </PillButton>
-          }
-        >
-          {test.error && <p className="text-sm text-danger-fg">{test.error}</p>}
-        </SettingsRow>
-        <RowDivider />
-        <SettingsRow
-          title="Disconnect"
-          description="OpenBot stops sending to Hark and forgets the webhook."
-          control={
-            <PillButton variant="secondary" size="md" onClick={() => setConfirming(true)}>
-              Disconnect
-            </PillButton>
-          }
-        />
-      </SettingsCard>
-      <ConfirmDialog
-        open={confirming}
-        title="Disconnect Hark?"
-        body="Your iPhone stops getting OpenBot's notifications. The service stays in Hark until you remove it there."
-        confirmLabel="Disconnect"
-        danger
-        pending={disconnect.pending}
-        error={disconnect.error}
-        onConfirm={() => void disconnect.run(undefined as never).then((r) => r.ok && setConfirming(false))}
-        onCancel={() => setConfirming(false)}
-      />
     </>
   )
 }

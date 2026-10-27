@@ -1,7 +1,7 @@
 /**
  * Whether the owner is at a computer whose OpenBot desktop app shows the notifications: the app reports
  * `presence.active` every 30 s while they use it (no input for 2 minutes, or a locked screen, stops it).
- * Hark holds its pushes back meanwhile, so the phone (and a Mac mirroring it) does not ring twice.
+ * Hark and ntfy hold their pushes back meanwhile, so the phone (and a Mac mirroring it) does not ring twice.
  */
 import { Context, Effect, Layer } from "effect"
 

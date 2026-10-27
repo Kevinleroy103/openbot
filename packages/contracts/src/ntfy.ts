@@ -3,7 +3,7 @@
 import { Schema } from "effect"
 import { Millis } from "./base.ts"
 
-/** Which notifications go to ntfy: all of them, or only a Bot waiting for the owner or failing. */
+/** Which notifications go to ntfy: all of them, or only a Bot waiting for the owner, a sign-in or a failure. */
 export const NtfySends = Schema.Literals(["all", "needs-you"])
 export type NtfySends = typeof NtfySends.Type
 
@@ -17,6 +17,10 @@ export const NtfyStatus = Schema.Struct({
   /** Why the last push failed (cleared by the next one that works). */
   problem: Schema.optionalKey(Schema.String),
   lastSentAt: Schema.optionalKey(Millis),
+  /** No pushes while the owner is at a computer whose OpenBot desktop app shows the notifications (as Hark). */
+  quietAtComputer: Schema.optionalKey(Schema.Boolean),
+  /** The owner is at such a computer right now: pushes are held back. */
+  atComputer: Schema.optionalKey(Schema.Boolean),
 })
 export type NtfyStatus = typeof NtfyStatus.Type
 

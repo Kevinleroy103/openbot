@@ -137,6 +137,7 @@ const V1_RPCS = [
   "ntfy.disconnect",
   "ntfy.test",
   "ntfy.setSends",
+  "ntfy.setQuietAtComputer",
   "usage.byBot",
 ] as const satisfies ReadonlyArray<OpenBotRpcTag>
 

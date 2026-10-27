@@ -155,16 +155,7 @@ const slackStatusOf = (status: SlackStatus | undefined, loading: boolean): AppSt
   }
 }
 
-const harkStatusOf = (status: HarkStatus | undefined, loading: boolean): AppStatus => {
-  if (status === undefined || !status.connected) return { state: "off", loading }
-  return {
-    state: status.problem === undefined ? "connected" : "attention",
-    summary: status.problem ?? (status.sends === "all" ? "Every notification" : "When a Bot needs you"),
-    loading,
-  }
-}
-
-const ntfyStatusOf = (status: NtfyStatus | undefined, loading: boolean): AppStatus => {
+const pushStatusOf = (status: HarkStatus | NtfyStatus | undefined, loading: boolean): AppStatus => {
   if (status === undefined || !status.connected) return { state: "off", loading }
   return {
     state: status.problem === undefined ? "connected" : "attention",
@@ -195,8 +186,8 @@ export const useAppStatuses = (options?: {
   }, [poll, refreshSlack, refreshHark, refreshNtfy])
   const map = new Map<AppId, AppStatus>([
     ["slack", slackStatusOf(slack.value, slack.loading)],
-    ["hark", harkStatusOf(hark.value, hark.loading)],
-    ["ntfy", ntfyStatusOf(ntfy.value, ntfy.loading)],
+    ["hark", pushStatusOf(hark.value, hark.loading)],
+    ["ntfy", pushStatusOf(ntfy.value, ntfy.loading)],
   ])
   return Object.assign(map, {
     refresh: () => {

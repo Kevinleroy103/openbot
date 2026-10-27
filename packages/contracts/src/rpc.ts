@@ -707,13 +707,21 @@ export class OpenBotRpcs extends RpcGroup.make(
     success: HarkStatus,
     error: errors(InvalidInput, Unavailable),
   }),
-  Rpc.make("hark.disconnect", { success: HarkStatus, error: errors() }),
+  Rpc.make("hark.disconnect", { success: HarkStatus, error: errors(Unavailable) }),
   Rpc.make("hark.test", { success: HarkStatus, error: errors(InvalidInput, Unavailable) }),
-  Rpc.make("hark.setSends", { payload: { sends: HarkSends }, success: HarkStatus, error: errors(InvalidInput) }),
-  Rpc.make("hark.setQuietAtComputer", { payload: { quiet: Schema.Boolean }, success: HarkStatus, error: errors() }),
+  Rpc.make("hark.setSends", {
+    payload: { sends: HarkSends },
+    success: HarkStatus,
+    error: errors(InvalidInput, Unavailable),
+  }),
+  Rpc.make("hark.setQuietAtComputer", {
+    payload: { quiet: Schema.Boolean },
+    success: HarkStatus,
+    error: errors(Unavailable),
+  }),
   /**
    * The owner is using this computer and its OpenBot desktop app shows notifications (sent every 30 s
-   * while they are active there): Hark holds its pushes back meanwhile.
+   * while they are active there): Hark and ntfy hold their pushes back meanwhile.
    */
   Rpc.make("presence.active", { error: errors() }),
 
@@ -731,9 +739,18 @@ export class OpenBotRpcs extends RpcGroup.make(
     success: NtfyStatus,
     error: errors(InvalidInput, Unavailable),
   }),
-  Rpc.make("ntfy.disconnect", { success: NtfyStatus, error: errors() }),
+  Rpc.make("ntfy.disconnect", { success: NtfyStatus, error: errors(Unavailable) }),
   Rpc.make("ntfy.test", { success: NtfyStatus, error: errors(InvalidInput, Unavailable) }),
-  Rpc.make("ntfy.setSends", { payload: { sends: NtfySends }, success: NtfyStatus, error: errors(InvalidInput) }),
+  Rpc.make("ntfy.setSends", {
+    payload: { sends: NtfySends },
+    success: NtfyStatus,
+    error: errors(InvalidInput, Unavailable),
+  }),
+  Rpc.make("ntfy.setQuietAtComputer", {
+    payload: { quiet: Schema.Boolean },
+    success: NtfyStatus,
+    error: errors(Unavailable),
+  }),
 
   // usage
   Rpc.make("usage.byBot", {

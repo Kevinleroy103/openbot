@@ -10,9 +10,11 @@
  * written instead of dispatching a Claude Code slash command (`/clear`, `/login`, …) that OpenBot
  * cannot see; OpenBot's own commands (compact) use `commandMessage`. Other text keeps the CLI's
  * normal turn-start context (skill listings, reminders), which `client_composed` would drop
- * (sdk-claude.md §4).
+ * (sdk-claude.md §4). The owner's `/name` skill command is sent as the CLI's own
+ * `/openbot-skills:name` command, so skills marked `disable-model-invocation` start too.
  */
 import type { TurnInput } from "@openbot/core"
+import { SKILLS_PLUGIN_NAME } from "./skillsPlugin.ts"
 
 export const SUPPORTED_IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
 
@@ -35,10 +37,17 @@ export interface ClaudeUserMessage {
 
 const toBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64")
 
+/** The turn's text; the owner's skill command as the CLI's command for the Bot's skills plugin. */
+const turnText = (input: TurnInput): string =>
+  input.skillCommand === undefined
+    ? input.text
+    : `/${SKILLS_PLUGIN_NAME}:${input.skillCommand.name} ${input.skillCommand.args}`.trimEnd()
+
 export const textWithAttachmentPaths = (input: TurnInput): string => {
-  if (input.attachments.length === 0) return input.text
+  const text = turnText(input)
+  if (input.attachments.length === 0) return text
   const lines = input.attachments.map((a) => `- ${a.name} (${a.mime}): ${a.path}`)
-  const header = input.text.length > 0 ? `${input.text}\n\n` : ""
+  const header = text.length > 0 ? `${text}\n\n` : ""
   return `${header}Attached files:\n${lines.join("\n")}`
 }
 
@@ -56,7 +65,9 @@ export const toUserMessage = async (
     parent_tool_use_id: null,
     uuid: options.uuid,
     ...(options.priority ? { priority: options.priority } : {}),
-    ...(looksLikeSlashCommand(input.text) ? { client_composed: true as const } : {}),
+    ...(input.skillCommand === undefined && looksLikeSlashCommand(input.text)
+      ? { client_composed: true as const }
+      : {}),
   }
   const images: Array<Record<string, unknown>> = []
   for (const attachment of input.attachments) {

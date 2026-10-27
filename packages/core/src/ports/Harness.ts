@@ -20,6 +20,7 @@ import type {
   HarnessRequestResolution,
   HarnessStatus,
   ModelInfo,
+  SkillName,
   TaskId,
   TurnId,
 } from "@openbot/contracts"
@@ -109,10 +110,21 @@ export interface TurnInput {
   /** Already rendered with sender attribution for group / bot-to-bot (§5.4). */
   readonly text: string
   readonly attachments: ReadonlyArray<TurnAttachment>
+  /**
+   * The owner's `/name` command for one of the Bot's skills (D5.5). `text` carries it as an
+   * instruction with the skill inline; an adapter whose harness starts skills itself sends its own
+   * command for `name` with `args`: `text` with only the owner's request in place of that instruction.
+   */
+  readonly skillCommand?: { readonly name: string; readonly args: string } | undefined
 }
 
 export interface OpenSessionInput {
   readonly bot: Bot
+  /**
+   * The Bot's skills marked `disable-model-invocation` (D5.5): only the owner's `/name` starts them,
+   * so an adapter leaves them out of what the model may load on its own. Absent: none.
+   */
+  readonly ownerOnlySkills?: ReadonlyArray<SkillName> | undefined
   /**
    * The bot's HOME conversation (its DM). The session serves every conversation of the bot; turns
    * name theirs in `TurnInput.conversationId`.

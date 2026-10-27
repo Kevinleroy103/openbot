@@ -6,10 +6,10 @@
  */
 import { afterAll, describe, expect, test } from "bun:test"
 import { deleteSession } from "@anthropic-ai/claude-agent-sdk"
-import type { HarnessEvent } from "@openbot/contracts"
+import type { HarnessEvent, SkillName } from "@openbot/contracts"
 import { makeDataDir } from "@openbot/core"
 import { Effect } from "effect"
-import { realpathSync, rmdirSync } from "node:fs"
+import { mkdirSync, realpathSync, rmdirSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { makeClaudeDriver } from "../src/Driver.ts"
@@ -131,5 +131,53 @@ describe.skipIf(!live)("live Claude (OPENBOT_LIVE_CLAUDE=1)", () => {
     expect(events[0]!._tag).toBe("SessionBound")
     expect(has("Usage")(events)).toBe(true)
     expect(has("ContextUsage")(events)).toBe(true)
+  }, 120_000)
+
+  test("the owner's command starts a disable-model-invocation skill (one haiku turn)", async () => {
+    const root = liveRoot()
+    const dataDir = makeDataDir(root)
+    mkdirSync(join(dataDir.skillsLib, "skills", "say-code"), { recursive: true })
+    writeFileSync(
+      join(dataDir.skillsLib, "skills", "say-code", "SKILL.md"),
+      "---\nname: say-code\ndescription: Says a code.\ndisable-model-invocation: true\n---\n\nReply with exactly CODE-$ARGUMENTS and nothing else.\n",
+    )
+    const events: Array<HarnessEvent> = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const driver = yield* makeClaudeDriver({}, { dataDir })
+          const base = makeSessionInput(join(root, "ws"), () => Effect.succeed({ decision: "deny" as const }), {
+            mcp: [],
+            model: "haiku",
+          })
+          const input = {
+            ...base,
+            bot: { ...base.bot, skills: ["say-code" as SkillName] },
+            ownerOnlySkills: ["say-code" as SkillName],
+            placement: { ...base.placement, disableBuiltinTools: true },
+          }
+          const session = yield* driver.openSession(input)
+          const sessionId = yield* session.nativeSessionId
+          if (sessionId) created.push({ sessionId, dir: input.placement.harnessCwd })
+          const collector = yield* collect(session.events)
+          yield* session.startTurn({
+            turnId: turnId(1),
+            text: 'The owner started your "say-code" skill (they typed /say-code).',
+            attachments: [],
+            skillCommand: { name: "say-code", args: "ZEBRA" },
+          })
+          for (let i = 0; i < 1800; i++) {
+            if (collector.events.some((e) => e._tag === "TurnCompleted" || e._tag === "TurnFailed")) break
+            yield* Effect.sleep(50)
+          }
+          return [...collector.events]
+        }),
+      ),
+    )
+    const text = events
+      .flatMap((e) =>
+        e._tag === "ItemUpserted" && e.item._tag === "Message" && !e.item.streaming ? [e.item.text] : [],
+      )
+      .join("")
+    expect(text).toContain("CODE-ZEBRA")
   }, 120_000)
 })

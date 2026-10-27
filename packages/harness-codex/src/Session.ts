@@ -146,7 +146,9 @@ export const openCodexSession = Effect.fn("CodexSession.open")(function* (
               ),
             ),
           )
-          return skillRulesFor(listed, root, input.bot.skills)
+          // an owner-only skill reaches the Bot only through the owner's `/name` (inline in the turn text)
+          const own = input.bot.skills.filter((name) => !input.ownerOnlySkills?.includes(name))
+          return skillRulesFor(listed, root, own)
         })
       : []
   const config = threadConfig(input.mcp, { ...deps.threadConfig, skillRules, effort: input.effort })

@@ -44,10 +44,13 @@ describe("skill commands", () => {
   })
 
   test("the Bot reads an explicit instruction that names the skill and the request", () => {
-    const text = renderSkillCommand({ name: "grill-me", rest: "my launch plan" })
+    const skill = { body: "Ask one hard question at a time.\n", dir: "/lib/skills/grill-me" }
+    const text = renderSkillCommand({ name: "grill-me", rest: "my launch plan" }, skill)
     expect(text).toContain('"grill-me" skill')
     expect(text).toContain("Their request: my launch plan")
+    expect(text).toContain("Base directory for this skill: /lib/skills/grill-me")
+    expect(text.endsWith("Ask one hard question at a time.")).toBe(true)
     expect(text).not.toContain("/grill-me my launch plan")
-    expect(renderSkillCommand({ name: "grill-me", rest: "" })).toContain("They gave no details")
+    expect(renderSkillCommand({ name: "grill-me", rest: "" }, skill)).toContain("They gave no details")
   })
 })

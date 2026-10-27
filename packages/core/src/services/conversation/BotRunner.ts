@@ -42,6 +42,7 @@ import type {
   HarnessRequest,
   HarnessRequestResolution,
   RuntimeRequest,
+  SkillName,
   Turn,
   TurnId,
 } from "@openbot/contracts"
@@ -77,11 +78,12 @@ import type {
   UsageService,
 } from "../../ports/services.ts"
 import { MAX_BOT_HOPS } from "../../ports/services.ts"
-import type { AttachmentRecord, AttachmentStore } from "../../ports/stores.ts"
+import type { AttachmentRecord, AttachmentStore, SkillStore } from "../../ports/stores.ts"
 import { routeBotMessage } from "./GroupRouter.ts"
 import type { ConversationStore } from "./internal/ConversationStore.ts"
 import { attachmentsLine, receiveFiles } from "./internal/inbox.ts"
-import { parseSkillCommand, renderSkillCommand } from "./skillCommand.ts"
+import { ownerOnlySkills } from "./internal/skills.ts"
+import { parseSkillCommand, renderSkillCommand, type SkillCommand } from "./skillCommand.ts"
 import { capUtf8, compact, messageWithAttachments, orDie, previewOf } from "./internal/util.ts"
 import {
   finalizeTurnEntries,
@@ -144,6 +146,7 @@ export interface RunnerDeps {
   readonly entries: Service<typeof EntryRepo>
   readonly turns: Service<typeof TurnRepo>
   readonly attachments: Service<typeof AttachmentStore>
+  readonly skills: Service<typeof SkillStore>
   /** Received files are copied into the bot's workspace on its host node (internal/inbox.ts). */
   readonly nodeFiles: Service<typeof NodeFiles>
   /** Largest file copied into a bot's inbox (`SendFileLimits.maxFileBytes`). */
@@ -269,6 +272,14 @@ interface OpenSession {
   readonly closed: Deferred.Deferred<string>
 }
 
+/** The owner's `/skill` command (D5.5) and the instruction the turn text carries for it. */
+type RenderedSkillCommand = SkillCommand & { readonly instruction: string }
+
+interface SessionConfig {
+  readonly signature: string
+  readonly ownerOnlySkills: ReadonlyArray<SkillName>
+}
+
 interface TurnFailure {
   readonly code: string
   readonly message: string
@@ -297,7 +308,7 @@ const triggerOf = (delivery: Delivery): Turn["trigger"] => {
 }
 
 /** Harness settings a live session was opened with; a change means reopening. */
-const signatureOf = (bot: Bot): string =>
+const signatureOf = (bot: Bot, ownerOnlySkills: ReadonlyArray<SkillName>): string =>
   JSON.stringify([
     bot.harness.kind,
     bot.harness.model ?? null,
@@ -306,6 +317,7 @@ const signatureOf = (bot: Bot): string =>
     [...bot.boundNodeIds].sort(),
     // the skills a session mounts (D5.5)
     [...bot.skills].sort(),
+    [...ownerOnlySkills].sort(),
   ])
 
 const isWaking = (delivery: Delivery): boolean => delivery.kind !== "bot-message" || delivery.urgency === "urgent"
@@ -524,7 +536,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         yield* Scope.close(open.scope, Exit.void)
       })
 
-    const openOnce = (bot: Bot, driver: HarnessDriver, signature: string, resumeId: string | undefined) =>
+    const openOnce = (bot: Bot, driver: HarnessDriver, config: SessionConfig, resumeId: string | undefined) =>
       Effect.gen(function* () {
         const scope = yield* Scope.fork(deps.scope, "sequential")
         const home = bot.directConversationId
@@ -567,6 +579,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           const session = yield* driver
             .openSession({
               bot,
+              ownerOnlySkills: config.ownerOnlySkills,
               conversationId: home,
               sessionKey,
               nativeSessionId: resumeId,
@@ -599,7 +612,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
             scope,
             placement,
             instructionsHash: instructions.hash,
-            signature,
+            signature: config.signature,
             ingest,
             closed,
           }
@@ -610,14 +623,14 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         )
       })
 
-    const openSession = (bot: Bot, driver: HarnessDriver, signature: string, noticeIn: ConversationId) =>
+    const openSession = (bot: Bot, driver: HarnessDriver, config: SessionConfig, noticeIn: ConversationId) =>
       Effect.gen(function* () {
         const native = yield* sessionRecord
         const resumeId =
           Option.isSome(native) && native.value.driver === driver.kind && driver.capabilities.resume
             ? native.value.nativeSessionId
             : undefined
-        const first = yield* Effect.result(openOnce(bot, driver, signature, resumeId))
+        const first = yield* Effect.result(openOnce(bot, driver, config, resumeId))
         let open: OpenSession
         if (first._tag === "Success") {
           open = first.success
@@ -633,7 +646,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
               text: `Couldn't resume the previous ${driver.displayName} session (${first.failure.message}). Started a new one.`,
             }),
           )
-          open = yield* openOnce(bot, driver, signature, undefined)
+          open = yield* openOnce(bot, driver, config, undefined)
         } else {
           return yield* Effect.fail(first.failure)
         }
@@ -662,17 +675,18 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         const driver = yield* deps.registry
           .get(bot.harness.kind, bot.harness.profileId)
           .pipe(Effect.mapError((e) => fail("harness-unavailable", e.message)))
-        const signature = signatureOf(bot)
+        const ownerOnly = yield* ownerOnlySkills(deps.skills, bot.skills)
+        const config: SessionConfig = { signature: signatureOf(bot, ownerOnly), ownerOnlySkills: ownerOnly }
         const current = state.session
         if (current !== undefined) {
           const closed = yield* Deferred.isDone(current.closed)
-          if (!closed && current.driver === driver && current.signature === signature) {
+          if (!closed && current.driver === driver && current.signature === config.signature) {
             const instructions = yield* deps.renderer.render({ bot, placement: current.placement })
             if (instructions.hash === current.instructionsHash) return current
           }
           yield* dropSession(closed ? "closed" : "reconfigured")
         }
-        return yield* openSession(bot, driver, signature, noticeIn)
+        return yield* openSession(bot, driver, config, noticeIn)
       })
 
     // ------------------------------------------------------------------ turn text
@@ -717,28 +731,40 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
       Effect.gen(function* () {
         if (delivery.kind === "bot-message") {
           const name = yield* botName(delivery.fromBotId)
-          return kind === "group" ? `[@${name}]: ${delivery.text}` : `[Direct message from @${name}]: ${delivery.text}`
+          const text =
+            kind === "group" ? `[@${name}]: ${delivery.text}` : `[Direct message from @${name}]: ${delivery.text}`
+          return { text }
         }
         if (delivery.kind === "user-message") {
-          const text = yield* skillCommandText(delivery.text)
-          return kind === "group" ? `[@${yield* ownerName}]: ${text}` : text
+          const command = yield* skillCommandOf(delivery.text)
+          const text = command?.instruction ?? delivery.text
+          return { text: kind === "group" ? `[@${yield* ownerName}]: ${text}` : text, command }
         }
-        return delivery.text
+        return { text: delivery.text }
       })
 
-    /** The owner's `/skill` command as an instruction (D5.5); any other text as it is. */
-    const skillCommandText = (text: string) =>
-      text.trimStart().startsWith("/")
-        ? Effect.map(orDie(deps.bots.get(botId)), (found) => {
-            const command = Option.isSome(found) ? parseSkillCommand(text, found.value.skills) : undefined
-            return command === undefined ? text : renderSkillCommand(command)
-          })
-        : Effect.succeed(text)
+    /** The owner's `/skill` command in `text` (D5.5), with the instruction the Bot reads for it. */
+    const skillCommandOf = (text: string) =>
+      Effect.gen(function* () {
+        if (!text.trimStart().startsWith("/")) return undefined
+        const bot = yield* orDie(deps.bots.get(botId))
+        if (Option.isNone(bot)) return undefined
+        const command = parseSkillCommand(text, bot.value.skills)
+        const name = bot.value.skills.find((skill) => skill === command?.name)
+        if (command === undefined || name === undefined) return undefined
+        const skill = yield* orDie(deps.skills.get(name))
+        if (Option.isNone(skill)) return undefined
+        const instruction = renderSkillCommand(command, { body: skill.value.body, dir: deps.skills.dir(name) })
+        return { ...command, instruction }
+      })
 
     const renderDeliveries = (deliveries: ReadonlyArray<Delivery>, kind: Conversation["kind"]) =>
       Effect.map(
         Effect.forEach(deliveries, (d) => renderDelivery(d, kind)),
-        (parts) => parts.join("\n\n"),
+        (parts) => ({
+          text: parts.map((part) => part.text).join("\n\n"),
+          command: parts.find((part) => part.command !== undefined)?.command,
+        }),
       )
 
     /**
@@ -778,9 +804,10 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           const lead = conversation.kind === "direct" && fromBotsOnly ? [tag, BOT_DM_HINT] : [tag]
           const prefix = lead.filter((line) => line !== undefined).join("\n")
           return {
-            text: prefix === "" ? body : `${prefix}\n${body}`,
+            text: prefix === "" ? body.text : `${prefix}\n${body.text}`,
             lastSeen: undefined as EntryId | undefined,
             attachmentIds: [] as ReadonlyArray<AttachmentId>,
+            command: body.command,
           }
         }
         const header = yield* groupHeader(conversation)
@@ -793,7 +820,13 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           window = (yield* orDie(deps.entries.page({ conversationId, limit: GROUP_FIRST_TURN_ENTRIES }))).entries
         }
         const owner = yield* ownerName
-        const lines: Array<string> = []
+        // `bytes` counts the owner's `/skill` command as typed, so its skill inline never crowds out the catch-up
+        const lines: Array<{ readonly text: string; readonly bytes: number }> = []
+        const push = (text: string, counted = text) =>
+          lines.push({ text, bytes: new TextEncoder().encode(counted).length + 1 })
+        let command: RenderedSkillCommand | undefined
+        // The owner's messages this turn answers: a `/skill` command among them is expanded, never an older one.
+        const current = new Set(deliveries.flatMap((d) => (d.kind === "user-message" ? [d.sourceEntryId] : [])))
         const rendered = new Set<EntryId>()
         /** Files in the catch-up (sent by the owner or teammates): copied into the inbox too. */
         const attachmentIds: Array<AttachmentId> = []
@@ -808,7 +841,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           // a teammate's ui card reads as its fallback text
           if (entry.kind === "card" && entry.card.type === "ui" && entry.author.kind === "bot") {
             if (entry.author.botId === botId) continue
-            lines.push(`[@${yield* botName(entry.author.botId)}]: ${entry.card.fallback}`)
+            push(`[@${yield* botName(entry.author.botId)}]: ${entry.card.fallback}`)
             rendered.add(entry.id)
             continue
           }
@@ -822,11 +855,16 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
           if (entry.author.kind === "bot") {
             // Its own messages are in its memory already (one mind).
             if (entry.author.botId === botId) continue
-            lines.push(`[@${yield* botName(entry.author.botId)}]: ${text}`)
+            push(`[@${yield* botName(entry.author.botId)}]: ${text}`)
             rendered.add(entry.id)
             attachmentIds.push(...entry.attachments.map((a) => a.id))
           } else if (entry.author.kind === "user") {
-            lines.push(`[@${owner}]: ${text}`)
+            const found = current.has(entry.id) ? yield* skillCommandOf(entry.text) : undefined
+            command ??= found
+            push(
+              `[@${owner}]: ${found === undefined ? text : messageWithAttachments(found.instruction, entry.attachments)}`,
+              `[@${owner}]: ${text}`,
+            )
             rendered.add(entry.id)
             attachmentIds.push(...entry.attachments.map((a) => a.id))
           }
@@ -834,23 +872,29 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         // Deliveries whose source is not a group message in the window (routine prompts, answers to
         // async questions, messages older than the window) are appended verbatim.
         const extra = deliveries.filter((d) => d.sourceEntryId === undefined || !rendered.has(d.sourceEntryId))
-        for (const delivery of extra) lines.push(yield* renderDelivery(delivery, "group"))
+        for (const delivery of extra) {
+          const line = yield* renderDelivery(delivery, "group")
+          command ??= line.command
+          push(line.text, line.command === undefined ? line.text : `[@${owner}]: ${delivery.text}`)
+        }
         const lastSeen = window[window.length - 1]?.id ?? seen
-        if (lines.length === 0)
-          return { text: `${header}\n${yield* renderDeliveries(deliveries, "group")}`, lastSeen, attachmentIds }
+        if (lines.length === 0) {
+          const body = yield* renderDeliveries(deliveries, "group")
+          return { text: `${header}\n${body.text}`, lastSeen, attachmentIds, command: body.command }
+        }
         // Keep the newest whole lines within the budget.
         const kept: Array<string> = []
         let budget = GROUP_CATCH_UP_BYTES
         for (let i = lines.length - 1; i >= 0; i--) {
-          const size = new TextEncoder().encode(lines[i]!).length + 1
-          if (size > budget) {
-            if (kept.length === 0) kept.unshift(capUtf8(lines[i]!, budget))
+          const line = lines[i]!
+          if (line.bytes > budget) {
+            if (kept.length === 0) kept.unshift(capUtf8(line.text, budget))
             break
           }
-          budget -= size
-          kept.unshift(lines[i]!)
+          budget -= line.bytes
+          kept.unshift(line.text)
         }
-        return { text: `${header}\n${kept.join("\n")}`, lastSeen, attachmentIds }
+        return { text: `${header}\n${kept.join("\n")}`, lastSeen, attachmentIds, command }
       })
 
     // ------------------------------------------------------------------ turns
@@ -921,11 +965,21 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
         ])
         if (active.interruptRequested) return { _tag: "interrupted" }
         const note = state.carryNote
+        const text = [note, rendered.text, files.line].filter((part) => part !== undefined && part !== "").join("\n")
+        const command = rendered.command
         const input: TurnInput = {
           turnId: active.turnId,
           conversationId,
-          text: [note, rendered.text, files.line].filter((part) => part !== undefined && part !== "").join("\n"),
+          text,
           attachments: files.attachments,
+          ...(command === undefined
+            ? {}
+            : {
+                skillCommand: {
+                  name: command.name,
+                  args: text.replace(command.instruction, () => command.rest).trim(),
+                },
+              }),
         }
         // a routine run is quiet: only its final message is posted, its narration goes with its steps
         const terminal = yield* open.ingest.beginTurn(active.turnId, conversationId, {
@@ -1573,7 +1627,7 @@ export const makeRunner = (deps: RunnerDeps, botId: BotId): Effect.Effect<Runner
               open.session.steer({
                 turnId: active.nativeTurnId ?? active.turnId,
                 conversationId: active.conversationId,
-                text: `${yield* renderDelivery(delivery, kind)}${delivery.kind === "user-message" ? STEER_NOTE : ""}`,
+                text: `${(yield* renderDelivery(delivery, kind)).text}${delivery.kind === "user-message" ? STEER_NOTE : ""}`,
                 attachments: [],
               }),
             )

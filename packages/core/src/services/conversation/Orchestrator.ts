@@ -60,7 +60,7 @@ import {
   type ToolContext,
   UsageService,
 } from "../../ports/services.ts"
-import { AttachmentStore, CarryoverStore, EMPTY_CARRYOVER } from "../../ports/stores.ts"
+import { AttachmentStore, CarryoverStore, EMPTY_CARRYOVER, SkillStore } from "../../ports/stores.ts"
 import { toAttachment } from "./AttachmentService.ts"
 import {
   DEFAULT_RUNNER_OPTIONS,
@@ -106,6 +106,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
     const turns = yield* TurnRepo
     const attachments = yield* AttachmentStore
     const carryover = yield* CarryoverStore
+    const skills = yield* SkillStore
     const nodeFiles = yield* NodeFiles
     const sendLimits = yield* SendFileLimits
 
@@ -161,6 +162,7 @@ const makeOrchestrator = (options: RunnerOptions) =>
       entries,
       turns,
       attachments,
+      skills,
       nodeFiles,
       maxFileBytes: sendLimits.maxFileBytes,
       registry,
@@ -859,6 +861,7 @@ export const makeOrchestratorLayer = (
   | ReplicaLog
   | AttachmentStore
   | CarryoverStore
+  | SkillStore
   | NodeFiles
 > =>
   Layer.effect(Orchestrator, makeOrchestrator({ ...DEFAULT_RUNNER_OPTIONS, ...options })).pipe(

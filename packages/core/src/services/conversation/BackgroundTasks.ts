@@ -67,6 +67,7 @@ import { McpBindingIssuer, type McpClaims } from "../../ports/Mcp.ts"
 import type { BootRecoveryReport } from "../../ports/Persistence.ts"
 import { PlacementService } from "../../ports/Placement.ts"
 import { BotRepo, ConversationRepo, EntryRepo, TaskRepo, TurnRepo } from "../../ports/repos.ts"
+import { SkillStore } from "../../ports/stores.ts"
 import {
   ApprovalService,
   type ApprovalWorkspace,
@@ -78,6 +79,7 @@ import {
   type ToolContext,
   UsageService,
 } from "../../ports/services.ts"
+import { ownerOnlySkills } from "./internal/skills.ts"
 import { capUtf8, compact, hashText, messageWithAttachments, orDie } from "./internal/util.ts"
 import { addUsage, itemFields, type TurnTerminal } from "./TurnIngest.ts"
 
@@ -444,6 +446,7 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
     const conversations = yield* ConversationRepo
     const entries = yield* EntryRepo
     const repo = yield* TaskRepo
+    const skills = yield* SkillStore
     // voice calls (experiment): work started on a call reports back on it
     const presence = Option.getOrUndefined(yield* Effect.serviceOption(CallPresence))
     const turnRepo = Option.getOrUndefined(yield* Effect.serviceOption(TurnRepo))
@@ -697,11 +700,13 @@ const makeBackgroundTasks = (options: BackgroundTasksOptions) =>
             onClosed: (reason) => Effect.asVoid(Deferred.succeed(closed, reason)),
           })
           live.ingest = ingest
+          const ownerOnly = yield* ownerOnlySkills(skills, bot.skills)
           const open = (nativeSessionId: string | undefined) =>
             Effect.result(
               driver.success.openSession({
                 purpose: "task",
                 bot,
+                ownerOnlySkills: ownerOnly,
                 conversationId: task.conversationId,
                 sessionKey: taskSessionKeyOf(bot.id, task.id),
                 nativeSessionId,
@@ -1221,6 +1226,7 @@ export const makeBackgroundTasksLayer = (
   | ConversationRepo
   | EntryRepo
   | TaskRepo
+  | SkillStore
 > => Layer.effect(BackgroundTasks, makeBackgroundTasks({ ...DEFAULT_BACKGROUND_TASKS_OPTIONS, ...options }))
 
 export const BackgroundTasksLive = makeBackgroundTasksLayer()

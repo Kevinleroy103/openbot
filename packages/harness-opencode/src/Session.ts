@@ -133,7 +133,8 @@ export const openOpenCodeSession = (
         disableBuiltinTools: input.placement.disableBuiltinTools,
         mcpServerNames: servers.map((s) => s.name),
         grants,
-        skills: input.bot.skills,
+        // an owner-only skill reaches the Bot only through the owner's `/name` (inline in the turn text)
+        skills: input.bot.skills.filter((name) => !input.ownerOnlySkills?.includes(name)),
       })
     const metadata = {
       openbot: { botId: input.bot.id, conversationId: input.conversationId, sessionKey: input.sessionKey },

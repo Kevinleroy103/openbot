@@ -689,6 +689,33 @@ describe("Claude session (fake query)", () => {
       }),
     ))
 
+  test("the owner's skill command is sent as the CLI's plugin skill command (owner-only skills start too)", () =>
+    run(
+      Effect.gen(function* () {
+        const h = yield* setup()
+        yield* h.session.startTurn({
+          turnId: turnId(1),
+          text: 'The owner started your "grill-me" skill …',
+          attachments: [],
+          skillCommand: { name: "grill-me", args: "[DM with the owner]\nmy launch plan" },
+        })
+        yield* h.collector.waitFor(has("TurnCompleted"))
+        yield* h.session.startTurn({
+          turnId: turnId(2),
+          text: 'The owner started your "grill-me" skill …',
+          attachments: [],
+          skillCommand: { name: "grill-me", args: "" },
+        })
+        yield* h.collector.waitFor(has("TurnCompleted", (e) => e._tag === "TurnCompleted" && e.turnId === turnId(2)))
+        const raw = h.fake().raw
+        expect(raw[0]).toMatchObject({
+          message: { content: "/openbot-skills:grill-me [DM with the owner]\nmy launch plan" },
+        })
+        expect(raw[0]!.client_composed).toBeUndefined()
+        expect(raw[1]).toMatchObject({ message: { content: "/openbot-skills:grill-me" } })
+      }),
+    ))
+
   test("setMcpServers rejection fails the open (open-failed, no token in the error) and closes the CLI at once", () =>
     run(
       Effect.gen(function* () {

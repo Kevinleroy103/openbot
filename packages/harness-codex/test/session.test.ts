@@ -352,7 +352,7 @@ describe("Codex session: thread setup", () => {
     })
   })
 
-  test("skills: the OpenBot library is mounted once; other skills and library skills the Bot lacks are disabled per thread", async () => {
+  test("skills: the OpenBot library is mounted once; other skills, library skills the Bot lacks and owner-only ones are disabled per thread", async () => {
     const result = await run(
       Effect.gen(function* () {
         let library = ""
@@ -374,24 +374,24 @@ describe("Codex session: thread setup", () => {
         mkdirSync(library, { recursive: true })
         // The library is looked up when a session opens (`<data>/skills-lib/skills`).
         const withNotes = makeSessionInput(ctx.workspace, allow())
-        yield* ctx.driver.openSession({ ...withNotes, bot: { ...withNotes.bot, skills: ["notes" as SkillName] } })
+        const notes = { ...withNotes.bot, skills: ["notes" as SkillName] }
+        yield* ctx.driver.openSession({ ...withNotes, bot: notes })
         yield* ctx.driver.openSession(makeSessionInput(ctx.workspace, allow()))
+        yield* ctx.driver.openSession({ ...withNotes, bot: notes, ownerOnlySkills: ["notes" as SkillName] })
         return { server: ctx.server(), library }
       }),
     )
     expect(result.server.requests("skills/extraRoots/set")).toEqual([{ extraRoots: [result.library] }])
     const starts = result.server.requests("thread/start")
-    expect(starts.length).toBe(2)
+    expect(starts.length).toBe(3)
     const host = [
       { path: "/home/u/.agents/skills/omarchy/SKILL.md", enabled: false },
       { path: "/w/.agents/skills/repo/SKILL.md", enabled: false },
     ]
     expect((starts[0]!.config as Record<string, unknown>)["skills.config"]).toEqual(host)
-    expect((starts[1]!.config as Record<string, unknown>)["skills.config"]).toEqual([
-      host[0],
-      { path: `${result.library}/notes/SKILL.md`, enabled: false },
-      host[1],
-    ])
+    const notesOff = [host[0], { path: `${result.library}/notes/SKILL.md`, enabled: false }, host[1]]
+    expect((starts[1]!.config as Record<string, unknown>)["skills.config"]).toEqual(notesOff)
+    expect((starts[2]!.config as Record<string, unknown>)["skills.config"]).toEqual(notesOff)
   })
 })
 

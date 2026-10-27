@@ -1,4 +1,4 @@
-import type { HarnessEvent, HarnessRequest, HarnessRequestResolution, TurnId } from "@openbot/contracts"
+import type { HarnessEvent, HarnessRequest, HarnessRequestResolution, SkillName, TurnId } from "@openbot/contracts"
 import { LOCAL_NODE_ID } from "@openbot/contracts"
 import {
   DataDir,
@@ -207,6 +207,27 @@ describe("OpenCode session (fake server)", () => {
           resource: "*",
           effect: "allow",
         })
+      }),
+    )
+  })
+
+  test("skills: only the Bot's skills the model may start on its own are allowed (owner-only ones are not)", async () => {
+    const fake = new FakeOpenCode()
+    await withDriver(fake, (driver) =>
+      Effect.gen(function* () {
+        const input = sessionInput({})
+        const grillMe = "grill-me" as SkillName
+        const skills = [grillMe, "notes" as SkillName]
+        yield* driver.openSession({ ...input, bot: { ...input.bot, skills }, ownerOnlySkills: [grillMe] })
+        const rules = fake.callsOf("session.create")[0]!.input.permissions as ReadonlyArray<{
+          action: string
+          resource: string
+          effect: string
+        }>
+        expect(rules.filter((r) => r.action === "skill")).toEqual([
+          { action: "skill", resource: "*", effect: "deny" },
+          { action: "skill", resource: "notes", effect: "allow" },
+        ])
       }),
     )
   })

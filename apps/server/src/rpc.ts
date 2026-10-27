@@ -272,7 +272,7 @@ export const RpcHandlersLive = OpenBotRpcs.toLayer(
       "skills.assign": ({ name, botIds }) => edge("skills.assign", skills.assign(name, botIds)),
       "skills.search": ({ query }) => edge("skills.search", skills.search(query)),
       "skills.preview": ({ id }) => edge("skills.preview", skills.preview(id)),
-      "skills.install": ({ id, botIds }) => edge("skills.install", skills.install(id, botIds)),
+      "skills.install": ({ id, botIds, name }) => edge("skills.install", skills.install(id, botIds, name)),
 
       // ---------------------------------------------------------------- harnesses
       "harnesses.status": () => edge("harnesses.status", profiles.status(probeDriver)),

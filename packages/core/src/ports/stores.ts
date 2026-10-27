@@ -55,7 +55,8 @@ export class SkillStore extends Context.Service<
     readonly get: (name: SkillName) => Effect.Effect<Option.Option<Skill>, RepoError>
     /**
      * Insert or replace the SKILL.md of `skill.name` (other files and unknown frontmatter are kept;
-     * `skill.source` is recorded when given); keeps `plugin.json` present.
+     * `skill.source` is recorded when given, `disable-model-invocation` written as given); keeps
+     * `plugin.json` present.
      */
     readonly put: (skill: Skill) => Effect.Effect<void, RepoError>
     /**

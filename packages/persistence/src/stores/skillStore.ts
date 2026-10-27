@@ -8,8 +8,9 @@
  * skills-lib/skills/<name>/…             other files (scripts, references), e.g. of an imported skill
  * ```
  *
- * The directory name is authoritative for the skill name. Unknown frontmatter keys (for example
- * `allowed-tools`, `disable-model-invocation`) and any other files in a skill directory are kept.
+ * The directory name is authoritative for the skill name. `disable-model-invocation` is read as Claude
+ * reads it and written as `"true"` or left out; other frontmatter keys (for example `allowed-tools`)
+ * and any other files in a skill directory are kept.
  * An imported skill records where it came from in `metadata.source` (`skills.sh:<owner/repo/skill>`)
  * and `metadata.source-hash`.
  */
@@ -30,6 +31,8 @@ import {
 const SKILL_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/
 export const SKILL_FILE = "SKILL.md"
 const SKILLS_SH = "skills.sh:"
+/** The values Claude Code takes as true in frontmatter (any case). */
+const TRUTHY = new Set(["true", "yes", "on", "1"])
 
 const sourceOf = (frontmatter: ReturnType<typeof parseFrontmatter>): SkillSource | undefined => {
   const source = metadataValue(frontmatter, "source")
@@ -95,6 +98,7 @@ export const makeFileSkillStore = (dataDir: DataDirShape) =>
         const source = sourceOf(frontmatter)
         const files = yield* otherFiles(op, joinPath(skillsDir, name))
         const argumentHint = scalar(frontmatter, "argument-hint")?.trim()
+        const ownerOnly = TRUTHY.has(scalar(frontmatter, "disable-model-invocation")?.trim().toLowerCase() ?? "")
         return Option.some<Skill>({
           name,
           description: scalar(frontmatter, "description") ?? "",
@@ -102,7 +106,7 @@ export const makeFileSkillStore = (dataDir: DataDirShape) =>
           updatedAt: updatedAt as Millis,
           ...(source === undefined ? {} : { source }),
           ...(files.length === 0 ? {} : { files }),
-          ...(scalar(frontmatter, "disable-model-invocation") === "true" ? { disableModelInvocation: true } : {}),
+          ...(ownerOnly ? { disableModelInvocation: true } : {}),
           ...(argumentHint === undefined || argumentHint === "" ? {} : { argumentHint }),
         })
       })
@@ -134,10 +138,7 @@ export const makeFileSkillStore = (dataDir: DataDirShape) =>
             scalars: [
               ["name", skill.name],
               ["description", skill.description],
-              // absent: the file's own setting stays
-              ...(skill.disableModelInvocation === undefined
-                ? []
-                : [["disable-model-invocation", skill.disableModelInvocation ? "true" : undefined] as const]),
+              ["disable-model-invocation", skill.disableModelInvocation === true ? "true" : undefined],
             ],
             metadata: metadataOf(skill),
             body: skill.body,

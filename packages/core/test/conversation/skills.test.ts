@@ -120,6 +120,30 @@ describe("SkillService (D5.5)", () => {
     expect(out).toEqual([true, true, undefined])
   })
 
+  test("owner-only skills: a Bot's save_skill never changes the setting, either way", async () => {
+    const out = await runTest(
+      Effect.gen(function* () {
+        const skills = yield* SkillService
+        const ada = yield* createBot("Ada")
+        const asAda = botActor({ claims: makeClaims({ botId: ada.id, conversationId: ada.directConversationId }) })
+        const ownerOnly = { name: name("grill-me"), description: "An interview.", body: "Ask." }
+        const open = { name: name("notes"), description: "Notes.", body: "Write." }
+        yield* skills.upsert(userActor, { ...ownerOnly, disableModelInvocation: true })
+        yield* skills.upsert(userActor, open)
+        yield* skills.assign(ownerOnly.name, [ada.id])
+        yield* skills.assign(open.name, [ada.id])
+        const unlocked = yield* skills.upsert(asAda, { ...ownerOnly, body: "Ask less.", disableModelInvocation: false })
+        const locked = yield* skills.upsert(asAda, { ...open, body: "Write more.", disableModelInvocation: true })
+        return [unlocked, locked].map((s) => [s.body, s.disableModelInvocation])
+      }),
+      layer(),
+    )
+    expect(out).toEqual([
+      ["Ask less.", true],
+      ["Write more.", undefined],
+    ])
+  })
+
   test("save_skill: the Bot gets its new skill and a skill-saved event; it may update its own, never someone else's", async () => {
     const out = await runTest(
       Effect.gen(function* () {
@@ -156,6 +180,24 @@ describe("SkillService (D5.5)", () => {
       { type: "skill-saved", name: "triage" },
       { type: "skill-saved", name: "triage" },
     ])
+  })
+
+  test("skills.sh: an install for an expected name is refused when the skill installs under another one", async () => {
+    const out = await runTest(
+      Effect.gen(function* () {
+        const skills = yield* SkillService
+        const store = yield* SkillStore
+        // "Release Notes" installs as release-notes, so it can't stand in for "notes"
+        const refused = yield* Effect.exit(skills.install("acme/skills/release-notes", [], name("notes")))
+        const afterRefused = yield* store.list
+        const installed = yield* skills.install("acme/skills/release-notes", [], name("release-notes"))
+        return { refused, afterRefused, installed: installed.name as string }
+      }),
+      layer(),
+    )
+    expect(failsWith(out.refused, "InvalidInput")).toBe(true)
+    expect(out.afterRefused).toEqual([])
+    expect(out.installed).toBe("release-notes")
   })
 
   test("skills.sh: search, preview (nothing written), install with its files and source; unsafe or empty skills are refused", async () => {

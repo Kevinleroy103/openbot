@@ -1086,11 +1086,13 @@ export class SkillService extends Context.Service<
     readonly preview: (id: string) => Effect.Effect<SkillPreview, NotFound | InvalidInput | Unavailable>
     /**
      * `skills.install`: downloads a skills.sh skill into the library (replacing a same-named one,
-     * which keeps its Bots) and gives it to `botIds` too.
+     * which keeps its Bots) and gives it to `botIds` too. With `name`, InvalidInput when the skill
+     * would install under another name (nothing is written).
      */
     readonly install: (
       id: string,
       botIds: ReadonlyArray<BotId>,
+      name?: SkillName,
     ) => Effect.Effect<Skill, NotFound | InvalidInput | Unavailable>
   }
 >()("openbot/core/SkillService") {}

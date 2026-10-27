@@ -121,6 +121,9 @@ export const makeSkillService = Effect.gen(function* () {
           })
         }
       }
+      // only the owner flips it; absent keeps the skill's own setting
+      const given = actor.kind === "bot" ? undefined : input.disableModelInvocation
+      const ownerOnly = given ?? Option.getOrUndefined(existing)?.disableModelInvocation
       // the store keeps an imported skill's source (frontmatter metadata) and its other files
       yield* store
         .put({
@@ -128,9 +131,7 @@ export const makeSkillService = Effect.gen(function* () {
           description,
           body: input.body,
           updatedAt: yield* Clock.currentTimeMillis,
-          ...(input.disableModelInvocation === undefined
-            ? {}
-            : { disableModelInvocation: input.disableModelInvocation }),
+          ...(ownerOnly === true ? { disableModelInvocation: true } : {}),
         })
         .pipe(Effect.orDie)
       if (author !== undefined && actor.kind === "bot") {
@@ -232,13 +233,18 @@ export const makeSkillService = Effect.gen(function* () {
       return result
     })
 
-  const install = (id: string, botIds: ReadonlyArray<BotId>) =>
+  const install = (id: string, botIds: ReadonlyArray<BotId>, name?: SkillName) =>
     Effect.gen(function* () {
       const all = yield* allBots
       for (const botId of botIds) {
         if (!all.some((bot) => bot.id === botId)) return yield* new NotFound({ entity: "bot", id: botId })
       }
       const fetched = yield* fetchSkill(id)
+      if (name !== undefined && fetched.name !== name) {
+        return yield* new InvalidInput({
+          message: `${fetched.id} installs as “${fetched.name}”, not “${name}”. Review it in Import from skills.sh.`,
+        })
+      }
       const skill: Skill = {
         name: fetched.name,
         description: fetched.description,

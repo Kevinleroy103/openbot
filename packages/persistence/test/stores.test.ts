@@ -125,7 +125,7 @@ describe("SkillStore files (Claude plugin layout)", () => {
 })
 
 describe("SkillStore invocation settings", () => {
-  test("reads disable-model-invocation and argument-hint; saving sets, clears or keeps the flag", async () => {
+  test("reads disable-model-invocation and argument-hint; saving writes the flag as given", async () => {
     const dir = await tempDataDir()
     const file = join(dir, "skills-lib", "skills", "grill-me", "SKILL.md")
     await mkdir(join(dir, "skills-lib", "skills", "grill-me"), { recursive: true })
@@ -150,20 +150,49 @@ describe("SkillStore invocation settings", () => {
     const states = await run(
       Effect.gen(function* () {
         const read = Option.getOrThrow(yield* Effect.flatMap(SkillStore, (store) => store.get(name)))
-        const kept = yield* save(undefined)
-        const cleared = yield* save(false)
-        const setAgain = yield* save(true)
-        return { read, kept, cleared, setAgain }
+        const set = yield* save(true)
+        const cleared = yield* save(undefined)
+        return { read, set, cleared }
       }),
       testPersistence(dir),
     )
     expect(states.read).toMatchObject({ disableModelInvocation: true, argumentHint: "<topic>" })
-    expect(states.kept).toMatchObject({ disableModelInvocation: true, argumentHint: "<topic>" })
+    expect(states.set).toMatchObject({ disableModelInvocation: true, argumentHint: "<topic>" })
     expect(states.cleared.disableModelInvocation).toBeUndefined()
     expect(states.cleared.argumentHint).toBe("<topic>")
-    expect(states.setAgain.disableModelInvocation).toBe(true)
     // the file keeps the keys this app doesn't manage
     expect(await readFile(file, "utf8")).toContain("allowed-tools: Read")
+  })
+
+  test("disable-model-invocation is on for the values Claude takes as true, in any case", async () => {
+    const dir = await tempDataDir()
+    const values = ["true", "True", "YES", "on", "1", "'yes'", "false", "no", "off", "0", "maybe"]
+    for (const [i, value] of values.entries()) {
+      await mkdir(join(dir, "skills-lib", "skills", `s${i}`), { recursive: true })
+      await writeFile(
+        join(dir, "skills-lib", "skills", `s${i}`, "SKILL.md"),
+        `---\nname: s${i}\ndescription: x\ndisable-model-invocation: ${value}\n---\n\nBody.\n`,
+      )
+    }
+    const read = await run(
+      Effect.flatMap(SkillStore, (store) =>
+        Effect.forEach(values.keys(), (i) => store.get(`s${i}` as SkillName).pipe(Effect.map(Option.getOrThrow))),
+      ),
+      testPersistence(dir),
+    )
+    expect(read.map((skill) => skill.disableModelInvocation === true)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ])
   })
 })
 

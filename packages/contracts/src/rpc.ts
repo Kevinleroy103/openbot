@@ -501,9 +501,12 @@ export class OpenBotRpcs extends RpcGroup.make(
     success: SkillPreview,
     error: errors(NotFound, InvalidInput, Unavailable),
   }),
-  /** Downloads a skills.sh skill into the library (replacing a same-named one) and gives it to `botIds`. */
+  /**
+   * Downloads a skills.sh skill into the library (replacing a same-named one) and gives it to `botIds`.
+   * With `name`, a skill that installs under another name is refused instead.
+   */
   Rpc.make("skills.install", {
-    payload: { id: Schema.String, botIds: Schema.Array(BotId) },
+    payload: { id: Schema.String, botIds: Schema.Array(BotId), name: Schema.optionalKey(SkillName) },
     success: Skill,
     error: errors(NotFound, InvalidInput, Unavailable),
   }),

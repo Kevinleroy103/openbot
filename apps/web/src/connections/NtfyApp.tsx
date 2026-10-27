@@ -85,7 +85,7 @@ function Connect(): ReactNode {
         <RowDivider />
         <SettingsRow
           title="2. Subscribe to a topic"
-          description="In the ntfy app, add a subscription with this topic name (on ntfy.sh, keep it long and secret: anyone who knows it can read your notifications)."
+          description="In the ntfy app, add a subscription with this topic name (on ntfy.sh, at least 20 characters and secret: anyone who knows it can read your notifications)."
           wide
           control={
             <PillButton variant="secondary" size="md" onClick={() => setTopic(randomTopic())}>
@@ -103,7 +103,7 @@ function Connect(): ReactNode {
         <RowDivider />
         <SettingsRow
           title="Your own server (optional)"
-          description="Leave blank for ntfy.sh. For a server of your own, its address and, if it needs a sign-in, an access token."
+          description="Leave blank for ntfy.sh. For a server of your own, its address (https://ntfy.example.com) and, if it needs a sign-in, an access token (sent over https only, or to this computer)."
           wide
         >
           <div className="flex flex-col gap-2">

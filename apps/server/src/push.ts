@@ -71,6 +71,16 @@ export const notificationText = (n: Notification) => (n.body.trim() === "" ? n.t
 
 export const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`)
 
+const encoder = new TextEncoder()
+
+/** Cuts to at most `max` UTF-8 bytes without splitting a character. */
+export const clipBytes = (text: string, max: number) => {
+  if (encoder.encode(text).length <= max) return text
+  // "…" is 3 bytes
+  const { read } = encoder.encodeInto(text, new Uint8Array(max - 3))
+  return `${text.slice(0, read)}…`
+}
+
 export const makePush = <Target, Status extends PushStatus>(app: PushApp<Target, Status>) =>
   Effect.gen(function* () {
     const config = yield* ServerConfig

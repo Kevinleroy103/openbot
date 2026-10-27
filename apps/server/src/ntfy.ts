@@ -3,7 +3,7 @@ import { InvalidInput, NTFY_DISCONNECTED, NTFY_URL, type NtfyStatus } from "@ope
 import { LiveHub } from "@openbot/core"
 import { Context, Effect, Layer, Schema } from "effect"
 import { ServerConfig } from "./config.ts"
-import { clip, makePush, needsYou, notificationText, type PushService } from "./push.ts"
+import { clip, clipBytes, makePush, needsYou, notificationText, type PushService } from "./push.ts"
 
 export interface NtfyConnect {
   readonly topic: string
@@ -27,35 +27,34 @@ const NtfyTarget = Schema.Struct({
 })
 type NtfyTarget = typeof NtfyTarget.Type
 
-/** A topic ntfy accepts: letters, digits, `_` and `-`, up to 64. */
-export const ntfyTopic = (text: string): string | undefined => {
-  const topic = text.trim()
-  return /^[A-Za-z0-9_-]{1,64}$/.test(topic) ? topic : undefined
-}
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"])
 
-/** An ntfy server's address (`https://ntfy.example.com`), without a trailing slash; blank is ntfy.sh. */
-export const ntfyServer = (text: string | undefined): string | undefined => {
-  const server = (text ?? "").trim().replace(/\/+$/, "")
-  if (server === "") return NTFY_URL
-  try {
-    const url = new URL(server)
-    return url.protocol === "http:" || url.protocol === "https:" ? server : undefined
-  } catch {
-    return undefined
-  }
-}
+const invalid = (message: string) => Effect.fail(new InvalidInput({ message }))
 
-const ntfyTarget = (input: NtfyConnect): Effect.Effect<NtfyTarget, InvalidInput> => {
-  const topic = ntfyTopic(input.topic)
-  if (topic === undefined) {
-    return Effect.fail(new InvalidInput({ message: "A topic is letters, digits, _ and -, up to 64 characters." }))
+/** Where to publish, from what the owner typed: the server is kept as its origin only. */
+export const ntfyTarget = (input: NtfyConnect): Effect.Effect<NtfyTarget, InvalidInput> => {
+  const topic = input.topic.trim()
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(topic)) return invalid("A topic is letters, digits, _ and -, up to 64 characters.")
+  const url = URL.parse(input.server?.trim() || NTFY_URL)
+  if (url === null || (url.protocol !== "https:" && url.protocol !== "http:")) {
+    return invalid("The server is an address like https://ntfy.example.com.")
   }
-  const server = ntfyServer(input.server)
-  if (server === undefined) {
-    return Effect.fail(new InvalidInput({ message: "The server is an address like https://ntfy.example.com." }))
+  if (url.username !== "" || url.password !== "") {
+    return invalid("Leave the sign-in out of the server's address and give an access token instead.")
+  }
+  if (url.pathname !== "/" || url.search !== "" || url.hash !== "") {
+    return invalid("The server is just its address, like https://ntfy.example.com: the topic has its own field.")
+  }
+  if (url.origin === NTFY_URL && topic.length < 20) {
+    return invalid(
+      "On ntfy.sh anyone who knows a topic can read its notifications: use one of at least 20 characters that nobody could guess (New topic makes one).",
+    )
   }
   const token = input.token?.trim() ?? ""
-  return Effect.succeed({ server, topic, ...(token === "" ? {} : { token }) })
+  if (token !== "" && url.protocol === "http:" && !LOOPBACK.has(url.hostname)) {
+    return invalid("An access token is only sent to an https:// server or one on this computer.")
+  }
+  return Effect.succeed({ server: url.origin, topic, ...(token === "" ? {} : { token }) })
 }
 
 const refused = (response: Response) => {
@@ -86,7 +85,9 @@ export const makeNtfy = (options: NtfyOptions) =>
       body: (n, link) =>
         Effect.succeed({
           title: clip(n.title, 250),
-          message: clip(notificationText(n), 3_500),
+          // ntfy turns a message over 4,096 bytes into an attachment
+          message: clipBytes(notificationText(n), 3_800),
+          markdown: true,
           ...(needsYou(n) ? { priority: 4 } : {}),
           ...(link === undefined ? {} : { click: link }),
         }),

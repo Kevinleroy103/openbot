@@ -286,10 +286,12 @@ where a Bot needs you), grouped by Bot. Tapping one opens that chat, through the
 
 [ntfy](https://ntfy.sh) brings OpenBot's notifications to any phone, Android or iPhone. Install the ntfy
 app, then under Connect apps › ntfy pick a topic (OpenBot suggests a long random one: on ntfy.sh anyone
-who knows a topic can read it), subscribe to it in the app and press Connect. OpenBot sends a test
+who knows a topic can read it, so it needs at least 20 characters there), subscribe to it in the app and press Connect. OpenBot sends a test
 notification, then pushes every notification it makes (or only the ones where a Bot needs you, at high
-priority). Tapping one opens that chat, through the address you gave `--public-origin`. To use your own
-ntfy server, give its address (and an access token if it needs a sign-in) when you connect.
+priority), and none while you are at a computer whose OpenBot desktop app shows them, as with Hark. Tapping
+one opens that chat, through the address you gave `--public-origin`. To use your own ntfy server, give its
+address (and an access token if it needs a sign-in; it is only sent over https, or over http to this
+computer) when you connect.
 
 ## Voice
 

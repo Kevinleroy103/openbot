@@ -6,7 +6,7 @@
 import { ArrowUp, AudioLines, Paperclip, Plus, Sparkles, Square, X } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useAtomSet } from "@effect/atom-react"
-import { Exit, Schema } from "effect"
+import { Exit, Option, Schema } from "effect"
 import { type Attachment, type AttachmentId, type Bot, type BotId, SkillName } from "@openbot/contracts"
 import { insertDictation } from "@openbot/app-model"
 import { uploadFilesAtom } from "@openbot/client"
@@ -58,7 +58,12 @@ export interface ComposerProps {
 
 const isSkillName = Schema.is(SkillName)
 
-const drafts = new Map<string, string>()
+const KEPT_DRAFTS = "openbot.drafts"
+const decodeDrafts = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)))
+
+// The tab's drafts outlive a reload (an update reloads the page by itself, reloadOnUpdate.ts).
+const drafts = new Map(Object.entries(Option.getOrElse(decodeDrafts(sessionStorage.getItem(KEPT_DRAFTS)), () => ({}))))
+addEventListener("pagehide", () => sessionStorage.setItem(KEPT_DRAFTS, JSON.stringify(Object.fromEntries(drafts))))
 const draftsBeingFinished = new Map<string, Promise<unknown>>()
 
 const holdDraft = (draftKey: string, until: Promise<unknown>) => {

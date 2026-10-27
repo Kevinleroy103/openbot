@@ -21,6 +21,7 @@ import { ComputerView, DetailsPane, NewBotForm, NewGroupForm, Onboarding, Settin
 import { isPhoneNow, useLayoutMode, useVisualViewport } from "./layout.ts"
 import { useBackDismiss } from "./nav.ts"
 import { useDesktopPresence, useSystemNotifications } from "./notifications.ts"
+import { useReloadOnUpdate } from "./reloadOnUpdate.ts"
 import { parseRoute } from "./route.ts"
 
 import { CallBar } from "../voice/CallBar.tsx"
@@ -109,6 +110,7 @@ export function App(): ReactNode {
   const [connectCode, setConnectCode] = useState<string | undefined>()
   useSystemNotifications()
   useDesktopPresence()
+  useReloadOnUpdate()
   const [compact, setCompactState] = useState(() => {
     try {
       return localStorage.getItem(COMPACT_KEY) === "1"

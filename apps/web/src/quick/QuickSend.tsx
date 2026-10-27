@@ -11,6 +11,7 @@ import { Camera, Check, ChevronDown, ClipboardList, Link2, Quote, Users, X } fro
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useRoster } from "../app/data.ts"
 import { desktopApp, type QuickSendPrefill } from "../app/notifications.ts"
+import { useReloadOnUpdate } from "../app/reloadOnUpdate.ts"
 import { describeFailure } from "../cards/useRespond.ts"
 
 const LAST_KEY = "openbot.quickSend.to"
@@ -115,6 +116,7 @@ export function QuickSend(): ReactNode {
   const bridge = desktopApp()?.quickSend
   const inPanel = bridge !== undefined
   const roster = useRoster()
+  useReloadOnUpdate()
   const [draft, setDraft] = useState<Draft>(() => (inPanel ? emptyDraft() : draftOfHash()))
   const [note, setNote] = useState("")
   const [targetId, setTargetId] = useState<string | undefined>(() => localStorage.getItem(LAST_KEY) ?? undefined)

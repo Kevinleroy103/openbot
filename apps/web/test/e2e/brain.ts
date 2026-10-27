@@ -52,6 +52,8 @@ export interface Brain {
   readonly dataDir: string
   /** Everything the brain printed (stdout + stderr). */
   readonly log: () => string
+  /** Stops the brain and starts it again on the same port and data (an update does that), with `args` added. */
+  readonly restart: (args?: ReadonlyArray<string>) => Promise<void>
   readonly stop: () => Promise<void>
 }
 
@@ -92,43 +94,46 @@ export const startBrain = async (options?: {
 }): Promise<Brain> => {
   const dataDir = mkdtempSync(join(tmpdir(), "openbot-e2e-brain-"))
   options?.prepare?.(dataDir)
-  const child = Bun.spawn(
-    [
-      process.execPath,
-      serverMain,
-      "--data-dir",
-      dataDir,
-      "--port",
-      "0",
-      "--harness",
-      options?.harnesses ?? "fake",
-      ...(options?.args ?? []),
-    ],
-    { cwd: repoRoot, stdout: "pipe", stderr: "pipe", env: childEnv(options?.env) },
-  )
-  const sink = { text: "" }
-  pump(child.stdout, sink)
-  pump(child.stderr, sink)
-  const m = await waitFor(
-    sink,
-    /OpenBot is running → (\S+)/,
-    30_000,
-    "the brain's login URL",
-    () => child.exitCode !== null,
-  )
-  const loginUrl = m[1]!
-  const url = new URL(loginUrl)
+  const args = ["--data-dir", dataDir, "--harness", options?.harnesses ?? "fake", ...(options?.args ?? [])]
+  const spawn = async (port: string, extra: ReadonlyArray<string>) => {
+    const child = Bun.spawn([process.execPath, serverMain, ...args, "--port", port, ...extra], {
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: childEnv(options?.env),
+    })
+    const sink = { text: "" }
+    pump(child.stdout, sink)
+    pump(child.stderr, sink)
+    const m = await waitFor(
+      sink,
+      /OpenBot is running → (\S+)/,
+      30_000,
+      "the brain's login URL",
+      () => child.exitCode !== null,
+    )
+    return { child, sink, loginUrl: m[1]! }
+  }
+  const kill = async (child: Bun.Subprocess) => {
+    child.kill("SIGTERM")
+    await Promise.race([child.exited, Bun.sleep(15_000)])
+    if (child.exitCode === null) child.kill("SIGKILL")
+    await child.exited
+  }
+  let running = await spawn("0", [])
+  const url = new URL(running.loginUrl)
   return {
     base: url.origin,
-    loginUrl,
+    loginUrl: running.loginUrl,
     token: url.searchParams.get("token") ?? "",
     dataDir,
-    log: () => sink.text,
+    log: () => running.sink.text,
+    restart: async (extra = []) => {
+      await kill(running.child)
+      running = await spawn(url.port, extra)
+    },
     stop: async () => {
-      child.kill("SIGTERM")
-      await Promise.race([child.exited, Bun.sleep(15_000)])
-      if (child.exitCode === null) child.kill("SIGKILL")
-      await child.exited
+      await kill(running.child)
       rmSync(dataDir, { recursive: true, force: true })
     },
   }

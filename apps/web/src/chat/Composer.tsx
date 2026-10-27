@@ -6,8 +6,8 @@
 import { ArrowUp, AudioLines, Paperclip, Plus, Sparkles, Square, X } from "lucide-react"
 import { type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useAtomSet } from "@effect/atom-react"
-import { Exit } from "effect"
-import type { Attachment, AttachmentId, Bot, BotId } from "@openbot/contracts"
+import { Exit, Schema } from "effect"
+import { type Attachment, type AttachmentId, type Bot, type BotId, SkillName } from "@openbot/contracts"
 import { insertDictation } from "@openbot/app-model"
 import { uploadFilesAtom } from "@openbot/client"
 import { Avatar, IconButton, Menu, MenuItem, MenuPanel, Spinner, cn, useToast } from "@openbot/ui"
@@ -56,6 +56,8 @@ export interface ComposerProps {
   readonly className?: string
 }
 
+const isSkillName = Schema.is(SkillName)
+
 const drafts = new Map<string, string>()
 const draftsBeingFinished = new Map<string, Promise<unknown>>()
 
@@ -82,9 +84,14 @@ const mentionQuery = (text: string, caret: number): { start: number; query: stri
   return { start: before.length - m[2]!.length - 1, query: m[2]! }
 }
 
-/** `/gri` at the start of the message (before the caret): the skill name typed so far. */
-const slashQuery = (text: string, caret: number): string | undefined =>
-  /^\/([a-z0-9_-]*)$/.exec(text.slice(0, caret))?.[1]
+const slashQuery = (text: string, caret: number): { start: number; end: number; query: string } | undefined => {
+  const match = /^\s*\/(\S*)/.exec(text)
+  if (match === null || (match[1] !== "" && !isSkillName(match[1]))) return undefined
+  const end = match[0].length
+  const start = end - match[1]!.length - 1
+  if (caret <= start || caret > end) return undefined
+  return { start, end, query: text.slice(start + 1, caret) }
+}
 
 const clipText = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`)
 
@@ -103,7 +110,7 @@ export function Composer(props: ComposerProps): ReactNode {
   const [uploads, setUploads] = useState<ReadonlyArray<Upload>>([])
   const [uploading, setUploading] = useState(false)
   const [mention, setMention] = useState<{ start: number; query: string; left: number } | undefined>()
-  const [slash, setSlash] = useState<string | undefined>()
+  const [slash, setSlash] = useState<ReturnType<typeof slashQuery>>()
   // the message needs the textarea's scrollbar: its text no longer lines up with the highlight under it
   const [tall, setTall] = useState(false)
   const mirrorRef = useRef<HTMLDivElement>(null)
@@ -158,18 +165,16 @@ export function Composer(props: ComposerProps): ReactNode {
   const skillOptions = useMemo(() => {
     if (slash === undefined) return []
     return (props.skills ?? [])
-      .filter((skill) => skill.name.includes(slash))
-      .sort((a, b) => Number(!a.name.startsWith(slash)) - Number(!b.name.startsWith(slash)))
+      .filter((skill) => skill.name.includes(slash.query))
+      .sort((a, b) => Number(!a.name.startsWith(slash.query)) - Number(!b.name.startsWith(slash.query)))
       .slice(0, 8)
   }, [slash, props.skills])
 
-  const update = (value: string, caret: number) => {
-    setText(value)
-    drafts.set(draftKey, value)
-    const typed = slashQuery(value, caret)
-    if (typed !== slash) setActive(0)
+  const updateSelection = (value: string, caret: number, end: number) => {
+    const typed = caret === end ? slashQuery(value, caret) : undefined
+    if (typed?.query !== slash?.query) setActive(0)
     setSlash(typed)
-    const m = mentionQuery(value, caret)
+    const m = caret === end ? mentionQuery(value, caret) : undefined
     if (m && taRef.current && shellRef.current) {
       const ta = taRef.current
       const style = getComputedStyle(ta)
@@ -181,6 +186,12 @@ export function Composer(props: ComposerProps): ReactNode {
       if (m.query !== mention?.query) setActive(0)
       setMention({ ...m, left })
     } else setMention(undefined)
+  }
+
+  const update = (value: string, caret: number, end: number) => {
+    setText(value)
+    drafts.set(draftKey, value)
+    updateSelection(value, caret, end)
   }
 
   const pick = (opt: { name: string }) => {
@@ -196,13 +207,14 @@ export function Composer(props: ComposerProps): ReactNode {
   }
 
   const pickSkill = (skill: { readonly name: string }) => {
-    const caret = taRef.current?.selectionStart ?? text.length
+    if (!slash) return
+    const before = text.slice(0, slash.start)
     const insert = `/${skill.name} `
-    const next = insert + text.slice(caret).replace(/^\s/, "")
+    const next = before + insert + text.slice(slash.end).replace(/^\s/, "")
     setText(next)
     drafts.set(draftKey, next)
     setSlash(undefined)
-    pendingCaret.current = insert.length
+    pendingCaret.current = (before + insert).length
   }
 
   // Place the caret right after an inserted mention, in the same commit (before the next keystroke).
@@ -321,6 +333,7 @@ export function Composer(props: ComposerProps): ReactNode {
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing) return
     if (slash !== undefined && skillOptions.length > 0) {
       if (e.key === "ArrowDown") return (e.preventDefault(), setActive((a) => (a + 1) % skillOptions.length))
       if (e.key === "ArrowUp")
@@ -341,7 +354,7 @@ export function Composer(props: ComposerProps): ReactNode {
       props.onCancelReply?.()
       return
     }
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !(phone && isTouchNow())) {
+    if (e.key === "Enter" && !e.shiftKey && !(phone && isTouchNow())) {
       e.preventDefault()
       void submit()
     }
@@ -412,13 +425,7 @@ export function Composer(props: ComposerProps): ReactNode {
                   active={i === active}
                   onSelect={() => pickSkill(skill)}
                   icon={Sparkles}
-                  trailing={
-                    skill.argumentHint !== undefined
-                      ? skill.argumentHint
-                      : skill.description === ""
-                        ? undefined
-                        : clipText(skill.description, 36)
-                  }
+                  trailing={skill.argumentHint ?? clipText(skill.description, 36)}
                   className="min-h-[30px] text-base"
                 >
                   /{skill.name}
@@ -542,10 +549,10 @@ export function Composer(props: ComposerProps): ReactNode {
               aria-label={placeholder}
               placeholder={placeholder}
               enterKeyHint={phone ? "enter" : "send"}
-              onChange={(e) => update(e.target.value, e.target.selectionStart)}
+              onChange={(e) => update(e.target.value, e.target.selectionStart, e.target.selectionEnd)}
               onSelect={(e) => {
                 const t = e.currentTarget
-                if (mention && t.selectionStart !== t.selectionEnd) setMention(undefined)
+                updateSelection(t.value, t.selectionStart, t.selectionEnd)
               }}
               onKeyDown={onKeyDown}
               onScroll={(e) => {

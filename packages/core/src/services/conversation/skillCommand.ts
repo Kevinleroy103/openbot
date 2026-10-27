@@ -1,3 +1,8 @@
+import { SkillName } from "@openbot/contracts"
+import { Schema } from "effect"
+
+const isSkillName = Schema.is(SkillName)
+
 /**
  * The owner's `/skill-name` command (D5.5): a message that starts with `/` and the name of one of the
  * Bot's skills asks the Bot to use that skill. The chat keeps what the owner typed; the Bot reads an
@@ -5,7 +10,7 @@
  * model to start on its own (`disable-model-invocation`). Anything else, a `/path` or a skill the Bot
  * doesn't have, is an ordinary message.
  */
-const COMMAND = /^\/([a-z0-9][a-z0-9_-]{0,63})(?=\s|$)[ \t]*([\s\S]*)$/
+const COMMAND = /^\/(\S+)(?=\s|$)[ \t]*([\s\S]*)$/
 
 export interface SkillCommand {
   readonly name: string
@@ -15,7 +20,7 @@ export interface SkillCommand {
 
 export const parseSkillCommand = (text: string, skills: ReadonlyArray<string>): SkillCommand | undefined => {
   const match = COMMAND.exec(text.trimStart())
-  if (match === null || !skills.includes(match[1]!)) return undefined
+  if (match === null || !isSkillName(match[1]) || !skills.includes(match[1])) return undefined
   return { name: match[1]!, rest: match[2]!.trim() }
 }
 

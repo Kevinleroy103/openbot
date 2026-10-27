@@ -23,6 +23,26 @@ describe("skill commands", () => {
     expect(parseSkillCommand("/grill-me", [])).toBeUndefined()
   })
 
+  test("accepts leading whitespace and preserves the request", () => {
+    for (const whitespace of ["", "  ", "\t", "\n", "\r\n", "\u00a0", "\uFEFF"]) {
+      for (const rest of ["", " my plan", "\nmy plan"]) {
+        expect(parseSkillCommand(`${whitespace}/grill-me${rest}`, skills)).toEqual({
+          name: "grill-me",
+          rest: rest.trim(),
+        })
+      }
+    }
+  })
+
+  test("validates the whole token with SkillName", () => {
+    for (const name of ["grill-me", "research_2", "0day", "a".repeat(64)]) {
+      expect(parseSkillCommand(`/${name} plan`, [name])).toEqual({ name, rest: "plan" })
+    }
+    for (const name of ["", "_a", "-a", "Grill", "grill.me", "grill/me", "a".repeat(65)]) {
+      expect(parseSkillCommand(`/${name} plan`, [name])).toBeUndefined()
+    }
+  })
+
   test("the Bot reads an explicit instruction that names the skill and the request", () => {
     const text = renderSkillCommand({ name: "grill-me", rest: "my launch plan" })
     expect(text).toContain('"grill-me" skill')

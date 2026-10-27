@@ -98,4 +98,89 @@ describe.skipIf(!hasChromium)("e2e: /skill command", () => {
     expect(await box.inputValue()).toBe("")
     expect(app.errors).toEqual([])
   })
+
+  test("moving within a command completes the whole token and keeps the arguments", async () => {
+    const { page } = app
+    const box = page.getByRole("textbox", { name: "Message Nova" })
+    const menu = page.getByRole("menu", { name: "Use a skill" })
+    await box.fill("/gri")
+    await box.press("ArrowLeft")
+    await box.press("Tab")
+    expect(await box.inputValue()).toBe("/grill-me ")
+
+    await box.fill("/gri my launch plan")
+    expect(await menu.count()).toBe(0)
+    await box.press("Home")
+    await box.press("ArrowRight")
+    await box.press("ArrowRight")
+    await menu.getByText("/grill-me").waitFor()
+    await menu.getByText("/grill-me").click()
+    expect(await box.inputValue()).toBe("/grill-me my launch plan")
+    expect(await box.evaluate((t: HTMLTextAreaElement) => t.selectionStart)).toBe("/grill-me ".length)
+  })
+
+  test("Home dismisses the picker so Enter sends the unchanged input", async () => {
+    const { page } = app
+    const box = page.getByRole("textbox", { name: "Message Nova" })
+    await box.fill("/gri")
+    await page.getByRole("menu", { name: "Use a skill" }).waitFor()
+    await box.press("Home")
+    expect(await page.getByRole("menu", { name: "Use a skill" }).count()).toBe(0)
+    await box.press("Enter")
+    await page.getByTestId("transcript").getByText("/gri", { exact: true }).waitFor()
+    expect(await box.inputValue()).toBe("")
+  })
+
+  test("a selection dismisses the picker and collapsing it updates the query", async () => {
+    const { page } = app
+    const box = page.getByRole("textbox", { name: "Message Nova" })
+    const menu = page.getByRole("menu", { name: "Use a skill" })
+    await box.fill("/gri")
+    await box.press("Shift+Home")
+    expect(await menu.count()).toBe(0)
+    await box.press("ArrowRight")
+    await menu.getByText("/grill-me").waitFor()
+    await box.press("Home")
+    await box.press("ArrowRight")
+    await menu.getByText("/weekly-report").waitFor()
+    await box.press("ArrowDown")
+    await box.press("Tab")
+    expect(await box.inputValue()).toBe("/weekly-report ")
+  })
+
+  test("IME keys neither complete a skill nor send the message", async () => {
+    const { page } = app
+    const box = page.getByRole("textbox", { name: "Message Nova" })
+    await box.fill("/gri")
+    await box.dispatchEvent("compositionstart")
+    const accepted = await box.evaluate((t) =>
+      t.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true }),
+      ),
+    )
+    expect(accepted).toBe(true)
+    expect(await box.inputValue()).toBe("/gri")
+    await page.getByRole("menu", { name: "Use a skill" }).waitFor()
+    await box.dispatchEvent("compositionend")
+    await box.press("Enter")
+    expect(await box.inputValue()).toBe("/grill-me ")
+    await box.dispatchEvent("compositionstart")
+    await box.dispatchEvent("keydown", { key: "Enter", isComposing: true })
+    expect(await box.inputValue()).toBe("/grill-me ")
+    await box.dispatchEvent("compositionend")
+  })
+
+  test("leading whitespace supports completion and command highlighting", async () => {
+    const { page } = app
+    const box = page.getByRole("textbox", { name: "Message Nova" })
+    for (const whitespace of ["  ", "\t", "\n", "\u00a0"]) {
+      await box.fill(`${whitespace}/gri`)
+      await page.getByRole("menu", { name: "Use a skill" }).getByText("/grill-me").waitFor()
+      await box.press("Tab")
+      expect(await box.inputValue()).toBe(`${whitespace}/grill-me `)
+      await page.getByTestId("composer-command").waitFor()
+      expect(await page.getByTestId("composer-command").textContent()).toBe(`${whitespace}/grill-me `)
+    }
+    expect(app.errors).toEqual([])
+  })
 })

@@ -87,9 +87,9 @@ export function LibraryTab({ bot }: { readonly bot: Bot }): ReactNode {
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-sm text-fg">{s.name}</span>
                     {s.source && <SkillsShChip id={s.source.id} />}
-                    {missingSkillDependencies({ name: s.name, body: s.body ?? "" }, library).length > 0 && (
-                      <SkillNeedsChip names={missingSkillDependencies({ name: s.name, body: s.body ?? "" }, library)} />
-                    )}
+                    <SkillNeedsChip
+                      names={missingSkillDependencies({ name: s.name, body: s.body ?? "" }, bot.skills)}
+                    />
                   </span>
                   <span className="truncate text-sm text-fg-secondary" title={s.description}>
                     {s.description || "…"}

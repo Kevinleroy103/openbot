@@ -23,6 +23,7 @@ export function SkillsPage(): ReactNode {
   const [editing, setEditing] = useState<Skill | "new" | undefined>(undefined)
   const [importing, setImporting] = useState(false)
   const list = [...(skills.value ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  const names = list.map((s) => s.name)
   // the editor follows the library (a save or an import refetches it)
   const open = editing === "new" ? undefined : editing && (list.find((s) => s.name === editing.name) ?? editing)
 
@@ -91,9 +92,7 @@ export function SkillsPage(): ReactNode {
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-base text-fg">{s.name}</span>
                     {s.source && <SkillsShChip id={s.source.id} />}
-                    {missingSkillDependencies(s, list).length > 0 && (
-                      <SkillNeedsChip names={missingSkillDependencies(s, list)} />
-                    )}
+                    <SkillNeedsChip names={missingSkillDependencies(s, names)} />
                   </span>
                   <span className="truncate text-sm text-fg-secondary">{s.description}</span>
                 </span>

@@ -2006,11 +2006,13 @@ export class MockBrain {
         ),
       "skills.preview": ({ id }) =>
         Effect.promise(() => sleep(400)).pipe(Effect.andThen(() => sync(() => this.previewSkill(id))())),
-      "skills.install": ({ id, botIds }) =>
+      "skills.install": ({ id, botIds, name }) =>
         Effect.promise(() => sleep(400)).pipe(
           Effect.andThen(() =>
             sync(() => {
               const p = this.previewSkill(id)
+              if (name !== undefined && p.name !== name)
+                throw new InvalidInput({ message: `${id} installs as “${p.name}”, not “${name}”.` })
               const canned = SKILLS_SH.find((c) => c.result.id === id)!
               const skill: Skill = {
                 name: p.name as SkillName,

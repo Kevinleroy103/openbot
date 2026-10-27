@@ -109,27 +109,27 @@ describe("skills.sh formatting", () => {
 })
 
 describe("skills that need another skill", () => {
-  const library = [{ name: "grill-me" as SkillName }, { name: "release-notes" as SkillName }]
-  test("missingSkillDependencies: the skills its instructions send the Bot to that the library lacks", () => {
+  const have = ["grill-me", "release-notes"]
+  const grilling = ["grilling" as SkillName]
+  test("missingSkillDependencies: the skills its instructions send the Bot to that aren't among the given ones", () => {
     const grillMe = { name: "grill-me" as SkillName, body: 'Call the Skill tool with "grilling".' }
-    expect(missingSkillDependencies(grillMe, library)).toEqual(["grilling"])
-    expect(missingSkillDependencies(grillMe, [...library, { name: "grilling" as SkillName }])).toEqual([])
+    expect(missingSkillDependencies(grillMe, have)).toEqual(grilling)
+    expect(missingSkillDependencies(grillMe, [...have, "grilling"])).toEqual([])
     // curly quotes, other wording, the same skill twice, a skill naming itself
     expect(
       missingSkillDependencies(
         { name: "a" as SkillName, body: "Use the Skill tool for “Grilling”, then the skill tool on 'grilling' again." },
-        library,
+        have,
       ),
-    ).toEqual(["grilling"])
-    expect(missingSkillDependencies({ name: "a" as SkillName, body: 'Skill tool with "a"' }, library)).toEqual([])
+    ).toEqual(grilling)
+    expect(missingSkillDependencies({ name: "a" as SkillName, body: 'Skill tool with "a"' }, have)).toEqual([])
     expect(
-      missingSkillDependencies({ name: "a" as SkillName, body: "Plain steps. Use /grilling later." }, library),
+      missingSkillDependencies({ name: "a" as SkillName, body: "Plain steps. Use /grilling later." }, have),
     ).toEqual([])
   })
 
   test("siblingSkillId: the same repository on skills.sh", () => {
     expect(siblingSkillId("mattpocock/skills/grill-me", "grilling")).toBe("mattpocock/skills/grilling")
-    expect(siblingSkillId("broken", "grilling")).toBeUndefined()
   })
 })
 

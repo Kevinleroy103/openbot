@@ -55,10 +55,10 @@ import {
   formatBytes,
   formatInstalls,
   loseText,
-  missingSkillDependencies,
   sameBots,
   skillNameError,
   siblingSkillId,
+  skillDependencies,
   skillsShErrorText,
   skillsShUrl,
   toSkillName,
@@ -167,10 +167,11 @@ export function SkillsShChip({ id }: { readonly id: string }): ReactNode {
   )
 }
 
-/** "needs grilling" chip of a skill whose instructions send the Bot to skills the library doesn't have. */
+/** "needs grilling" chip of a skill whose instructions send the Bot to skills it can't use; nothing when none. */
 export function SkillNeedsChip({ names }: { readonly names: ReadonlyArray<string> }): ReactNode {
+  if (names.length === 0) return null
   return (
-    <span title={`Needs ${names.join(", ")}, not in the library`} className="inline-flex shrink-0">
+    <span title={`Its instructions send the Bot to ${names.join(", ")}`} className="inline-flex shrink-0">
       <LabelChip className="border-warn-line-faint bg-warn-soft font-medium text-warn-fg">
         needs {names.join(", ")}
       </LabelChip>
@@ -178,18 +179,29 @@ export function SkillNeedsChip({ names }: { readonly names: ReadonlyArray<string
   )
 }
 
-/** A skill the one being edited sends the Bot to, missing from the library: install it from the same repo. */
+/**
+ * A skill the one being edited sends the Bot to that its Bots can't use: in the library, give it to the
+ * ones that lack it; else install it from the same skills.sh repo for them.
+ */
 function MissingDependency({
   name,
   source,
-  botIds,
+  holders,
+  givenTo,
 }: {
-  readonly name: string
+  readonly name: SkillName
   readonly source: Skill["source"]
-  readonly botIds: ReadonlyArray<BotId>
+  /** The Bots that have the skill being edited (saved, not the unsaved picks). */
+  readonly holders: ReadonlyArray<Bot>
+  /** The Bots that have `name`; undefined: it isn't in the library. */
+  readonly givenTo: ReadonlyArray<BotId> | undefined
 }): ReactNode {
   const install = useCommand("skills.install", name, skillsShErrorText)
-  const id = source === undefined ? undefined : siblingSkillId(source.id, name)
+  const assign = useCommand("skills.assign", name)
+  const lacking = holders.filter((b) => !b.skills.includes(name))
+  if (givenTo !== undefined && lacking.length === 0) return null
+  const id = givenTo === undefined && source !== undefined ? siblingSkillId(source.id, name) : undefined
+  const error = install.error ?? assign.error
   return (
     <div
       className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl border border-warn-line-faint bg-warn-soft px-3 py-2.5 text-sm text-warn-fg"
@@ -197,21 +209,34 @@ function MissingDependency({
     >
       <Icon icon={TriangleAlert} size="md" className="shrink-0 text-warn-bright" />
       <span className="min-w-0 flex-1">
-        <strong className="font-semibold">Missing skill: {name}.</strong> These instructions send the Bot to it, but it
-        isn't in your library, so the skill can't run properly.
+        <strong className="font-semibold">Missing skill: {name}.</strong> These instructions send the Bot to it, but{" "}
+        {givenTo === undefined
+          ? "it isn't in your library, so the skill can't run properly."
+          : `${lacking.map((b) => b.name).join(", ")} ${lacking.length === 1 ? "doesn't" : "don't"} have it.`}
       </span>
+      {givenTo !== undefined && (
+        <PillButton
+          variant="primary"
+          size="md"
+          loading={assign.pending}
+          data-testid="skill-give-missing"
+          onClick={() => void assign.run({ name, botIds: [...givenTo, ...lacking.map((b) => b.id)] })}
+        >
+          Give {name}
+        </PillButton>
+      )}
       {id !== undefined && (
         <PillButton
           variant="primary"
           size="md"
           loading={install.pending}
           data-testid="skill-install-missing"
-          onClick={() => void install.run({ id, botIds: [...botIds] })}
+          onClick={() => void install.run({ id, botIds: holders.map((b) => b.id), name })}
         >
           Install {name}
         </PillButton>
       )}
-      {install.error && <p className="w-full text-sm text-danger-fg">{install.error}</p>}
+      {error && <p className="w-full text-sm text-danger-fg">{error}</p>}
     </div>
   )
 }
@@ -307,7 +332,7 @@ export function SkillEditorDialog({
   const holders = skill ? botsWithSkill(bots, skill.name) : []
   const canSave = finalName !== "" && nameError === undefined && description.trim() !== "" && body.trim() !== ""
   const files = skill?.files ?? []
-  const missing = missingSkillDependencies({ name: finalName, body }, library)
+  const dependencies = skillDependencies({ name: finalName, body })
 
   const save = async () => {
     const textChanged =
@@ -348,8 +373,14 @@ export function SkillEditorDialog({
         onClose={onClose}
       />
       <DialogBody className="flex flex-col gap-4">
-        {missing.map((dep) => (
-          <MissingDependency key={dep} name={dep} source={skill?.source} botIds={picked} />
+        {dependencies.map((dep) => (
+          <MissingDependency
+            key={dep}
+            name={dep}
+            source={skill?.source}
+            holders={holders}
+            givenTo={library.some((s) => s.name === dep) ? botsWithSkill(bots, dep).map((b) => b.id) : undefined}
+          />
         ))}
         {skill?.source && (
           <div

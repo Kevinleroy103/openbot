@@ -4,7 +4,7 @@
 // so when skills.sh is down), previews and installs with the Bot preselected; deleting says who loses
 // it; on a phone the editor closes back onto the Skills page. Screenshots: e2e-6x-*.png.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import type { Bot, BotId } from "@openbot/contracts"
+import type { Bot, BotId, SkillName } from "@openbot/contracts"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import type { Browser } from "playwright-core"
@@ -311,5 +311,37 @@ describe.skipIf(!hasChromium)("e2e: skills", () => {
     } finally {
       await context.close()
     }
+  }, 60_000)
+
+  test("a skill that sends the Bot to one it lacks: the Bot's Library says so, the editor gives it", async () => {
+    const { page } = app
+    await rpc.call((c) => c["skills.upsert"]({ name: "grilling" as SkillName, description: "Grill.", body: "Ask." }))
+    await rpc.call((c) => c["skills.assign"]({ name: "grilling" as SkillName, botIds: [otto.id] }))
+    const body = 'Call the Skill tool with "grilling".'
+    await rpc.call((c) => c["skills.upsert"]({ name: "grill-me" as SkillName, description: "Interview.", body }))
+    await rpc.call((c) => c["skills.assign"]({ name: "grill-me" as SkillName, botIds: [mira.id] }))
+    const pane = page.getByTestId("details-pane")
+    if (!(await pane.isVisible())) await page.getByRole("button", { name: "View conversation details" }).click()
+    await pane.getByRole("tab", { name: "Library" }).click()
+    const tab = pane.getByTestId("details-tab-library")
+    // the library has grilling, but Mira doesn't
+    await tab.getByTestId("skill-row").filter({ hasText: "grill-me" }).getByText("needs grilling").waitFor()
+    await tab.getByTestId("manage-library").click()
+    const library = page.getByTestId("settings-page-skills").getByTestId("skills-library")
+    const row = library.getByTestId("skill-row").filter({ hasText: "grill-me" })
+    await row.waitFor()
+    expect(await row.getByText("needs grilling").count()).toBe(0)
+    await row.click()
+    const editor = page.getByRole("dialog", { name: "Skill grill-me" })
+    const missing = editor.getByTestId("skill-missing")
+    await missing.getByText("Mira doesn't have it.", { exact: false }).waitFor()
+    expect(await missing.getByTestId("skill-install-missing").count()).toBe(0)
+    await missing.getByTestId("skill-give-missing").click()
+    await missing.waitFor({ state: "detached" })
+    expect(await skillsOf(mira.id)).toEqual(["grill-me", "grilling"])
+    expect(await skillsOf(otto.id)).toEqual(["grilling"])
+    await editor.getByRole("button", { name: "Cancel" }).click()
+    await page.getByRole("button", { name: "Close settings" }).click()
+    expect(app.errors).toEqual([])
   }, 60_000)
 })

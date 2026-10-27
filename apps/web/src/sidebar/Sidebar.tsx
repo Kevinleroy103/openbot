@@ -403,7 +403,7 @@ function PinnedTile({
       title={b.name}
       data-bot={b.id}
       className={cn(
-        "flex w-[82px] min-w-0 flex-col items-center rounded-xl px-1.5 pt-2 pb-2 transition-colors duration-100 hover:bg-hover active:bg-active aria-[current=page]:bg-active",
+        "flex w-full flex-col items-center rounded-xl px-1.5 pt-2 pb-2 transition-colors duration-100 hover:bg-hover active:bg-active aria-[current=page]:bg-active",
         dragged && "opacity-40",
       )}
     >
@@ -743,7 +743,11 @@ export function Sidebar({ compact, onToggleCompact, onSearch, onNewChat }: Sideb
             className="flex flex-wrap items-start justify-center gap-x-1 gap-y-3 px-1 pt-2.5 pb-4"
           >
             {model.pinned.map((item, index) => (
-              <div key={item.key} className="relative" {...drag.row("pinned", model.pinned, index, "x")}>
+              <div
+                key={item.key}
+                className="relative max-w-max min-w-[82px] flex-1"
+                {...drag.row("pinned", model.pinned, index, "x")}
+              >
                 {drag.isTarget("pinned", index) && <DropLine edge="left" />}
                 <PinnedTile
                   item={item}

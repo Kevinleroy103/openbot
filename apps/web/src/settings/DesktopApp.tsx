@@ -285,6 +285,20 @@ export function NotificationsRow(): ReactNode {
           This browser blocked notifications for OpenBot. Allow them in its site settings, then turn this on again.
         </p>
       )}
+      {desktopApp()?.platform === "darwin" && (
+        <div className="flex flex-wrap items-center gap-2 pt-2 text-sm text-fg-secondary">
+          <span>macOS hides them after a few seconds. Choose Alerts in System Settings to keep them on screen.</span>
+          {/* the desktop app opens other links with the system (main.ts setWindowOpenHandler) */}
+          <PillButton
+            variant="secondary"
+            size="md"
+            onClick={() => window.open("x-apple.systempreferences:com.apple.preference.notifications")}
+            data-testid="notifications-system-settings"
+          >
+            Open System Settings
+          </PillButton>
+        </div>
+      )}
     </SettingsRow>
   )
 }

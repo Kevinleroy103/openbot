@@ -7,7 +7,7 @@
 // the Bot's avatar as its icon (botIcon.ts).
 import { useAtomSet } from "@effect/atom-react"
 import { commands } from "@openbot/client"
-import type { ConversationId } from "@openbot/contracts"
+import type { ConversationId, Notification as RosterNotification } from "@openbot/contracts"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import { botIconUrl } from "./botIcon.ts"
 import { useRoster } from "./data.ts"
@@ -107,6 +107,14 @@ export function useDesktopPresence(): void {
   }, [report])
 }
 
+/** A Bot that needs you stays on screen until dismissed (not on macOS: there only the Alerts style does that). */
+export const notificationOptions = (n: RosterNotification, icon: string | undefined): NotificationOptions => ({
+  body: n.body,
+  tag: n.conversationId ?? n.id,
+  requireInteraction: n.kind === "waiting",
+  ...(icon === undefined ? {} : { icon }),
+})
+
 /** Mounted once (App): shows new notifications and keeps the desktop app's badge current. */
 export function useSystemNotifications(): void {
   const roster = useRoster()
@@ -140,11 +148,7 @@ export function useSystemNotifications(): void {
       if (looking) continue
       const bot = n.botId === undefined ? undefined : roster.botById(n.botId)
       void (bot === undefined ? Promise.resolve(undefined) : botIconUrl(bot.avatar)).then((icon) => {
-        const shown = new Notification(n.title, {
-          body: n.body,
-          tag: n.conversationId ?? n.id,
-          ...(icon === undefined ? {} : { icon }),
-        })
+        const shown = new Notification(n.title, notificationOptions(n, icon))
         shown.onclick = () => {
           desktopApp()?.focus()
           window.focus()

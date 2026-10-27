@@ -93,8 +93,6 @@ const slashQuery = (text: string, caret: number): { start: number; end: number; 
   return { start, end, query: text.slice(start + 1, caret) }
 }
 
-const clipText = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`)
-
 let measureCanvas: HTMLCanvasElement | undefined
 const textWidth = (text: string, font: string): number => {
   measureCanvas ??= document.createElement("canvas")
@@ -416,25 +414,6 @@ export function Composer(props: ComposerProps): ReactNode {
 
   return (
     <div className={cn("relative w-full", phone && "flex items-end gap-2", props.className)}>
-      {slash !== undefined && skillOptions.length > 0 && (
-        <div className={cn("absolute bottom-full z-30 mb-2 animate-fade-in", phone ? "inset-x-0" : "w-[360px]")}>
-          <MenuPanel label="Use a skill" className="max-h-[360px] overflow-y-auto scrollbar-thin">
-            {skillOptions.map((skill, i) => (
-              <div key={skill.name} onPointerMove={() => setActive(i)} onMouseDown={(e) => e.preventDefault()}>
-                <MenuItem
-                  active={i === active}
-                  onSelect={() => pickSkill(skill)}
-                  icon={Sparkles}
-                  trailing={skill.argumentHint ?? clipText(skill.description, 36)}
-                  className="min-h-[30px] text-base"
-                >
-                  /{skill.name}
-                </MenuItem>
-              </div>
-            ))}
-          </MenuPanel>
-        </div>
-      )}
       {mention && options.length > 0 && (
         <div
           className={cn("absolute bottom-full z-30 mb-2 animate-fade-in", phone ? "inset-x-0" : "w-[360px]")}
@@ -468,9 +447,10 @@ export function Composer(props: ComposerProps): ReactNode {
       {phone && actions}
       <div
         ref={shellRef}
+        data-testid="composer"
         className={cn(
           "flex w-full flex-col rounded-composer bg-elevated hairline border-line-secondary shadow-composer transition-[border-color] duration-150 focus-within:border-line hover:border-line",
-          phone && "min-w-0 flex-1",
+          phone ? "min-w-0 flex-1" : "relative",
         )}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) e.preventDefault()
@@ -482,6 +462,29 @@ export function Composer(props: ComposerProps): ReactNode {
           }
         }}
       >
+        {slash !== undefined && skillOptions.length > 0 && (
+          <div className="absolute inset-x-0 bottom-full z-30 mb-2 animate-fade-in">
+            <MenuPanel label="Use a skill" className="max-h-[360px] overflow-y-auto scrollbar-thin">
+              {skillOptions.map((skill, i) => (
+                <div key={skill.name} onPointerMove={() => setActive(i)} onMouseDown={(e) => e.preventDefault()}>
+                  <MenuItem
+                    active={i === active}
+                    onSelect={() => pickSkill(skill)}
+                    icon={Sparkles}
+                    className="min-h-[30px] text-base"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="shrink-0 whitespace-nowrap">/{skill.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-fg-tertiary">
+                        {skill.argumentHint ?? skill.description}
+                      </span>
+                    </span>
+                  </MenuItem>
+                </div>
+              ))}
+            </MenuPanel>
+          </div>
+        )}
         {props.replyTo && (
           <div className="flex items-center gap-2 border-b-[0.5px] border-line-tertiary px-3.5 py-2 text-sm">
             <span className="shrink-0 text-fg-secondary">Replying to {props.replyAuthor ?? "message"}</span>

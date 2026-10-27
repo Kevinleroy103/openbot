@@ -183,4 +183,63 @@ describe.skipIf(!hasChromium)("e2e: /skill command", () => {
     }
     expect(app.errors).toEqual([])
   })
+
+  test("completion spans the composer and keeps skill names whole at desktop and phone widths", async () => {
+    const skills = [
+      {
+        name: "engineering-practices" as SkillName,
+        description:
+          "Use for engineering work: writing or changing code, tests or config, answering review feedback, and before handing work off or pushing.",
+      },
+      {
+        name: "vercel-composition-patterns" as SkillName,
+        description:
+          "React composition patterns that scale. Use when refactoring components, designing reusable APIs, or building flexible component libraries.",
+      },
+    ]
+    for (const skill of skills) {
+      await rpc.call((c) => c["skills.upsert"]({ ...skill, body: "Review the code." }))
+      await rpc.call((c) => c["skills.assign"]({ name: skill.name, botIds: [nova.id] }))
+    }
+    for (const width of [1440, 393, 320]) {
+      for (const theme of ["light", "dark"] as const) {
+        const layout = await openApp(browser, brain, {
+          theme,
+          route: `#/c/${nova.directConversationId}`,
+          context: { viewport: { width, height: 900 }, isMobile: width < 600, hasTouch: width < 600 },
+        })
+        try {
+          const { page } = layout
+          const box = page.getByRole("textbox", { name: "Message Nova" })
+          await box.fill("/")
+          const menu = page.getByRole("menu", { name: "Use a skill" })
+          await menu.getByText(`/${skills[1]!.name}`, { exact: true }).waitFor()
+          const [panel, composer, actions] = await Promise.all([
+            menu.boundingBox(),
+            page.getByTestId("composer").boundingBox(),
+            page.getByRole("button", { name: "Composer actions" }).boundingBox(),
+          ])
+          const left = width < 600 ? actions!.x : composer!.x
+          expect(Math.abs(panel!.x - left)).toBeLessThanOrEqual(1)
+          expect(Math.abs(panel!.x + panel!.width - composer!.x - composer!.width)).toBeLessThanOrEqual(1)
+          for (const skill of skills) {
+            const name = menu.getByText(`/${skill.name}`, { exact: true })
+            const description = menu.getByText(skill.description, { exact: true })
+            expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+            expect(await description.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
+            expect(await description.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis")
+            const [label, detail] = await Promise.all([name.boundingBox(), description.boundingBox()])
+            expect(label!.x + label!.width).toBeLessThanOrEqual(detail!.x)
+            expect(detail!.x + detail!.width).toBeLessThan(panel!.x + panel!.width)
+          }
+          expect(await menu.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+          expect(await page.locator("html").getAttribute("data-theme")).toBe(theme)
+          expect(layout.errors).toEqual([])
+          await layout.shot(`e2e-skills-command-width-${width}-${theme}`)
+        } finally {
+          await layout.context.close()
+        }
+      }
+    }
+  }, 60_000)
 })

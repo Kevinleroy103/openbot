@@ -18,11 +18,13 @@ describe("boot", () => {
       const { botId, conversationId } = await first.run(
         Effect.gen(function* () {
           const client = yield* rpcClient(`${first.wsBase}/rpc`, { cookie, origin: first.base })
+          // no introduction: a message sent while it runs is steered into that turn, so no user turn would come
           const bot = yield* client["bots.create"]({
             name: "Sleeper",
             harness: { kind: "fake" },
             autonomy: "ask",
             clientNonce: "boot-1",
+            introduce: false,
           })
           const convo = yield* watchConversation(client, bot.directConversationId)
           yield* client["messages.send"]({
